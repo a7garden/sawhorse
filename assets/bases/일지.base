@@ -1,0 +1,18 @@
+filters:
+  and:
+    - type == "일지"
+    - not:
+        - file.inFolder("템플릿")
+properties:
+  file.name:
+    displayName: 날짜
+views:
+  - type: table
+    name: 최근
+    order:
+      - file.name
+      - tags
+    sort:
+      - property: file.name
+        direction: DESC
+    limit: 30

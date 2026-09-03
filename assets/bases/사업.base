@@ -1,0 +1,46 @@
+filters:
+  and:
+    - not:
+        - file.inFolder("템플릿")
+    - or:
+        - type == "사업"
+        - type == "연구"
+properties:
+  file.name:
+    displayName: 사업
+  status:
+    displayName: 상태
+  client:
+    displayName: 발주처
+  period:
+    displayName: 기간
+  codebase:
+    displayName: 코드베이스
+views:
+  - type: table
+    name: 진행중
+    filters:
+      and:
+        - status == "진행중"
+    order:
+      - file.name
+      - client
+      - period
+      - vcs
+    sort:
+      - property: file.name
+        direction: ASC
+  - type: table
+    name: 전체
+    order:
+      - file.name
+      - type
+      - status
+      - client
+      - period
+      - parent
+    sort:
+      - property: status
+        direction: ASC
+      - property: file.name
+        direction: ASC

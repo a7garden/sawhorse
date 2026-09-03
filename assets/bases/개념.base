@@ -1,0 +1,71 @@
+filters:
+  and:
+    - file.inFolder("개념")
+    - file.ext == "md"
+newItemFolder: 개념
+newItemTemplate: 템플릿/개념.md
+properties:
+  file.name:
+    displayName: 개념
+  file.mtime:
+    displayName: 수정
+  domain:
+    displayName: 분류
+  status:
+    displayName: 상태
+  aliases:
+    displayName: 별칭
+  sources:
+    displayName: 출처
+views:
+  - type: table
+    name: 수집
+    filters:
+      and:
+        - status != "정리됨"
+    order:
+      - file.name
+      - status
+      - domain
+      - aliases
+      - sources
+    sort:
+      - property: file.mtime
+        direction: DESC
+  - type: table
+    name: 전체
+    order:
+      - file.name
+      - domain
+      - status
+      - aliases
+      - tags
+    sort:
+      - property: domain
+        direction: ASC
+      - property: file.name
+        direction: ASC
+  - type: table
+    name: 분류별
+    order:
+      - file.name
+      - status
+      - aliases
+    groupBy:
+      property: domain
+      direction: ASC
+    sort:
+      - property: file.name
+        direction: ASC
+  - type: table
+    name: 근거없음
+    filters:
+      and:
+        - sources.isEmpty()
+    order:
+      - file.name
+      - domain
+      - status
+    sort:
+      - property: file.name
+        direction: ASC
