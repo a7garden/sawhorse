@@ -1,0 +1,110 @@
+filters:
+  and:
+    - type == "개선"
+    - not:
+        - file.inFolder("템플릿")
+properties:
+  file.name:
+    displayName: 문제
+  id:
+    displayName: ID
+  url:
+    displayName: 화면
+  category:
+    displayName: 구분
+  status:
+    displayName: 상태
+  approve:
+    displayName: 승인
+  verified:
+    displayName: 검증
+  commits:
+    displayName: 커밋
+  depends_on:
+    displayName: 선행
+views:
+  - type: table
+    name: 승인대기
+    filters:
+      and:
+        - status == "승인대기"
+    order:
+      - id
+      - file.name
+      - url
+      - category
+      - approve
+    sort:
+      - property: id
+        direction: ASC
+  - type: table
+    name: 구현대기
+    filters:
+      and:
+        - approve == true
+        - status == "승인"
+    order:
+      - id
+      - file.name
+      - url
+      - category
+      - depends_on
+    sort:
+      - property: id
+        direction: ASC
+  - type: table
+    name: 제안
+    filters:
+      and:
+        - status == "제안"
+    order:
+      - id
+      - file.name
+      - url
+      - category
+    sort:
+      - property: id
+        direction: ASC
+  - type: table
+    name: 검증대기
+    filters:
+      and:
+        - status == "구현완료"
+        - verified != "확인"
+    order:
+      - id
+      - file.name
+      - url
+      - commits
+    sort:
+      - property: id
+        direction: ASC
+  - type: table
+    name: 화면별
+    order:
+      - id
+      - file.name
+      - category
+      - status
+      - verified
+    groupBy:
+      property: url
+      direction: ASC
+    sort:
+      - property: id
+        direction: ASC
+  - type: table
+    name: 전체
+    order:
+      - id
+      - file.name
+      - url
+      - category
+      - status
+      - approve
+      - verified
+      - approved
+      - commits
+    sort:
+      - property: id
+        direction: ASC
