@@ -1,7 +1,7 @@
 {
   "name": "si-workbench",
   "description": "SI 업무 지식베이스 플러그인: Obsidian vault 기반 업무일지, 업무 보고, 위키(개념 노트), 제안서/코드베이스 분석 문서화, push 확인 안전장치",
-  "version": "0.6.0",
+  "version": "0.9.0",
   "author": {
     "name": "won"
   },

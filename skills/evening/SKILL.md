@@ -46,7 +46,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scrip
 
 | 모드 | 담당 | 스크립트가 하는 일 | 쓰기 |
 |---|---|---|---|
-| `quick` | morning | 표준 폴더 밖 첨부 회수, `attachmentFolderPath` 교정, 루트 미분류 노트 탐지, 인덱스 자산 확인, `.base` 템플릿 폴더 제외 보정, 파일명과 겹치는 H1 제거 | 기계적 이동·설정만 |
+| `quick` | morning | 표준 폴더 밖 첨부 회수, `attachmentFolderPath` 교정, 루트 미분류 노트 탐지, 인덱스 자산 확인(볼트 공통 + 개선 범위별 `.base`), `.base` 템플릿 폴더 제외 보정, 개선 문서의 파생 표 탐지, 파일명과 겹치는 H1 제거 | 기계적 이동·설정만 |
 | `scan` | lunch | 죽은 링크·고아 첨부·frontmatter 스키마 이탈·중복 H1 진단 | 없음 (읽기 전용) |
 | `fix` | evening | quick + scan 전부 | 기계적 조치 |
 
@@ -58,6 +58,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scrip
 - `[죽은링크]` — 대소문자·공백만 다른 명백한 오타는 고치고, 대상 자체가 없으면 개념 노트 생성 대상으로 보고한다.
 - `[제목중복]` — 파일명과 같은 H1 이다. `quick`/`fix` 가 이미 지웠으므로 보고만 확인한다. `scan` 이 잡아낸 것은 다음 `quick`/`fix` 가 처리한다. 스킬이 직접 손댈 일은 없다.
 - `[고아첨부]` — **삭제하지 않는다.** 목록만 보고한다.
+- `[개선base]` — 개선 폴더에 사업·화면 범위 `.base` 가 없다. 여기서 만들지 말고 `/si-workbench:improve` 실행을 안내한다(그 스킬이 asset 에서 만든다).
+- `[파생표]` — 개선 문서가 문제 노트 프로퍼티를 마크다운 표로 베껴 두고 있다. **반드시 어긋나므로** `.base` 뷰 임베드로 바꿔야 한다. 본문을 다시 쓰는 일이라 여기서 자동으로 고치지 않고, 목록과 함께 `/si-workbench:improve` 또는 `/si-workbench:vault-tidy` 를 안내한다.
 - `[충돌]` `[경고]` — 그대로 보고한다.
 
 스크립트 실행에 실패하면(PowerShell 없음, 경로 오류 등) 루틴을 멈추지 말고 "볼트 위생: 실패 — <사유>" 한 줄만 남기고 나머지 절차를 계속한다.

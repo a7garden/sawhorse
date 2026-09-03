@@ -46,6 +46,7 @@ si-workbench가 쓸 Obsidian vault의 폴더 구조를 만들고, 노트 템플�
    - `${CLAUDE_PLUGIN_ROOT}/assets/대시보드.md` → `${user_config.vault_path}/대시보드.md`
    - 같은 이름의 파일이 이미 있으면 덮어쓰지 않고 skip 목록에 기록한다.
    - Bases는 Obsidian 1.9+ 코어 플러그인이다. `.obsidian/core-plugins.json`의 `"bases"`가 `false`면 활성화를 안내한다(설정 파일을 직접 고치지 않는다).
+   - 개선 사이클의 **사업 범위 `.base`**(`assets/bases/개선-사업.base`)는 여기서 배치하지 않는다. 사업명을 알아야 필터를 채울 수 있으므로 `/si-workbench:improve` 가 만든다. 화면 범위 base 는 존재하지 않는다 — 화면은 `url` 프로퍼티이고 `화면별` 뷰가 묶는다.
 6. Obsidian 설정 보정: `${user_config.vault_path}/.obsidian/app.json`
    - 파일이 없으면 `{"attachmentFolderPath":"첨부/스크린샷"}`으로 만든다.
    - 있으면 `attachmentFolderPath` 키만 본다. 없거나 값이 비어 있거나 `/` 또는 `.`(볼트 루트)이면 `첨부/스크린샷`으로 채운다. 다른 폴더가 지정돼 있으면 사용자의 선택이므로 그대로 두고 보고만 한다.

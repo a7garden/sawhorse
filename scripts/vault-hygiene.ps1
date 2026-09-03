@@ -143,15 +143,46 @@ if ($Mode -eq 'quick' -or $Mode -eq 'fix') {
              Where-Object { -not (Test-Excluded $_.FullName) })
   foreach ($b in $bases) {
     $txt = Get-Content -LiteralPath $b.FullName -Raw -Encoding UTF8
-    if ($txt -match '(?m)^\s*-\s*type\s*==' -and $txt -notmatch 'inFolder\("템플릿"\)') {
+    # 이미 폴더로 범위를 좁힌 base(개선의 사업 범위)는 템플릿이 섞일 수 없으므로 건드리지 않는다.
+    $scoped = $txt -match 'file\.inFolder\("[^"]+"\)'
+    if ($txt -match '(?m)^\s*-\s*type\s*==' -and -not $scoped) {
       $ins = "`$1    - not:`r`n        - file.inFolder(""템플릿"")`r`n"
-      $patched = [regex]::Replace($txt, '(?m)\A(filters:\r?\n  and:\r?\n)', $ins)
+      $patched = [regex]::Replace($txt, '(?m)^(filters:\r?\n  and:\r?\n)', $ins)
       if ($patched -ne $txt) {
         Write-Utf8 $b.FullName $patched
         Write-Output "[base] $(Get-Rel $b.FullName) — 템플릿 폴더 제외 추가"
         $fixed++
       } else {
         [void]$warn.Add("[base] $(Get-Rel $b.FullName) — 템플릿 제외 누락, 구조가 달라 자동 보정 실패")
+      }
+    }
+  }
+
+  # 5-b) 개선 폴더의 범위별 base 존재 확인 + 파생 표 잔존 탐지 (보고만 — 고치는 것은 improve 스킬)
+  $impRoot = Join-Path $V '사업'
+  if (Test-Path -LiteralPath $impRoot) {
+    $impDirs = @(Get-ChildItem -LiteralPath $impRoot -Recurse -Directory -Filter '개선' -ErrorAction SilentlyContinue |
+                 Where-Object { -not (Test-Excluded $_.FullName) })
+    foreach ($d in $impDirs) {
+      $hasNote = @(Get-ChildItem -LiteralPath $d.FullName -Recurse -File -Filter *.md |
+                   Where-Object { (Get-Content -LiteralPath $_.FullName -TotalCount 12 -Encoding UTF8) -match '^type:\s*개선\s*$' })
+      if ($hasNote.Count -eq 0) { continue }
+      if (@(Get-ChildItem -LiteralPath $d.FullName -File -Filter *.base).Count -eq 0) {
+        Write-Output "[개선base] $(Get-Rel $d.FullName) — 사업 범위 base 없음 (/si-workbench:improve 가 만든다)"
+      }
+      # 개선 폴더는 평면이다 — 화면은 노트의 url 프로퍼티가 나눈다. 옛 화면단위 하위 폴더는 보고만 한다.
+      foreach ($sd in @(Get-ChildItem -LiteralPath $d.FullName -Directory)) {
+        $n = @(Get-ChildItem -LiteralPath $sd.FullName -File -Filter *.md).Count
+        if ($n -gt 0) {
+          Write-Output "[개선폴더] $(Get-Rel $sd.FullName) — 화면단위 하위 폴더 (옛 구조). 문제 노트를 개선/ 바로 아래로 올릴 것 — 화면 구분은 url 프로퍼티가 한다"
+        }
+      }
+      # 노트 프로퍼티를 베껴 둔 표(행이 [[링크]] 로 시작)는 반드시 어긋난다.
+      foreach ($m in @(Get-ChildItem -LiteralPath $d.FullName -Recurse -File -Filter *.md)) {
+        $rows = @([regex]::Matches((Get-Content -LiteralPath $m.FullName -Raw -Encoding UTF8), '(?m)^\|\s*\[\[')).Count
+        if ($rows -ge 3) {
+          Write-Output "[파생표] $(Get-Rel $m.FullName) — 문제 노트를 베낀 표 $rows 행. .base 뷰 임베드로 바꿀 것"
+        }
       }
     }
   }
@@ -316,7 +347,7 @@ if ($Mode -eq 'scan' -or $Mode -eq 'fix') {
     $rel = Get-Rel $f.FullName
     if ($rel -like '템플릿\*') { continue }
     # improve 스킬이 의도적으로 frontmatter 없이 두는 산출물
-    if ($f.Name -like '문제목록 - *.md') { continue }
+    if ($f.Name -like '문제목록 - *.md' -or $f.Name -like '* 문제목록.md') { continue }
     if ($f.Name -eq '개선.md' -and $rel -like '*\개선\개선.md') { continue }
     $raw = $bodies[$f.FullName]
     $m = [regex]::Match($raw, '(?s)\A---\r?\n(.*?)\r?\n---')

@@ -3,8 +3,7 @@ formulas:
 filters:
   and:
     - type == "개선"
-    - not:
-        - file.inFolder("템플릿")
+    - file.inFolder("사업/<사업명>/개선")
 properties:
   file.name:
     displayName: 문제
