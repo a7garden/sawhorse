@@ -33,11 +33,9 @@ description: Use when setting up or troubleshooting si-workbench — "si-workben
 | 항목 | 뜻 | 기본값 |
 |---|---|---|
 | `path` | 코드베이스 절대경로 | (필수, 실존 확인) |
+| `workBranch` | **개선 작업 전용 단일 브랜치.** 모든 문제의 커밋이 여기 쌓인다 | (필수, 반드시 물어본다 — 추정·자동 생성 금지) |
+| `portableBase` | 나중에 이 브랜치를 다른 브랜치로 옮길 때의 기준 (예: `origin/dev`) | 생략 가능 |
 | `idPrefix` | 문제 ID 접두어 (예: `FDR` → `FDR-001`) | 사업명 이니셜로 제안 |
-| `mode` | `inplace`(현재 디렉터리에 브랜치) / `worktree`(별도 체크아웃) | `inplace` |
-| `baseBranch` | 복귀·병합 대상 브랜치 | 빈 값 = 실행 시점의 현재 브랜치 |
-| `branchPrefix` | 문제 브랜치 접두어 | `fix/` |
-| `worktreeRoot` | 워크트리 위치 (`worktree` 모드만) | (필수) **SVN 작업복사본 바깥** 경로여야 함 |
 | `verify` | 컴파일 검증 명령 | 매니페스트로 추정해 제안 (`pom.xml` → `mvn -o -q compile`, `package.json` → `npm run build`) |
 
 ```json
@@ -48,10 +46,8 @@ description: Use when setting up or troubleshooting si-workbench — "si-workben
     "projects": {
       "<사업명>": {
         "path": "D:\\workspace\\myproj",
-        "mode": "inplace",
-        "baseBranch": "",
-        "branchPrefix": "fix/",
-        "worktreeRoot": "",
+        "workBranch": "improve/fdr",
+        "portableBase": "origin/dev",
         "idPrefix": "FDR",
         "verify": "mvn -o -q compile"
       }
@@ -62,7 +58,11 @@ description: Use when setting up or troubleshooting si-workbench — "si-workben
 
 - 사업이 하나뿐이면 `defaultProject` 를 그 값으로 자동 설정한다.
 - 등록된 프로젝트는 진단 표에 `path` 실존, git 저장소 여부, `.svn` 공존 여부를 함께 보고한다. `.svn` 이 있으면 "SVN 작업복사본입니다 — improve 스킬은 svn 상태 변경 명령을 실행하지 않습니다" 를 덧붙인다.
-- `worktreeRoot` 가 프로젝트 경로 **안쪽**으로 지정되면 거부하고 다시 묻는다 (SVN 작업복사본 오염 방지).
+- **브랜치를 만들지 않는다.** `git branch --list <workBranch>` 로 존재 여부만 확인한다. 없으면 값은 그대로 기록하되 아래를 안내하고 사용자가 직접 만들게 한다:
+  - `workBranch` 는 **남의 변경이 섞이지 않은 지점에서 분기**해 두어야 나중에 통째로 다른 브랜치에 옮길 수 있다.
+  - 만드는 명령: `git branch <workBranch> <분기점>` (개선 작업은 문제마다 브랜치를 파지 않고 이 하나에만 쌓인다).
+  - 같은 작업 트리를 IDE·톰캣·다른 세션이 함께 보므로 `switch`·`checkout` 은 사용자가 직접 판단해 실행한다.
+- 이 스킬도 improve 스킬도 브랜치를 생성·전환·병합하지 않는다. 확인과 안내까지가 범위다.
 
 ## 3. 환경 진단
 
@@ -72,6 +72,7 @@ description: Use when setting up or troubleshooting si-workbench — "si-workben
 |---|---|---|
 | vault 디렉토리 | 1단계에서 확인 | 경로 재질문 |
 | Obsidian 템플릿 설정 | `<vault>/.obsidian/templates.json` 존재 | `/si-workbench:init-vault` 실행 제안 |
+| 개선 승인 체크박스 | `<vault>/.obsidian/types.json` 의 `types.approve` 가 `checkbox` | 없으면 승인 표시가 체크박스가 아니라 텍스트로 보인다. `/si-workbench:init-vault` 실행 제안 |
 | pandoc | `pandoc --version` | docx 파싱은 Word 자동화로 폴백됨. 설치 권장: https://pandoc.org/installing |
 | Node.js (v18+) | `node --version` | Playwright 스크린샷만 제한, 나머지 기능 정상 |
 | Playwright MCP | 세션의 `/mcp` 화면에서 playwright 상태 확인 | 미연결이면 README '자주 묻는 질문'의 Windows npx 우회법 안내 |
