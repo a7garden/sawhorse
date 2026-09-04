@@ -7,8 +7,12 @@ import {
   FolderSearch,
   FileText,
   Settings,
+  Monitor,
+  Moon,
+  Sun,
 } from "lucide-react";
 import { useApp, type PageId } from "@/lib/store";
+import { useTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import ImprovePage from "@/pages/ImprovePage";
@@ -30,11 +34,16 @@ const NAV: { id: PageId; label: string; icon: React.ComponentType<{ className?: 
   { id: "settings", label: "설정", icon: Settings },
 ];
 
+const THEME_LABEL: Record<Theme, string> = { light: "라이트", dark: "다크", system: "시스템" };
+
 export default function App() {
   const page = useApp((s) => s.page);
   const setPage = useApp((s) => s.setPage);
   const init = useApp((s) => s.init);
   const missedCount = useApp((s) => s.missed.length);
+  const theme = useTheme((s) => s.theme);
+  const resolved = useTheme((s) => s.resolved);
+  const cycleTheme = useTheme((s) => s.cycle);
 
   useEffect(() => {
     void init();
@@ -88,7 +97,23 @@ export default function App() {
             </button>
           ))}
         </nav>
-        <div className="mt-auto px-2 text-[10px] text-muted-foreground">v0.1.0</div>
+        <div className="mt-auto flex items-center justify-between px-2">
+          <div className="text-[10px] text-muted-foreground">v0.1.0</div>
+          <button
+            onClick={cycleTheme}
+            title={`테마: ${THEME_LABEL[theme]} (클릭하여 전환)`}
+            aria-label="테마 전환"
+            className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+          >
+            {theme === "system" ? (
+              <Monitor className="size-3.5" />
+            ) : resolved === "dark" ? (
+              <Moon className="size-3.5" />
+            ) : (
+              <Sun className="size-3.5" />
+            )}
+          </button>
+        </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto">{body}</main>
       <SetupWizard />
