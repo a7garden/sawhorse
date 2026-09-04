@@ -69,6 +69,10 @@ pub fn approve_note(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn list_obsidian_vaults() -> Vec<vault::VaultCandidate> {
+    vault::detect_obsidian_vaults()
+}
+#[tauri::command]
 pub fn list_inbox_count(project: Option<String>) -> u64 {
     let view = config::load_view();
     if view.vault_path.is_empty() {

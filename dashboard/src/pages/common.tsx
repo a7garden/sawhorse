@@ -51,6 +51,8 @@ export const JOB_KIND_KO: Record<Job["kind"], string> = {
   implement: "구현",
   routine: "루틴",
   excel: "엑셀",
+  initVault: "init-vault",
+  setup: "setup",
 };
 
 export function jobBadgeVariant(s: JobStatus): BadgeVariant {

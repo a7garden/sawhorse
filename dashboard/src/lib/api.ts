@@ -11,12 +11,14 @@ import type {
   RoutineName,
   TodoSection,
   TodoSections,
+  VaultCandidate,
   VaultNode,
   VaultNoteView,
 } from "./types";
 
 export const api = {
   getConfig: (): Promise<ConfigView> => invoke("get_config"),
+  listObsidianVaults: (): Promise<VaultCandidate[]> => invoke("list_obsidian_vaults"),
   saveConfig: (patch: ConfigPatch): Promise<void> => invoke("save_config", { patch }),
   diagnostics: (): Promise<Diagnostics> => invoke("diagnostics"),
 

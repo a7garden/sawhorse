@@ -27,8 +27,11 @@ interface AppState {
   missed: MissedRoutine[];
   vaultTree: VaultNode[];
   inboxCount: number;
+  wizardOpen: boolean;
 
   init: () => Promise<void>;
+  openWizard: () => void;
+  closeWizard: () => void;
   refreshConfig: () => Promise<void>;
   refreshImprovements: () => Promise<void>;
   refreshTodos: () => Promise<void>;
@@ -45,6 +48,9 @@ export const useApp = create<AppState>((set, get) => ({
   page: "home",
   setPage: (page) => set({ page }),
 
+  wizardOpen: false,
+  openWizard: () => set({ wizardOpen: true }),
+  closeWizard: () => set({ wizardOpen: false }),
   config: null,
   diag: null,
   improvements: [],
@@ -88,6 +94,10 @@ export const useApp = create<AppState>((set, get) => ({
       get().refreshTree(),
       get().refreshDiagnostics(),
     ]);
+    const cfg = get().config;
+    if (cfg && (!cfg.exists || cfg.vaultPath.length === 0)) {
+      set({ wizardOpen: true });
+    }
   },
 
   refreshConfig: async () => set({ config: await api.getConfig() }),

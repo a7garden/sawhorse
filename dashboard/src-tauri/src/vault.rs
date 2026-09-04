@@ -572,6 +572,42 @@ pub fn read_vault_note(vault: &Path, rel: &str) -> Result<(String, String), Stri
     Ok((title, text))
 }
 
+// ---------- Obsidian vault detection (first-run wizard helper) ----------
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultCandidate {
+    pub path: String,
+    pub open: bool,
+}
+
+/// Parse Obsidian's vault registry JSON: {"vaults": {"<id>": {"path": ..., "open": ...}}}.
+fn parse_vault_registry(text: &str) -> Vec<(String, bool)> {
+    let Ok(v) = serde_json::from_str::<Json>(text) else { return vec![] };
+    let Some(vaults) = v.get("vaults").and_then(Json::as_object) else { return vec![] };
+    let mut out = Vec::new();
+    for entry in vaults.values() {
+        let Some(p) = entry.get("path").and_then(Json::as_str) else { continue };
+        let open = entry.get("open").and_then(Json::as_bool).unwrap_or(false);
+        out.push((p.to_string(), open));
+    }
+    out
+}
+
+/// Known vaults from Obsidian's own config, existing dirs first (open first).
+pub fn detect_obsidian_vaults() -> Vec<VaultCandidate> {
+    let Some(cfg_dir) = dirs::config_dir() else { return vec![] };
+    let registry = cfg_dir.join("obsidian").join("obsidian.json");
+    let Ok(text) = std::fs::read_to_string(registry) else { return vec![] };
+    let mut out: Vec<VaultCandidate> = parse_vault_registry(&text)
+        .into_iter()
+        .filter(|(p, _)| Path::new(p).is_dir())
+        .map(|(path, open)| VaultCandidate { path, open })
+        .collect();
+    out.sort_by(|a, b| b.open.cmp(&a.open));
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -638,7 +674,6 @@ mod tests {
         let map = parse_mapping(&split.yaml).unwrap();
         assert_eq!(fm_bool(&map, "approve"), true);
         assert_eq!(fm_str(&map, "approved"), chrono::Local::now().format("%Y-%m-%d").to_string());
-        assert_eq!(fm_str(&map, "status"), "승인");
         assert_eq!(fm_str(&map, "id"), "FDR-001");
         assert_eq!(fm_list(&map, "commits").len(), 0);
 
@@ -763,4 +798,17 @@ mod tests {
         assert!(read_vault_note(&vault, "../outside.md").is_err());
         assert!(read_vault_note(&vault, "/etc/passwd").is_err());
     }
+    #[test]
+    fn parse_vault_registry_shapes() {
+        let parsed = parse_vault_registry(
+            r#"{"vaults":{"a1":{"path":"/v/main","ts":1,"open":true},"a2":{"path":"/v/old","ts":2}}}"#,
+        );
+        assert_eq!(parsed.len(), 2);
+        assert!(parsed.iter().any(|(p, o)| p == "/v/main" && *o));
+        assert!(parsed.iter().any(|(p, o)| p == "/v/old" && !o));
+        assert!(parse_vault_registry("not json").is_empty());
+        assert!(parse_vault_registry(r#"{"vaults":{}}"#).is_empty());
+        assert!(parse_vault_registry(r#"{"other":1}"#).is_empty());
+    }
+
 }

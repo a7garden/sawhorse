@@ -90,9 +90,20 @@ export interface VaultNode {
   mtimeMs: number;
 }
 
-export type JobKind = "design" | "implement" | "routine" | "excel";
 export type RoutineName = "morning" | "lunch" | "evening";
 export type JobStatus = "queued" | "running" | "success" | "failed" | "cancelled" | "interrupted";
+
+export interface VaultCandidate {
+  path: string;
+  open: boolean;
+}
+export type JobKind =
+  | "design"
+  | "implement"
+  | "routine"
+  | "excel"
+  | "initVault"
+  | "setup";
 
 export interface JobRequest {
   kind: JobKind;

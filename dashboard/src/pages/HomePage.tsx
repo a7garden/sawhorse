@@ -41,6 +41,7 @@ export default function HomePage() {
   const progress = useApp((s) => s.progress);
   const missed = useApp((s) => s.missed);
   const setPage = useApp((s) => s.setPage);
+  const openWizard = useApp((s) => s.openWizard);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const refreshMissed = useApp((s) => s.refreshMissed);
   const [busy, setBusy] = useState(false);
@@ -104,9 +105,16 @@ export default function HomePage() {
                 <li key={p}>{p}</li>
               ))}
             </ul>
-            <Button size="xs" variant="outline" className="mt-2" onClick={() => setPage("settings")}>
-              설정으로 이동
-            </Button>
+            <div className="mt-2 flex items-center gap-2">
+              <Button size="xs" variant="outline" onClick={() => setPage("settings")}>
+                설정으로 이동
+              </Button>
+              {(!config?.exists || config?.vaultPath.length === 0) && (
+                <Button size="xs" variant="outline" onClick={openWizard}>
+                  설정 마법사
+                </Button>
+              )}
+            </div>
           </div>
         )}
 

@@ -16,6 +16,8 @@ import TodosPage from "@/pages/TodosPage";
 import DocsPage from "@/pages/DocsPage";
 import SettingsPage from "@/pages/SettingsPage";
 
+import SetupWizard from "@/pages/SetupWizard";
+
 const NAV: { id: PageId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "home", label: "홈", icon: LayoutDashboard },
   { id: "improve", label: "개선", icon: ListChecks },
@@ -84,6 +86,7 @@ export default function App() {
         <div className="mt-auto px-2 text-[10px] text-muted-foreground">v0.1.0</div>
       </aside>
       <main className="min-w-0 flex-1 overflow-y-auto">{body}</main>
+      <SetupWizard />
     </div>
   );
 }

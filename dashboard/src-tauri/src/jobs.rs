@@ -307,6 +307,28 @@ fn build_job(
                 ..base
             })
         }
+        "initVault" => {
+            if opts.vault_path.is_empty() {
+                return Err("볼트 경로가 설정되지 않았습니다".into());
+            }
+            Ok(Job {
+                label: "볼트 초기화 (init-vault)".into(),
+                prompt: "/si-workbench:init-vault".into(),
+                cwd: opts.vault_path.clone(),
+                ..base
+            })
+        }
+        "setup" => {
+            if opts.vault_path.is_empty() {
+                return Err("볼트 경로가 설정되지 않았습니다".into());
+            }
+            Ok(Job {
+                label: "환경 진단 (setup)".into(),
+                prompt: "/si-workbench:setup".into(),
+                cwd: opts.vault_path.clone(),
+                ..base
+            })
+        }
         other => Err(format!("알 수 없는 작업 종류: {other}")),
     }
 }

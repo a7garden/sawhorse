@@ -47,6 +47,7 @@ export default function SettingsPage() {
   const diag = useApp((s) => s.diag);
   const refreshConfig = useApp((s) => s.refreshConfig);
   const refreshDiagnostics = useApp((s) => s.refreshDiagnostics);
+  const openWizard = useApp((s) => s.openWizard);
 
   const [draft, setDraft] = useState<ConfigView | null>(config ? structuredClone(config) : null);
   const [saving, setSaving] = useState(false);
@@ -115,6 +116,9 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader title="설정" desc="볼트·프로젝트·루틴과 실행 옵션을 관리합니다.">
+        <Button size="sm" variant="ghost" onClick={openWizard}>
+          마법사
+        </Button>
         <Button
           size="sm"
           variant="outline"
