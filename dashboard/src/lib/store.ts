@@ -9,10 +9,12 @@ import type {
   MissedRoutine,
   ProgressEntry,
   TodoSections,
+  UnpromotedItem,
+  VaultAudit,
   VaultNode,
 } from "./types";
 
-export type PageId = "home" | "improve" | "jobs" | "todos" | "docs" | "settings";
+export type PageId = "home" | "improve" | "jobs" | "todos" | "docs" | "vault" | "settings";
 
 interface AppState {
   page: PageId;
@@ -27,6 +29,8 @@ interface AppState {
   missed: MissedRoutine[];
   vaultTree: VaultNode[];
   inboxCount: number;
+  audit: VaultAudit | null;
+  unpromoted: UnpromotedItem[];
   wizardOpen: boolean;
 
   init: () => Promise<void>;
@@ -39,6 +43,7 @@ interface AppState {
   refreshMissed: () => Promise<void>;
   refreshDiagnostics: () => Promise<void>;
   refreshTree: () => Promise<void>;
+  refreshAudit: () => Promise<void>;
   pushProgress: (jobId: string, entry: ProgressEntry) => void;
 }
 
@@ -60,6 +65,8 @@ export const useApp = create<AppState>((set, get) => ({
   missed: [],
   vaultTree: [],
   inboxCount: 0,
+  audit: null,
+  unpromoted: [],
 
   init: async () => {
     if (initialized) return;
@@ -92,6 +99,7 @@ export const useApp = create<AppState>((set, get) => ({
       get().refreshImprovements(),
       get().refreshTodos(),
       get().refreshTree(),
+      get().refreshAudit(),
       get().refreshDiagnostics(),
     ]);
     const cfg = get().config;
@@ -114,6 +122,10 @@ export const useApp = create<AppState>((set, get) => ({
   refreshMissed: async () => set({ missed: await api.listMissed() }),
   refreshDiagnostics: async () => set({ diag: await api.diagnostics() }),
   refreshTree: async () => set({ vaultTree: await api.listVaultTree() }),
+  refreshAudit: async () => {
+    const [audit, unpromoted] = await Promise.all([api.auditVault(), api.listUnpromoted()]);
+    set({ audit, unpromoted });
+  },
 
   pushProgress: (jobId, entry) =>
     set((s) => {

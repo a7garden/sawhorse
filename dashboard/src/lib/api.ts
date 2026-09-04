@@ -11,6 +11,8 @@ import type {
   RoutineName,
   TodoSection,
   TodoSections,
+  UnpromotedItem,
+  VaultAudit,
   VaultCandidate,
   VaultNode,
   VaultNoteView,
@@ -28,6 +30,8 @@ export const api = {
   approveNote: (path: string): Promise<void> => invoke("approve_note", { path }),
   inboxCount: (project?: string): Promise<number> =>
     invoke("list_inbox_count", { project: project ?? null }),
+  auditVault: (): Promise<VaultAudit> => invoke("audit_vault"),
+  listUnpromoted: (): Promise<UnpromotedItem[]> => invoke("list_unpromoted"),
 
   listTodos: (): Promise<TodoSections> => invoke("list_todos"),
   toggleTodo: (section: TodoSection, index: number, checked: boolean): Promise<void> =>

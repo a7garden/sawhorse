@@ -97,13 +97,38 @@ export interface VaultCandidate {
   path: string;
   open: boolean;
 }
+
+export interface AuditIssue {
+  severity: "error" | "warn" | "info";
+  path: string;
+  message: string;
+}
+
+export interface JournalAudit {
+  todayExists: boolean;
+  missing: string[];
+}
+
+export interface VaultAudit {
+  issues: AuditIssue[];
+  journal: JournalAudit;
+  scannedAtMs: number;
+}
+
+export interface UnpromotedItem {
+  project: string;
+  idPrefix: string;
+  text: string;
+  listPath: string;
+}
 export type JobKind =
   | "design"
   | "implement"
   | "routine"
   | "excel"
   | "initVault"
-  | "setup";
+  | "setup"
+  | "promote";
 
 export interface JobRequest {
   kind: JobKind;
