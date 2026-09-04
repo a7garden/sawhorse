@@ -1,0 +1,115 @@
+import { create } from "zustand";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { api, EVENTS } from "./api";
+import type {
+  ConfigView,
+  Diagnostics,
+  ImprovementNote,
+  Job,
+  MissedRoutine,
+  ProgressEntry,
+  TodoSections,
+  VaultNode,
+} from "./types";
+
+export type PageId = "home" | "improve" | "jobs" | "todos" | "docs" | "settings";
+
+interface AppState {
+  page: PageId;
+  setPage: (p: PageId) => void;
+
+  config: ConfigView | null;
+  diag: Diagnostics | null;
+  improvements: ImprovementNote[];
+  todos: TodoSections | null;
+  jobs: Job[];
+  progress: Record<string, ProgressEntry[]>;
+  missed: MissedRoutine[];
+  vaultTree: VaultNode[];
+  inboxCount: number;
+
+  init: () => Promise<void>;
+  refreshConfig: () => Promise<void>;
+  refreshImprovements: () => Promise<void>;
+  refreshTodos: () => Promise<void>;
+  refreshJobs: () => Promise<void>;
+  refreshMissed: () => Promise<void>;
+  refreshDiagnostics: () => Promise<void>;
+  refreshTree: () => Promise<void>;
+  pushProgress: (jobId: string, entry: ProgressEntry) => void;
+}
+
+let initialized = false;
+
+export const useApp = create<AppState>((set, get) => ({
+  page: "home",
+  setPage: (page) => set({ page }),
+
+  config: null,
+  diag: null,
+  improvements: [],
+  todos: null,
+  jobs: [],
+  progress: {},
+  missed: [],
+  vaultTree: [],
+  inboxCount: 0,
+
+  init: async () => {
+    if (initialized) return;
+    initialized = true;
+    const unlisteners: UnlistenFn[] = [];
+    unlisteners.push(
+      await listen<{ jobId: string; entry: ProgressEntry }>(EVENTS.jobProgress, (e) =>
+        get().pushProgress(e.payload.jobId, e.payload.entry),
+      ),
+    );
+    unlisteners.push(
+      await listen<{ job: Job }>(EVENTS.jobFinished, () => void get().refreshJobs()),
+    );
+    unlisteners.push(
+      await listen<{ areas: string[] }>(EVENTS.vaultChanged, () => {
+        void get().refreshImprovements();
+        void get().refreshTodos();
+        void get().refreshTree();
+      }),
+    );
+    unlisteners.push(
+      await listen<{ missed: MissedRoutine }>(EVENTS.scheduleMissed, () =>
+        void get().refreshMissed(),
+      ),
+    );
+    await Promise.all([
+      get().refreshConfig(),
+      get().refreshJobs(),
+      get().refreshMissed(),
+      get().refreshImprovements(),
+      get().refreshTodos(),
+      get().refreshTree(),
+      get().refreshDiagnostics(),
+    ]);
+  },
+
+  refreshConfig: async () => set({ config: await api.getConfig() }),
+  refreshImprovements: async () => {
+    const improvements = await api.listImprovements();
+    const project = get().config?.defaultProject;
+    set({
+      improvements,
+      inboxCount: await api.inboxCount(project || undefined).catch(() => 0),
+    });
+  },
+  refreshTodos: async () => set({ todos: await api.listTodos() }),
+  refreshJobs: async () => set({ jobs: await api.listJobs() }),
+  refreshMissed: async () => set({ missed: await api.listMissed() }),
+  refreshDiagnostics: async () => set({ diag: await api.diagnostics() }),
+  refreshTree: async () => set({ vaultTree: await api.listVaultTree() }),
+
+  pushProgress: (jobId, entry) =>
+    set((s) => {
+      const list = s.progress[jobId] ?? [];
+      // keep memory bounded for very chatty jobs
+      const next = list.length > 4000 ? list.slice(-2000) : list;
+      return { progress: { ...s.progress, [jobId]: [...next, entry] } };
+    }),
+}));
