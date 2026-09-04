@@ -10,6 +10,7 @@ use crate::jobs::{Job, JobManager, JobRequest};
 use crate::config;
 use crate::scheduler;
 use crate::state::{AppState, MissedEntry};
+use crate::plugin;
 use crate::vault;
 
 #[derive(Serialize)]
@@ -219,4 +220,26 @@ pub fn set_launch_at_login(app: AppHandle, on: bool) -> Result<(), String> {
 pub fn get_launch_at_login(app: AppHandle) -> bool {
     use tauri_plugin_autostart::ManagerExt;
     app.autolaunch().is_enabled().unwrap_or(false)
+}
+
+#[tauri::command]
+pub fn plugin_info() -> Result<plugin::PluginBundle, String> {
+    plugin::plugin_info()
+}
+
+#[tauri::command]
+pub fn read_skill(name: String) -> Result<String, String> {
+    let root = plugin::resolve_root()?;
+    plugin::read_skill(&root, &name)
+}
+
+#[tauri::command]
+pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    if !url.starts_with("https://") {
+        return Err("https URL만 허용".into());
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| format!("링크 열기 실패: {e}"))
 }
