@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ListChecks, RefreshCw, SquareTerminal } from "lucide-react";
+import { ListChecks, RefreshCw, SquareTerminal, TriangleAlert } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import type { AuditIssue } from "@/lib/types";
@@ -14,11 +14,26 @@ const SEV: Record<AuditIssue["severity"], { label: string; variant: "destructive
   info: { label: "정보", variant: "secondary" },
 };
 
+// 미승격 목록의 절대 경로에서 볼트 경로 prefix를 떼어 볼트 기준 상대 경로로 바꾼다.
+// 구분자는 슬래시로 정규화하고, 볼트 경로와 맞지 않으면 null을 돌려준다.
+function vaultRel(listPath: string, vaultPath: string): string | null {
+  const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+  const v = norm(vaultPath);
+  const f = norm(listPath);
+  if (v.length === 0 || !f.startsWith(`${v}/`)) return null;
+  return f.slice(v.length + 1);
+}
+
 export default function VaultPage() {
   const audit = useApp((s) => s.audit);
   const unpromoted = useApp((s) => s.unpromoted);
   const refreshAudit = useApp((s) => s.refreshAudit);
+  const refreshJobs = useApp((s) => s.refreshJobs);
+  const setPage = useApp((s) => s.setPage);
+  const vaultPath = useApp((s) => s.config?.vaultPath ?? "");
   const [scanning, setScanning] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<{ title: string; md: string } | null>(null);
 
   async function scan() {
@@ -40,8 +55,28 @@ export default function VaultPage() {
     }
   }
 
+  // 미승격 목록은 frontmatter가 없어 read_note가 거부하므로 볼트 노트 읽기로 연다.
+  async function openList(rel: string) {
+    try {
+      const v = await api.readVaultNote(rel);
+      setView({ title: v.title, md: v.markdown });
+    } catch {
+      setView(null);
+    }
+  }
+
   async function promote() {
-    await api.enqueueJob({ kind: "promote" });
+    setPromoting(true);
+    setError(null);
+    try {
+      await api.enqueueJob({ kind: "promote" });
+      await refreshJobs();
+      setPage("jobs");
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setPromoting(false);
+    }
   }
 
   return (
@@ -50,10 +85,16 @@ export default function VaultPage() {
         <Button size="sm" variant="outline" disabled={scanning} onClick={() => void scan()}>
           <RefreshCw /> 다시 검사
         </Button>
-        <Button size="sm" onClick={() => void promote()}>
+        <Button size="sm" disabled={promoting} onClick={() => void promote()}>
           <SquareTerminal /> 인박스 승격 검토
         </Button>
       </PageHeader>
+
+      {error && (
+        <p className="mx-4 mb-1 flex items-center gap-1.5 text-xs text-destructive">
+          <TriangleAlert className="size-3.5 shrink-0" /> 승격 검토 등록 실패: {error}
+        </p>
+      )}
 
       <div className="grid gap-3 p-4 lg:grid-cols-2">
         <div className="space-y-3">
@@ -98,15 +139,24 @@ export default function VaultPage() {
                 <Empty>미승격 항목이 없습니다.</Empty>
               ) : (
                 <ul className="space-y-1">
-                  {unpromoted.map((it, i) => (
-                    <li key={i} className="flex items-start gap-2 text-xs">
-                      <Badge variant="outline" className="shrink-0">{it.project}</Badge>
-                      <span className="min-w-0 flex-1">{it.text}</span>
-                      <button onClick={() => void openPath(it.listPath)} className="shrink-0 text-[11px] text-muted-foreground hover:underline">
-                        목록 열기
-                      </button>
-                    </li>
-                  ))}
+                  {unpromoted.map((it, i) => {
+                    const rel = vaultRel(it.listPath, vaultPath);
+                    return (
+                      <li key={i} className="flex items-start gap-2 text-xs">
+                        <Badge variant="outline" className="shrink-0">{it.project}</Badge>
+                        <span className="min-w-0 flex-1">{it.text}</span>
+                        {rel ? (
+                          <button onClick={() => void openList(rel)} className="shrink-0 text-[11px] text-muted-foreground hover:underline">
+                            목록 열기
+                          </button>
+                        ) : (
+                          <span className="shrink-0 text-[11px] text-muted-foreground" title="설정의 볼트 경로와 목록 경로가 일치하지 않습니다">
+                            볼트 불일치
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>
