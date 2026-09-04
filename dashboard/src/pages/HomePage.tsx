@@ -44,15 +44,21 @@ export default function HomePage() {
   const openWizard = useApp((s) => s.openWizard);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const refreshMissed = useApp((s) => s.refreshMissed);
+  const todos = useApp((s) => s.todos);
+  const refreshTodos = useApp((s) => s.refreshTodos);
+  const refreshAudit = useApp((s) => s.refreshAudit);
+  const audit = useApp((s) => s.audit);
+  const inboxCount = useApp((s) => s.inboxCount);
   const [busy, setBusy] = useState(false);
 
   useTicker(jobs.some((j) => j.status === "running"));
 
   useEffect(() => {
+    void refreshAudit();
     // job-finished events refresh the list, but queued→running has no event; poll lightly.
     const t = setInterval(() => void refreshJobs(), 10000);
     return () => clearInterval(t);
-  }, [refreshJobs]);
+  }, [refreshJobs, refreshAudit]);
 
   const activeJobs = jobs
     .filter((j) => j.status === "queued" || j.status === "running")
@@ -67,6 +73,16 @@ export default function HomePage() {
   if (diag) {
     const bad = diag.projects.filter((p) => !p.pathOk).map((p) => p.name);
     if (bad.length > 0) problems.push(`프로젝트 경로 확인 실패: ${bad.join(", ")}`);
+  }
+
+  async function toggleToday(index: number, checked: boolean) {
+    if (!todos) return;
+    try {
+      await api.toggleTodo("today", index, checked);
+      await refreshTodos();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   async function runRoutine(r: RoutineName) {
@@ -191,7 +207,135 @@ export default function HomePage() {
           })}
         </section>
 
-        <section className="grid gap-3 lg:grid-cols-2">
+        <section className="grid gap-3 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
+              <CardTitle className="text-[13px]">
+                오늘의 업무
+                {todos && todos.today.length > 0 && (
+                  <span className="ml-2 text-[11px] font-normal text-muted-foreground">
+                    {todos.today.filter((t) => t.checked).length}/{todos.today.length}
+                  </span>
+                )}
+              </CardTitle>
+              <Button size="xs" variant="ghost" onClick={() => setPage("todos")}>
+                전체 <ArrowRight />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {!todos || !todos.fileExists || todos.today.length === 0 ? (
+                <Empty>일지에 오늘 할 일이 없습니다.</Empty>
+              ) : (
+                <div className="space-y-1">
+                  {todos.today.map((t) => (
+                    <label key={t.index} className="flex items-center gap-2 rounded-md px-1.5 py-1 text-[13px] transition-colors hover:bg-accent">
+                      <input
+                        type="checkbox"
+                        checked={t.checked}
+                        onChange={(e) => void toggleToday(t.index, e.target.checked)}
+                        className="size-3.5 accent-[var(--primary)]"
+                      />
+                      <span className={t.checked ? "text-muted-foreground line-through" : ""}>{t.text}</span>
+                    </label>
+                  ))}
+                  {todos.tomorrow.length > 0 && (
+                    <details className="pt-1">
+                      <summary className="cursor-pointer text-[11px] text-muted-foreground">
+                        내일 {todos.tomorrow.length}건
+                      </summary>
+                      <ul className="mt-1 space-y-0.5 pl-5 text-xs text-muted-foreground list-disc">
+                        {todos.tomorrow.map((t) => (
+                          <li key={t.index}>{t.text}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
+              <CardTitle className="text-[13px]">활동 요약</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">오늘 완료 잡</span>
+                <span className="font-semibold tabular-nums">
+                  {jobs.filter((j) => j.status === "success" && j.finishedAtMs != null && fmtDate(j.finishedAtMs) === today).length}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">오늘 실패 잡</span>
+                <span className="font-semibold tabular-nums">
+                  {jobs.filter((j) => j.status === "failed" && j.finishedAtMs != null && fmtDate(j.finishedAtMs) === today).length}
+                </span>
+              </div>
+              {(() => {
+                const failed = jobs
+                  .filter((j) => j.status === "failed")
+                  .sort((a, b) => (b.finishedAtMs ?? 0) - (a.finishedAtMs ?? 0))[0];
+                return failed ? (
+                  <button
+                    onClick={() => setPage("jobs")}
+                    className="w-full rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-left"
+                  >
+                    <span className="block truncate font-medium">{failed.label}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      마지막 실패 {failed.finishedAtMs ? fmtClock(failed.finishedAtMs) : ""} · 작업 탭에서 로그 보기
+                    </span>
+                  </button>
+                ) : null;
+              })()}
+              <Button size="xs" variant="outline" className="w-full" onClick={() => setPage("docs")}>
+                마지막 리포트 <ArrowRight />
+              </Button>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-3 lg:grid-cols-3">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
+              <CardTitle className="text-[13px]">볼트 현황</CardTitle>
+              <Button size="xs" variant="ghost" onClick={() => setPage("vault")}>
+                볼트 관리 <ArrowRight />
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2 text-xs">
+              <button onClick={() => setPage("vault")} className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-accent">
+                <span className="text-muted-foreground">미승격 항목</span>
+                <span className="text-lg font-bold tabular-nums">{inboxCount}</span>
+              </button>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">오늘 일지</span>
+                {audit == null ? (
+                  <Badge variant="outline">검사 전</Badge>
+                ) : audit.journal.todayExists ? (
+                  <Badge variant="success">있음</Badge>
+                ) : (
+                  <Badge variant="warning">없음</Badge>
+                )}
+              </div>
+              <div>
+                <div className="mb-1 text-muted-foreground">최근 변경 개선 노트</div>
+                {improvements.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">개선 노트가 없습니다.</p>
+                ) : (
+                  <ul className="space-y-0.5">
+                    {improvements.slice(0, 3).map((n) => (
+                      <li key={n.path} className="truncate">
+                        <button onClick={() => setPage("improve")} className="text-left hover:underline" title={n.title}>
+                          <span className="font-mono text-[11px] text-muted-foreground">{n.id}</span> {n.title}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
               <CardTitle className="text-[13px]">개선 사이클</CardTitle>
@@ -215,7 +359,6 @@ export default function HomePage() {
               ))}
             </CardContent>
           </Card>
-
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
               <CardTitle className="text-[13px]">실행 중 잡</CardTitle>
