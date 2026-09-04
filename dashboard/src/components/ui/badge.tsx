@@ -9,7 +9,7 @@ const variants: Record<Variant, string> = {
   outline: "text-foreground",
   destructive: "border-transparent bg-destructive/10 text-destructive",
   success: "border-transparent bg-success/10 text-success",
-  warning: "border-transparent bg-warning/15 text-[oklch(0.55_0.14_70)]",
+  warning: "border-transparent bg-warning/15 text-warning-foreground",
 };
 
 export function Badge({

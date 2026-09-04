@@ -34,7 +34,7 @@ export function fmtDur(ms: number): string {
 
 // ---------- labels / badges ----------
 
-export const WARN_TEXT = "text-[oklch(0.55_0.14_70)]";
+export const WARN_TEXT = "text-warning-foreground";
 export type BadgeVariant = "default" | "secondary" | "outline" | "destructive" | "success" | "warning";
 
 export const JOB_STATUS_KO: Record<JobStatus, string> = {
@@ -71,7 +71,7 @@ export function jobBadgeVariant(s: JobStatus): BadgeVariant {
   }
 }
 
-// Improvement note vocabulary (templates/개선.md): status/priority frontmatter values.
+// Issue workflow vocabulary (templates/이슈.md): status/priority frontmatter values.
 export const NOTE_STATUSES = [
   "제안",
   "승인대기",

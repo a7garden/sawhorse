@@ -22,7 +22,7 @@ import SetupWizard from "@/pages/SetupWizard";
 
 const NAV: { id: PageId; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "home", label: "홈", icon: LayoutDashboard },
-  { id: "improve", label: "개선", icon: ListChecks },
+  { id: "improve", label: "이슈", icon: ListChecks },
   { id: "jobs", label: "작업", icon: SquareTerminal },
   { id: "todos", label: "할 일", icon: SquareCheckBig },
   { id: "docs", label: "문서", icon: FileText },
@@ -81,7 +81,7 @@ export default function App() {
               <n.icon className="size-3.5" />
               {n.label}
               {n.id === "home" && missedCount > 0 && (
-                <span className="ml-auto rounded-full bg-warning/20 px-1.5 text-[10px] font-semibold text-[oklch(0.55_0.14_70)]">
+                <span className="ml-auto rounded-full bg-warning/20 px-1.5 text-[10px] font-semibold text-warning-foreground">
                   {missedCount}
                 </span>
               )}
