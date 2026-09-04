@@ -4,6 +4,7 @@ import {
   ListChecks,
   SquareTerminal,
   SquareCheckBig,
+  FolderSearch,
   FileText,
   Settings,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import JobsPage from "@/pages/JobsPage";
 import TodosPage from "@/pages/TodosPage";
 import DocsPage from "@/pages/DocsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import VaultPage from "@/pages/VaultPage";
 
 import SetupWizard from "@/pages/SetupWizard";
 
@@ -24,6 +26,7 @@ const NAV: { id: PageId; label: string; icon: React.ComponentType<{ className?: 
   { id: "jobs", label: "작업", icon: SquareTerminal },
   { id: "todos", label: "할 일", icon: SquareCheckBig },
   { id: "docs", label: "문서", icon: FileText },
+  { id: "vault", label: "볼트", icon: FolderSearch },
   { id: "settings", label: "설정", icon: Settings },
 ];
 
@@ -49,6 +52,8 @@ export default function App() {
         return <TodosPage />;
       case "docs":
         return <DocsPage />;
+      case "vault":
+        return <VaultPage />;
       case "settings":
         return <SettingsPage />;
     }
