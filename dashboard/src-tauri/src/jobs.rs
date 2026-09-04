@@ -329,6 +329,22 @@ fn build_job(
                 ..base
             })
         }
+        "promote" => {
+            if opts.vault_path.is_empty() {
+                return Err("볼트 경로가 설정되지 않았습니다".into());
+            }
+            let prompt = "볼트의 모든 사업 문제목록(사업/<사업명>/개선/<idPrefix> 문제목록.md)의 '## 신규 (미승격)' 항목을 검토하라.\n\
+                1. 항목별로 승격 여부를 판단한다. 단순 메모·중복·실행 불가는 승격하지 않고 해당 항목 뒤에 한 줄 사유를 덧붙여 유지한다.\n\
+                2. 승격 건은 개선 노트 템플릿으로 생성한다: status: 제안, approve: false, priority: 보통, id는 해당 사업 개선 폴더의 기존 id 최댓값+1, 파일명은 '<ID> <제목>.md', 개선/ 바로 아래 평면 배치.\n\
+                3. 문제목록 문서는 base 뷰 임베드 + '## 신규 (미승격)' + '## 승격 이력' 구조로 재작성하고, 승격 건은 '## 승격 이력'에 '<ID> (<날짜>)'로 남긴다.\n\
+                4. 마지막 출력에 승격 N건 / 유지 M건과 승격된 ID 목록을 보고한다.";
+            Ok(Job {
+                label: "인박스 승격 검토".into(),
+                prompt: prompt.into(),
+                cwd: opts.vault_path.clone(),
+                ..base
+            })
+        }
         other => Err(format!("알 수 없는 작업 종류: {other}")),
     }
 }
@@ -767,6 +783,32 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         )
         .unwrap_err();
         assert!(err.contains("등록되지 않은"));
+    }
+
+
+    #[tokio::test]
+    async fn build_promote_job_targets_vault() {
+        let rig = rig("promote");
+        let view = rig.view.clone();
+        let mut opts = opts("/bin/claude-fake".into(), &rig.dir);
+        opts.vault_path = rig.dir.join("vault").to_string_lossy().to_string();
+        let job = build_job(
+            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None },
+            &opts, &view, &rig.state,
+        )
+        .unwrap();
+        assert_eq!(job.label, "인박스 승격 검토");
+        assert!(job.prompt.contains("신규 (미승격)"));
+        assert_eq!(job.cwd, opts.vault_path);
+
+        let mut empty_vault = opts.clone();
+        empty_vault.vault_path = String::new();
+        let err = build_job(
+            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None },
+            &empty_vault, &view, &rig.state,
+        )
+        .unwrap_err();
+        assert!(err.contains("볼트 경로"));
     }
 
     #[test]
