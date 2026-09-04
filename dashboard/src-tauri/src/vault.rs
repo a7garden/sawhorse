@@ -261,14 +261,14 @@ pub fn inbox_count(vault: &Path, projects: &[(String, String)], filter: Option<&
                 continue;
             }
             let Ok(text) = std::fs::read_to_string(&path) else { continue };
-            total += count_section_items(&text, "## 신규 (미승격)");
+            total += section_items(&text, "## 신규 (미승격)").len() as u64;
         }
     }
     total
 }
 
-fn count_section_items(text: &str, header: &str) -> u64 {
-    let mut count = 0;
+fn section_items(text: &str, header: &str) -> Vec<String> {
+    let mut items = Vec::new();
     let mut in_section = false;
     for line in text.lines() {
         let t = line.trim_end();
@@ -280,10 +280,50 @@ fn count_section_items(text: &str, header: &str) -> u64 {
             continue;
         }
         if in_section && t.starts_with("- ") {
-            count += 1;
+            items.push(t[2..].trim().to_string());
         }
     }
-    count
+    items
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct UnpromotedItem {
+    pub project: String,
+    pub id_prefix: String,
+    pub text: String,
+    pub list_path: String,
+}
+
+/// List unpromoted items (`## 신규 (미승격)`) from each project's 문제목록.md.
+pub fn list_unpromoted(vault: &Path, projects: &[(String, String)]) -> Vec<UnpromotedItem> {
+    let mut out = Vec::new();
+    for (name, id_prefix) in projects {
+        let dir = vault.join("사업").join(name).join("개선");
+        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(fname) = path.file_name().and_then(|n| n.to_str()) else { continue };
+            let matches = if id_prefix.is_empty() {
+                fname.ends_with("문제목록.md")
+            } else {
+                fname == &format!("{id_prefix} 문제목록.md")
+            };
+            if !matches {
+                continue;
+            }
+            let Ok(text) = std::fs::read_to_string(&path) else { continue };
+            for item in section_items(&text, "## 신규 (미승격)") {
+                out.push(UnpromotedItem {
+                    project: name.clone(),
+                    id_prefix: id_prefix.clone(),
+                    text: item,
+                    list_path: path.to_string_lossy().to_string(),
+                });
+            }
+        }
+    }
+    out
 }
 
 // ---------- vault audit ----------
@@ -815,6 +855,16 @@ mod tests {
         let vault = fixture_vault("inbox");
         let n = inbox_count(&vault, &[("FDR".to_string(), "FDR".to_string())], None);
         assert_eq!(n, 2);
+    }
+
+    #[test]
+    fn list_unpromoted_reads_new_section() {
+        let vault = fixture_vault("unpromoted");
+        let items = list_unpromoted(&vault, &[("FDR".to_string(), "FDR".to_string())]);
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0].text, "목업 버튼 위치가 어색함 (fdrView.do)");
+        assert_eq!(items[0].project, "FDR");
+        assert!(items[0].list_path.ends_with("FDR 문제목록.md"));
     }
 
     fn audit_write_note(vault: &Path, name: &str, yaml: &str) {

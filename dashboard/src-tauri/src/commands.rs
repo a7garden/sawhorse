@@ -84,6 +84,17 @@ pub fn list_inbox_count(project: Option<String>) -> u64 {
 }
 
 #[tauri::command]
+pub fn list_unpromoted() -> Vec<vault::UnpromotedItem> {
+    let view = config::load_view();
+    if view.vault_path.is_empty() {
+        return vec![];
+    }
+    let pairs: Vec<(String, String)> =
+        view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    vault::list_unpromoted(Path::new(&view.vault_path), &pairs)
+}
+
+#[tauri::command]
 pub fn audit_vault() -> vault::VaultAudit {
     let view = config::load_view();
     if view.vault_path.is_empty() {

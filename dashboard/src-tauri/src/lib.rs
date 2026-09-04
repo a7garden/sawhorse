@@ -103,6 +103,7 @@ pub fn run() {
             commands::read_note,
             commands::approve_note,
             commands::list_inbox_count,
+            commands::list_unpromoted,
             commands::audit_vault,
             commands::list_obsidian_vaults,
             commands::list_todos,
