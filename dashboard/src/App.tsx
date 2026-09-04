@@ -10,6 +10,7 @@ import {
   Monitor,
   Moon,
   Sun,
+  Puzzle,
 } from "lucide-react";
 import { useApp, type PageId } from "@/lib/store";
 import { useTheme, type Theme } from "@/lib/theme";
@@ -21,6 +22,7 @@ import TodosPage from "@/pages/TodosPage";
 import DocsPage from "@/pages/DocsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import VaultPage from "@/pages/VaultPage";
+import PluginPage from "@/pages/PluginPage";
 
 import SetupWizard from "@/pages/SetupWizard";
 
@@ -31,6 +33,7 @@ const NAV: { id: PageId; label: string; icon: React.ComponentType<{ className?: 
   { id: "todos", label: "할 일", icon: SquareCheckBig },
   { id: "docs", label: "문서", icon: FileText },
   { id: "vault", label: "볼트", icon: FolderSearch },
+  { id: "plugin", label: "플러그인", icon: Puzzle },
   { id: "settings", label: "설정", icon: Settings },
 ];
 
@@ -65,6 +68,8 @@ export default function App() {
         return <VaultPage />;
       case "settings":
         return <SettingsPage />;
+      case "plugin":
+        return <PluginPage />;
     }
   })();
 

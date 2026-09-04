@@ -8,6 +8,7 @@ import type {
   JobRequest,
   MissedRoutine,
   NoteView,
+  PluginBundle,
   RoutineName,
   TodoSection,
   TodoSections,
@@ -54,6 +55,10 @@ export const api = {
     invoke("dismiss_missed", { key, run }),
 
   setLaunchAtLogin: (on: boolean): Promise<void> => invoke("set_launch_at_login", { on }),
+
+  pluginInfo: (): Promise<PluginBundle> => invoke("plugin_info"),
+  readSkill: (name: string): Promise<string> => invoke("read_skill", { name }),
+  openExternal: (url: string): Promise<void> => invoke("open_external", { url }),
 };
 
 // Tauri event names (mirrored by Rust side)

@@ -14,7 +14,7 @@ import type {
   VaultNode,
 } from "./types";
 
-export type PageId = "home" | "improve" | "jobs" | "todos" | "docs" | "vault" | "settings";
+export type PageId = "home" | "improve" | "jobs" | "todos" | "docs" | "vault" | "plugin" | "settings";
 
 interface AppState {
   page: PageId;

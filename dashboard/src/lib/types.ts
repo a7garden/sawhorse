@@ -183,3 +183,21 @@ export interface VaultNoteView {
   title: string;
   markdown: string;
 }
+
+export interface SkillInfo {
+  name: string;
+  description: string;
+}
+
+export interface PluginBundle {
+  name: string;
+  description: string;
+  version: string;
+  author: string;
+  license: string;
+  homepage: string;
+  repository: string;
+  keywords: string[];
+  root: string;
+  skills: SkillInfo[];
+}
