@@ -286,6 +286,123 @@ fn count_section_items(text: &str, header: &str) -> u64 {
     count
 }
 
+// ---------- vault audit ----------
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AuditIssue {
+    pub severity: String, // "error" | "warn" | "info"
+    pub path: String,
+    pub message: String,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct JournalAudit {
+    pub today_exists: bool,
+    pub missing: Vec<String>,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultAudit {
+    pub issues: Vec<AuditIssue>,
+    pub journal: JournalAudit,
+    pub scanned_at_ms: u64,
+}
+
+/// skills/improve/SKILL.md frontmatter 어휘 (2026-09 기준)
+const STATUS_SET: [&str; 8] =
+    ["제안", "승인대기", "승인", "구현중", "부분구현", "구현완료", "보류", "반려"];
+
+pub fn audit_vault(vault: &Path, projects: &[String]) -> VaultAudit {
+    let mut issues = Vec::new();
+
+    // 개선 노트 규칙 (1: status 어휘, 2: 승인 3키, 3: dangling 의존성)
+    let notes = scan_improvements(vault, None, projects);
+    let ids: std::collections::HashSet<&str> = notes.iter().map(|n| n.id.as_str()).collect();
+    for n in &notes {
+        if !STATUS_SET.contains(&n.status.as_str()) {
+            issues.push(AuditIssue {
+                severity: "error".into(),
+                path: n.path.clone(),
+                message: format!("{}: status '{}' — 허용 집합 밖", n.id, n.status),
+            });
+        }
+        if n.approve {
+            if n.status != "승인" {
+                issues.push(AuditIssue {
+                    severity: "error".into(),
+                    path: n.path.clone(),
+                    message: format!("{}: approve=true인데 status='{}' — 승인 3키 불일치", n.id, n.status),
+                });
+            }
+            if chrono::NaiveDate::parse_from_str(&n.approved, "%Y-%m-%d").is_err() {
+                issues.push(AuditIssue {
+                    severity: "warn".into(),
+                    path: n.path.clone(),
+                    message: format!("{}: approved '{}' — YYYY-MM-DD 아님", n.id, n.approved),
+                });
+            }
+        }
+        for d in n.depends_on.iter().chain(n.dependents.iter()) {
+            if !ids.contains(d.as_str()) {
+                issues.push(AuditIssue {
+                    severity: "error".into(),
+                    path: n.path.clone(),
+                    message: format!("{}: 의존성 '{d}' 노트 없음 (dangling)", n.id),
+                });
+            }
+        }
+    }
+
+    // 일지 (4)
+    let today = chrono::Local::now().date_naive();
+    let today_exists = journal_path(vault).is_file();
+    if !today_exists {
+        issues.push(AuditIssue {
+            severity: "error".into(),
+            path: String::new(),
+            message: "오늘 일지가 없습니다".into(),
+        });
+    }
+    let mut missing = Vec::new();
+    for i in 1..=7 {
+        let d = today - chrono::Duration::days(i);
+        if !vault.join("일지").join(format!("{d}.md")).is_file() {
+            missing.push(d.to_string());
+        }
+    }
+    if !missing.is_empty() {
+        issues.push(AuditIssue {
+            severity: "info".into(),
+            path: String::new(),
+            message: format!("최근 7일 중 일지 없는 날: {}", missing.join(", ")),
+        });
+    }
+
+    // 구조 (5)
+    for project in projects {
+        let dir = vault.join("사업").join(project).join("개선");
+        if !dir.is_dir() {
+            issues.push(AuditIssue {
+                severity: "info".into(),
+                path: dir.to_string_lossy().to_string(),
+                message: format!("'{project}' 개선 폴더 없음 (init-vault 기준 구조)"),
+            });
+        }
+    }
+
+    VaultAudit {
+        issues,
+        journal: JournalAudit { today_exists, missing },
+        scanned_at_ms: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0),
+    }
+}
+
 // ---------- journal todos ----------
 
 #[derive(Serialize, Clone, Debug)]
@@ -698,6 +815,52 @@ mod tests {
         let vault = fixture_vault("inbox");
         let n = inbox_count(&vault, &[("FDR".to_string(), "FDR".to_string())], None);
         assert_eq!(n, 2);
+    }
+
+    fn audit_write_note(vault: &Path, name: &str, yaml: &str) {
+        let p = vault.join("사업").join("FDR").join("개선").join(name);
+        std::fs::write(p, format!("---\n{yaml}---\n\n본문.\n")).unwrap();
+    }
+
+    #[test]
+    fn audit_clean_vault_has_no_issues() {
+        let vault = fixture_vault("audit-ok");
+        // 오늘 일지 작성 — 없으면 error 이슈 1건 (fixture에 일지/ 디렉터리는 없다)
+        std::fs::create_dir_all(vault.join("일지")).unwrap();
+        std::fs::write(
+            journal_path(&vault),
+            "---\ntype: 일지\n---\n\n## 오늘 할 일\n\n- [ ] A\n",
+        )
+        .unwrap();
+        // 최근 7일 일지도 작성 — 없으면 info 이슈가 나온다
+        let today = chrono::Local::now().date_naive();
+        for i in 1..=7 {
+            let d = today - chrono::Duration::days(i);
+            std::fs::write(vault.join("일지").join(format!("{d}.md")), "---\ntype: 일지\n---\n").unwrap();
+        }
+        let audit = audit_vault(&vault, &["FDR".to_string()]);
+        assert!(audit.issues.is_empty(), "unexpected: {:?}", audit.issues);
+        assert!(audit.journal.today_exists);
+    }
+
+    #[test]
+    fn audit_flags_bad_status_and_approval_mismatch() {
+        let vault = fixture_vault("audit-bad");
+        audit_write_note(&vault, "FDR-003 상태 오타.md", "id: FDR-003\nstatus: 완료\napprove: false\n");
+        audit_write_note(&vault, "FDR-004 승인 불일치.md", "id: FDR-004\nstatus: 승인대기\napprove: true\napproved: 9월1일\n");
+        let audit = audit_vault(&vault, &["FDR".to_string()]);
+        let msgs: Vec<&str> = audit.issues.iter().map(|i| i.message.as_str()).collect();
+        assert!(msgs.iter().any(|m| m.contains("FDR-003") && m.contains("허용 집합 밖")));
+        assert!(msgs.iter().any(|m| m.contains("FDR-004") && m.contains("3키 불일치")));
+        assert!(msgs.iter().any(|m| m.contains("FDR-004") && m.contains("YYYY-MM-DD")));
+    }
+
+    #[test]
+    fn audit_flags_dangling_dependency() {
+        let vault = fixture_vault("audit-dep");
+        audit_write_note(&vault, "FDR-005 유령 의존.md", "id: FDR-005\nstatus: 제안\napprove: false\ndepends_on: [FDR-999]\n");
+        let audit = audit_vault(&vault, &["FDR".to_string()]);
+        assert!(audit.issues.iter().any(|i| i.message.contains("FDR-999")));
     }
 
     fn todo_fixture(tag: &str) -> PathBuf {

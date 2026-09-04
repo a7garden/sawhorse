@@ -84,6 +84,20 @@ pub fn list_inbox_count(project: Option<String>) -> u64 {
 }
 
 #[tauri::command]
+pub fn audit_vault() -> vault::VaultAudit {
+    let view = config::load_view();
+    if view.vault_path.is_empty() {
+        return vault::VaultAudit {
+            issues: vec![],
+            journal: vault::JournalAudit { today_exists: false, missing: vec![] },
+            scanned_at_ms: 0,
+        };
+    }
+    let projects: Vec<String> = view.projects.iter().map(|p| p.name.clone()).collect();
+    vault::audit_vault(Path::new(&view.vault_path), &projects)
+}
+
+#[tauri::command]
 pub fn list_todos() -> vault::TodoSections {
     let view = config::load_view();
     if view.vault_path.is_empty() {
