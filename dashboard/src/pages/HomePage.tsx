@@ -137,7 +137,7 @@ export default function HomePage() {
         {missed.length > 0 && (
           <section className="space-y-2">
             {missed.map((m) => {
-              const label = m.title || m.taskId;
+              const label = ROUTINES.find((r) => r.key === m.taskId)?.label ?? m.title ?? m.taskId;
               return (
                 <div
                   key={m.key}

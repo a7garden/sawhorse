@@ -1365,17 +1365,10 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         assert_eq!(generic.cwd, "/v");
     }
 
-    /// Test injection point for the task store root. OnceLock is process-wide
-    /// and can only be set once, so parallel tests share one root dir and
-    /// isolate by unique task ids.
+    /// Test injection point for the task store root. Delegates to the shared
+    /// fixture in tasks.rs so parallel test modules share ONE injected dir.
     fn tasks_root_for_test() -> PathBuf {
-        static ROOT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
-        ROOT.get_or_init(|| {
-            let d = temp_dir("tasks-root");
-            crate::tasks::TASKS_ROOT_OVERRIDE.set(d.clone()).ok();
-            d
-        })
-        .clone()
+        crate::tasks::test_root()
     }
 
     fn task_req(id: &str) -> JobRequest {

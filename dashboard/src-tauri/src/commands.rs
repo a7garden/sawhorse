@@ -297,16 +297,17 @@ pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
     // refresh pending list from the agent inbox before reading it
     tasks::process_inbox(&root, &chrono::Local::now().format("%Y-%m-%d").to_string());
     let mut builtin = builtin_rows(&config::load_view().dashboard.schedules);
-    let tasks_list: Vec<TaskRow> = {
-        let st = state.state.lock();
-        for row in &mut builtin {
-            row.last_run = st.last_run.get(&row.def.id).cloned();
-        }
-        tasks::list_tasks(&root)
-            .into_iter()
-            .map(|def| TaskRow { last_run: st.last_run.get(&def.id).cloned(), def })
-            .collect()
-    };
+    // Clone last_run and drop the state lock before the store walk below —
+    // tasks::list_tasks does file I/O and must not hold other threads up.
+    let last_run: std::collections::HashMap<String, String> =
+        state.state.lock().last_run.clone();
+    for row in &mut builtin {
+        row.last_run = last_run.get(&row.def.id).cloned();
+    }
+    let tasks_list: Vec<TaskRow> = tasks::list_tasks(&root)
+        .into_iter()
+        .map(|def| TaskRow { last_run: last_run.get(&def.id).cloned(), def })
+        .collect();
     TasksView {
         builtin,
         tasks: tasks_list,
@@ -316,7 +317,9 @@ pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
 }
 
 /// GUI-authored save: no approval gate (a person wrote it). The backend owns id
-/// assignment and forces gui source so agents can't be impersonated from here.
+/// assignment. Brand-new creations (empty created_at — what TasksPage sends)
+/// are stamped with a gui source so agents can't be impersonated from here;
+/// edits keep the original source (an agent task stays agent-sourced).
 #[tauri::command]
 pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef, String> {
     if def.id.is_empty() {
@@ -324,7 +327,9 @@ pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef
     }
     def.builtin = false;
     def.skill = None;
-    def.source.kind = "gui".into();
+    if def.created_at.is_empty() {
+        def.source.kind = "gui".into();
+    }
     // same protection as delete_task: a user task shadowing "morning" etc.
     // would collide with the builtin routine's state and be undeletable
     if scheduler::ROUTINE_IDS.contains(&def.id.as_str()) {
@@ -494,16 +499,10 @@ mod tests {
         }
     }
 
-    /// One-shot injection, same trick as jobs.rs tests: the override is
-    /// process-wide, so parallel tests share one root and isolate by unique ids.
+    /// Shared injected store root — lives in tasks.rs so every test module
+    /// (tasks/jobs/commands) races for the SAME dir, never different ones.
     fn tasks_root_for_test() -> std::path::PathBuf {
-        static ROOT: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(|| {
-            let d = std::env::temp_dir().join(format!("swdash-cmds-{}", uuid::Uuid::new_v4()));
-            std::fs::create_dir_all(&d).unwrap();
-            crate::tasks::TASKS_ROOT_OVERRIDE.set(d.clone()).ok();
-            d
-        });
-        ROOT.clone()
+        crate::tasks::test_root()
     }
 
     #[test]
@@ -521,6 +520,7 @@ mod tests {
         };
         let saved = save_task(fresh).unwrap();
         assert!(!saved.created_at.is_empty(), "신규 생성 시 created_at이 채워져야 한다");
+        assert_eq!(saved.source.kind, "gui", "신규 생성만 gui 출처가 된다");
         assert_eq!(
             crate::tasks::get_task(&root, &saved.id).unwrap().created_at,
             saved.created_at
@@ -535,6 +535,19 @@ mod tests {
             crate::tasks::get_task(&root, &edited.id).unwrap().created_at,
             saved.created_at
         );
+
+        // Editing an agent-sourced task must keep its provenance, not force gui.
+        let mut agent_edit = saved.clone();
+        agent_edit.source = crate::tasks::Source {
+            kind: "agent".into(),
+            agent: Some("codex".into()),
+            request: Some("req-1".into()),
+        };
+        agent_edit.title = "출처 보존 편집".into();
+        let out = save_task(agent_edit).unwrap();
+        assert_eq!(out.source.kind, "agent", "편집 시 기존 출처 유지");
+        assert_eq!(out.source.agent.as_deref(), Some("codex"));
+        assert_eq!(crate::tasks::get_task(&root, &out.id).unwrap().source.kind, "agent");
     }
 }
 

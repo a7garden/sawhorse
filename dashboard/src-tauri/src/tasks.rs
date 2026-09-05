@@ -2,8 +2,6 @@
 // The dashboard process is the ONLY writer of task files; terminal agents may
 // write inbox requests and READ task files. Nothing else.
 
-// Task 1 of 12: items below are the public store API consumed by later tasks
-#![allow(dead_code)]
 use std::path::{Path, PathBuf};
 
 use chrono::{Local, NaiveDate, NaiveTime};
@@ -14,7 +12,7 @@ pub const PROMPT_MAX: usize = 20_000;
 
 /// Test injection point: when set, `workbench_root()` returns this instead of
 /// the real config dir. Production never sets it.
-pub static TASKS_ROOT_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+pub(crate) static TASKS_ROOT_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
 
 pub fn workbench_root() -> PathBuf {
     if let Some(root) = TASKS_ROOT_OVERRIDE.get() {
@@ -23,6 +21,7 @@ pub fn workbench_root() -> PathBuf {
     crate::config::config_path().parent().map(Path::to_path_buf).unwrap_or_default()
 }
 pub fn tasks_dir(root: &Path) -> PathBuf { root.join("tasks") }
+
 pub fn inbox_dir(root: &Path) -> PathBuf { tasks_dir(root).join("inbox") }
 pub fn rejected_dir(root: &Path) -> PathBuf { tasks_dir(root).join("rejected") }
 pub fn archive_dir(root: &Path) -> PathBuf { tasks_dir(root).join("archive") }
@@ -32,6 +31,19 @@ pub fn ensure_dirs(root: &Path) -> std::io::Result<()> {
         std::fs::create_dir_all(d)?;
     }
     Ok(())
+}
+/// Shared test fixture: inject one process-wide temp store root. Parallel
+/// tests (tasks/jobs/commands) share whichever dir wins the OnceLock race and
+/// isolate from each other by unique task ids.
+#[cfg(test)]
+pub(crate) fn test_root() -> PathBuf {
+    static SEED: std::sync::OnceLock<()> = std::sync::OnceLock::new();
+    SEED.get_or_init(|| {
+        let d = std::env::temp_dir().join(format!("swdash-tasks-root-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&d).unwrap();
+        TASKS_ROOT_OVERRIDE.set(d).ok();
+    });
+    TASKS_ROOT_OVERRIDE.get().cloned().expect("test root must be injected")
 }
 
 pub fn now_iso() -> String { Local::now().to_rfc3339() }
@@ -100,15 +112,13 @@ pub fn validate_schedule(s: &Schedule, today: &str) -> Result<(), String> {
         || !s.time.as_bytes()[4].is_ascii_digit() {
         return Err(format!("잘못된 시간 형식: {} (HH:MM)", s.time));
     }
-    let t = NaiveTime::parse_from_str(&s.time, "%H:%M")
+    NaiveTime::parse_from_str(&s.time, "%H:%M")
         .map_err(|_| format!("잘못된 시간 형식: {} (HH:MM)", s.time))?;
-    let _ = t;
     match s.kind {
         ScheduleKind::Once => {
             let date = s.date.as_deref().ok_or("once 스케줄에는 date가 필요합니다")?;
-            let d = NaiveDate::parse_from_str(date, "%Y-%m-%d")
+            NaiveDate::parse_from_str(date, "%Y-%m-%d")
                 .map_err(|_| format!("잘못된 날짜 형식: {date} (YYYY-MM-DD)"))?;
-            let _ = d;
             if date < today {
                 return Err(format!("과거 날짜입니다: {date}"));
             }
@@ -239,18 +249,21 @@ fn valid_stem(stem: &str) -> bool {
         && !stem.contains("..")
 }
 
-fn move_to_rejected(root: &Path, stem: &str, error: &str) {
+fn move_to_rejected(root: &Path, stem: &str, error: &str) -> std::io::Result<()> {
     let src = req_path(root, stem);
     let payload = serde_json::json!({
         "error": error,
         "request": std::fs::read_to_string(&src).unwrap_or_default(),
     });
-    let _ = std::fs::create_dir_all(rejected_dir(root));
-    let _ = std::fs::write(
-        rejected_dir(root).join(format!("{stem}.rejected.json")),
-        serde_json::to_vec_pretty(&payload).unwrap_or_default(),
-    );
-    let _ = std::fs::remove_file(&src);
+    let bytes = serde_json::to_vec_pretty(&payload)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    // write_atomic creates rejected/ and is the same convention as task files.
+    crate::config::write_atomic(&rejected_dir(root).join(format!("{stem}.rejected.json")), &bytes)?;
+    // Drop the inbox original only after the rejected copy is safely on disk.
+    // On failure the request stays in the inbox: process_inbox retries it on
+    // the next tick instead of losing the agent's request.
+    std::fs::remove_file(&src)?;
+    Ok(())
 }
 
 fn parse_req(root: &Path, stem: &str) -> Result<InboxRequest, String> {
@@ -339,7 +352,8 @@ pub fn process_inbox(root: &Path, today: &str) {
         }
         match parse_req(root, stem).and_then(|req| validate_req(root, &req, today).map(|_| req)) {
             Ok(_) => {}
-            Err(err) => move_to_rejected(root, stem, &err),
+            // move failure keeps the request in the inbox for the next tick
+            Err(err) => { let _ = move_to_rejected(root, stem, &err); }
         }
     }
 }
@@ -401,8 +415,8 @@ pub fn reject_request(root: &Path, stem: &str, reason: &str) -> Result<(), Strin
     if !valid_stem(stem) || !req_path(root, stem).is_file() {
         return Err("해당 요청이 없습니다".into());
     }
-    move_to_rejected(root, stem, &format!("사용자 거부: {reason}"));
-    Ok(())
+    move_to_rejected(root, stem, &format!("사용자 거부: {reason}"))
+        .map_err(|e| format!("반려 처리 실패: {e}"))
 }
 
 pub fn approve_request(root: &Path, stem: &str, agent: &str, today: &str) -> Result<TaskDef, String> {
@@ -612,6 +626,24 @@ mod tests {
         assert_eq!(rej.len(), 1);
         assert!(rej[0].error.contains("사용자 거부"));
         assert!(list_pending(&root).is_empty());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn move_to_rejected_preserves_original_when_copy_write_fails() {
+        let root = tempdir("rejectfail");
+        std::fs::create_dir_all(inbox_dir(&root)).unwrap();
+        write_req(&root, "req-f", r#"{"op":"create","task":{"title":"t","prompt":"p"}}"#);
+        // occupy the rejected path with a regular file so the copy write fails
+        std::fs::write(rejected_dir(&root), "blocker").unwrap();
+        assert!(reject_request(&root, "req-f", "사유").is_err());
+        assert!(req_path(&root, "req-f").is_file(), "쓰기 실패 시 원본 보존");
+
+        // unblock: the retry writes the copy and only then drops the original
+        std::fs::remove_file(rejected_dir(&root)).unwrap();
+        reject_request(&root, "req-f", "사유").unwrap();
+        assert!(!req_path(&root, "req-f").exists());
+        assert_eq!(list_rejected(&root).len(), 1);
         std::fs::remove_dir_all(&root).unwrap();
     }
 

@@ -625,15 +625,19 @@ export default function SettingsPage() {
 function WorkbenchSkillCard() {
   const [status, setStatus] = useState<SkillInstall[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const refresh = useCallback(async () => setStatus(await api.skillStatus()), []);
   useEffect(() => {
     void refresh();
   }, [refresh]);
   const install = async (target: string) => {
     setBusy(true);
+    setMsg(null);
     try {
       await api.installSkill(target);
       await refresh();
+    } catch (e) {
+      setMsg({ ok: false, text: `스킬 설치 실패: ${String(e)}` });
     } finally {
       setBusy(false);
     }
@@ -667,6 +671,9 @@ function WorkbenchSkillCard() {
             </div>
           );
         })}
+        {msg && (
+          <div className={`text-xs ${msg.ok ? "text-success" : "text-destructive"}`}>{msg.text}</div>
+        )}
       </CardContent>
     </Card>
   );
