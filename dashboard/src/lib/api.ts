@@ -18,8 +18,10 @@ import type {
   PluginBundle,
   ProvisionReport,
   QueryResult,
-  RoutineName,
   ScheduleView,
+  SkillInstall,
+  TaskDef,
+  TasksView,
   TodoSection,
   TodoSections,
   UnpromotedItem,
@@ -65,7 +67,16 @@ export const api = {
   jobLog: (id: string): Promise<string[]> => invoke("job_log", { id }),
   jobReport: (id: string): Promise<string | null> => invoke("job_report", { id }),
 
-  runRoutineNow: (routine: RoutineName): Promise<Job> => invoke("run_routine_now", { routine }),
+  listTasks: (): Promise<TasksView> => invoke("list_tasks"),
+  saveTask: (def: TaskDef): Promise<TaskDef> => invoke("save_task", { def }),
+  deleteTask: (id: string): Promise<void> => invoke("delete_task", { id }),
+  setTaskEnabled: (id: string, enabled: boolean): Promise<void> =>
+    invoke("set_task_enabled", { id, enabled }),
+  runTaskNow: (id: string): Promise<Job> => invoke("run_task_now", { id }),
+  approveTaskRequest: (id: string): Promise<TaskDef> => invoke("approve_request", { id }),
+  rejectTaskRequest: (id: string, reason?: string): Promise<void> =>
+    invoke("reject_request", { id, reason: reason ?? null }),
+
   listMissed: (): Promise<MissedRoutine[]> => invoke("list_missed"),
   dismissMissed: (key: string, run: boolean): Promise<MissedRoutine[]> =>
     invoke("dismiss_missed", { key, run }),
@@ -74,6 +85,8 @@ export const api = {
 
   pluginInfo: (): Promise<PluginBundle> => invoke("plugin_info"),
   readSkill: (name: string): Promise<string> => invoke("read_skill", { name }),
+  installSkill: (target: string): Promise<SkillInstall> => invoke("install_skill", { target }),
+  skillStatus: (): Promise<SkillInstall[]> => invoke("skill_status"),
   openExternal: (url: string): Promise<void> => invoke("open_external", { url }),
   openPath: (path: string): Promise<void> => invoke("open_path", { path }),
 
@@ -130,5 +143,6 @@ export const EVENTS = {
   jobProgress: "job-progress", // { jobId, entry }
   jobFinished: "job-finished", // { job }
   vaultChanged: "vault-changed", // { areas: string[] }
-  scheduleMissed: "schedule-missed", // { missed: MissedRoutine }
+  scheduleMissed: "schedule-missed", // { missed: MissedEntry }
+  tasksChanged: "tasks-changed", // {}
 } as const;

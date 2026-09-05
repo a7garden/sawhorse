@@ -116,7 +116,11 @@ pub struct JobRequest {
     pub action_id: Option<String>,
     #[serde(default)]
     pub params: Map<String, Value>,
+    /// kind = "task" 일 때: 호스트 내장 작업 정의의 ID
+    #[serde(default)]
+    pub task_id: Option<String>,
 }
+
 
 #[derive(Clone, Debug)]
 pub struct SpawnOpts {
@@ -472,6 +476,26 @@ fn build_job(
                 label: format!("{} ({})", action.label, pack.manifest.name),
                 project: params.get("project").and_then(Value::as_str).map(str::to_string),
                 prompt,
+                cwd,
+                ..base
+            })
+        }
+        // 호스트 내장 작업 — 승인된 작업 정의 파일의 프롬프트를 그대로 돌린다.
+        "task" => {
+            let task_id = req.task_id.clone().ok_or("작업 ID가 지정되지 않았습니다")?;
+            let def = crate::tasks::get_task(&crate::tasks::workbench_root(), &task_id)?;
+            if opts.vault_path.is_empty() {
+                return Err("볼트 경로가 설정되지 않았습니다".into());
+            }
+            let cwd = def
+                .project
+                .as_deref()
+                .and_then(|name| view.projects.iter().find(|p| p.name == name))
+                .and_then(|p| (!p.path.is_empty()).then(|| p.path.clone()))
+                .unwrap_or_else(|| opts.vault_path.clone());
+            Ok(Job {
+                label: def.title,
+                prompt: def.prompt,
                 cwd,
                 ..base
             })

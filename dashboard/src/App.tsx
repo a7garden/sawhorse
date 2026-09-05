@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import {
+  CalendarClock,
   LayoutDashboard,
   SquareTerminal,
   Terminal,
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import ImprovePage from "@/pages/ImprovePage";
 import JobsPage from "@/pages/JobsPage";
+import TasksPage from "@/pages/TasksPage";
 import TodosPage from "@/pages/TodosPage";
 import DocsPage from "@/pages/DocsPage";
 import SettingsPage from "@/pages/SettingsPage";
@@ -31,6 +33,7 @@ import SetupWizard from "@/pages/SetupWizard";
 const TOP_NAV: { id: PageId; label: string; icon: IconComponent }[] = [
   { id: "home", label: "홈", icon: LayoutDashboard },
   { id: "jobs", label: "작업", icon: SquareTerminal },
+  { id: "tasks", label: "예약", icon: CalendarClock },
   { id: "terminal", label: "터미널", icon: Terminal },
 ];
 
@@ -77,6 +80,8 @@ export default function App() {
         return <TerminalPage />;
       case "packs":
         return <PacksPage />;
+      case "tasks":
+        return <TasksPage />;
       case "settings":
         return <SettingsPage />;
     }
@@ -180,7 +185,7 @@ export default function App() {
           </button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 overflow-y-auto">{body}</main>
+      <main className="min-w-0 flex-1 overflow-y-auto bg-[var(--workspace)]">{body}</main>
       <SetupWizard />
     </div>
   );

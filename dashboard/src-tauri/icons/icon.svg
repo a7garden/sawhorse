@@ -1,33 +1,18 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!--
-    sawhorse dashboard icon source.
-    Identity: dark slate workbench, white "w" (workbench), blue bar (CLI prompt cursor).
-    Optical bounds: glyph block spans x 217..831, y 334..690 (optically centered on 512,512).
+    sawhorse app icon source.
+    Identity: an amber beam and an ivory A-frame on graphite.
+    Intentionally flat and simple so the mark holds at every platform icon size.
     Regenerate platform assets: npx tauri icon src-tauri/icons/icon.svg (run from dashboard/)
   -->
-  <defs>
-    <linearGradient id="bg" x1="512" y1="100" x2="512" y2="924" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#262C37"/>
-      <stop offset="1" stop-color="#11141A"/>
-    </linearGradient>
-    <linearGradient id="bar" x1="255" y1="334" x2="255" y2="690" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#6AA5FF"/>
-      <stop offset="1" stop-color="#2E6FFF"/>
-    </linearGradient>
-    <linearGradient id="w" x1="593" y1="334" x2="593" y2="690" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#C7D0DE"/>
-    </linearGradient>
-  </defs>
 
-  <!-- squircle plate -->
-  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)"/>
-  <!-- top-light hairline rim -->
-  <rect x="102" y="102" width="820" height="820" rx="183" stroke="#FFFFFF" stroke-opacity="0.07" stroke-width="3"/>
+  <!-- App tile -->
+  <rect x="104" y="104" width="816" height="816" rx="204" fill="#202326"/>
 
-  <!-- prompt-cursor bar: same stroke weight (76) and cap radius (38) as the w -->
-  <rect x="217" y="334" width="76" height="356" rx="38" fill="url(#bar)"/>
+  <!-- Beam -->
+  <rect x="246" y="322" width="532" height="118" rx="28" fill="#E7A23A"/>
 
-  <!-- w monogram, monoline with round caps/joins -->
-  <path d="M393 372L473 652L593 424L713 652L793 372" stroke="url(#w)" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- A-frame: the minimal structural form of a sawhorse -->
+  <path d="M391 428L278 718" stroke="#F5F1E8" stroke-width="82" stroke-linecap="round"/>
+  <path d="M633 428L746 718" stroke="#F5F1E8" stroke-width="82" stroke-linecap="round"/>
 </svg>

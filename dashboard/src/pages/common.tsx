@@ -35,7 +35,13 @@ export function fmtDur(ms: number): string {
 // ---------- labels / badges ----------
 
 export const WARN_TEXT = "text-warning-foreground";
-export type BadgeVariant = "default" | "secondary" | "outline" | "destructive" | "success" | "warning";
+export type BadgeVariant =
+  | "default"
+  | "secondary"
+  | "outline"
+  | "destructive"
+  | "success"
+  | "warning";
 
 export const JOB_STATUS_KO: Record<JobStatus, string> = {
   queued: "대기",
@@ -50,6 +56,7 @@ export const JOB_KIND_KO: Record<Job["kind"], string> = {
   design: "설계",
   implement: "구현",
   routine: "루틴",
+  task: "작업",
   excel: "엑셀",
   promote: "승격 검토",
   initVault: "init-vault",
@@ -157,7 +164,13 @@ export function StatusBadge({ status }: { status: string }) {
 
 export function PriorityBadge({ p }: { p: string }) {
   const variant =
-    p === "최우선" ? "destructive" : p === "중요" ? "warning" : p === "보통" ? "secondary" : "outline";
+    p === "최우선"
+      ? "destructive"
+      : p === "중요"
+        ? "warning"
+        : p === "보통"
+          ? "secondary"
+          : "outline";
   return <Badge variant={variant}>{p || "-"}</Badge>;
 }
 
@@ -180,9 +193,9 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
+    <div className="sticky top-0 z-20 flex min-h-[58px] flex-wrap items-center gap-2 border-b bg-background/90 px-4 py-3 backdrop-blur-xl lg:px-5">
       <div className="mr-auto">
-        <h1 className="text-sm font-bold leading-tight">{title}</h1>
+        <h1 className="text-[15px] font-bold leading-tight tracking-tight">{title}</h1>
         {desc && <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>}
       </div>
       {children}
@@ -192,7 +205,9 @@ export function PageHeader({
 
 export function Empty({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("py-8 text-center text-xs text-muted-foreground", className)}>{children}</div>
+    <div className={cn("py-8 text-center text-xs text-muted-foreground", className)}>
+      {children}
+    </div>
   );
 }
 
@@ -230,7 +245,9 @@ const MD_CLASSES = [
 
 export function MarkdownView({ src, className }: { src: string; className?: string }) {
   return (
-    <div className={cn("text-[13px] leading-relaxed [&>*:first-child]:mt-0", MD_CLASSES, className)}>
+    <div
+      className={cn("text-[13px] leading-relaxed [&>*:first-child]:mt-0", MD_CLASSES, className)}
+    >
       <ReactMarkdown remarkPlugins={[remarkGfm]}>{preprocessObsidianMd(src)}</ReactMarkdown>
     </div>
   );

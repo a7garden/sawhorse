@@ -162,7 +162,8 @@ export type JobKind =
   | "setup"
   | "promote"
   /** 팩이 선언한 액션 */
-  | "action";
+  | "action"
+  | "task";
 
 export interface JobRequest {
   kind: JobKind;
@@ -172,6 +173,7 @@ export interface JobRequest {
   packId?: string;
   actionId?: string;
   params?: Record<string, unknown>;
+  taskId?: string | null;
 }
 
 export type JobRunner = "headless" | "herdr";
@@ -264,9 +266,9 @@ export interface PluginBundle {
 // ---------- 확장(pack) ----------
 
 export type SettingFieldType = "text" | "path" | "number" | "bool" | "select" | "table";
-export type ActionParamType = "text" | "list" | "select" | "project";
+export type ScheduleKind = "daily" | "weekdays" | "once";
 export type ViewKind = "notes" | "native";
-export type ScheduleKind = "daily" | "weekdays";
+export type ActionParamType = "text" | "list" | "select" | "project";
 
 export interface Choice {
   value: string;
@@ -496,3 +498,46 @@ export interface HerdrSnapshot {
   tabs: HerdrTab[];
   agents: HerdrAgentRow[];
 }
+
+// ---------- 호스트 내장 작업 (에이전트가 승인 큐로 만드는 예약) ----------
+
+export interface TaskSchedule { kind: ScheduleKind; time: string; date?: string | null }
+
+export interface TaskSource { kind: string; agent?: string | null; request?: string | null }
+
+export interface TaskDef {
+  id: string;
+  title: string;
+  prompt: string;
+  schedule: TaskSchedule | null;
+  enabled: boolean;
+  builtin: boolean;
+  skill: string | null;
+  project: string | null;
+  source: TaskSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskRow { def: TaskDef; lastRun: string | null }
+
+export interface PendingTaskRequest {
+  id: string;
+  op: "create" | "update" | "pause" | "resume" | "delete";
+  agent: string;
+  note: string;
+  targetTitle: string;
+  summary: string[];
+  duplicateOf: string | null;
+}
+
+export interface RejectedRequest { id: string; error: string }
+
+export interface TasksView {
+  builtin: TaskRow[];
+  tasks: TaskRow[];
+  pending: PendingTaskRequest[];
+  rejected: RejectedRequest[];
+}
+
+export interface SkillInstall { target: string; path: string; written: boolean }

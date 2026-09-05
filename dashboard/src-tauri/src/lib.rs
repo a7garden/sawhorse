@@ -8,6 +8,7 @@ mod packs;
 mod plugin;
 mod scheduler;
 mod state;
+mod tasks;
 mod transcript;
 mod vault;
 mod watcher;
@@ -97,6 +98,24 @@ pub fn run() {
                 }
             }
 
+            // watch the task store for agent inbox activity
+            {
+                let root = tasks::workbench_root();
+                let _ = tasks::ensure_dirs(&root);
+                if let Some(w) = watcher::start_path(
+                    &tasks::tasks_dir(&root),
+                    emit_fn.clone(),
+                    "tasks-changed",
+                    serde_json::json!({}),
+                ) {
+                    if let Some(keeper) = app.try_state::<WatchKeeper>() {
+                        keeper.0.lock().push(Box::new(w));
+                    } else {
+                        app.manage(WatchKeeper(Mutex::new(vec![Box::new(w)])));
+                    }
+                }
+            }
+
             app.manage(state);
             app.manage(mgr);
 
@@ -120,7 +139,7 @@ pub fn run() {
                     "morning" | "lunch" | "evening" => {
                         let st = app.state::<Arc<state::AppState>>();
                         let jm = app.state::<Arc<jobs::JobManager>>();
-                        let _ = scheduler::run_routine_now(&jm, &st, event.id.as_ref());
+                        let _ = scheduler::run_scheduled_now(&jm, &st, event.id.as_ref());
                     }
                     "quit" => app.exit(0),
                     _ => {}
@@ -164,13 +183,21 @@ pub fn run() {
             commands::list_jobs,
             commands::job_log,
             commands::job_report,
-            commands::run_routine_now,
+            commands::list_tasks,
+            commands::save_task,
+            commands::delete_task,
+            commands::set_task_enabled,
+            commands::run_task_now,
+            commands::approve_request,
+            commands::reject_request,
             commands::list_missed,
             commands::dismiss_missed,
             commands::set_launch_at_login,
             commands::get_launch_at_login,
             commands::plugin_info,
             commands::read_skill,
+            commands::install_skill,
+            commands::skill_status,
             commands::open_external,
             commands::open_path,
             // 확장(pack) 레지스트리

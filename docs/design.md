@@ -206,7 +206,7 @@ sawhorse/
 - ps1은 UTF-8 **with BOM**으로 저장 (Windows PowerShell 5.1 한글 파싱).
 - 훅 스크립트 경로는 `${CLAUDE_PLUGIN_ROOT}` 변수 사용.
 
-## 스킬 (12개, 네임스페이스 `/sawhorse:*`)
+## 스킬 (13개, 네임스페이스 `/sawhorse:*`)
 
 ### 일과 루틴 (무인 실행)
 
@@ -233,6 +233,7 @@ sawhorse/
 | `codebase-docs` | 코드베이스 → 기능별 기능분석 문서(mermaid 필수) + 필요시 Playwright 스크린샷 → 첨부/스크린샷 |
 | `vault-tidy` | ①상시 정규화(매 실행·무승인): 루트 첨부 회수, `attachmentFolderPath` 교정, frontmatter 스키마 정합, 인덱스 자산 확인, 죽은 링크. ②재구성(승인 게이트): 이동·병합·보강·삭제. 로컬 git 증분 (remote 금지) |
 | `improve` | 개선 사이클: 스캔 → 설계(단건·일괄, 정지) → **볼트에서 승인 체크** → 구현(단건·일괄) → 경로 한정 커밋 1개/건 + 커밋 ID·의존성·배치 결과 보고 |
+| `workbench` | 예약 작업 등록: 대화에서 제목·내용·주기 파악 → 인박스 요청 작성 → 대시보드 승인 후 스케줄 가동(정식 스토어 쓰기는 대시보드 전용) |
 
 공통: vault 경로는 `${user_config.vault_path}` 주입, 비었으면 `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` 폴백(setup이 관리). docx 우선순위 pandoc → Word COM.
 

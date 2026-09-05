@@ -508,10 +508,12 @@ pub struct ScheduledEntry {
     pub pack_id: String,
     pub action_id: String,
     pub label: String,
-    /// daily | weekdays
+    /// daily | weekdays | once (once는 호스트 내장 작업 전용)
     pub kind: String,
     pub time: String,
     pub enabled: bool,
+    /// once 전용 실행 날짜(YYYY-MM-DD). daily·weekdays는 없다. 코드에서만 만든다.
+    pub date: Option<String>,
 }
 
 /// 활성 팩의 예약 가능한 액션 + config 의 사용자 재정의를 합친 결과.
@@ -530,6 +532,7 @@ pub fn scheduled_entries(reg: &Registry, view: &ConfigView) -> Vec<ScheduledEntr
                 time: over.as_ref().map(|o| o.time.clone()).unwrap_or_else(|| sched.time.clone()),
                 enabled: over.as_ref().map(|o| o.enabled).unwrap_or(sched.enabled),
                 key,
+                date: None,
             });
         }
     }

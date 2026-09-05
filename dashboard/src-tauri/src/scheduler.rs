@@ -4,7 +4,7 @@
 //
 // `decide()` 는 순수 함수로 그대로 둔다: 형제 작업(에이전트가 만드는 예약)이 같은 함수에
 // 엔트리를 더 넣을 예정이라, 판정 규칙은 한 곳에 남아 있어야 한다.
-use chrono::{DateTime, Datelike, Duration, Local, NaiveTime, Timelike, Weekday};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, Timelike, Weekday};
 use std::sync::Arc;
 
 use serde_json::json;
@@ -59,7 +59,7 @@ pub fn due_today(kind: &str, now: DateTime<Local>) -> bool {
 
 /// 팩 이전 시절의 루틴 3종. 팩 레지스트리를 못 읽는 환경(플러그인 루트 미발견)에서
 /// 예약이 조용히 멈추지 않도록 남겨 둔 안전망이다.
-const LEGACY_ROUTINES: [&str; 3] = ["morning", "lunch", "evening"];
+pub const LEGACY_ROUTINES: [&str; 3] = ["morning", "lunch", "evening"];
 
 fn legacy_entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
     LEGACY_ROUTINES
@@ -78,7 +78,35 @@ fn legacy_entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
                 kind: "daily".into(),
                 time: s.time.clone(),
                 enabled: s.enabled,
+                date: None,
             }
+        })
+        .collect()
+}
+
+/// 호스트 내장 작업(사람이 승인한 에이전트 예약)을 팩 엔트리와 같은 모양으로.
+fn tasks_entries() -> Vec<ScheduledEntry> {
+    let root = crate::tasks::workbench_root();
+    crate::tasks::list_tasks(&root)
+        .into_iter()
+        .filter_map(|t| {
+            let s = t.schedule?;
+            NaiveTime::parse_from_str(&s.time, "%H:%M").ok()?;
+            let kind = match s.kind {
+                crate::tasks::ScheduleKind::Daily => "daily",
+                crate::tasks::ScheduleKind::Weekdays => "weekdays",
+                crate::tasks::ScheduleKind::Once => "once",
+            };
+            Some(ScheduledEntry {
+                key: t.id.clone(),
+                pack_id: "tasks".into(),
+                action_id: t.id,
+                label: t.title,
+                kind: kind.into(),
+                time: s.time,
+                enabled: t.enabled,
+                date: s.date,
+            })
         })
         .collect()
 }
@@ -87,16 +115,25 @@ fn legacy_entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
 pub fn entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
     let reg = packs::load_registry(&view.packs.enabled);
     let from_packs = packs::scheduled_entries(&reg, view);
-    if from_packs.is_empty() {
+    let mut all = if from_packs.is_empty() {
         legacy_entries(view)
     } else {
         from_packs
-    }
+    };
+    all.extend(tasks_entries());
+    all
 }
 
 /// 예약 하나를 잡 요청으로. 팩 액션이면 `action`, 안전망 엔트리면 예전 `routine` 잡.
 fn request_for(entry: &ScheduledEntry) -> JobRequest {
-    if entry.pack_id.is_empty() {
+    if entry.pack_id == "tasks" {
+        // 호스트 내장 작업 — 작업 정의 파일의 프롬프트를 그대로 돌린다.
+        JobRequest {
+            kind: "task".into(),
+            task_id: Some(entry.action_id.clone()),
+            ..Default::default()
+        }
+    } else if entry.pack_id.is_empty() {
         JobRequest {
             kind: "routine".into(),
             routine: Some(entry.action_id.clone()),
@@ -112,6 +149,40 @@ fn request_for(entry: &ScheduledEntry) -> JobRequest {
     }
 }
 
+/// `once` 예약 판정. 지정 날짜에 단 한 번; 그 날짜에 돌렸으면 끝난다.
+fn decide_once(
+    now: DateTime<Local>,
+    entry: &ScheduledEntry,
+    time: NaiveTime,
+    last_run: Option<&str>,
+    booted_at: DateTime<Local>,
+) -> Decision {
+    if !entry.enabled {
+        return Decision::Idle;
+    }
+    let Some(date) = &entry.date else {
+        return Decision::Idle;
+    };
+    let Ok(target_date) = NaiveDate::parse_from_str(date, "%Y-%m-%d") else {
+        return Decision::Idle;
+    };
+    if last_run == Some(date.as_str()) {
+        return Decision::Idle;
+    }
+    let target = target_date.and_time(time);
+    let now_naive = now.naive_local();
+    if now_naive < target {
+        return Decision::Idle;
+    }
+    let overdue = now_naive - target;
+    let passed_before_boot = target <= booted_at.naive_local();
+    if passed_before_boot && overdue > GRACE {
+        Decision::Missed
+    } else {
+        Decision::Run
+    }
+}
+
 /// 예전 state.json 은 `last_run["morning"]` 을 갖고 있다. 정규 키가 없으면 그 키를 본다 —
 /// 업그레이드한 날 아침 루틴이 한 번 더 도는 것을 막는다.
 fn last_run_of(state: &AppState, entry: &ScheduledEntry) -> Option<String> {
@@ -123,9 +194,15 @@ fn last_run_of(state: &AppState, entry: &ScheduledEntry) -> Option<String> {
 }
 
 fn mark_ran(state: &AppState, entry: &ScheduledEntry, today: &str) {
-    let mut st = state.state.lock();
-    st.last_run.insert(entry.key.clone(), today.to_string());
-    st.missed.retain(|m| !(m.routine == entry.key && m.date == today));
+    {
+        let mut st = state.state.lock();
+        st.last_run.insert(entry.key.clone(), today.to_string());
+        st.missed.retain(|m| !(m.routine == entry.key && m.date == today));
+    }
+    if entry.kind == "once" && entry.pack_id == "tasks" {
+        // 1회 작업은 소화 후 조용히 꺼진다 — 다음 날 같은 카드가 다시 생기지 않게.
+        let _ = crate::tasks::set_enabled(&crate::tasks::workbench_root(), &entry.action_id, false);
+    }
 }
 
 /// One scheduler pass. Runs every 20s from `start_tick`; also directly callable
@@ -136,6 +213,10 @@ pub fn tick_once(
     emit: &crate::jobs::EmitFn,
     booted_at: DateTime<Local>,
 ) {
+    let tasks_root = crate::tasks::workbench_root();
+    let _ = crate::tasks::ensure_dirs(&tasks_root);
+    crate::tasks::process_inbox(&tasks_root, &Local::now().format("%Y-%m-%d").to_string());
+
     let view = config::load_view();
     if view.vault_path.is_empty() {
         return;
@@ -146,11 +227,39 @@ pub fn tick_once(
     let mut missed_events: Vec<MissedEntry> = Vec::new();
 
     for entry in entries(&view) {
+        let Ok(time) = NaiveTime::parse_from_str(&entry.time, "%H:%M") else { continue };
+        let last = last_run_of(state, &entry);
+        if entry.kind == "once" {
+            match decide_once(now, &entry, time, last.as_deref(), booted_at) {
+                Decision::Idle => {}
+                Decision::Run => {
+                    if mgr.enqueue(request_for(&entry)).is_ok() {
+                        mark_ran(state, &entry, &today);
+                        changed = true;
+                    }
+                }
+                Decision::Missed => {
+                    let key = format!("{}-{today}", entry.key);
+                    let mut st = state.state.lock();
+                    if !st.missed.iter().any(|m| m.key == key) {
+                        let e = MissedEntry {
+                            key,
+                            routine: entry.key.clone(),
+                            label: entry.label.clone(),
+                            date: today.clone(),
+                            scheduled_at: format!("{:02}:{:02}", time.hour(), time.minute()),
+                        };
+                        st.missed.push(e.clone());
+                        missed_events.push(e);
+                        changed = true;
+                    }
+                }
+            }
+            continue;
+        }
         if !due_today(&entry.kind, now) {
             continue;
         }
-        let Ok(time) = NaiveTime::parse_from_str(&entry.time, "%H:%M") else { continue };
-        let last = last_run_of(state, &entry);
         match decide(now, time, entry.enabled, last.as_deref(), &today, booted_at) {
             Decision::Idle => {}
             Decision::Run => {
@@ -230,14 +339,6 @@ pub fn run_scheduled_now(
     Err(format!("알 수 없는 예약: {key}"))
 }
 
-/// 기존 이름 유지 — 트레이 메뉴와 예전 프론트엔드가 부른다.
-pub fn run_routine_now(
-    mgr: &JobManager,
-    state: &AppState,
-    routine: &str,
-) -> Result<crate::jobs::Job, String> {
-    run_scheduled_now(mgr, state, routine)
-}
 
 /// Missed-card dismissal. `run=true` also enqueues the entry immediately.
 pub fn dismiss_missed(
@@ -406,6 +507,7 @@ mod tests {
             kind: "daily".into(),
             time: "09:00".into(),
             enabled: true,
+            date: None,
         };
         let req = request_for(&entry);
         assert_eq!(req.kind, "action");

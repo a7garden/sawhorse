@@ -21,5 +21,12 @@ export default defineConfig({
     target: "chrome105",
     minify: "esbuild",
     sourcemap: false,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "dashboard-grid": ["react-grid-layout"],
+        },
+      },
+    },
   },
 });

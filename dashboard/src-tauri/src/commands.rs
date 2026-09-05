@@ -223,14 +223,6 @@ pub fn job_report(id: String, state: State<'_, Arc<AppState>>) -> Option<String>
     std::fs::read_to_string(state.report_path(&id)).ok()
 }
 
-#[tauri::command]
-pub fn run_routine_now(
-    routine: String,
-    mgr: State<'_, Arc<JobManager>>,
-    state: State<'_, Arc<AppState>>,
-) -> Result<Job, String> {
-    scheduler::run_routine_now(&mgr, &state, &routine)
-}
 
 #[tauri::command]
 pub fn list_missed(state: State<'_, Arc<AppState>>) -> Vec<MissedEntry> {
@@ -540,4 +532,174 @@ pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|e| format!("링크 열기 실패: {e}"))
+}
+
+// ---------- 호스트 내장 작업 (에이전트가 승인 큐로 만드는 예약) ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRow {
+    pub def: crate::tasks::TaskDef,
+    pub last_run: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TasksView {
+    pub builtin: Vec<TaskRow>,
+    pub tasks: Vec<TaskRow>,
+    pub pending: Vec<crate::tasks::PendingRequest>,
+    pub rejected: Vec<crate::tasks::RejectedRequest>,
+}
+
+fn builtin_rows(view: &config::ConfigView, state: &AppState) -> Vec<TaskRow> {
+    let s = &view.dashboard.schedules;
+    [
+        ("morning", &s.morning, "아침 브리핑"),
+        ("lunch", &s.lunch, "오전 결산"),
+        ("evening", &s.evening, "퇴근 정산"),
+    ]
+    .into_iter()
+    .map(|(id, sched, title)| TaskRow {
+        last_run: state.state.lock().last_run.get(id).cloned(),
+        def: crate::tasks::TaskDef {
+            id: id.into(),
+            title: title.into(),
+            skill: Some(format!("sawhorse:{id}")),
+            builtin: true,
+            enabled: sched.enabled,
+            schedule: Some(crate::tasks::Schedule {
+                kind: crate::tasks::ScheduleKind::Daily,
+                time: sched.time.clone(),
+                date: None,
+            }),
+            source: crate::tasks::Source { kind: "builtin".into(), agent: None, request: None },
+            ..crate::tasks::TaskDef::default()
+        },
+    })
+    .collect()
+}
+
+#[tauri::command]
+pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
+    let root = crate::tasks::workbench_root();
+    let _ = crate::tasks::ensure_dirs(&root);
+    crate::tasks::process_inbox(&root, &chrono::Local::now().format("%Y-%m-%d").to_string());
+    let view = config::load_view();
+    let builtin = builtin_rows(&view, &state);
+    let tasks: Vec<TaskRow> = {
+        let st = state.state.lock();
+        let last_run = st.last_run.clone();
+        drop(st);
+        crate::tasks::list_tasks(&root)
+            .into_iter()
+            .map(|def| TaskRow { last_run: last_run.get(&def.id).cloned(), def })
+            .collect()
+    };
+    TasksView {
+        builtin,
+        tasks,
+        pending: crate::tasks::list_pending(&root),
+        rejected: crate::tasks::list_rejected(&root),
+    }
+}
+
+#[tauri::command]
+pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef, String> {
+    let root = crate::tasks::workbench_root();
+    let _ = crate::tasks::ensure_dirs(&root);
+    let is_new = def.created_at.is_empty();
+    if def.id.is_empty() {
+        def.id = crate::tasks::new_id();
+    }
+    if crate::scheduler::LEGACY_ROUTINES.contains(&def.id.as_str()) {
+        return Err("내장 작업 ID는 사용할 수 없습니다".into());
+    }
+    def.builtin = false;
+    def.skill = None;
+    if is_new {
+        def.source = crate::tasks::Source { kind: "gui".into(), agent: None, request: None };
+        def.created_at = crate::tasks::now_iso();
+    }
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    crate::tasks::validate_new(&def, &today)?;
+    def.updated_at = crate::tasks::now_iso();
+    crate::tasks::save_task(&root, &def)?;
+    Ok(def)
+}
+
+#[tauri::command]
+pub fn delete_task(id: String) -> Result<(), String> {
+    if scheduler::LEGACY_ROUTINES.contains(&id.as_str()) {
+        return Err("내장 작업은 삭제할 수 없습니다".into());
+    }
+    crate::tasks::delete_task(&crate::tasks::workbench_root(), &id)
+}
+
+#[tauri::command]
+pub fn set_task_enabled(id: String, enabled: bool) -> Result<(), String> {
+    let root = crate::tasks::workbench_root();
+    if scheduler::LEGACY_ROUTINES.contains(&id.as_str()) {
+        let scheds = &config::load_view().dashboard.schedules;
+        let time = match id.as_str() {
+            "morning" => scheds.morning.time.clone(),
+            "lunch" => scheds.lunch.time.clone(),
+            _ => scheds.evening.time.clone(),
+        };
+        return config::save_patch(&serde_json::json!({
+            "dashboard": { "schedules": { id: { "time": time, "enabled": enabled } } }
+        }))
+        .map(|_| ());
+    }
+    crate::tasks::set_enabled(&root, &id, enabled)
+}
+
+#[tauri::command]
+pub fn run_task_now(
+    id: String,
+    mgr: State<'_, Arc<JobManager>>,
+    state: State<'_, Arc<AppState>>,
+) -> Result<Job, String> {
+    scheduler::run_scheduled_now(&mgr, &state, &id)
+}
+
+#[tauri::command]
+pub fn approve_request(
+    id: String,
+    app: AppHandle,
+) -> Result<crate::tasks::TaskDef, String> {
+    use tauri::Emitter;
+    let root = crate::tasks::workbench_root();
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let agent = crate::tasks::list_pending(&root)
+        .into_iter()
+        .find(|p| p.id == id)
+        .map(|p| p.agent)
+        .unwrap_or_default();
+    let def = crate::tasks::approve_request(&root, &id, &agent, &today);
+    if def.is_ok() {
+        let _ = app.emit("tasks-changed", serde_json::json!({}));
+    }
+    def
+}
+
+#[tauri::command]
+pub fn reject_request(id: String, reason: Option<String>, app: AppHandle) -> Result<(), String> {
+    use tauri::Emitter;
+    let result =
+        crate::tasks::reject_request(&crate::tasks::workbench_root(), &id, reason.as_deref().unwrap_or("사유 없음"));
+    if result.is_ok() {
+        let _ = app.emit("tasks-changed", serde_json::json!({}));
+    }
+    result
+}
+
+#[tauri::command]
+pub fn install_skill(target: String) -> Result<plugin::SkillInstall, String> {
+    plugin::install_skill(&target)
+}
+
+#[tauri::command]
+pub fn skill_status() -> Vec<plugin::SkillInstall> {
+    plugin::skill_status()
 }

@@ -22,7 +22,7 @@ import type {
  * 코어 페이지는 호스트가 항상 들고 있고, 그 사이의 화면은 팩이 기여한다.
  * 팩 화면의 id 는 `view:<packId>:<viewId>`.
  */
-export const CORE_PAGES = ["home", "jobs", "terminal", "packs", "settings"] as const;
+export const CORE_PAGES = ["home", "jobs", "tasks", "terminal", "packs", "settings"] as const;
 export type CorePage = (typeof CORE_PAGES)[number];
 export type PageId = CorePage | `view:${string}:${string}`;
 

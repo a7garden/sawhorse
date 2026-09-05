@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import WorkbenchSkillCard from "@/settings/WorkbenchSkillCard";
 import { Empty, PageHeader } from "./common";
 
 const PERMISSION_OPTIONS: { value: PermissionMode; label: string }[] = [
@@ -629,6 +630,7 @@ export default function SettingsPage() {
                 )}
               </CardContent>
             </Card>
+            <WorkbenchSkillCard />
           </div>
         </div>
       )}

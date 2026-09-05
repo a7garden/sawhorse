@@ -38,7 +38,7 @@
     archive/                 # 삭제 승인된 작업 이동 (수동 정리, 스캐빈저 없음)
     inbox/
       req-<ISO시각>-<난수>.json        # 에이전트 요청 (승인 시 소비)
-      rejected/req-*.rejected.json    # 반려 요청 + { error } — 에이전트가 읽고 자기수정
+    rejected/req-*.rejected.json      # 반려 요청 + { error } — 에이전트가 읽고 자기수정
 ```
 
 작업 파일 스키마 (camelCase, 기존 와이어 규약):
