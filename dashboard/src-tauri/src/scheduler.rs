@@ -162,9 +162,13 @@ fn req_for(e: &SchedEntry) -> JobRequest {
 
 /// Record today's run for `id` and drop today's missed card for it.
 fn mark_ran(state: &AppState, id: &str, today: &str) {
-    let mut st = state.state.lock();
-    st.last_run.insert(id.into(), today.into());
-    st.missed.retain(|m| !(m.task_id == id && m.date == today));
+    // scope the guard: save_state re-locks state.state, and parking_lot
+    // Mutex is non-reentrant — saving under the guard would deadlock
+    {
+        let mut st = state.state.lock();
+        st.last_run.insert(id.into(), today.into());
+        st.missed.retain(|m| !(m.task_id == id && m.date == today));
+    }
     state.save_state();
 }
 
@@ -282,10 +286,11 @@ pub fn dismiss_missed(
         run_task_now(mgr, state, &entry.task_id)?;
     }
     {
+        // guard dropped before save_state — see mark_ran (non-reentrant re-lock)
         let mut st = state.state.lock();
         st.missed.retain(|m| m.key != key);
-        state.save_state();
     }
+    state.save_state();
     Ok(state.state.lock().missed.clone())
 }
 
