@@ -226,7 +226,7 @@ sawhorse/
 |---|---|
 | `setup` | 설정·환경 진단: vault 경로 수집(config.json), Node/pandoc/MCP/훅 점검. 재실행 안전 |
 | `wiki` | 개념 노트 규범 본문. 다른 모든 스킬이 이 규범을 준수함을 명시 |
-| `init-vault` | Obsidian 쪽 설정(templates.json/app.json/types.json/homepage) 보정. **폴더·템플릿·`.base` 배치는 앱이 팩 매니페스트로 직접 한다** — 결정적인 파일 복사에 LLM 을 부를 이유가 없다. 재실행 안전(기존 파일 보존) |
+| `init-vault` | Obsidian 쪽 설정(templates.json/app.json/types.json/homepage) 보정 + 폴더·템플릿·`.base` 배치. **앱을 쓰면 배치는 이미 끝나 있고**(팩 매니페스트로 직접 만든다 — 결정적인 파일 복사에 LLM 을 부를 이유가 없다) 스킬은 스킵 목록만 보고한다. 앱 없이 플러그인만 쓰는 경로가 있으므로 스킬에서 지우지는 않는다. 양쪽 다 기존 파일을 덮지 않아 재실행 안전 |
 | `daily-log` | 상세 업무기록 → 일지 노트 `## 업무기록` 자동 영역 교체 + 수기 기록 재가공([PRESERVE]) |
 | `daily-report` | 보고 형식 요약 → 코드블록 출력 |
 | `project-doc` | 사업 등록: 제안서(docx: pandoc, 없으면 Word COM) + 코드베이스 경로 → 사업 폴더/허브/요약 |
