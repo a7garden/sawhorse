@@ -271,6 +271,7 @@ npm run tauri build   # 배포 번들
 ## 문서
 
 - [워크벤치 플랫폼 설계](docs/superpowers/specs/2026-09-05-workbench-platform-design.md) — 팩 아키텍처
+- [멀티에이전트 협업·확장 설계](docs/superpowers/specs/2026-09-05-multi-agent-collaboration-design.md) — 승인 병합·로컬 검증·GitHub/RSS 커넥터
 - [대시보드 설계](docs/superpowers/specs/2026-09-04-dashboard-design.md) — 잡 실행기·herdr
 - [이슈·마일스톤 설계](docs/issues-milestones-design.md)
 - [전체 설계 문서](docs/design.md)
