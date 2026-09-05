@@ -5,12 +5,13 @@ use std::sync::Arc;
 
 use serde::Serialize;
 use serde_json::Value;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 use crate::jobs::{Job, JobManager, JobRequest};
 use crate::config;
 use crate::scheduler;
 use crate::state::{AppState, MissedEntry};
 use crate::plugin;
+use crate::tasks;
 use crate::vault;
 
 #[derive(Serialize)]
@@ -219,12 +220,12 @@ pub fn job_report(id: String, state: State<'_, Arc<AppState>>) -> Option<String>
 }
 
 #[tauri::command]
-pub fn run_routine_now(
-    routine: String,
+pub fn run_task_now(
+    id: String,
     mgr: State<'_, Arc<JobManager>>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<Job, String> {
-    scheduler::run_task_now(&mgr, &state, &routine)
+    scheduler::run_task_now(&mgr, &state, &id)
 }
 
 #[tauri::command]
@@ -240,6 +241,152 @@ pub fn dismiss_missed(
     state: State<'_, Arc<AppState>>,
 ) -> Result<Vec<MissedEntry>, String> {
     scheduler::dismiss_missed(&mgr, &state, &key, run)
+}
+
+// ---------- tasks (user-defined + builtin routines) ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskRow {
+    pub def: crate::tasks::TaskDef,
+    pub last_run: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TasksView {
+    pub builtin: Vec<TaskRow>,
+    pub tasks: Vec<TaskRow>,
+    pub pending: Vec<crate::tasks::PendingRequest>,
+    pub rejected: Vec<crate::tasks::RejectedRequest>,
+}
+
+/// The three config-defined routines rendered as TaskRows so the frontend can
+/// treat builtin and user tasks uniformly. Not persisted — synthesized live.
+fn builtin_rows(scheds: &config::Schedules) -> Vec<TaskRow> {
+    [
+        ("morning", &scheds.morning, "아침 브리핑"),
+        ("lunch", &scheds.lunch, "오전 결산"),
+        ("evening", &scheds.evening, "퇴근 정산"),
+    ]
+    .into_iter()
+    .map(|(id, sched, title)| TaskRow {
+        last_run: None,
+        def: crate::tasks::TaskDef {
+            id: id.into(),
+            title: title.into(),
+            skill: Some(format!("sawhorse:{id}")),
+            builtin: true,
+            enabled: sched.enabled,
+            schedule: Some(crate::tasks::Schedule {
+                kind: crate::tasks::ScheduleKind::Daily,
+                time: sched.time.clone(),
+                date: None,
+            }),
+            source: crate::tasks::Source { kind: "builtin".into(), agent: None, request: None },
+            ..crate::tasks::TaskDef::default()
+        },
+    })
+    .collect()
+}
+
+#[tauri::command]
+pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
+    let root = tasks::workbench_root();
+    let _ = tasks::ensure_dirs(&root);
+    // refresh pending list from the agent inbox before reading it
+    tasks::process_inbox(&root, &chrono::Local::now().format("%Y-%m-%d").to_string());
+    let mut builtin = builtin_rows(&config::load_view().dashboard.schedules);
+    let tasks_list: Vec<TaskRow> = {
+        let st = state.state.lock();
+        for row in &mut builtin {
+            row.last_run = st.last_run.get(&row.def.id).cloned();
+        }
+        tasks::list_tasks(&root)
+            .into_iter()
+            .map(|def| TaskRow { last_run: st.last_run.get(&def.id).cloned(), def })
+            .collect()
+    };
+    TasksView {
+        builtin,
+        tasks: tasks_list,
+        pending: tasks::list_pending(&root),
+        rejected: tasks::list_rejected(&root),
+    }
+}
+
+/// GUI-authored save: no approval gate (a person wrote it). The backend owns id
+/// assignment and forces gui source so agents can't be impersonated from here.
+#[tauri::command]
+pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef, String> {
+    let root = tasks::workbench_root();
+    let _ = tasks::ensure_dirs(&root);
+    if def.id.is_empty() {
+        def.id = tasks::new_id();
+    }
+    def.builtin = false;
+    def.skill = None;
+    def.source.kind = "gui".into();
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    tasks::validate_new(&def, &today)?;
+    def.updated_at = tasks::now_iso();
+    tasks::save_task(&root, &def)?;
+    Ok(def)
+}
+
+#[tauri::command]
+pub fn delete_task(id: String) -> Result<(), String> {
+    if scheduler::ROUTINE_IDS.contains(&id.as_str()) {
+        return Err("내장 작업은 삭제할 수 없습니다".into());
+    }
+    tasks::delete_task(&tasks::workbench_root(), &id)
+}
+
+#[tauri::command]
+pub fn set_task_enabled(id: String, enabled: bool) -> Result<(), String> {
+    let root = tasks::workbench_root();
+    if scheduler::ROUTINE_IDS.contains(&id.as_str()) {
+        // builtin: toggle config.json schedules.<id>.enabled, keeping the config
+        // file the source of truth. save_patch replaces each schedule entry
+        // wholesale (no deep merge), so send the full routine object with the
+        // current time preserved — the same shape the settings page patches.
+        let scheds = &config::load_view().dashboard.schedules;
+        let rs = match id.as_str() {
+            "morning" => &scheds.morning,
+            "lunch" => &scheds.lunch,
+            _ => &scheds.evening,
+        };
+        return config::save_patch(&serde_json::json!({
+            "dashboard": { "schedules": { id: { "time": rs.time, "enabled": enabled } } }
+        }))
+        .map(|_| ());
+    }
+    let mut def = tasks::get_task(&root, &id)?;
+    def.enabled = enabled;
+    def.updated_at = tasks::now_iso();
+    tasks::save_task(&root, &def)
+}
+
+#[tauri::command]
+pub fn approve_request(id: String, app: AppHandle) -> Result<crate::tasks::TaskDef, String> {
+    let root = tasks::workbench_root();
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    // the request file's agent field becomes the approving actor of record
+    let agent = tasks::list_pending(&root)
+        .into_iter()
+        .find(|p| p.id == id)
+        .map(|p| p.agent)
+        .unwrap_or_default();
+    let def = tasks::approve_request(&root, &id, &agent, &today)?;
+    let _ = app.emit("tasks-changed", serde_json::json!({}));
+    Ok(def)
+}
+
+#[tauri::command]
+pub fn reject_request(id: String, reason: Option<String>, app: AppHandle) -> Result<(), String> {
+    tasks::reject_request(&tasks::workbench_root(), &id, reason.as_deref().unwrap_or("사유 없음"))?;
+    let _ = app.emit("tasks-changed", serde_json::json!({}));
+    Ok(())
 }
 
 #[tauri::command]
@@ -276,4 +423,41 @@ pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|e| format!("링크 열기 실패: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_rows_mirror_config_schedules() {
+        let scheds = config::Schedules::default();
+        let rows = builtin_rows(&scheds);
+        assert_eq!(rows.len(), 3);
+        let ids: Vec<&str> = rows.iter().map(|r| r.def.id.as_str()).collect();
+        assert_eq!(ids, ["morning", "lunch", "evening"]);
+        let m = &rows[0].def;
+        assert!(m.builtin);
+        assert_eq!(m.skill.as_deref(), Some("sawhorse:morning"));
+        assert_eq!(m.title, "아침 브리핑");
+        assert_eq!(m.source.kind, "builtin");
+        assert_eq!(m.prompt, "");
+        let s = m.schedule.as_ref().unwrap();
+        assert_eq!(s.kind, crate::tasks::ScheduleKind::Daily);
+        assert_eq!(s.time, "09:00");
+        assert!(s.date.is_none());
+        assert!(m.enabled);
+        assert!(rows[0].last_run.is_none());
+    }
+
+    #[test]
+    fn builtin_rows_reflect_disabled_schedule() {
+        let mut scheds = config::Schedules::default();
+        scheds.lunch.enabled = false;
+        scheds.evening.time = "19:45".into();
+        let rows = builtin_rows(&scheds);
+        assert!(!rows[1].def.enabled, "disabled lunch must surface as disabled");
+        assert!(rows[0].def.enabled);
+        assert_eq!(rows[2].def.schedule.as_ref().unwrap().time, "19:45");
+    }
 }
