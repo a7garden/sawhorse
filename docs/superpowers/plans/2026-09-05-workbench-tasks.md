@@ -19,7 +19,7 @@
 - 제목 1~80자, 프롬프트 1~20,000자, schedule kind는 `daily|weekdays|once`만, `once`는 `date` 필수이고 과거 날짜 거부. builtin(morning/lunch/evening) 대상 인박스 op는 거부.
 - 미싱 정책 유지: 놓친 스케줄 자동 실행 금지, 카드 확인 후 실행. GRACE 2분.
 - `decide()`는 순수 함수 유지(시간 인자만, I/O 없음).
-- 기존 `~/.claude/si-workbench/config.json` 스키마 무변경. 루틴 스케줄 정본은 그대로 `dashboard.schedules.*`.
+- 기존 `~/.claude/sawhorse/config.json` 스키마 무변경. 루틴 스케줄 정본은 그대로 `dashboard.schedules.*`.
 - 구형 state.json 호환: `MissedEntry.task_id`에 `#[serde(alias = "routine")]`, `title`은 `#[serde(default)]`.
 - 커밋: conventional(feat:), 영어, **경로 한정**(`git add <내 파일> && git commit -m ... -- <내 파일>`). 기존 미커밋 WIP를 내 커밋에 섞지 않는다.
 - 전제 파일(스냅샷 기준): `dashboard/src-tauri/src/{config,jobs,scheduler,state,watcher,commands,lib,plugin}.rs`, `dashboard/src/{App.tsx,lib/{types,api,store}.tsx?ts}`, `dashboard/src/pages/{HomePage,SettingsPage}.tsx`.
@@ -46,7 +46,7 @@
 **Interfaces:**
 - Consumes: `config::write_atomic(path, bytes)`, `config::config_path()`(workbench 루트 유도), `uuid`, `chrono`.
 - Produces (이후 모든 태스크가 소비):
-  - `pub fn workbench_root() -> PathBuf` — `config_path().parent()` = `~/.claude/si-workbench`
+  - `pub fn workbench_root() -> PathBuf` — `config_path().parent()` = `~/.claude/sawhorse`
   - `pub fn tasks_dir(root: &Path) -> PathBuf` / `inbox_dir` / `rejected_dir` / `archive_dir` — root 아래 `tasks{,/inbox,/rejected,/archive}`
   - `pub fn ensure_dirs(root: &Path) -> std::io::Result<()>` — 4개 디렉터리 생성(존재 시 무시)
   - `#[derive(...)] pub struct Schedule { pub kind: ScheduleKind, pub time: String, pub date: Option<String> }`, `pub enum ScheduleKind { Daily, Weekdays, Once }` (serde rename_all camelCase, kind는 `#[serde(rename_all = "lowercase")]`)
@@ -1101,7 +1101,7 @@ git commit -m "feat(dashboard): task job kind" -- dashboard/src-tauri/src/jobs.r
 **Interfaces:**
 - Produces (Task 7 프론트가 소비하는 command JSON 계약):
   - `watcher::start_path(path: &Path, emit: EmitFn, event: &'static str, payload: serde_json::Value) -> Option<RecommendedWatcher>` — 기존 `start`는 이를 감싼다.
-  - `commands::list_tasks(state) -> TasksView { builtin: TaskRow[], tasks: TaskRow[], pending: PendingRequest[], rejected: RejectedRequest[] }`, `TaskRow { def: TaskDef, lastRun: Option<String> }` — builtin은 `config::load_view().dashboard.schedules`에서 합성(id=morning 등, builtin:true, skill="si-workbench:<id>", prompt:"").
+  - `commands::list_tasks(state) -> TasksView { builtin: TaskRow[], tasks: TaskRow[], pending: PendingRequest[], rejected: RejectedRequest[] }`, `TaskRow { def: TaskDef, lastRun: Option<String> }` — builtin은 `config::load_view().dashboard.schedules`에서 합성(id=morning 등, builtin:true, skill="sawhorse:<id>", prompt:"").
   - `commands::save_task(def: TaskDef) -> Result<(), String>` — `validate_new` + GUI 소스 저장(`source.kind="gui"`, 없던 id면 `new_id()`는 프론트가 아닌 백엔드에서: def.id 비었으면 채움), 승인 게이트 없음(사람이 직접 씀).
   - `commands::delete_task(id)`, `commands::set_task_enabled(id, enabled)`(enabled 저장+updated_at), `commands::run_task_now(id) -> Job`, `commands::approve_request(id: String)`, `commands::reject_request(id: String, reason: Option<String>)`, `commands::install_skill(target: String)`(Task 8), `commands::skill_status()`(Task 8) — approve/reject 후 스토어 변화이므로 프론트가 `tasks-changed` 이벤트를 수신해 재조회. 승인/거부 시 `emit("tasks-changed", {})`도 호출.
 
@@ -1151,7 +1151,7 @@ fn builtin_rows(view: &config::ConfigView) -> Vec<TaskRow> {
             last_run: None, // 아래에서 채움
             def: crate::tasks::TaskDef {
                 id: id.into(), title: title.into(),
-                skill: Some(format!("si-workbench:{id}")),
+                skill: Some(format!("sawhorse:{id}")),
                 builtin: true, enabled: sched.enabled,
                 schedule: Some(crate::tasks::Schedule { kind: crate::tasks::ScheduleKind::Daily, time: sched.time.clone(), date: None }),
                 source: crate::tasks::Source { kind: "builtin".into(), agent: None, request: None },
@@ -1676,18 +1676,18 @@ git commit -m "feat(dashboard): missed cards and routine runs on unified task mo
 ```markdown
 ---
 name: workbench
-description: Use when the user asks to register or manage a scheduled task in the workbench — "워크벤치에 작업 만들어줘", "매일 아침 X 돌려줘", "작업 등록해줘", "workbench task", "예약 작업". 대화에서 제목·내용·주기를 파악해 si-workbench 대시보드의 승인 큐에 작업 생성 요청을 넣는다.
+description: Use when the user asks to register or manage a scheduled task in the workbench — "워크벤치에 작업 만들어줘", "매일 아침 X 돌려줘", "작업 등록해줘", "workbench task", "예약 작업". 대화에서 제목·내용·주기를 파악해 sawhorse 대시보드의 승인 큐에 작업 생성 요청을 넣는다.
 ---
 
 # workbench — 워크벤치 작업 등록
 
-터미널 에이전트(너)가 si-workbench 대시보드에 예약 작업 생성을 요청하는 스킬이다.
+터미널 에이전트(너)가 sawhorse 대시보드에 예약 작업 생성을 요청하는 스킬이다.
 **너는 정식 작업을 만들 수 없다.** 승인 큐(inbox)에 요청을 넣을 뿐이고, 사람이
 대시보드에서 승인해야 작업이 태어나고 스케줄이 가동된다.
 
 ## 경로
 
-스토어 루트: `%USERPROFILE%\.claude\si-workbench\` (Windows) / `~/.claude/si-workbench/` (macOS·Linux).
+스토어 루트: `%USERPROFILE%\.claude\sawhorse\` (Windows) / `~/.claude/sawhorse/` (macOS·Linux).
 아래 표기는 `<ROOT>`로 줄인다.
 
 | 위치 | 용도 | 너의 권한 |
@@ -1700,8 +1700,8 @@ description: Use when the user asks to register or manage a scheduled task in th
 ## 절차
 
 1. **요청 파악** — 대화에서 제목·무엇을 할지·주기를 끌어낸다. 사용자가 모호하게 말하면 여기서만 질문한다(이 스킬은 대화형 실행이다).
-2. **기존 스킬 우선** — 요청이 기존 스킬로 커버되면 prompt는 그 스킬의 실행 지시 한 줄로 한다: 예) `/si-workbench:morning`을 매일 09:00에 실행 → prompt = `/si-workbench:morning`.
-3. **프롬프트 작성** — [UNATTENDED] 계약: 실행 중 사용자에게 질문하지 않고 끝까지 실행하며, 모든 판단과 근거를 마지막 보고에 남긴다. 대화 맥락을 전제로 하지 않는 자기완결 문장으로 쓴다. 원격 저장소 변경(git push 등) 금지를 명시한다. 볼트 경로가 필요하면 `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath`를 읽어 쓰라고 지시한다.
+2. **기존 스킬 우선** — 요청이 기존 스킬로 커버되면 prompt는 그 스킬의 실행 지시 한 줄로 한다: 예) `/sawhorse:morning`을 매일 09:00에 실행 → prompt = `/sawhorse:morning`.
+3. **프롬프트 작성** — [UNATTENDED] 계약: 실행 중 사용자에게 질문하지 않고 끝까지 실행하며, 모든 판단과 근거를 마지막 보고에 남긴다. 대화 맥락을 전제로 하지 않는 자기완결 문장으로 쓴다. 원격 저장소 변경(git push 등) 금지를 명시한다. 볼트 경로가 필요하면 `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath`를 읽어 쓰라고 지시한다.
 4. **중복 확인** — `<ROOT>/tasks/*.json`을 읽어 같은 제목·주기의 활성 작업이 있으면 사용자에게 확인한다. 그래도 진행하면 요청 비고에 적는다.
 5. **요청 파일 작성** — `<ROOT>/tasks/inbox/req-<UTC시각 YYYYMMDDTHHmmss>-<난수 4자리>.json` (Write 도구로 한 번에 작성):
 
@@ -1732,7 +1732,7 @@ description: Use when the user asks to register or manage a scheduled task in th
 - 요청 파일명 재사용 금지 — 매번 새 타임스탬프+난수.
 ```
 
-- [ ] **Step 2: docs/design.md 스킬 표 갱신** — `## 스킬 (12개, 네임스페이스 /si-workbench:*)` → 13개, 도구 표에 `workbench` 행 추가: "예약 작업 등록: 대화에서 제목·내용·주기 파악 → 인박스 요청 작성 → 대시보드 승인 후 스케줄 가동(정식 스토어 쓰기는 대시보드 전용)".
+- [ ] **Step 2: docs/design.md 스킬 표 갱신** — `## 스킬 (12개, 네임스페이스 /sawhorse:*)` → 13개, 도구 표에 `workbench` 행 추가: "예약 작업 등록: 대화에서 제목·내용·주기 파악 → 인박스 요청 작성 → 대시보드 승인 후 스케줄 가동(정식 스토어 쓰기는 대시보드 전용)".
 - [ ] **Step 3: 커밋**
 
 ```bash
@@ -1906,9 +1906,9 @@ git commit -m "feat(dashboard): workbench skill installer" -- dashboard/src-taur
 ### Task 12: 전체 검증 + 스모크
 
 - [ ] **Step 1: 전체 게이트** — `cd dashboard/src-tauri && cargo test` (기존 54 + 신규 전부 PASS, 경고 0), `cd dashboard && npx tsc --noEmit && npx vite build`.
-- [ ] **Step 2: 부팅 스모크** — 실행 중 인스턴스 `pgrep -f si-workbench` 확인(single-instance 오탐 방지) 후 없으면 디버그 바이너리 기동, 수 초 생존 확인.
+- [ ] **Step 2: 부팅 스모크** — 실행 중 인스턴스 `pgrep -f sawhorse` 확인(single-instance 오탐 방지) 후 없으면 디버그 바이너리 기동, 수 초 생존 확인.
 - [ ] **Step 3: 엔드투엔드 인박스 스모크** — 앱 실행 중:
-  1. `~/.claude/si-workbench/tasks/inbox/req-smoke-0001.json` 작성: `{"op":"create","agent":"smoke","note":"스모크","task":{"title":"스모크 작업","prompt":"/si-workbench:daily-report","schedule":{"kind":"daily","time":"23:59"}}}`
+  1. `~/.claude/sawhorse/tasks/inbox/req-smoke-0001.json` 작성: `{"op":"create","agent":"smoke","note":"스모크","task":{"title":"스모크 작업","prompt":"/sawhorse:daily-report","schedule":{"kind":"daily","time":"23:59"}}}`
   2. 작업 페이지에 승인대기 카드 표시 확인(≤20s).
   3. 승인 → 예약 작업 목록에 "스모크 작업" 표시 + `tasks/t-*.json` 생성 확인.
   4. "지금 실행" → 잡 페이지에 kind:task 잡 생성 확인 → 취소.
