@@ -6,7 +6,7 @@ import type {
   Diagnostics,
   IssueNote,
   Job,
-  MissedRoutine,
+  MissedEntry,
   ProgressEntry,
   TodoSections,
   UnpromotedItem,
@@ -14,7 +14,7 @@ import type {
   VaultNode,
 } from "./types";
 
-export type PageId = "home" | "improve" | "jobs" | "todos" | "docs" | "vault" | "plugin" | "settings";
+export type PageId = "home" | "improve" | "jobs" | "tasks" | "todos" | "docs" | "vault" | "plugin" | "settings";
 
 interface AppState {
   page: PageId;
@@ -26,7 +26,7 @@ interface AppState {
   todos: TodoSections | null;
   jobs: Job[];
   progress: Record<string, ProgressEntry[]>;
-  missed: MissedRoutine[];
+  missed: MissedEntry[];
   vaultTree: VaultNode[];
   inboxCount: number;
   audit: VaultAudit | null;
@@ -88,7 +88,7 @@ export const useApp = create<AppState>((set, get) => ({
       }),
     );
     unlisteners.push(
-      await listen<{ missed: MissedRoutine }>(EVENTS.scheduleMissed, () =>
+      await listen<{ missed: MissedEntry }>(EVENTS.scheduleMissed, () =>
         void get().refreshMissed(),
       ),
     );

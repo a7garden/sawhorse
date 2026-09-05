@@ -88,7 +88,7 @@ export default function HomePage() {
   async function runRoutine(r: RoutineName) {
     setBusy(true);
     try {
-      await api.runRoutineNow(r);
+      await api.runTaskNow(r);
       await refreshJobs();
     } finally {
       setBusy(false);
@@ -137,7 +137,7 @@ export default function HomePage() {
         {missed.length > 0 && (
           <section className="space-y-2">
             {missed.map((m) => {
-              const label = ROUTINES.find((r) => r.key === m.routine)?.label ?? m.routine;
+              const label = ROUTINES.find((r) => r.key === m.taskId)?.label ?? m.taskId;
               return (
                 <div
                   key={m.key}
@@ -171,7 +171,7 @@ export default function HomePage() {
             const doneToday = rjobs.some(
               (j) => j.status === "success" && j.finishedAtMs != null && fmtDate(j.finishedAtMs) === today,
             );
-            const isMissed = missed.some((m) => m.routine === r.key && m.date === today);
+            const isMissed = missed.some((m) => m.taskId === r.key && m.date === today);
 
             let state: { label: string; variant: BadgeVariant } = { label: "예정", variant: "outline" };
             if (running) state = { label: "실행중", variant: "default" };

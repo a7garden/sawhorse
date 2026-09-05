@@ -160,13 +160,15 @@ export type JobKind =
   | "excel"
   | "initVault"
   | "setup"
-  | "promote";
+  | "promote"
+  | "task";
 
 export interface JobRequest {
   kind: JobKind;
   project?: string;
   ids?: string[];
   routine?: RoutineName;
+  taskId?: string | null;
 }
 
 export type JobRunner = "headless" | "herdr";
@@ -218,11 +220,54 @@ export interface Diagnostics {
   projects: { name: string; pathOk: boolean; gitOk: boolean; branchOk: boolean | null }[];
 }
 
-export interface MissedRoutine {
-  key: string; // "<routine>-<date>"
-  routine: RoutineName;
-  date: string; // YYYY-MM-DD
-  scheduledAt: string; // HH:MM
+export type ScheduleKind = "daily" | "weekdays" | "once";
+
+export interface TaskSchedule { kind: ScheduleKind; time: string; date?: string | null }
+
+export interface TaskSource { kind: string; agent?: string | null; request?: string | null }
+
+export interface TaskDef {
+  id: string;
+  title: string;
+  prompt: string;
+  schedule: TaskSchedule | null;
+  enabled: boolean;
+  builtin: boolean;
+  skill: string | null;
+  project: string | null;
+  source: TaskSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskRow { def: TaskDef; lastRun: string | null }
+
+export interface PendingTaskRequest {
+  id: string;
+  op: "create" | "update" | "pause" | "resume" | "delete";
+  agent: string;
+  note: string;
+  targetTitle: string;
+  summary: string[];
+  duplicateOf: string | null;
+}
+
+export interface RejectedRequest { id: string; error: string }
+
+export interface TasksView {
+  builtin: TaskRow[];
+  tasks: TaskRow[];
+  pending: PendingTaskRequest[];
+  rejected: RejectedRequest[];
+}
+
+/** Generalized missed card. Old field name `routine` is aliased server-side. */
+export interface MissedEntry {
+  key: string;
+  taskId: string;
+  title: string;
+  date: string;
+  scheduledAt: string;
 }
 
 export interface JobProgressPayload {
