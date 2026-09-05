@@ -1,16 +1,25 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  AgentPresence,
   ConfigPatch,
   ConfigView,
   Diagnostics,
   HerdrDiag,
+  HerdrSnapshot,
+  InstallReport,
   IssueNote,
   Job,
   JobRequest,
   MissedRoutine,
+  NavEntry,
   NoteView,
+  PackAgentStatus,
+  PackRegistryView,
   PluginBundle,
+  ProvisionReport,
+  QueryResult,
   RoutineName,
+  ScheduleView,
   TodoSection,
   TodoSections,
   UnpromotedItem,
@@ -66,6 +75,52 @@ export const api = {
   pluginInfo: (): Promise<PluginBundle> => invoke("plugin_info"),
   readSkill: (name: string): Promise<string> => invoke("read_skill", { name }),
   openExternal: (url: string): Promise<void> => invoke("open_external", { url }),
+  openPath: (path: string): Promise<void> => invoke("open_path", { path }),
+
+  // 확장(pack)
+  listPacks: (): Promise<PackRegistryView> => invoke("list_packs"),
+  listNav: (): Promise<NavEntry[]> => invoke("list_nav"),
+  setPackEnabled: (id: string, on: boolean): Promise<ConfigView> =>
+    invoke("set_pack_enabled", { id, on }),
+  savePackSettings: (packId: string, values: Record<string, unknown>): Promise<ConfigView> =>
+    invoke("save_pack_settings", { packId, values }),
+  queryPackView: (packId: string, viewId: string): Promise<QueryResult> =>
+    invoke("query_pack_view", { packId, viewId }),
+  runPackAction: (
+    packId: string,
+    actionId: string,
+    params: Record<string, unknown> = {},
+  ): Promise<Job> => invoke("run_pack_action", { packId, actionId, params }),
+  readPackSkill: (packId: string, name: string): Promise<string> =>
+    invoke("read_pack_skill", { packId, name }),
+
+  // 에이전트 브리지
+  listAgents: (): Promise<AgentPresence[]> => invoke("list_agents"),
+  packAgentStatus: (packId: string): Promise<PackAgentStatus> =>
+    invoke("pack_agent_status", { packId }),
+  installPackSkills: (packId: string, agent: string, force: boolean): Promise<InstallReport> =>
+    invoke("install_pack_skills", { packId, agent, force }),
+  uninstallPackSkills: (packId: string, agent: string): Promise<InstallReport> =>
+    invoke("uninstall_pack_skills", { packId, agent }),
+
+  // 작업공간 프로비저닝
+  workspacePlan: (): Promise<string[]> => invoke("workspace_plan"),
+  provisionWorkspace: (vaultPath?: string): Promise<ProvisionReport> =>
+    invoke("provision_workspace", { vaultPath: vaultPath ?? null }),
+
+  // 예약
+  listSchedules: (): Promise<ScheduleView[]> => invoke("list_schedules"),
+  runScheduledNow: (key: string): Promise<Job> => invoke("run_scheduled_now", { key }),
+  setSchedule: (key: string, enabled: boolean, time: string): Promise<ConfigView> =>
+    invoke("set_schedule", { key, enabled, time }),
+
+  // herdr 터미널
+  herdrSnapshot: (): Promise<HerdrSnapshot> => invoke("herdr_snapshot"),
+  herdrFocusWorkspace: (id: string): Promise<void> => invoke("herdr_focus_workspace", { id }),
+  herdrFocusPane: (id: string): Promise<void> => invoke("herdr_focus_pane", { id }),
+  herdrCloseTab: (id: string): Promise<void> => invoke("herdr_close_tab", { id }),
+  herdrOpenTab: (cwd?: string, label?: string): Promise<{ tabId: string; paneId: string; workspaceId: string }> =>
+    invoke("herdr_open_tab", { cwd: cwd ?? null, label: label ?? null }),
 };
 
 // Tauri event names (mirrored by Rust side)

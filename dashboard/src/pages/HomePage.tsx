@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowRight, Play, TriangleAlert } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
-import type { Job, ProgressEntry, RoutineName } from "@/lib/types";
+import type { Job, ProgressEntry, ScheduleView } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -20,18 +20,13 @@ import {
   useTicker,
 } from "./common";
 
-const ROUTINES: { key: RoutineName; label: string }[] = [
-  { key: "morning", label: "아침" },
-  { key: "lunch", label: "점심" },
-  { key: "evening", label: "저녁" },
-];
-
-// Job.label is backend-owned text; match routine jobs by name keywords.
-const ROUTINE_LABEL_RE: Record<RoutineName, RegExp> = {
-  morning: /morning|아침/i,
-  lunch: /lunch|점심/i,
-  evening: /evening|저녁/i,
-};
+// 예약은 팩이 선언한다. 잡 라벨은 백엔드가 만든 문자열이라, 팩 액션 잡은 라벨이
+// 예약 라벨과 정확히 같고 구형 routine 잡만 이름으로 맞춘다.
+function jobsFor(jobs: Job[], s: ScheduleView): Job[] {
+  return jobs.filter(
+    (j) => j.label === s.label || (j.kind === "routine" && j.label.toLowerCase().includes(s.actionId)),
+  );
+}
 
 export default function HomePage() {
   const config = useApp((s) => s.config);
@@ -40,6 +35,8 @@ export default function HomePage() {
   const jobs = useApp((s) => s.jobs);
   const progress = useApp((s) => s.progress);
   const missed = useApp((s) => s.missed);
+  const schedules = useApp((s) => s.schedules);
+  const refreshSchedules = useApp((s) => s.refreshSchedules);
   const setPage = useApp((s) => s.setPage);
   const openWizard = useApp((s) => s.openWizard);
   const refreshJobs = useApp((s) => s.refreshJobs);
@@ -55,10 +52,14 @@ export default function HomePage() {
 
   useEffect(() => {
     void refreshAudit();
+    void refreshSchedules();
     // job-finished events refresh the list, but queued→running has no event; poll lightly.
-    const t = setInterval(() => void refreshJobs(), 10000);
+    const t = setInterval(() => {
+      void refreshJobs();
+      void refreshSchedules();
+    }, 10000);
     return () => clearInterval(t);
-  }, [refreshJobs, refreshAudit]);
+  }, [refreshJobs, refreshAudit, refreshSchedules]);
 
   const activeJobs = jobs
     .filter((j) => j.status === "queued" || j.status === "running")
@@ -67,7 +68,7 @@ export default function HomePage() {
 
   const problems: string[] = [];
   if (config && !config.exists)
-    problems.push("설정 파일(~/.claude/si-workbench/config.json)이 없습니다. 볼트 경로만 지정해도 시작할 수 있습니다.");
+    problems.push("설정 파일(~/.claude/sawhorse/config.json)이 없습니다. 작업공간 경로만 지정해도 시작할 수 있습니다.");
   if (diag && !diag.vaultPathOk) problems.push("볼트 경로가 유효하지 않습니다. 설정에서 경로를 확인하세요.");
   if (diag && !diag.claudeOk) problems.push("claude CLI를 실행할 수 없습니다. 설정에서 실행 파일 위치를 확인하세요.");
   if (diag) {
@@ -85,11 +86,11 @@ export default function HomePage() {
     }
   }
 
-  async function runRoutine(r: RoutineName) {
+  async function runScheduled(key: string) {
     setBusy(true);
     try {
-      await api.runRoutineNow(r);
-      await refreshJobs();
+      await api.runScheduledNow(key);
+      await Promise.all([refreshJobs(), refreshSchedules()]);
     } finally {
       setBusy(false);
     }
@@ -137,7 +138,7 @@ export default function HomePage() {
         {missed.length > 0 && (
           <section className="space-y-2">
             {missed.map((m) => {
-              const label = ROUTINES.find((r) => r.key === m.routine)?.label ?? m.routine;
+              const label = m.label || schedules.find((s) => s.key === m.routine)?.label || m.routine;
               return (
                 <div
                   key={m.key}
@@ -145,7 +146,7 @@ export default function HomePage() {
                 >
                   <TriangleAlert className={`size-4 shrink-0 ${WARN_TEXT}`} />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold">{label} 루틴을 놓쳤습니다</div>
+                    <div className="text-[13px] font-semibold">{label} 예약을 놓쳤습니다</div>
                     <div className="text-xs text-muted-foreground">
                       {m.date} {m.scheduledAt} 예정 — 자동 실행되지 않았습니다. 확인 후 실행하세요.
                     </div>
@@ -162,50 +163,55 @@ export default function HomePage() {
           </section>
         )}
 
-        <section className="grid gap-3 sm:grid-cols-3">
-          {ROUTINES.map((r) => {
-            const sched = config?.dashboard.schedules[r.key];
-            const rjobs = jobs.filter((j) => j.kind === "routine" && ROUTINE_LABEL_RE[r.key].test(j.label));
-            const running = rjobs.find((j) => j.status === "running");
-            const queued = rjobs.find((j) => j.status === "queued");
-            const doneToday = rjobs.some(
-              (j) => j.status === "success" && j.finishedAtMs != null && fmtDate(j.finishedAtMs) === today,
-            );
-            const isMissed = missed.some((m) => m.routine === r.key && m.date === today);
+        {schedules.length > 0 && (
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {schedules.map((s) => {
+              const sjobs = jobsFor(jobs, s);
+              const running = sjobs.find((j) => j.status === "running");
+              const queued = sjobs.find((j) => j.status === "queued");
+              const doneToday =
+                s.lastRun === today ||
+                sjobs.some(
+                  (j) => j.status === "success" && j.finishedAtMs != null && fmtDate(j.finishedAtMs) === today,
+                );
+              const isMissed = missed.some((m) => m.routine === s.key && m.date === today);
 
-            let state: { label: string; variant: BadgeVariant } = { label: "예정", variant: "outline" };
-            if (running) state = { label: "실행중", variant: "default" };
-            else if (queued) state = { label: "대기", variant: "secondary" };
-            else if (isMissed) state = { label: "놓침", variant: "warning" as const };
-            else if (doneToday) state = { label: "완료", variant: "success" as const };
-            else if (sched && !sched.enabled) state = { label: "꺼짐", variant: "outline" as const };
+              let state: { label: string; variant: BadgeVariant } = { label: "예정", variant: "outline" };
+              if (running) state = { label: "실행중", variant: "default" };
+              else if (queued) state = { label: "대기", variant: "secondary" };
+              else if (isMissed) state = { label: "놓침", variant: "warning" as const };
+              else if (doneToday) state = { label: "완료", variant: "success" as const };
+              else if (!s.enabled) state = { label: "꺼짐", variant: "outline" as const };
 
-            return (
-              <Card key={r.key}>
-                <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-                  <CardTitle className="text-[13px]">{r.label} 루틴</CardTitle>
-                  <Badge variant={state.variant}>{state.label}</Badge>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-xs text-muted-foreground">
-                    {sched?.enabled ? `매일 ${sched.time}` : "비활성"}
-                    {running ? ` · 시작 ${fmtClock(running.startedAtMs)}` : ""}
-                    {queued ? ` · 등록 ${fmtClock(queued.createdAtMs)}` : ""}
-                  </div>
-                  <Button
-                    className="mt-2 w-full"
-                    size="sm"
-                    variant={isMissed ? "default" : "outline"}
-                    disabled={busy || !!running || !!queued}
-                    onClick={() => void runRoutine(r.key)}
-                  >
-                    <Play /> 지금 실행
-                  </Button>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </section>
+              return (
+                <Card key={s.key}>
+                  <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
+                    <CardTitle className="min-w-0 truncate text-[13px]" title={s.label}>
+                      {s.label}
+                    </CardTitle>
+                    <Badge variant={state.variant}>{state.label}</Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-xs text-muted-foreground">
+                      {s.enabled ? `${s.kind === "weekdays" ? "평일" : "매일"} ${s.time}` : "비활성"}
+                      {running ? ` · 시작 ${fmtClock(running.startedAtMs)}` : ""}
+                      {queued ? ` · 등록 ${fmtClock(queued.createdAtMs)}` : ""}
+                    </div>
+                    <Button
+                      className="mt-2 w-full"
+                      size="sm"
+                      variant={isMissed ? "default" : "outline"}
+                      disabled={busy || !!running || !!queued}
+                      onClick={() => void runScheduled(s.key)}
+                    >
+                      <Play /> 지금 실행
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </section>
+        )}
 
         <section className="grid gap-3 lg:grid-cols-3">
           <Card className="lg:col-span-2">

@@ -9,7 +9,7 @@ import type {
   HerdrMode,
   PermissionMode,
   ProjectCfg,
-  RoutineName,
+  ScheduleView,
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,12 +18,6 @@ import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Empty, PageHeader } from "./common";
-
-const ROUTINES: { key: RoutineName; label: string }[] = [
-  { key: "morning", label: "아침" },
-  { key: "lunch", label: "점심" },
-  { key: "evening", label: "저녁" },
-];
 
 const PERMISSION_OPTIONS: { value: PermissionMode; label: string }[] = [
   { value: "default", label: "기본" },
@@ -61,18 +55,65 @@ function validate(d: ConfigView): string | null {
   }
   if (d.defaultProject.length > 0 && !names.has(d.defaultProject))
     return "기본 프로젝트가 프로젝트 목록에 없습니다.";
-  for (const r of ROUTINES) {
-    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(d.dashboard.schedules[r.key].time.trim()))
-      return `${r.label} 루틴 시각은 HH:MM 형식이어야 합니다.`;
-  }
   if (d.dashboard.claudeBin.trim().length === 0) return "claude 실행 파일을 입력하세요.";
   return null;
+}
+
+/** 예약 한 줄. 시각은 타이핑 중 저장하지 않고, 형식이 맞을 때만 커밋한다. */
+function ScheduleRow({ entry, onSaved }: { entry: ScheduleView; onSaved: () => void }) {
+  const [time, setTime] = useState(entry.time);
+  const [err, setErr] = useState(false);
+  useEffect(() => setTime(entry.time), [entry.time]);
+
+  async function save(enabled: boolean, value: string) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value.trim())) {
+      setErr(true);
+      return;
+    }
+    setErr(false);
+    try {
+      await api.setSchedule(entry.key, enabled, value.trim());
+      onSaved();
+    } catch {
+      setErr(true);
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Switch
+        id={`sched-${entry.key}`}
+        checked={entry.enabled}
+        onCheckedChange={(on) => void save(on, time)}
+      />
+      <Label htmlFor={`sched-${entry.key}`} className="min-w-0 flex-1 truncate" title={entry.label}>
+        {entry.label}
+      </Label>
+      <span className="shrink-0 text-[10px] text-muted-foreground">
+        {entry.kind === "weekdays" ? "평일" : "매일"}
+      </span>
+      <Input
+        className={`w-24 shrink-0 ${err ? "border-destructive" : ""}`}
+        value={time}
+        onChange={(e) => setTime(e.target.value)}
+        onBlur={() => void save(entry.enabled, time)}
+        placeholder="HH:MM"
+        aria-label={`${entry.label} 예약 시각`}
+      />
+    </div>
+  );
 }
 
 export default function SettingsPage() {
   const config = useApp((s) => s.config);
   const diag = useApp((s) => s.diag);
   const refreshConfig = useApp((s) => s.refreshConfig);
+  const schedules = useApp((s) => s.schedules);
+  const refreshSchedules = useApp((s) => s.refreshSchedules);
+  const saveSchedules = () => {
+    void refreshSchedules();
+    void refreshConfig();
+  };
   const refreshDiagnostics = useApp((s) => s.refreshDiagnostics);
   const openWizard = useApp((s) => s.openWizard);
 
@@ -112,7 +153,6 @@ export default function SettingsPage() {
         vaultPath: draft.vaultPath.trim(),
         defaultProject: draft.defaultProject,
         projects: draft.projects,
-        schedules: draft.dashboard.schedules,
         excelOutputDir: draft.dashboard.excelOutputDir,
         claudeBin: draft.dashboard.claudeBin,
         permissionMode: draft.dashboard.permissionMode,
@@ -297,41 +337,18 @@ export default function SettingsPage() {
           <div className="space-y-4">
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-[13px]">루틴 예약</CardTitle>
+                <CardTitle className="text-[13px]">예약</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2.5">
-                {ROUTINES.map((r) => {
-                  const s = draft.dashboard.schedules[r.key];
-                  return (
-                    <div key={r.key} className="flex items-center gap-2">
-                      <Switch
-                        id={`sched-${r.key}`}
-                        checked={s.enabled}
-                        onCheckedChange={(on) =>
-                          patchDraft((d) => {
-                            d.dashboard.schedules[r.key].enabled = on;
-                          })
-                        }
-                      />
-                      <Label htmlFor={`sched-${r.key}`} className="w-10">
-                        {r.label}
-                      </Label>
-                      <Input
-                        className="w-24"
-                        value={s.time}
-                        onChange={(e) =>
-                          patchDraft((d) => {
-                            d.dashboard.schedules[r.key].time = e.target.value;
-                          })
-                        }
-                        placeholder="HH:MM"
-                        aria-label={`${r.label} 루틴 시각`}
-                      />
-                    </div>
-                  );
-                })}
+                {schedules.length === 0 && (
+                  <Empty>예약 가능한 액션이 없습니다. 확장 탭에서 확장을 켜세요.</Empty>
+                )}
+                {schedules.map((s) => (
+                  <ScheduleRow key={s.key} entry={s} onSaved={saveSchedules} />
+                ))}
                 <p className="text-[11px] text-muted-foreground">
-                  시각이 지나도 앱이 꺼져 있었다면 자동 실행하지 않고 홈에 알립니다.
+                  예약은 확장이 선언하고, 여기서 바꾼 값이 그 위에 덮입니다. 시각이 지나도
+                  앱이 꺼져 있었다면 자동 실행하지 않고 홈에 알립니다.
                 </p>
               </CardContent>
             </Card>

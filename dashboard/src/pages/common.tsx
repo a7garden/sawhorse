@@ -54,6 +54,7 @@ export const JOB_KIND_KO: Record<Job["kind"], string> = {
   promote: "승격 검토",
   initVault: "init-vault",
   setup: "setup",
+  action: "확장 액션",
 };
 
 export const JOB_RUNNER_KO: Record<JobRunner, string> = {

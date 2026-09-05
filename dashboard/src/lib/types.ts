@@ -160,13 +160,18 @@ export type JobKind =
   | "excel"
   | "initVault"
   | "setup"
-  | "promote";
+  | "promote"
+  /** 팩이 선언한 액션 */
+  | "action";
 
 export interface JobRequest {
   kind: JobKind;
   project?: string;
   ids?: string[];
   routine?: RoutineName;
+  packId?: string;
+  actionId?: string;
+  params?: Record<string, unknown>;
 }
 
 export type JobRunner = "headless" | "herdr";
@@ -219,8 +224,11 @@ export interface Diagnostics {
 }
 
 export interface MissedRoutine {
-  key: string; // "<routine>-<date>"
-  routine: RoutineName;
+  key: string; // "<예약 키>-<date>"
+  /** 예약 키(`si.morning`). 구형 기록은 루틴 이름(`morning`)을 담고 있다. */
+  routine: string;
+  /** 사람이 읽는 이름. 구형 기록에는 없다. */
+  label?: string;
   date: string; // YYYY-MM-DD
   scheduledAt: string; // HH:MM
 }
@@ -251,4 +259,240 @@ export interface PluginBundle {
   keywords: string[];
   root: string;
   skills: SkillInfo[];
+}
+
+// ---------- 확장(pack) ----------
+
+export type SettingFieldType = "text" | "path" | "number" | "bool" | "select" | "table";
+export type ActionParamType = "text" | "list" | "select" | "project";
+export type ViewKind = "notes" | "native";
+export type ScheduleKind = "daily" | "weekdays";
+
+export interface Choice {
+  value: string;
+  label: string;
+}
+
+export interface PackColumn {
+  key: string;
+  label: string;
+  type: string;
+}
+
+export interface SettingField {
+  key: string;
+  type: SettingFieldType;
+  label: string;
+  description: string;
+  placeholder: string;
+  options: Choice[];
+  columns: PackColumn[];
+}
+
+export interface ActionParam {
+  key: string;
+  type: ActionParamType;
+  label: string;
+  options: Choice[];
+  required: boolean;
+}
+
+export interface ActionSchedule {
+  kind: ScheduleKind;
+  time: string;
+  enabled: boolean;
+}
+
+export interface PackAction {
+  id: string;
+  label: string;
+  description: string;
+  prompt: string;
+  cwd: string;
+  params: ActionParam[];
+  schedule: ActionSchedule | null;
+  featured: boolean;
+}
+
+export interface ViewColumn {
+  field: string;
+  label: string;
+  /** "" | "title" | "mtime" — 프론트매터가 아니라 노트 자체에서 오는 값 */
+  source: string;
+  type: string;
+  width: number;
+}
+
+export interface PackView {
+  id: string;
+  label: string;
+  icon: string;
+  type: ViewKind;
+  component: string;
+  columns: ViewColumn[];
+  groupBy: string;
+  actions: string[];
+  empty: string;
+}
+
+export interface FileSeed {
+  src: string;
+  dest: string;
+}
+
+export interface PackInfo {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  author: string;
+  icon: string;
+  skills: string[];
+  workspace: { folders: string[]; files: FileSeed[] };
+  settings: SettingField[];
+  actions: PackAction[];
+  views: PackView[];
+  dir: string;
+  source: "builtin" | "user";
+  enabled: boolean;
+  availableSkills: string[];
+  settingsValues: Record<string, unknown>;
+}
+
+export interface BrokenPack {
+  dir: string;
+  error: string;
+}
+
+export interface PackRegistryView {
+  packs: PackInfo[];
+  broken: BrokenPack[];
+}
+
+export interface NavEntry {
+  packId: string;
+  packName: string;
+  viewId: string;
+  label: string;
+  icon: string;
+  type: ViewKind;
+  component: string;
+}
+
+// ---------- 노트 질의 ----------
+
+export interface NoteRow {
+  path: string;
+  rel: string;
+  title: string;
+  mtimeMs: number;
+  fields: Record<string, unknown>;
+}
+
+export interface QueryResult {
+  rows: NoteRow[];
+  folders: string[];
+  truncated: boolean;
+}
+
+// ---------- 에이전트 브리지 ----------
+
+export type SkillState = "installed" | "modified" | "missing" | "noSource";
+
+export interface SkillStatus {
+  skill: string;
+  agent: string;
+  state: SkillState;
+  target: string;
+}
+
+export interface PluginInstall {
+  key: string;
+  version: string;
+  installPath: string;
+}
+
+export interface PackAgentStatus {
+  packId: string;
+  claude: SkillStatus[];
+  codex: SkillStatus[];
+  pluginInstalls: PluginInstall[];
+}
+
+export interface AgentPresence {
+  id: string;
+  name: string;
+  detected: boolean;
+  version?: string;
+  home: string;
+  installable: boolean;
+  note: string;
+}
+
+export interface InstallReport {
+  installed: string[];
+  skipped: string[];
+  failed: string[];
+}
+
+export interface ProvisionReport {
+  created: string[];
+  skipped: string[];
+  failed: string[];
+}
+
+// ---------- 예약 ----------
+
+export interface ScheduleView {
+  key: string;
+  packId: string;
+  actionId: string;
+  label: string;
+  kind: ScheduleKind;
+  time: string;
+  enabled: boolean;
+  lastRun?: string;
+}
+
+// ---------- herdr 터미널 ----------
+
+export interface HerdrWorkspace {
+  workspaceId: string;
+  label: string;
+  number: number;
+  focused: boolean;
+  tabCount: number;
+  paneCount: number;
+  agentStatus: string;
+}
+
+export interface HerdrTab {
+  tabId: string;
+  workspaceId: string;
+  label: string;
+  number: number;
+  focused: boolean;
+  paneCount: number;
+  agentStatus: string;
+}
+
+export interface HerdrAgentRow {
+  paneId: string;
+  tabId: string;
+  workspaceId: string;
+  name: string;
+  agent: string;
+  agentStatus: string;
+  cwd: string;
+  focused: boolean;
+  terminalTitle: string;
+}
+
+export interface HerdrSnapshot {
+  available: boolean;
+  error?: string;
+  session: string;
+  workspaces: HerdrWorkspace[];
+  tabs: HerdrTab[];
+  agents: HerdrAgentRow[];
 }

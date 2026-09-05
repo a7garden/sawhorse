@@ -1,13 +1,17 @@
+mod agents;
 mod commands;
 mod config;
 mod herdr;
 mod jobs;
+mod notes;
+mod packs;
 mod plugin;
 mod scheduler;
 mod state;
 mod transcript;
 mod vault;
 mod watcher;
+mod workspace;
 
 use std::sync::Arc;
 use parking_lot::Mutex;
@@ -63,6 +67,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             apply_dock_icon();
+            // 번들 실행에서는 packs/·skills/ 가 리소스로 따라온다. 개발 실행에서는
+            // 마커가 없어 등록되지 않고, resolve_root 의 저장소 탐색이 그대로 쓰인다.
+            if let Ok(res) = app.path().resource_dir() {
+                plugin::set_root_override(res);
+            }
             let data_dir = app.path().app_data_dir()?;
             let state = Arc::new(state::AppState::new(data_dir));
             // herdr sessions outlive the app, so these are candidates for resuming
@@ -163,6 +172,33 @@ pub fn run() {
             commands::plugin_info,
             commands::read_skill,
             commands::open_external,
+            commands::open_path,
+            // 확장(pack) 레지스트리
+            commands::list_packs,
+            commands::list_nav,
+            commands::set_pack_enabled,
+            commands::save_pack_settings,
+            commands::query_pack_view,
+            commands::run_pack_action,
+            commands::read_pack_skill,
+            // 에이전트 브리지
+            commands::list_agents,
+            commands::pack_agent_status,
+            commands::install_pack_skills,
+            commands::uninstall_pack_skills,
+            // 작업공간 프로비저닝
+            commands::workspace_plan,
+            commands::provision_workspace,
+            // 예약
+            commands::list_schedules,
+            commands::run_scheduled_now,
+            commands::set_schedule,
+            // herdr 터미널
+            commands::herdr_snapshot,
+            commands::herdr_focus_workspace,
+            commands::herdr_focus_pane,
+            commands::herdr_close_tab,
+            commands::herdr_open_tab,
         ])
         .run(tauri::generate_context!())
         .expect("sawhorse 대시보드 실행 실패");

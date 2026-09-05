@@ -154,7 +154,7 @@ Obsidian은 에디터 최상단에 파일명을 인라인 제목으로 이미 �
    - 기존 노트들의 frontmatter `aliases`에 개념명/별칭이 있는지 확인한다.
 2. 노트가 있으면 새로 만들지 않는다. 정의나 출처가 부족하면 기존 노트의 기존 필드 안에서만 보완한다.
 3. 노트가 없으면 템플릿 복제: `${user_config.vault_path}/템플릿/개념.md` → `${user_config.vault_path}/개념/<개념명>.md`.
-   - vault에 템플릿이 없으면 `${CLAUDE_PLUGIN_ROOT}/templates/개념.md`를 사용한다.
+   - vault에 템플릿이 없으면 `${CLAUDE_PLUGIN_ROOT}/packs/si/templates/개념.md`를 사용한다.
    - 그것도 없으면 `/sawhorse:init-vault` 실행을 안내하고 이 절차를 중단한다.
 4. 내용 기재:
    - `## 정의`에 2-3문장 정의를 쓴다. 한 줄로 끝나는 용어여도 노트로 만든다(제6조).

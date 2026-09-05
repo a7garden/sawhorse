@@ -1,0 +1,248 @@
+{
+  "id": "si",
+  "name": "SI 업무",
+  "version": "1.0.0",
+  "author": "won",
+  "icon": "briefcase",
+  "description": "Obsidian 볼트를 지식베이스로 쓰는 SI 업무 방식 전체 — 일과 루틴, 업무일지·보고, 위키(개념 노트), 사업 문서화, 이슈·마일스톤 워크플로, 발주처 보고용 엑셀. 설정은 config.json 의 vaultPath·improve·dashboard 블록을 그대로 쓴다(팩 이전부터 있던 정본이라 packs.settings 로 옮기지 않는다 — 상태가 두 곳에 있으면 반드시 어긋난다).",
+
+  "skills": [
+    "morning", "lunch", "evening",
+    "daily-log", "daily-report",
+    "wiki", "init-vault", "setup", "vault-tidy",
+    "project-doc", "codebase-docs",
+    "issues", "improve", "improve-excel"
+  ],
+
+  "workspace": {
+    "folders": [
+      "템플릿",
+      "일지",
+      "사업",
+      "개념",
+      "첨부/스크린샷",
+      "첨부/다이어그램"
+    ],
+    "files": [
+      { "src": "templates/일지.md", "dest": "템플릿/일지.md" },
+      { "src": "templates/사업.md", "dest": "템플릿/사업.md" },
+      { "src": "templates/개념.md", "dest": "템플릿/개념.md" },
+      { "src": "templates/기능분석.md", "dest": "템플릿/기능분석.md" },
+      { "src": "templates/회의.md", "dest": "템플릿/회의.md" },
+      { "src": "templates/이슈.md", "dest": "템플릿/이슈.md" },
+      { "src": "templates/마일스톤.md", "dest": "템플릿/마일스톤.md" },
+      { "src": "templates/개선.md", "dest": "템플릿/개선.md" },
+      { "src": "assets/bases/일지.base", "dest": "일지/일지.base" },
+      { "src": "assets/bases/개념.base", "dest": "개념/개념.base" },
+      { "src": "assets/bases/사업.base", "dest": "사업/사업.base" },
+      { "src": "assets/bases/이슈.base", "dest": "사업/이슈.base" },
+      { "src": "assets/bases/마일스톤.base", "dest": "사업/마일스톤.base" },
+      { "src": "assets/대시보드.md", "dest": "대시보드.md" }
+    ]
+  },
+
+  "actions": [
+    {
+      "id": "morning",
+      "label": "아침 브리핑",
+      "description": "오늘 일지 준비 + 어제 할 일 이월 + 어제 요약 + 볼트 빠른 정리",
+      "prompt": "/sawhorse:morning",
+      "cwd": "workspace",
+      "featured": true,
+      "schedule": { "kind": "weekdays", "time": "09:00" }
+    },
+    {
+      "id": "lunch",
+      "label": "오전 결산",
+      "description": "오늘 할 일 대 오전 세션 대조 + 볼트 진단 (읽기 전용)",
+      "prompt": "/sawhorse:lunch",
+      "cwd": "workspace",
+      "featured": true,
+      "schedule": { "kind": "weekdays", "time": "12:30" }
+    },
+    {
+      "id": "evening",
+      "label": "퇴근 정산",
+      "description": "체크 확정 → 업무기록 작성 → 보고서 출력 → 내일 할 일 정리 → 볼트 정리",
+      "prompt": "/sawhorse:evening",
+      "cwd": "workspace",
+      "featured": true,
+      "schedule": { "kind": "weekdays", "time": "18:00" }
+    },
+    {
+      "id": "daily-log",
+      "label": "업무일지 갱신",
+      "description": "오늘 세션을 분석해 일지 노트의 업무기록 자동 영역만 다시 쓴다",
+      "prompt": "/sawhorse:daily-log {{note}}",
+      "cwd": "workspace",
+      "params": [{ "key": "note", "type": "text", "label": "덧붙일 구두 업무 (선택)" }]
+    },
+    {
+      "id": "daily-report",
+      "label": "업무 보고 만들기",
+      "description": "그날 작업을 보고 형식 코드블록으로 출력 (복붙용)",
+      "prompt": "/sawhorse:daily-report {{note}}",
+      "cwd": "workspace",
+      "params": [{ "key": "note", "type": "text", "label": "덧붙일 구두 업무 (선택)" }]
+    },
+    {
+      "id": "design",
+      "label": "이슈 설계",
+      "description": "미착수 이슈를 조사해 설계 문서를 쓴다. 승인은 사람이 볼트/대시보드에서 한다",
+      "prompt": "/sawhorse:issues 설계 {{ids}}",
+      "cwd": "project",
+      "params": [
+        { "key": "ids", "type": "list", "label": "이슈 ID (비우면 전체)" },
+        { "key": "project", "type": "project", "label": "사업" }
+      ]
+    },
+    {
+      "id": "implement",
+      "label": "이슈 실행",
+      "description": "승인된 이슈를 이슈별 커밋 1개로 적용한다",
+      "prompt": "/sawhorse:issues 실행 {{ids}}",
+      "cwd": "project",
+      "params": [
+        { "key": "ids", "type": "list", "label": "이슈 ID (비우면 승인된 전체)" },
+        { "key": "project", "type": "project", "label": "사업" }
+      ]
+    },
+    {
+      "id": "milestone",
+      "label": "마일스톤 계획",
+      "description": "납기·릴리스·검수 목표를 마일스톤 노트로 정리하고 이슈를 묶는다",
+      "prompt": "/sawhorse:issues 마일스톤 {{name}}",
+      "cwd": "workspace",
+      "params": [{ "key": "name", "type": "text", "label": "마일스톤 이름 (선택)" }]
+    },
+    {
+      "id": "excel",
+      "label": "보고용 엑셀",
+      "description": "이슈 노트를 발주처 보고용 체크리스트 엑셀로 뽑는다 (근거 이미지 포함)",
+      "prompt": "/sawhorse:improve-excel",
+      "cwd": "workspace"
+    },
+    {
+      "id": "wiki",
+      "label": "개념 정리",
+      "description": "문서에 나온 개념을 위키링크로 연결하고 없는 개념 노트를 만든다",
+      "prompt": "/sawhorse:wiki {{topic}}",
+      "cwd": "workspace",
+      "params": [{ "key": "topic", "type": "text", "label": "정리할 개념/문서 (선택)" }]
+    },
+    {
+      "id": "project-doc",
+      "label": "사업 등록",
+      "description": "제안서(docx)와 코드베이스 경로로 사업 허브 문서를 만든다",
+      "prompt": "/sawhorse:project-doc {{source}}",
+      "cwd": "workspace",
+      "params": [{ "key": "source", "type": "text", "label": "제안서 경로 / 코드베이스 경로" }]
+    },
+    {
+      "id": "codebase-docs",
+      "label": "코드베이스 문서화",
+      "description": "기능별 분석 문서를 mermaid 다이어그램과 함께 만든다",
+      "prompt": "/sawhorse:codebase-docs {{target}}",
+      "cwd": "project",
+      "params": [
+        { "key": "target", "type": "text", "label": "문서화할 범위 (선택)" },
+        { "key": "project", "type": "project", "label": "사업" }
+      ]
+    },
+    {
+      "id": "vault-tidy",
+      "label": "볼트 정리",
+      "description": "루트 첨부 회수·스키마 정합·죽은 링크 정리 + 재구성 (로컬 git 증분)",
+      "prompt": "/sawhorse:vault-tidy",
+      "cwd": "workspace"
+    },
+    {
+      "id": "init-vault",
+      "label": "볼트 초기화",
+      "description": "Obsidian 쪽 설정(템플릿 폴더·첨부 경로·프로퍼티 타입·홈페이지)까지 맞춘다. 폴더와 템플릿 자체는 앱이 이미 깔아 둔다",
+      "prompt": "/sawhorse:init-vault",
+      "cwd": "workspace"
+    },
+    {
+      "id": "setup",
+      "label": "환경 진단",
+      "description": "볼트 경로·Node·pandoc·훅·MCP 설정을 점검하고 보고한다",
+      "prompt": "/sawhorse:setup",
+      "cwd": "workspace"
+    }
+  ],
+
+  "views": [
+    {
+      "id": "issues",
+      "label": "이슈",
+      "icon": "list-checks",
+      "type": "native",
+      "component": "issues"
+    },
+    {
+      "id": "todos",
+      "label": "할 일",
+      "icon": "square-check-big",
+      "type": "native",
+      "component": "todos"
+    },
+    {
+      "id": "milestones",
+      "label": "마일스톤",
+      "icon": "flag",
+      "type": "notes",
+      "query": {
+        "folders": ["사업/*/마일스톤"],
+        "exclude": ["*.base"],
+        "where": [{ "field": "type", "op": "eq", "value": "마일스톤" }],
+        "sort": { "field": "due", "desc": false }
+      },
+      "columns": [
+        { "field": "id", "label": "ID", "width": 100 },
+        { "field": "", "source": "title", "label": "제목" },
+        { "field": "state", "label": "상태", "type": "badge", "width": 80 },
+        { "field": "due", "label": "기한", "type": "date", "width": 110 },
+        { "field": "project", "label": "사업", "width": 120 }
+      ],
+      "groupBy": "state",
+      "actions": ["milestone"],
+      "empty": "아직 마일스톤 노트가 없습니다. 템플릿/마일스톤.md 로 만들거나 '마일스톤 계획' 을 실행하세요."
+    },
+    {
+      "id": "concepts",
+      "label": "개념",
+      "icon": "book-marked",
+      "type": "notes",
+      "query": {
+        "folders": ["개념"],
+        "exclude": ["*.base"],
+        "sort": { "field": "", "source": "title", "desc": false }
+      },
+      "columns": [
+        { "field": "", "source": "title", "label": "개념" },
+        { "field": "domain", "label": "분류", "type": "badge", "width": 110 },
+        { "field": "aliases", "label": "다른 이름", "type": "list" },
+        { "field": "sources", "label": "출처", "type": "list" },
+        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
+      ],
+      "groupBy": "domain",
+      "actions": ["wiki"],
+      "empty": "개념 노트가 아직 없습니다. '개념 정리' 를 실행하면 문서에 나온 용어부터 만듭니다."
+    },
+    {
+      "id": "docs",
+      "label": "문서",
+      "icon": "file-text",
+      "type": "native",
+      "component": "docs"
+    },
+    {
+      "id": "vault",
+      "label": "볼트",
+      "icon": "folder-search",
+      "type": "native",
+      "component": "vault"
+    }
+  ]
+}

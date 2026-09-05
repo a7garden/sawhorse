@@ -281,6 +281,58 @@ impl Herdr {
         self.call(&["agent", "focus", target]).await
     }
 
+    // ---------- 터미널 화면용 조회 ----------
+
+    /// herdr 가 보는 세계 전체. 실패는 오류가 아니라 `available: false` 다 —
+    /// herdr 없이도 앱은 돌아가야 하고, 화면은 설치 안내로 바뀐다.
+    pub async fn snapshot(&self) -> HerdrSnapshot {
+        let mut snap = HerdrSnapshot { session: self.cfg.session.clone(), ..Default::default() };
+        match self.call(&["workspace", "list"]).await {
+            Ok(v) => {
+                snap.available = true;
+                snap.workspaces = parse_list(&v, "workspaces");
+            }
+            Err(e) => {
+                snap.error = Some(e.to_string());
+                return snap;
+            }
+        }
+        if let Ok(v) = self.call(&["tab", "list"]).await {
+            snap.tabs = parse_list(&v, "tabs");
+        }
+        if let Ok(v) = self.call(&["agent", "list"]).await {
+            snap.agents = parse_list(&v, "agents");
+        }
+        snap
+    }
+
+    pub async fn focus_workspace(&self, id: &str) -> HerdrResult<Value> {
+        self.call(&["workspace", "focus", id]).await
+    }
+
+    pub async fn focus_pane(&self, pane_id: &str) -> HerdrResult<Value> {
+        self.call(&["pane", "focus", pane_id]).await
+    }
+
+    /// 사람이 직접 쓸 빈 탭. 잡 탭과 달리 에이전트를 자동으로 띄우지 않는다.
+    pub async fn open_shell_tab(&self, workspace: &str, label: &str, cwd: &str) -> HerdrResult<NewTab> {
+        self.call(&[
+            "tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label,
+        ])
+        .await
+        .and_then(|v| {
+            let tab_id = v
+                .pointer("/tab/tab_id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| HerdrError::local("bad_response", "tab create 응답에 tab_id가 없습니다"))?;
+            let pane_id = v
+                .pointer("/root_pane/pane_id")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            Ok(NewTab { tab_id: tab_id.to_string(), pane_id: pane_id.to_string() })
+        })
+    }
+
     // ---------- misc ----------
 
     pub async fn notify(&self, title: &str, body: &str) {
@@ -296,9 +348,113 @@ impl Herdr {
     }
 }
 
+// ---------- 조회 결과 타입 ----------
+//
+// herdr 의 소켓 응답은 snake_case 이고 프론트엔드 계약은 camelCase 라, 한쪽만 rename 한다.
+// 모르는 필드는 무시하고 없는 필드는 기본값 — herdr 가 필드를 늘려도 화면이 깨지지 않는다.
+
+#[derive(Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[serde(default)]
+pub struct HerdrWorkspace {
+    #[serde(rename(serialize = "workspaceId"))]
+    pub workspace_id: String,
+    pub label: String,
+    pub number: u32,
+    pub focused: bool,
+    #[serde(rename(serialize = "tabCount"))]
+    pub tab_count: u32,
+    #[serde(rename(serialize = "paneCount"))]
+    pub pane_count: u32,
+    #[serde(rename(serialize = "agentStatus"))]
+    pub agent_status: String,
+}
+
+#[derive(Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[serde(default)]
+pub struct HerdrTab {
+    #[serde(rename(serialize = "tabId"))]
+    pub tab_id: String,
+    #[serde(rename(serialize = "workspaceId"))]
+    pub workspace_id: String,
+    pub label: String,
+    pub number: u32,
+    pub focused: bool,
+    #[serde(rename(serialize = "paneCount"))]
+    pub pane_count: u32,
+    #[serde(rename(serialize = "agentStatus"))]
+    pub agent_status: String,
+}
+
+#[derive(Serialize, serde::Deserialize, Clone, Debug, Default)]
+#[serde(default)]
+pub struct HerdrAgentRow {
+    #[serde(rename(serialize = "paneId"))]
+    pub pane_id: String,
+    #[serde(rename(serialize = "tabId"))]
+    pub tab_id: String,
+    #[serde(rename(serialize = "workspaceId"))]
+    pub workspace_id: String,
+    pub name: String,
+    pub agent: String,
+    #[serde(rename(serialize = "agentStatus"))]
+    pub agent_status: String,
+    pub cwd: String,
+    pub focused: bool,
+    #[serde(rename(serialize = "terminalTitle"))]
+    pub terminal_title: String,
+}
+
+#[derive(Serialize, Clone, Debug, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct HerdrSnapshot {
+    pub available: bool,
+    pub error: Option<String>,
+    pub session: String,
+    pub workspaces: Vec<HerdrWorkspace>,
+    pub tabs: Vec<HerdrTab>,
+    pub agents: Vec<HerdrAgentRow>,
+}
+
+fn parse_list<T: serde::de::DeserializeOwned>(v: &Value, key: &str) -> Vec<T> {
+    v.get(key)
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(|x| serde_json::from_value(x.clone()).ok()).collect())
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshot_rows_parse_from_real_socket_shapes() {
+        let ws: Vec<HerdrWorkspace> = parse_list(
+            &serde_json::json!({"workspaces": [
+                {"active_tab_id":"w1:t1","agent_status":"working","focused":true,
+                 "label":"sawhorse","number":1,"pane_count":3,"tab_count":1,"workspace_id":"w1"}]}),
+            "workspaces",
+        );
+        assert_eq!(ws.len(), 1);
+        assert_eq!(ws[0].workspace_id, "w1");
+        assert_eq!(ws[0].label, "sawhorse");
+        assert_eq!(ws[0].agent_status, "working");
+        // 프론트엔드 계약은 camelCase
+        let json = serde_json::to_string(&ws[0]).unwrap();
+        assert!(json.contains("\"workspaceId\""), "{json}");
+
+        let agents: Vec<HerdrAgentRow> = parse_list(
+            &serde_json::json!({"agents": [
+                {"pane_id":"w1:p1","tab_id":"w1:t1","workspace_id":"w1","agent":"claude",
+                 "agent_status":"blocked","cwd":"/x","terminal_title":"작업 중","unknown_field":1}]}),
+            "agents",
+        );
+        assert_eq!(agents[0].agent_status, "blocked");
+        assert_eq!(agents[0].cwd, "/x");
+
+        // 모양이 다르면 빈 목록 (오류 아님)
+        let none: Vec<HerdrTab> = parse_list(&serde_json::json!({"tabs": "nope"}), "tabs");
+        assert!(none.is_empty());
+    }
 
     #[test]
     fn agent_info_reads_status_and_session() {

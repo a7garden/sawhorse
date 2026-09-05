@@ -1,6 +1,7 @@
 // plugin.rs — plugin metadata + skill catalog, read at runtime from the plugin root.
 
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use serde::Serialize;
 
@@ -62,9 +63,25 @@ fn resolve_from(candidates: &[PathBuf]) -> Result<PathBuf, String> {
     ))
 }
 
-/// exe 디렉터리 상위 탐색 → 빌드 머신 저장소 폴백. 설정 키 불필요.
+/// 번들된 앱에는 저장소가 없다. 실행 시점에 리소스 디렉터리를 한 번 등록해 두면
+/// 그 뒤의 모든 조회(팩 레지스트리 포함)가 거기서 플러그인 루트를 찾는다.
+static ROOT_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
+
+/// 마커(`.claude-plugin/plugin.json`)가 실제로 있는 경로만 등록한다 — 개발 실행에서는
+/// 리소스 디렉터리가 target/debug 라 마커가 없고, 그때는 아래 탐색이 그대로 쓰인다.
+pub fn set_root_override(dir: PathBuf) -> bool {
+    if walk_up(&dir).is_none() {
+        return false;
+    }
+    ROOT_OVERRIDE.set(dir).is_ok()
+}
+
+/// 리소스 디렉터리 → exe 디렉터리 상위 탐색 → 빌드 머신 저장소 폴백. 설정 키 불필요.
 pub fn resolve_root() -> Result<PathBuf, String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Some(dir) = ROOT_OVERRIDE.get() {
+        candidates.push(dir.clone());
+    }
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             candidates.push(dir.to_path_buf());
@@ -153,12 +170,28 @@ pub fn plugin_info() -> Result<PluginBundle, String> {
     })
 }
 
-pub fn read_skill(root: &Path, name: &str) -> Result<String, String> {
+/// 스킬 본문을 스킬 폴더에서 직접 읽는다. 팩마다 `skills/` 위치가 달라(내장 팩은 플러그인
+/// 루트, 사용자 팩은 팩 폴더) 호출자가 디렉터리를 정한다.
+pub fn read_skill_at(skills_dir: &Path, name: &str) -> Result<String, String> {
     if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
         return Err("잘못된 스킬 이름".into());
     }
-    let p = root.join("skills").join(name).join("SKILL.md");
+    let p = skills_dir.join(name).join("SKILL.md");
     std::fs::read_to_string(&p).map_err(|e| format!("SKILL.md 읽기 실패: {e}"))
+}
+
+pub fn read_skill(root: &Path, name: &str) -> Result<String, String> {
+    read_skill_at(&root.join("skills"), name)
+}
+
+/// plugin.json 의 `name` — 설치된 플러그인 감지(`agents::plugin_installs`)의 키.
+pub fn plugin_name() -> Result<String, String> {
+    let root = resolve_root()?;
+    let raw = std::fs::read_to_string(root.join(MARKER))
+        .map_err(|e| format!("plugin.json 읽기 실패: {e}"))?;
+    let v: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|e| format!("plugin.json 파싱 실패: {e}"))?;
+    Ok(v.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string())
 }
 
 #[cfg(test)]

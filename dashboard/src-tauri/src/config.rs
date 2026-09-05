@@ -2,6 +2,7 @@
 // this file's schema; the dashboard only merges known keys and preserves the rest
 // (including key order, via serde_json preserve_order).
 
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -154,6 +155,16 @@ pub struct ProjectCfg {
     pub verify: String,
 }
 
+/// 확장(pack) 블록. 호스트 소유이고 플러그인은 모르는 키로 무시한다.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct PacksCfg {
+    /// 활성 팩 id. **비어 있으면 전부 활성** — 업그레이드한 기존 사용자의 화면이 사라지지 않게.
+    pub enabled: Vec<String>,
+    /// 팩 id -> 그 팩의 설정 값 (스키마는 팩이 선언)
+    pub settings: Map<String, Value>,
+}
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigView {
@@ -162,6 +173,38 @@ pub struct ConfigView {
     pub default_project: String,
     pub projects: Vec<ProjectCfg>,
     pub dashboard: DashboardCfg,
+    pub packs: PacksCfg,
+    /// `dashboard.schedules` 원본 전체. 정규 키는 `<packId>.<actionId>` 이고
+    /// 예전 키(`morning`)도 그대로 실려 온다 — 별칭 폴백은 `schedule_override` 가 한다.
+    pub schedules: BTreeMap<String, RoutineSched>,
+}
+
+impl ConfigView {
+    /// 예약 재정의 조회. 정규 키 우선, 없으면 예전 루틴 키(`morning` 등)를 본다.
+    pub fn schedule_override(&self, key: &str, legacy: &str) -> Option<RoutineSched> {
+        self.schedules
+            .get(key)
+            .or_else(|| self.schedules.get(legacy))
+            .cloned()
+    }
+
+    pub fn pack_settings(&self, pack_id: &str) -> Map<String, Value> {
+        self.packs
+            .settings
+            .get(pack_id)
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    #[allow(dead_code)] // 팩 설정 단일 값 조회 — 현재는 테스트/향후 네이티브 뷰용
+    pub fn pack_setting_str(&self, pack_id: &str, key: &str) -> String {
+        self.pack_settings(pack_id)
+            .get(key)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    }
 }
 
 pub fn view(raw: &Value, exists: bool) -> ConfigView {
@@ -194,7 +237,23 @@ pub fn view(raw: &Value, exists: bool) -> ConfigView {
         .and_then(|o| o.get("dashboard"))
         .and_then(|v| serde_json::from_value::<DashboardCfg>(v.clone()).ok())
         .unwrap_or_default();
-    ConfigView { exists, vault_path, default_project, projects, dashboard }
+    let packs = obj
+        .and_then(|o| o.get("packs"))
+        .and_then(|v| serde_json::from_value::<PacksCfg>(v.clone()).ok())
+        .unwrap_or_default();
+    let schedules = obj
+        .and_then(|o| o.get("dashboard"))
+        .and_then(|d| d.get("schedules"))
+        .and_then(Value::as_object)
+        .map(|m| {
+            m.iter()
+                .filter_map(|(k, v)| {
+                    serde_json::from_value::<RoutineSched>(v.clone()).ok().map(|s| (k.clone(), s))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    ConfigView { exists, vault_path, default_project, projects, dashboard, packs, schedules }
 }
 
 pub fn load_view() -> ConfigView {
@@ -361,6 +420,40 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
                     }
                 }
                 _ => {} // launchAtLogin and unknown keys are ignored here
+            }
+        }
+    }
+
+    if let Some(packs) = patch.get("packs").and_then(Value::as_object) {
+        let target = obj
+            .entry("packs")
+            .or_insert_with(|| Value::Object(Map::new()))
+            .as_object_mut()
+            .ok_or_else(|| "packs 블록이 객체가 아닙니다".to_string())?;
+        if let Some(enabled) = packs.get("enabled") {
+            let list = enabled
+                .as_array()
+                .ok_or_else(|| "packs.enabled는 배열이어야 합니다".to_string())?;
+            if list.iter().any(|v| !v.is_string()) {
+                return Err("packs.enabled 항목은 문자열이어야 합니다".into());
+            }
+            target.insert("enabled".into(), enabled.clone());
+        }
+        if let Some(settings) = packs.get("settings") {
+            let map = settings
+                .as_object()
+                .ok_or_else(|| "packs.settings는 객체여야 합니다".to_string())?;
+            let st = target
+                .entry("settings")
+                .or_insert_with(|| Value::Object(Map::new()))
+                .as_object_mut()
+                .ok_or_else(|| "packs.settings 블록이 객체가 아닙니다".to_string())?;
+            // 팩 단위로 통째 교체 — 팩 스키마는 팩이 아는 것이고 호스트는 키를 모른다.
+            for (pack_id, values) in map {
+                if !values.is_object() {
+                    return Err(format!("packs.settings.{pack_id}는 객체여야 합니다"));
+                }
+                st.insert(pack_id.clone(), values.clone());
             }
         }
     }
@@ -619,6 +712,59 @@ mod tests {
         let bad_project = serde_json::json!({"projects": [{"path": "x"}]});
         assert!(save_patch_at(&path, &bad_project).is_err());
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn packs_block_saves_and_preserves_neighbours() {
+        let path = temp_path("packs");
+        let initial: Value = serde_json::from_str(
+            r#"{"vaultPath": "/v", "packs": {"enabled": ["si"],
+                 "settings": {"si": {"excelOutputDir": "/out"}, "other": {"keep": true}}}}"#,
+        )
+        .unwrap();
+        write_atomic(&path, serde_json::to_string_pretty(&initial).unwrap().as_bytes()).unwrap();
+
+        let v = save_patch_at(
+            &path,
+            &serde_json::json!({"packs": {"enabled": ["si", "starter"],
+                                          "settings": {"si": {"excelOutputDir": "/new"}}}}),
+        )
+        .unwrap();
+        assert_eq!(v.packs.enabled, vec!["si".to_string(), "starter".to_string()]);
+        assert_eq!(v.pack_setting_str("si", "excelOutputDir"), "/new");
+        assert!(
+            v.packs.settings.get("other").is_some(),
+            "패치에 없는 팩 설정은 남아야 한다"
+        );
+
+        assert!(save_patch_at(&path, &serde_json::json!({"packs": {"enabled": "si"}})).is_err());
+        assert!(save_patch_at(&path, &serde_json::json!({"packs": {"settings": {"si": 1}}})).is_err());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn schedule_map_carries_pack_keys_with_legacy_fallback() {
+        let v = view(
+            &serde_json::json!({"dashboard": {"schedules": {
+                "morning": {"enabled": true, "time": "08:10"},
+                "si.lunch": {"enabled": false, "time": "13:00"}}}}),
+            true,
+        );
+        // 정규 키가 있으면 그것
+        assert_eq!(v.schedule_override("si.lunch", "lunch").unwrap().time, "13:00");
+        // 없으면 예전 루틴 키
+        assert_eq!(v.schedule_override("si.morning", "morning").unwrap().time, "08:10");
+        // 둘 다 없으면 팩 기본값을 쓰라는 뜻
+        assert!(v.schedule_override("si.evening", "evening").is_none());
+        // 기존 타입 계약도 유지
+        assert_eq!(v.dashboard.schedules.morning.time, "08:10");
+    }
+
+    #[test]
+    fn empty_packs_config_means_everything_enabled() {
+        let v = view(&Value::Object(Map::new()), false);
+        assert!(v.packs.enabled.is_empty());
+        assert!(v.pack_settings("si").is_empty());
     }
 
     #[test]

@@ -27,9 +27,13 @@ pub struct PersistedState {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MissedEntry {
-    /// "<routine>-<date>"
+    /// "<예약 키>-<date>"
     pub key: String,
+    /// 예약 키(`si.morning`). 구형 state.json 은 루틴 이름(`morning`)을 담고 있다.
     pub routine: String,
+    /// 사람이 읽는 이름. 구형 기록에는 없다.
+    #[serde(default)]
+    pub label: String,
     pub date: String,
     pub scheduled_at: String,
 }

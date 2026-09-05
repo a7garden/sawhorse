@@ -70,7 +70,7 @@ fn fm_list(map: &Mapping, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn yaml_to_json(v: &Yaml) -> Json {
+pub(crate) fn yaml_to_json(v: &Yaml) -> Json {
     match v {
         Yaml::Null => Json::Null,
         Yaml::Bool(b) => Json::Bool(*b),
@@ -100,7 +100,7 @@ fn yaml_to_json(v: &Yaml) -> Json {
     }
 }
 
-fn mtime_ms(path: &Path) -> u64 {
+pub(crate) fn mtime_ms(path: &Path) -> u64 {
     path.metadata()
         .and_then(|m| m.modified())
         .ok()

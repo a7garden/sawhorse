@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::config::{self, ConfigView, HerdrCfg};
@@ -104,13 +104,18 @@ pub struct Job {
     pub herdr_cfg: HerdrCfg,
 }
 
-#[derive(Deserialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(default, rename_all = "camelCase")]
 pub struct JobRequest {
     pub kind: String,
     pub project: Option<String>,
     pub ids: Option<Vec<String>>,
     pub routine: Option<String>,
+    /// kind = "action" 일 때: 어느 팩의 어느 액션인가
+    pub pack_id: Option<String>,
+    pub action_id: Option<String>,
+    #[serde(default)]
+    pub params: Map<String, Value>,
 }
 
 #[derive(Clone, Debug)]
@@ -431,6 +436,43 @@ fn build_job(
                 label: "인박스 승격 검토".into(),
                 prompt: prompt.into(),
                 cwd: opts.vault_path.clone(),
+                ..base
+            })
+        }
+        // 팩이 선언한 액션. 앞의 arm 들은 SI 팩이 팩 구조 이전에 갖고 있던 잡들이고,
+        // 히스토리(jobs.jsonl)가 그 kind 로 남아 있어 그대로 둔다.
+        "action" => {
+            let pack_id = req.pack_id.clone().ok_or("팩이 지정되지 않았습니다")?;
+            let action_id = req.action_id.clone().ok_or("액션이 지정되지 않았습니다")?;
+            let reg = crate::packs::load_registry(&view.packs.enabled);
+            let (pack, action) = reg
+                .action(&pack_id, &action_id)
+                .ok_or_else(|| format!("활성 팩에서 액션을 찾지 못했습니다: {pack_id}.{action_id}"))?;
+            let mut params = req.params.clone();
+            if let Some(ids) = &req.ids {
+                params.entry("ids".to_string()).or_insert_with(|| json!(ids));
+            }
+            if let Some(project) = &req.project {
+                params.entry("project".to_string()).or_insert_with(|| json!(project));
+            }
+            for p in action.params.iter().filter(|p| p.required) {
+                let given = params.get(&p.key).is_some_and(|v| match v {
+                    Value::Null => false,
+                    Value::String(s) => !s.trim().is_empty(),
+                    Value::Array(a) => !a.is_empty(),
+                    _ => true,
+                });
+                if !given {
+                    return Err(format!("{} 값이 필요합니다", p.label));
+                }
+            }
+            let prompt = crate::packs::render_prompt(&action.prompt, &params);
+            let cwd = crate::packs::resolve_cwd(action, &params, view)?;
+            Ok(Job {
+                label: format!("{} ({})", action.label, pack.manifest.name),
+                project: params.get("project").and_then(Value::as_str).map(str::to_string),
+                prompt,
+                cwd,
                 ..base
             })
         }
@@ -1191,6 +1233,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             project: None,
             ids: None,
             routine: Some("morning".into()),
+            ..Default::default()
         };
         let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
         assert_eq!(job.prompt, "/sawhorse:morning");
@@ -1224,7 +1267,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
     async fn failure_without_result_marks_failed() {
         let rig = rig("fail");
         let bin = write_script(&rig.dir, "echo 'boom' >&2\nexit 1\n");
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("lunch".into()) };
+        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("lunch".into()), ..Default::default() };
         let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
         let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
         assert_eq!(done.status, JobStatus::Failed);
@@ -1240,7 +1283,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             &rig.dir,
             "echo '{\"type\":\"system\",\"subtype\":\"init\"}'\nsleep 30\n",
         );
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("evening".into()) };
+        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("evening".into()), ..Default::default() };
         let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
         for _ in 0..100 {
             {
@@ -1259,7 +1302,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
     #[tokio::test]
     async fn missing_binary_fails_fast() {
         let rig = rig("nobin");
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("morning".into()) };
+        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("morning".into()), ..Default::default() };
         let job = rig
             .mgr
             .enqueue_with(req, opts("/nonexistent/claude-bin".into(), &rig.dir), &rig.view)
@@ -1287,7 +1330,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             true,
         );
         let job = build_job(
-            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None, ..Default::default() },
             &SpawnOpts::from(&view),
             &view,
             &state,
@@ -1299,7 +1342,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
 
         let view2 = config::view(&serde_json::json!({"vaultPath": rig_dir.to_string_lossy()}), true);
         let err = build_job(
-            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None, ..Default::default() },
             &SpawnOpts::from(&view2),
             &view2,
             &state,
@@ -1325,6 +1368,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
                 project: Some("FDR".into()),
                 ids: Some(vec!["FDR-001".into(), "FDR-002".into()]),
                 routine: None,
+                ..Default::default()
             },
             &opts, &view, &state,
         )
@@ -1333,20 +1377,100 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         assert_eq!(j.cwd, "/w");
         assert_eq!(j.label, "설계 FDR-001 외 1건 (FDR)");
         let j2 = build_job(
-            JobRequest { kind: "implement".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "implement".into(), project: None, ids: None, routine: None, ..Default::default() },
             &opts, &view, &state,
         )
         .unwrap();
         assert_eq!(j2.prompt, "/sawhorse:issues 실행");
         assert_eq!(j2.label, "실행 승인된 전체 (FDR)");
         let generic = build_job(
-            JobRequest { kind: "design".into(), project: Some("없는사업".into()), ids: None, routine: None },
+            JobRequest { kind: "design".into(), project: Some("없는사업".into()), ids: None, routine: None, ..Default::default() },
             &opts, &view, &state,
         )
         .unwrap();
         assert_eq!(generic.cwd, "/v");
     }
 
+
+    /// 팩 액션 잡: 동봉한 SI 팩의 선언이 그대로 프롬프트·cwd·라벨이 된다.
+    ///
+    /// 레지스트리는 `plugin::resolve_root()` 로 찾는다 — 테스트에서는 tauri-build 가
+    /// `bundle.resources` 를 target 디렉터리에 복사해 둔 것을 쓰게 되고, 번들 앱에서
+    /// 실제로 일어나는 일과 같은 경로다.
+    #[test]
+    fn pack_action_job_renders_from_the_manifest() {
+        let reg = crate::packs::load_registry(&[]);
+        assert!(
+            reg.get("si").is_some() && reg.get("starter").is_some(),
+            "동봉 팩을 찾지 못했다 (플러그인 루트: {:?})",
+            crate::plugin::resolve_root()
+        );
+        let state = AppState::new(temp_dir("action").join("data"));
+        let raw = serde_json::json!({
+            "vaultPath": "/v",
+            "improve": {"defaultProject": "FDR", "projects": {"FDR": {"path": "/w", "idPrefix": "FDR"}}}
+        });
+        let view = config::view(&raw, true);
+        let opts = SpawnOpts::from(&view);
+
+        // cwd: workspace 인 예약 액션
+        let j = build_job(
+            JobRequest {
+                kind: "action".into(),
+                pack_id: Some("si".into()),
+                action_id: Some("morning".into()),
+                ..Default::default()
+            },
+            &opts, &view, &state,
+        )
+        .unwrap();
+        assert_eq!(j.prompt, "/sawhorse:morning");
+        assert_eq!(j.cwd, "/v");
+        assert!(j.label.contains("아침 브리핑"), "{}", j.label);
+
+        // cwd: project + ids 파라미터
+        let d = build_job(
+            JobRequest {
+                kind: "action".into(),
+                pack_id: Some("si".into()),
+                action_id: Some("design".into()),
+                ids: Some(vec!["FDR-001".into()]),
+                ..Default::default()
+            },
+            &opts, &view, &state,
+        )
+        .unwrap();
+        assert_eq!(d.prompt, "/sawhorse:issues 설계 FDR-001");
+        assert_eq!(d.cwd, "/w");
+
+        // 없는 액션 / 없는 팩은 오류
+        for (pack, action) in [("si", "없는액션"), ("없는팩", "morning")] {
+            let err = build_job(
+                JobRequest {
+                    kind: "action".into(),
+                    pack_id: Some(pack.into()),
+                    action_id: Some(action.into()),
+                    ..Default::default()
+                },
+                &opts, &view, &state,
+            )
+            .unwrap_err();
+            assert!(err.contains("액션을 찾지 못했습니다"), "{err}");
+        }
+
+        // required 파라미터가 비면 실행 전에 막는다 (starter 의 capture)
+        let err = build_job(
+            JobRequest {
+                kind: "action".into(),
+                pack_id: Some("starter".into()),
+                action_id: Some("capture".into()),
+                ..Default::default()
+            },
+            &opts, &view, &state,
+        )
+        .unwrap_err();
+        assert!(err.contains("값이 필요합니다"), "{err}");
+    }
 
     #[tokio::test]
     async fn build_promote_job_targets_vault() {
@@ -1355,7 +1479,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         let mut opts = opts("/bin/claude-fake".into(), &rig.dir);
         opts.vault_path = rig.dir.join("vault").to_string_lossy().to_string();
         let job = build_job(
-            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None, ..Default::default() },
             &opts, &view, &rig.state,
         )
         .unwrap();
@@ -1366,7 +1490,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         let mut empty_vault = opts.clone();
         empty_vault.vault_path = String::new();
         let err = build_job(
-            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None, ..Default::default() },
             &empty_vault, &view, &rig.state,
         )
         .unwrap_err();
@@ -1445,6 +1569,7 @@ esac
             project: None,
             ids: None,
             routine: Some(routine.into()),
+            ..Default::default()
         }
     }
 
