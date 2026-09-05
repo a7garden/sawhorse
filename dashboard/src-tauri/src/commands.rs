@@ -319,14 +319,19 @@ pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
 /// assignment and forces gui source so agents can't be impersonated from here.
 #[tauri::command]
 pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef, String> {
-    let root = tasks::workbench_root();
-    let _ = tasks::ensure_dirs(&root);
     if def.id.is_empty() {
         def.id = tasks::new_id();
     }
     def.builtin = false;
     def.skill = None;
     def.source.kind = "gui".into();
+    // same protection as delete_task: a user task shadowing "morning" etc.
+    // would collide with the builtin routine's state and be undeletable
+    if scheduler::ROUTINE_IDS.contains(&def.id.as_str()) {
+        return Err("내장 작업 ID는 사용할 수 없습니다".into());
+    }
+    let root = tasks::workbench_root();
+    let _ = tasks::ensure_dirs(&root);
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     tasks::validate_new(&def, &today)?;
     def.updated_at = tasks::now_iso();
@@ -460,4 +465,20 @@ mod tests {
         assert!(rows[0].def.enabled);
         assert_eq!(rows[2].def.schedule.as_ref().unwrap().time, "19:45");
     }
+
+    #[test]
+    fn save_task_rejects_builtin_ids() {
+        // guard fires before any fs access, so this is hermetic
+        for id in scheduler::ROUTINE_IDS {
+            let def = crate::tasks::TaskDef {
+                id: id.into(),
+                title: "사칭 작업".into(),
+                prompt: "p".into(),
+                ..crate::tasks::TaskDef::default()
+            };
+            let err = save_task(def).unwrap_err();
+            assert!(err.contains("내장 작업"), "id {id}: got {err}");
+        }
+    }
 }
+
