@@ -400,6 +400,7 @@ pub fn reject_request(root: &Path, stem: &str, reason: &str) -> Result<(), Strin
 }
 
 pub fn approve_request(root: &Path, stem: &str, agent: &str, today: &str) -> Result<TaskDef, String> {
+    if !valid_stem(stem) { return Err("잘못된 요청 ID".into()); }
     let req = parse_req(root, stem)?;
     validate_req(root, &req, today)?;
     let applied = match req.op.as_str() {
@@ -607,5 +608,18 @@ mod tests {
         assert!(list_pending(&root).is_empty());
         std::fs::remove_dir_all(&root).unwrap();
     }
+
+    #[test]
+    fn approve_request_rejects_bad_stem() {
+        let root = tempdir("stem");
+        ensure_dirs(&root).unwrap();
+        // a stem containing '..' or '/' must be refused before any FS path is built
+        assert!(approve_request(&root, "../evil", "agent", "2026-09-05").is_err());
+        assert!(approve_request(&root, "a/b", "agent", "2026-09-05").is_err());
+        // and nothing must have been deleted outside the inbox
+        assert!(!inbox_dir(&root).join("../evil.json").exists());
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
 
 }
