@@ -44,6 +44,11 @@ export default function SettingsPage() {
   const diag = useApp((s) => s.diag);
   const refreshConfig = useApp((s) => s.refreshConfig);
   const refreshDiagnostics = useApp((s) => s.refreshDiagnostics);
+  const requirements = useApp((s) => s.requirements);
+  const agents = useApp((s) => s.agents);
+  const defaultAgent = useApp((s) => s.defaultAgent);
+  const refreshRequirements = useApp((s) => s.refreshRequirements);
+  const refreshAgents = useApp((s) => s.refreshAgents);
   const openWizard = useApp((s) => s.openWizard);
 
   const [section, setSection] = useState<SectionId>("general");
@@ -155,8 +160,15 @@ export default function SettingsPage() {
           {section === "diagnostics" && (
             <DiagnosticsSection
               diag={diag}
+              requirements={requirements}
+              agents={agents}
+              defaultAgent={defaultAgent}
               vaultPath={draft.vaultPath}
-              onRefresh={() => void refreshDiagnostics()}
+              onRefresh={() => {
+                void refreshDiagnostics();
+                void refreshRequirements();
+                void refreshAgents();
+              }}
             />
           )}
         </>

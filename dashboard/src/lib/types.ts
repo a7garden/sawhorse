@@ -28,6 +28,15 @@ export interface HerdrCfg {
   notify: boolean;
 }
 
+/** 카탈로그에 없는 CLI 를 사용자가 직접 등록하는 항목. */
+export interface CustomAgent {
+  id: string;
+  name: string;
+  /** 실행 파일 이름 또는 절대 경로. 비면 id 를 이름으로 본다. */
+  bin: string;
+  installUrl: string;
+}
+
 export interface DashboardCfg {
   schedules: Schedules;
   excelOutputDir: string;
@@ -35,6 +44,9 @@ export interface DashboardCfg {
   permissionMode: PermissionMode;
   launchAtLogin: boolean;
   herdr: HerdrCfg;
+  /** 마법사에서 고른 기본 에이전트 id. 스킬 설치와 안내의 기준. */
+  defaultAgent: string;
+  customAgents: CustomAgent[];
 }
 
 export interface ProjectCfg {
@@ -426,9 +438,42 @@ export interface AgentPresence {
   name: string;
   detected: boolean;
   version?: string;
+  /** 실제로 찾은 실행 파일 경로 ("" = 못 찾음) */
+  path: string;
   home: string;
+  /** 스킬 설치 대상인가 */
   installable: boolean;
+  /** 앱이 이 에이전트로 잡을 직접 돌릴 수 있는가 */
+  runsJobs: boolean;
+  /** "" 이면 설치 위치가 등록돼 있지 않다 — 버튼을 내지 않는다. */
+  installUrl: string;
+  installHint: string;
+  custom: boolean;
   note: string;
+}
+
+export interface AgentsView {
+  agents: AgentPresence[];
+  /** 설정값을 정상화한 기본 에이전트 id */
+  defaultAgent: string;
+}
+
+export type Need = "required" | "recommended" | "optional";
+
+/** 제품이 실제로 쓰는 외부 프로그램 하나의 상태. */
+export interface RequirementStatus {
+  id: string;
+  name: string;
+  need: Need;
+  why: string;
+  detected: boolean;
+  version?: string;
+  path: string;
+  /** 깔려는 있는데 최소 버전에 못 미친다 */
+  outdated: boolean;
+  minMajor: number;
+  installUrl: string;
+  installHint: string;
 }
 
 export interface InstallReport {

@@ -361,10 +361,23 @@ pub struct PackAgentStatus {
     pub plugin_installs: Vec<agents::PluginInstall>,
 }
 
+/// 목록과 "그중 어느 것이 기본인가" 는 늘 함께 읽힌다. 따로 부르면 설정을 두 번 읽고
+/// 그 사이에 바뀔 수 있으므로 한 번에 돌려준다.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentsView {
+    pub agents: Vec<agents::AgentPresence>,
+    /// 설정값을 정상화한 기본 에이전트 id (모르는 값이면 claude)
+    pub default_agent: String,
+}
+
 #[tauri::command]
-pub async fn list_agents() -> Vec<agents::AgentPresence> {
+pub async fn list_agents() -> AgentsView {
     let view = config::load_view();
-    agents::detect_agents(&view.dashboard).await
+    AgentsView {
+        default_agent: agents::effective_default(&view.dashboard),
+        agents: agents::detect_agents(&view.dashboard).await,
+    }
 }
 
 /// 제품이 실제로 쓰는 외부 프로그램이 이 PC 에 있는지. 마법사의 「프로그램」 단계와

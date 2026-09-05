@@ -23,17 +23,48 @@ npm run tauri dev     # 개발 실행
 npm run tauri build   # 배포 번들
 ```
 
-앱을 처음 열면 마법사가 다섯 단계를 안내한다.
+앱을 처음 열면 마법사가 일곱 단계를 안내한다. 앞의 두 단계는 아무것도 바꾸지 않는
+읽기 전용 점검이다 — 무엇이 없는지 먼저 보여 주고 나서 설정을 받는다.
 
 | 단계 | 하는 일 |
 |---|---|
-| 1 시작 | 무엇을 설치할지 안내 |
-| 2 작업공간 | 노트가 쌓일 폴더 지정 (Obsidian 볼트 기록을 자동으로 찾아 준다. 없는 폴더면 만든다) |
-| 3 확장 | 쓸 확장 선택 → **앱이 폴더·템플릿·인덱스를 직접 만든다** (에이전트 불필요) |
-| 4 에이전트 | Claude Code·Codex·herdr 감지 → **앱이 확장의 스킬을 설치한다** |
-| 5 완료 | 선택적으로 `init-vault`(Obsidian 설정 맞추기)·`setup`(환경 진단) 실행 |
+| 1 시작 | 무엇을 정하게 되는지 안내 |
+| 2 프로그램 | Git·Obsidian·herdr·Node·pandoc 감지 → 없으면 **받는 곳을 여는 「설치」 버튼** |
+| 3 에이전트 | 이 PC의 터미널 에이전트 감지 → 그중 **기본 에이전트 선택** |
+| 4 작업공간 | 노트가 쌓일 폴더 지정 (Obsidian 볼트 기록을 자동으로 찾아 준다. 없는 폴더면 만든다) |
+| 5 확장 | 쓸 확장 선택 → **앱이 폴더·템플릿·인덱스를 직접 만든다** (에이전트 불필요) |
+| 6 스킬 | **앱이 확장의 스킬을 에이전트에 설치한다** |
+| 7 완료 | 정한 내용 요약 + 선택적으로 `init-vault`(Obsidian 설정 맞추기)·`setup`(환경 진단) 실행 |
 
-4단계가 예전의 "플러그인 설치"다. 이제 앱 안에서 일어난다.
+6단계가 예전의 "플러그인 설치"다. 이제 앱 안에서 일어난다. 2·3단계의 같은 목록은
+설정 → 진단에서도 언제든 다시 볼 수 있다.
+
+### 에이전트 감지와 기본 에이전트
+
+카탈로그에 있는 CLI 를 PATH 와 흔한 설치 디렉토리(`~/.local/bin`, `~/.bun/bin`,
+`/opt/homebrew/bin` 등)에서 찾는다. GUI 로 띄운 앱은 로그인 셸의 PATH 를 물려받지 못하는
+일이 잦아 PATH 만 보지 않는다. 판정 기준은 **실행 파일의 존재**이지 `--version` 성공이
+아니다 — 버전 플래그가 없는 CLI 를 미설치로 읽지 않기 위해서다.
+
+| 감지 대상 | 범위 |
+|---|---|
+| Claude Code | 스킬 설치 + **잡 실행** |
+| Codex CLI | 스킬 설치 |
+| opencode · Gemini CLI · Amp · GitHub Copilot CLI · Cursor CLI · Aider · Crush · goose · Qwen Code · Factory Droid · omp · pi | 감지 |
+
+고른 기본 에이전트(`dashboard.defaultAgent`)는 **스킬 설치 대상과 화면 안내의 기준**이다.
+대시보드가 직접 돌리는 잡은 아직 Claude Code 로만 실행된다 — 진행 스트림 파싱이 그 CLI 의
+`stream-json` 형식에 묶여 있다.
+
+카탈로그에 없는 CLI 는 설정 파일에 직접 등록하면 목록에 함께 뜬다:
+
+```json
+{"dashboard": {"customAgents": [
+  {"id": "mytool", "name": "사내 에이전트", "bin": "/opt/mytool/bin/agent", "installUrl": ""}
+]}}
+```
+
+`id` 가 카탈로그와 같으면 새 줄을 만들지 않고 실행 파일 경로만 바로잡는다.
 
 ### Claude Code 플러그인으로 쓰고 싶다면
 
@@ -142,13 +173,16 @@ npm run tauri build   # 배포 번들
   "vaultPath": "…",                                   // 작업공간 루트
   "improve": { "defaultProject": "…", "projects": { … } },  // SI 확장이 쓴다
   "dashboard": { "schedules": { "si.morning": { "enabled": true, "time": "09:00" } },
-                 "claudeBin": "claude", "permissionMode": "bypassPermissions", "herdr": { … } },
+                 "claudeBin": "claude", "permissionMode": "bypassPermissions", "herdr": { … },
+                 "defaultAgent": "claude", "customAgents": [] },
   "packs": { "enabled": ["si", "starter"], "settings": { "starter": { "ownerName": "…" } } }
 }
 ```
 
 - 예약 키는 `<확장id>.<액션id>`. 예전 키(`morning`·`lunch`·`evening`)도 계속 읽는다.
 - `packs.enabled` 가 **비어 있으면 전부 활성**이다 — 업그레이드했을 때 화면이 사라지지 않는다.
+- `dashboard.defaultAgent` 가 모르는 값이면 읽는 쪽에서 `claude` 로 떨어진다 — 손으로 고친
+  설정 파일이 화면을 망가뜨리지 않게.
 
 ## SI 업무 확장
 
@@ -237,9 +271,12 @@ npm run tauri build   # 배포 번들
 | macOS / Windows 10+ / Linux | 필수 | 앱은 Tauri 2. 훅 스크립트는 PowerShell용(Windows) |
 | Rust 도구체인 + Node 18+ | 앱 빌드에 필요 | 배포 번들을 쓰면 불필요 |
 | Claude Code CLI | 권장 | 액션 실행에 필요. 없어도 앱은 뜬다 |
+| Git | 권장 | 코드 이슈 실행과 진단이 저장소 상태를 읽는다 |
 | herdr | 선택 | 잡을 사람이 볼 수 있는 터미널에서 돌리려면 |
 | Obsidian | 선택 | SI 확장의 `.base` 뷰·시작 화면을 쓰려면 |
 | pandoc | 선택 | docx 제안서 파싱. 없으면 Word 자동화로 폴백 |
+
+이 표와 같은 내용을 마법사 2단계와 설정 → 진단이 이 PC 기준으로 검사해 보여 준다.
 
 ## 자주 묻는 질문
 

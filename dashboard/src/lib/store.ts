@@ -11,6 +11,7 @@ import type {
   NavEntry,
   PackRegistryView,
   ProgressEntry,
+  RequirementStatus,
   ScheduleView,
   TodoSections,
   UnpromotedItem,
@@ -50,6 +51,9 @@ interface AppState {
   nav: NavEntry[];
   packs: PackRegistryView | null;
   agents: AgentPresence[];
+  /** 설정값을 정상화한 기본 에이전트 id */
+  defaultAgent: string;
+  requirements: RequirementStatus[];
   schedules: ScheduleView[];
 
   config: ConfigView | null;
@@ -71,6 +75,7 @@ interface AppState {
   refreshConfig: () => Promise<void>;
   refreshPacks: () => Promise<void>;
   refreshAgents: () => Promise<void>;
+  refreshRequirements: () => Promise<void>;
   refreshSchedules: () => Promise<void>;
   refreshImprovements: () => Promise<void>;
   refreshTodos: () => Promise<void>;
@@ -106,6 +111,8 @@ export const useApp = create<AppState>((set, get) => ({
   nav: [],
   packs: null,
   agents: [],
+  defaultAgent: "claude",
+  requirements: [],
   schedules: [],
 
   wizardOpen: false,
@@ -160,6 +167,7 @@ export const useApp = create<AppState>((set, get) => ({
       get().refreshDiagnostics(),
     ]);
     void get().refreshAgents();
+    void get().refreshRequirements();
     const cfg = get().config;
     if (cfg && (!cfg.exists || cfg.vaultPath.length === 0)) {
       set({ wizardOpen: true });
@@ -180,7 +188,12 @@ export const useApp = create<AppState>((set, get) => ({
       set({ page: "home" });
     }
   },
-  refreshAgents: async () => set({ agents: await api.listAgents().catch(() => []) }),
+  refreshAgents: async () => {
+    const v = await api.listAgents().catch(() => null);
+    if (v) set({ agents: v.agents, defaultAgent: v.defaultAgent });
+  },
+  refreshRequirements: async () =>
+    set({ requirements: await api.checkRequirements().catch(() => []) }),
   refreshSchedules: async () => set({ schedules: await api.listSchedules().catch(() => []) }),
   refreshImprovements: async () => {
     const improvements = await api.listIssues().catch(() => [] as IssueNote[]);

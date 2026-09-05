@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
-  AgentPresence,
+  AgentsView,
   ConfigPatch,
   ConfigView,
   Diagnostics,
@@ -18,6 +18,7 @@ import type {
   PluginBundle,
   ProvisionReport,
   QueryResult,
+  RequirementStatus,
   ScheduleView,
   SkillInstall,
   TaskDef,
@@ -108,7 +109,9 @@ export const api = {
     invoke("read_pack_skill", { packId, name }),
 
   // 에이전트 브리지
-  listAgents: (): Promise<AgentPresence[]> => invoke("list_agents"),
+  listAgents: (): Promise<AgentsView> => invoke("list_agents"),
+  checkRequirements: (): Promise<RequirementStatus[]> => invoke("check_requirements"),
+  setDefaultAgent: (id: string): Promise<ConfigView> => invoke("set_default_agent", { id }),
   packAgentStatus: (packId: string): Promise<PackAgentStatus> =>
     invoke("pack_agent_status", { packId }),
   installPackSkills: (packId: string, agent: string, force: boolean): Promise<InstallReport> =>
@@ -117,6 +120,7 @@ export const api = {
     invoke("uninstall_pack_skills", { packId, agent }),
 
   // 작업공간 프로비저닝
+  suggestVaultPath: (): Promise<string> => invoke("suggest_vault_path"),
   workspacePlan: (): Promise<string[]> => invoke("workspace_plan"),
   provisionWorkspace: (vaultPath?: string): Promise<ProvisionReport> =>
     invoke("provision_workspace", { vaultPath: vaultPath ?? null }),
