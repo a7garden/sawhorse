@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import {
+  CalendarClock,
   LayoutDashboard,
   ListChecks,
   SquareTerminal,
@@ -20,6 +21,7 @@ import { cn } from "@/lib/utils";
 import HomePage from "@/pages/HomePage";
 import ImprovePage from "@/pages/ImprovePage";
 import JobsPage from "@/pages/JobsPage";
+import TasksPage from "@/pages/TasksPage";
 import TodosPage from "@/pages/TodosPage";
 import DocsPage from "@/pages/DocsPage";
 import SettingsPage from "@/pages/SettingsPage";
@@ -35,7 +37,8 @@ const NAV: {
 }[] = [
   { id: "home", label: "홈", icon: LayoutDashboard },
   { id: "improve", label: "이슈", icon: ListChecks },
-  { id: "jobs", label: "작업", icon: SquareTerminal },
+  { id: "jobs", label: "잡", icon: SquareTerminal },
+  { id: "tasks", label: "작업", icon: CalendarClock },
   { id: "todos", label: "할 일", icon: SquareCheckBig },
   { id: "docs", label: "문서", icon: FileText },
   { id: "vault", label: "볼트", icon: FolderSearch },
@@ -81,6 +84,8 @@ export default function App() {
         return <ImprovePage />;
       case "jobs":
         return <JobsPage />;
+      case "tasks":
+        return <TasksPage />;
       case "todos":
         return <TodosPage />;
       case "docs":

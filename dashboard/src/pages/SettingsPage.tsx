@@ -10,6 +10,7 @@ import ExecutionSection from "./settings/ExecutionSection";
 import GeneralSection from "./settings/GeneralSection";
 import ProjectsSection from "./settings/ProjectsSection";
 import { ROUTINES } from "./settings/constants";
+import WorkbenchSkillCard from "../settings/WorkbenchSkillCard";
 
 type SettingsTab = "general" | "projects" | "execution" | "diagnostics";
 
@@ -148,11 +149,14 @@ export default function SettingsPage() {
             <Tabs tabs={TABS} value={tab} onChange={setTab} />
           </div>
           {tab === "general" && (
-            <GeneralSection
-              draft={draft}
-              patchDraft={patchDraft}
-              onLaunchAtLogin={(on) => void toggleLogin(on)}
-            />
+            <>
+              <GeneralSection
+                draft={draft}
+                patchDraft={patchDraft}
+                onLaunchAtLogin={(on) => void toggleLogin(on)}
+              />
+              <WorkbenchSkillCard />
+            </>
           )}
           {tab === "projects" && <ProjectsSection draft={draft} patchDraft={patchDraft} />}
           {tab === "execution" && <ExecutionSection draft={draft} patchDraft={patchDraft} />}

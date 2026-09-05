@@ -56,6 +56,7 @@ export const JOB_KIND_KO: Record<Job["kind"], string> = {
   design: "설계",
   implement: "구현",
   routine: "루틴",
+  task: "작업",
   excel: "엑셀",
   promote: "승격 검토",
   initVault: "init-vault",

@@ -111,6 +111,8 @@ pub struct JobRequest {
     pub project: Option<String>,
     pub ids: Option<Vec<String>>,
     pub routine: Option<String>,
+    #[serde(default)]
+    pub task_id: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -433,6 +435,20 @@ fn build_job(
                 cwd: opts.vault_path.clone(),
                 ..base
             })
+        }
+        "task" => {
+            let task_id = req.task_id.clone().ok_or("작업 ID가 지정되지 않았습니다")?;
+            let def = crate::tasks::get_task(&crate::tasks::workbench_root(), &task_id)?;
+            if opts.vault_path.is_empty() {
+                return Err("볼트 경로가 설정되지 않았습니다".into());
+            }
+            let cwd = def
+                .project
+                .as_deref()
+                .and_then(|name| view.projects.iter().find(|p| p.name == name))
+                .and_then(|p| (!p.path.is_empty()).then(|| p.path.clone()))
+                .unwrap_or_else(|| view.vault_path.clone());
+            Ok(Job { label: def.title, prompt: def.prompt, cwd, ..base })
         }
         other => Err(format!("알 수 없는 작업 종류: {other}")),
     }
@@ -1191,6 +1207,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             project: None,
             ids: None,
             routine: Some("morning".into()),
+            task_id: None,
         };
         let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
         assert_eq!(job.prompt, "/sawhorse:morning");
@@ -1224,7 +1241,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
     async fn failure_without_result_marks_failed() {
         let rig = rig("fail");
         let bin = write_script(&rig.dir, "echo 'boom' >&2\nexit 1\n");
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("lunch".into()) };
+        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("lunch".into()), task_id: None };
         let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
         let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
         assert_eq!(done.status, JobStatus::Failed);
@@ -1240,7 +1257,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             &rig.dir,
             "echo '{\"type\":\"system\",\"subtype\":\"init\"}'\nsleep 30\n",
         );
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("evening".into()) };
+        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("evening".into()), task_id: None };
         let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
         for _ in 0..100 {
             {
@@ -1259,7 +1276,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
     #[tokio::test]
     async fn missing_binary_fails_fast() {
         let rig = rig("nobin");
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("morning".into()) };
+        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("morning".into()), task_id: None };
         let job = rig
             .mgr
             .enqueue_with(req, opts("/nonexistent/claude-bin".into(), &rig.dir), &rig.view)
@@ -1287,7 +1304,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             true,
         );
         let job = build_job(
-            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None, task_id: None },
             &SpawnOpts::from(&view),
             &view,
             &state,
@@ -1299,7 +1316,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
 
         let view2 = config::view(&serde_json::json!({"vaultPath": rig_dir.to_string_lossy()}), true);
         let err = build_job(
-            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None, task_id: None },
             &SpawnOpts::from(&view2),
             &view2,
             &state,
@@ -1325,6 +1342,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
                 project: Some("FDR".into()),
                 ids: Some(vec!["FDR-001".into(), "FDR-002".into()]),
                 routine: None,
+                task_id: None,
             },
             &opts, &view, &state,
         )
@@ -1333,18 +1351,85 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         assert_eq!(j.cwd, "/w");
         assert_eq!(j.label, "설계 FDR-001 외 1건 (FDR)");
         let j2 = build_job(
-            JobRequest { kind: "implement".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "implement".into(), project: None, ids: None, routine: None, task_id: None },
             &opts, &view, &state,
         )
         .unwrap();
         assert_eq!(j2.prompt, "/sawhorse:issues 실행");
         assert_eq!(j2.label, "실행 승인된 전체 (FDR)");
         let generic = build_job(
-            JobRequest { kind: "design".into(), project: Some("없는사업".into()), ids: None, routine: None },
+            JobRequest { kind: "design".into(), project: Some("없는사업".into()), ids: None, routine: None, task_id: None },
             &opts, &view, &state,
         )
         .unwrap();
         assert_eq!(generic.cwd, "/v");
+    }
+
+    /// Test injection point for the task store root. Delegates to the shared
+    /// fixture in tasks.rs so parallel test modules share ONE injected dir.
+    fn tasks_root_for_test() -> PathBuf {
+        crate::tasks::test_root()
+    }
+
+    fn task_req(id: &str) -> JobRequest {
+        JobRequest {
+            kind: "task".into(),
+            project: None,
+            ids: None,
+            routine: None,
+            task_id: Some(id.into()),
+        }
+    }
+
+    #[test]
+    fn build_job_task_uses_prompt_and_project_cwd() {
+        let root = tasks_root_for_test();
+        let proj_id = format!("t-{}-proj", uuid::Uuid::new_v4().simple());
+        let plain_id = format!("t-{}-plain", uuid::Uuid::new_v4().simple());
+        let def = crate::tasks::TaskDef {
+            id: proj_id.clone(),
+            title: "야간 빌드".into(),
+            prompt: "빌드해라".into(),
+            project: Some("FDR".into()),
+            ..crate::tasks::TaskDef::default()
+        };
+        crate::tasks::save_task(&root, &def).unwrap();
+        crate::tasks::save_task(
+            &root,
+            &crate::tasks::TaskDef { id: plain_id.clone(), project: None, ..def },
+        )
+        .unwrap();
+
+        let state = AppState::new(temp_dir("task-job").join("data"));
+        let raw = serde_json::json!({
+            "vaultPath": "/v",
+            "improve": {"defaultProject": "FDR", "projects": {"FDR": {
+                "path": "/w", "workBranch": "", "portableBase": "", "idPrefix": "FDR", "verify": ""
+            }}}
+        });
+        let view = config::view(&raw, true);
+        let opts = SpawnOpts::from(&view);
+
+        let job = build_job(task_req(&proj_id), &opts, &view, &state).unwrap();
+        assert_eq!(job.label, "야간 빌드");
+        assert_eq!(job.prompt, "빌드해라");
+        assert_eq!(job.cwd, "/w");
+        assert_eq!(
+            build_job(task_req(&plain_id), &opts, &view, &state).unwrap().cwd,
+            "/v"
+        );
+        assert_eq!(
+            build_job(task_req("t-none"), &opts, &view, &state).unwrap_err(),
+            "작업을 찾을 수 없습니다: t-none"
+        );
+        let missing_id = JobRequest {
+            kind: "task".into(),
+            project: None,
+            ids: None,
+            routine: None,
+            task_id: None,
+        };
+        assert!(build_job(missing_id, &opts, &view, &state).is_err());
     }
 
 
@@ -1355,7 +1440,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         let mut opts = opts("/bin/claude-fake".into(), &rig.dir);
         opts.vault_path = rig.dir.join("vault").to_string_lossy().to_string();
         let job = build_job(
-            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None, task_id: None },
             &opts, &view, &rig.state,
         )
         .unwrap();
@@ -1366,7 +1451,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         let mut empty_vault = opts.clone();
         empty_vault.vault_path = String::new();
         let err = build_job(
-            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None },
+            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None, task_id: None },
             &empty_vault, &view, &rig.state,
         )
         .unwrap_err();
@@ -1445,6 +1530,7 @@ esac
             project: None,
             ids: None,
             routine: Some(routine.into()),
+            task_id: None,
         }
     }
 

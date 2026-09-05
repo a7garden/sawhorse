@@ -135,7 +135,7 @@ export default function HomePage() {
   async function runRoutine(routine: RoutineName) {
     setBusy(true);
     try {
-      await api.runRoutineNow(routine);
+      await api.runTaskNow(routine);
       await refreshJobs();
     } finally {
       setBusy(false);
@@ -284,7 +284,9 @@ function AttentionArea({
       )}
       {missed.map((item) => {
         const label =
-          ROUTINES.find((routine) => routine.key === item.routine)?.label ?? item.routine;
+          item.title.length > 0
+            ? item.title
+            : ROUTINES.find((routine) => routine.key === item.taskId)?.label ?? item.taskId;
         return (
           <div
             key={item.key}
@@ -294,7 +296,7 @@ function AttentionArea({
               <Clock3 className={`size-4 ${WARN_TEXT}`} />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold">{label} 루틴을 놓쳤습니다</div>
+              <div className="text-[13px] font-semibold">{label} 작업을 놓쳤습니다</div>
               <div className="text-xs text-muted-foreground">
                 {item.date} {item.scheduledAt} 예정 · 확인 후 지금 실행할 수 있습니다.
               </div>
@@ -495,7 +497,7 @@ function RoutinesWidget({
               fmtDate(job.finishedAtMs) === today,
           );
           const isMissed = missed.some(
-            (item) => item.routine === routine.key && item.date === today,
+            (item) => item.taskId === routine.key && item.date === today,
           );
           let state: { label: string; variant: BadgeVariant } = {
             label: "예정",

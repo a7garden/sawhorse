@@ -10,7 +10,7 @@ use crate::jobs::Job;
 
 #[derive(Default, Serialize, Deserialize)]
 pub struct PersistedState {
-    /// routine name -> last run date (YYYY-MM-DD)
+    /// task id (builtin routine or task file) -> last run date (YYYY-MM-DD)
     #[serde(default)]
     pub last_run: HashMap<String, String>,
     /// outstanding missed-schedule cards awaiting user decision
@@ -27,9 +27,13 @@ pub struct PersistedState {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MissedEntry {
-    /// "<routine>-<date>"
+    /// "<task_id>-<date>"
     pub key: String,
-    pub routine: String,
+    /// builtin ids: morning | lunch | evening. Old state files used `routine`.
+    #[serde(alias = "routine")]
+    pub task_id: String,
+    #[serde(default)]
+    pub title: String,
     pub date: String,
     pub scheduled_at: String,
 }
@@ -163,5 +167,28 @@ impl AppState {
 
     pub fn report_path(&self, id: &str) -> PathBuf {
         self.data_dir.join("reports").join(format!("{id}.md"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missed_entry_loads_legacy_routine_field() {
+        let legacy = r#"{"key":"morning-2026-09-05","routine":"morning","date":"2026-09-05","scheduledAt":"09:00"}"#;
+        let e: MissedEntry = serde_json::from_str(legacy).unwrap();
+        assert_eq!(e.task_id, "morning");
+        assert_eq!(e.title, "");
+        assert_eq!(e.date, "2026-09-05");
+        assert_eq!(e.scheduled_at, "09:00");
+    }
+
+    #[test]
+    fn missed_entry_reads_current_task_id_field() {
+        let cur = r#"{"key":"t-20260905-aaaa-2026-09-05","taskId":"t-20260905-aaaa","title":"주간 정리","date":"2026-09-05","scheduledAt":"08:30"}"#;
+        let e: MissedEntry = serde_json::from_str(cur).unwrap();
+        assert_eq!(e.task_id, "t-20260905-aaaa");
+        assert_eq!(e.title, "주간 정리");
     }
 }
