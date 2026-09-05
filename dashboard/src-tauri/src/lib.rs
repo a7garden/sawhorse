@@ -1,6 +1,7 @@
 mod agents;
 mod commands;
 mod config;
+mod detect;
 mod herdr;
 mod jobs;
 mod notes;
@@ -210,6 +211,9 @@ pub fn run() {
             commands::read_pack_skill,
             // 에이전트 브리지
             commands::list_agents,
+            commands::check_requirements,
+            commands::set_default_agent,
+            commands::suggest_vault_path,
             commands::pack_agent_status,
             commands::install_pack_skills,
             commands::uninstall_pack_skills,

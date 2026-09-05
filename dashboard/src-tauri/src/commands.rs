@@ -364,7 +364,37 @@ pub struct PackAgentStatus {
 #[tauri::command]
 pub async fn list_agents() -> Vec<agents::AgentPresence> {
     let view = config::load_view();
-    agents::detect_agents(&view.dashboard.claude_bin, &view.dashboard.herdr.bin).await
+    agents::detect_agents(&view.dashboard).await
+}
+
+/// 제품이 실제로 쓰는 외부 프로그램이 이 PC 에 있는지. 마법사의 「프로그램」 단계와
+/// 설정의 진단 화면이 같은 답을 쓴다.
+#[tauri::command]
+pub async fn check_requirements() -> Vec<crate::detect::RequirementStatus> {
+    crate::detect::check_requirements().await
+}
+
+/// 기본 에이전트 저장. 감지되지 않은 에이전트도 고를 수 있게 두되(설치 직후 재검사 없이
+/// 넘어가는 흐름이 흔하다), 앱이 전혀 모르는 id 는 거절한다.
+#[tauri::command]
+pub fn set_default_agent(id: String) -> Result<config::ConfigView, String> {
+    let id = id.trim().to_string();
+    let view = config::load_view();
+    let known = agents::spec(&id).is_some()
+        || view.dashboard.custom_agents.iter().any(|c| c.id.trim() == id);
+    if !known {
+        return Err(format!("모르는 에이전트입니다: {id}"));
+    }
+    config::save_patch(&serde_json::json!({"dashboard": {"defaultAgent": id}}))
+}
+
+/// 작업공간을 처음 만들 때 채워 넣을 경로 제안. 빈 절대경로 입력칸만 내미는 것보다
+/// 하나라도 눌러 볼 수 있는 값이 있는 편이 낫다.
+#[tauri::command]
+pub fn suggest_vault_path() -> String {
+    let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
+    let docs = dirs::document_dir().unwrap_or_else(|| home.join("Documents"));
+    docs.join("sawhorse").display().to_string()
 }
 
 #[tauri::command]

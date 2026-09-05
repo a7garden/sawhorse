@@ -119,6 +119,18 @@ impl HerdrCfg {
     }
 }
 
+/// 카탈로그에 없는 에이전트를 사용자가 직접 등록하는 항목. 사내 도구나 직접 만든 CLI 가
+/// 마법사 감지 목록에 뜨게 하는 유일한 방법이다.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CustomAgent {
+    pub id: String,
+    pub name: String,
+    /// 실행 파일 이름 또는 절대 경로. 비어 있으면 `id` 를 이름으로 본다.
+    pub bin: String,
+    pub install_url: String,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct DashboardCfg {
@@ -128,6 +140,10 @@ pub struct DashboardCfg {
     pub permission_mode: String,
     pub launch_at_login: bool,
     pub herdr: HerdrCfg,
+    /// 마법사에서 고른 기본 에이전트. 스킬 설치 대상과 안내의 기준이 된다.
+    /// 잡 실행기는 아직 Claude Code 에 묶여 있어 이 값이 실행기를 바꾸지는 않는다.
+    pub default_agent: String,
+    pub custom_agents: Vec<CustomAgent>,
 }
 
 impl Default for DashboardCfg {
@@ -139,6 +155,8 @@ impl Default for DashboardCfg {
             permission_mode: "bypassPermissions".into(),
             launch_at_login: false,
             herdr: HerdrCfg::default(),
+            default_agent: "claude".into(),
+            custom_agents: Vec::new(),
         }
     }
 }
@@ -401,9 +419,31 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
                     }
                     target.insert(k.clone(), v.clone());
                 }
-                "claudeBin" | "excelOutputDir" => {
+                "claudeBin" | "excelOutputDir" | "defaultAgent" => {
                     if !v.is_string() {
                         return Err(format!("{k}는 문자열이어야 합니다"));
+                    }
+                    target.insert(k.clone(), v.clone());
+                }
+                "customAgents" => {
+                    // 목록 통째 교체. 항목 하나가 망가져 있으면 전부 거절해서 반쯤 저장된
+                    // 상태를 만들지 않는다.
+                    let list = v
+                        .as_array()
+                        .ok_or_else(|| "customAgents는 배열이어야 합니다".to_string())?;
+                    for item in list {
+                        let o = item
+                            .as_object()
+                            .ok_or_else(|| "customAgents 항목은 객체여야 합니다".to_string())?;
+                        let id = o.get("id").and_then(Value::as_str).unwrap_or("").trim();
+                        if id.is_empty() {
+                            return Err("customAgents 항목에는 id가 필요합니다".into());
+                        }
+                        for key in ["id", "name", "bin", "installUrl"] {
+                            if o.get(key).is_some_and(|x| !x.is_string()) {
+                                return Err(format!("customAgents.{key}는 문자열이어야 합니다"));
+                            }
+                        }
                     }
                     target.insert(k.clone(), v.clone());
                 }
