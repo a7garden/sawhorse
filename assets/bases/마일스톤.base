@@ -1,0 +1,21 @@
+filters:
+  and:
+    - type == "마일스톤"
+    - not:
+        - file.inFolder("템플릿")
+properties:
+  file.name: { displayName: 마일스톤 }
+  id: { displayName: ID }
+  status: { displayName: 상태 }
+  due: { displayName: 목표일 }
+  github_number: { displayName: "GitHub #" }
+  github_url: { displayName: GitHub 링크 }
+  github_state: { displayName: GitHub 상태 }
+views:
+  - type: table
+    name: 진행중
+    filters: { and: ['status == "진행중"'] }
+    order: [id, file.name, due, github_number]
+  - type: table
+    name: 전체
+    order: [id, file.name, status, due, github_number]

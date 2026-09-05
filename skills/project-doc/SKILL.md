@@ -35,7 +35,9 @@ description: Use when the user wants to register a new business project in the v
    - 문서가 하나도 없으면 docx 파싱 단계를 건너뛰고, 발주처/기간 등을 사용자 문답으로 채운다.
 
 2. **사업 폴더 생성**
-   - `${user_config.vault_path}/사업/<사업명>/` 아래 `분석/`, `산출물/`, `회의/`를 만든다(이미 있으면 유지).
+   - `${user_config.vault_path}/사업/<사업명>/` 아래 `분석/`, `산출물/`, `회의/`, `이슈/`, `마일스톤/`을 만든다(이미 있으면 유지).
+   - 이슈 폴더에는 `이슈.md` MOC, `<idPrefix> 이슈목록.md`, `<idPrefix> 이슈.base`를 준비한다. 마일스톤 폴더에는 `마일스톤.md` MOC를 준비한다. 기존 파일은 절대 덮어쓰지 않는다.
+   - MOC에는 상태 표를 수기로 쓰지 않고 각각 `![[사업/이슈.base]]`, `![[사업/마일스톤.base]]` 또는 사업 범위 Base 뷰를 임베드한다. 이슈목록은 `## 신규 (미승격)`과 `## 승격 이력`만 둔다.
    - 필요 시 `${user_config.vault_path}/개념/`도 만든다.
 
 3. **문서 파싱 (docx)**
@@ -97,7 +99,7 @@ description: Use when the user wants to register a new business project in the v
 7. **결과 보고**
    - 생성/갱신한 파일 목록.
    - 빈 값으로 남긴 frontmatter 필드(예: `client`, `period`)와 사용자 확인 질문.
-   - 다음 단계 안내: `/si-workbench:codebase-docs <사업명> <코드베이스 경로>`.
+   - 다음 단계 안내: `/si-workbench:issues 등록 <사업명>` 및 (코드베이스가 있으면) `/si-workbench:codebase-docs <사업명> <코드베이스 경로>`.
 
 ## 금지사항
 

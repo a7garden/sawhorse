@@ -41,19 +41,20 @@ si-workbench가 쓸 Obsidian vault의 폴더 구조를 만들고, 노트 템플�
 5. 인덱스 자산 배치 (Bases 뷰 + 대시보드)
    - `${CLAUDE_PLUGIN_ROOT}/assets/bases/개념.base` → `${user_config.vault_path}/개념/개념.base`
    - `${CLAUDE_PLUGIN_ROOT}/assets/bases/사업.base` → `${user_config.vault_path}/사업/사업.base`
-   - `${CLAUDE_PLUGIN_ROOT}/assets/bases/개선.base` → `${user_config.vault_path}/사업/개선.base`
+   - `${CLAUDE_PLUGIN_ROOT}/assets/bases/이슈.base` → `${user_config.vault_path}/사업/이슈.base`
+   - `${CLAUDE_PLUGIN_ROOT}/assets/bases/마일스톤.base` → `${user_config.vault_path}/사업/마일스톤.base`
    - `${CLAUDE_PLUGIN_ROOT}/assets/bases/일지.base` → `${user_config.vault_path}/일지/일지.base`
    - `${CLAUDE_PLUGIN_ROOT}/assets/대시보드.md` → `${user_config.vault_path}/대시보드.md`
    - 같은 이름의 파일이 이미 있으면 덮어쓰지 않고 skip 목록에 기록한다.
    - Bases는 Obsidian 1.9+ 코어 플러그인이다. `.obsidian/core-plugins.json`의 `"bases"`가 `false`면 활성화를 안내한다(설정 파일을 직접 고치지 않는다).
-   - 개선 사이클의 **사업 범위 `.base`**(`assets/bases/개선-사업.base`)는 여기서 배치하지 않는다. 사업명을 알아야 필터를 채울 수 있으므로 `/si-workbench:improve` 가 만든다. 화면 범위 base 는 존재하지 않는다 — 화면은 `url` 프로퍼티이고 `화면별` 뷰가 묶는다.
+   - 이슈 워크플로의 **사업 범위 `.base`**(`assets/bases/이슈-사업.base`)는 여기서 배치하지 않는다. 사업명을 알아야 필터를 채울 수 있으므로 `/si-workbench:issues` 또는 `/si-workbench:project-doc`가 만든다. 화면 범위 base 는 존재하지 않는다 — 화면은 `url` 프로퍼티이고 `화면별` 뷰가 묶는다. 기존 `개선.base`는 호환을 위해 그대로 둔다.
 6. Obsidian 설정 보정: `${user_config.vault_path}/.obsidian/app.json`
    - 파일이 없으면 `{"attachmentFolderPath":"첨부/스크린샷"}`으로 만든다.
    - 있으면 `attachmentFolderPath` 키만 본다. 없거나 값이 비어 있거나 `/` 또는 `.`(볼트 루트)이면 `첨부/스크린샷`으로 채운다. 다른 폴더가 지정돼 있으면 사용자의 선택이므로 그대로 두고 보고만 한다.
    - 이 키 외의 다른 설정은 읽기만 하고 건드리지 않는다. 이 설정이 없으면 붙여넣기 이미지가 볼트 루트에 쌓인다.
 7. 프로퍼티 타입 등록: `${user_config.vault_path}/.obsidian/types.json`
    - 파일이 없으면 `{"types":{"approve":"checkbox"}}` 로 만든다. 있으면 `types` 객체에 `"approve": "checkbox"` 키만 추가한다(다른 키는 그대로 둔다. 이미 있으면 건드리지 않는다).
-   - 이게 없으면 개선 노트의 승인 체크박스가 속성 패널과 `개선.base` 표에서 체크박스가 아니라 텍스트로 보인다. 승인은 클릭 한 번이어야 하므로 이 등록이 필요하다.
+   - 이게 없으면 이슈의 승인 체크박스가 속성 패널과 `이슈.base` 표에서 체크박스가 아니라 텍스트로 보인다. 승인은 클릭 한 번이어야 하므로 이 등록이 필요하다.
 8. 홈페이지 설정 (Homepage 커뮤니티 플러그인이 설치돼 있을 때만)
    - `${user_config.vault_path}/.obsidian/plugins/homepage/`가 없으면 이 단계를 건너뛰고, 대시보드를 시작 화면으로 쓰려면 Homepage 플러그인을 설치하면 된다고 안내만 한다.
    - `data.json`이 이미 있으면 **덮어쓰지 않는다**. `homepages["Main Homepage"].value`가 무엇인지 보고만 한다.

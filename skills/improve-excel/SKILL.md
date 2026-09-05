@@ -1,11 +1,11 @@
 ---
 name: improve-excel
-description: Use when the user wants the vault's 개선 notes exported to (or re-synced with) the 「개선수정사항 체크리스트」 Excel report for the client — "체크리스트 엑셀 만들어줘", "개선사항 엑셀로 뽑아줘", "보고용 엑셀 갱신해줘", "엑셀 동기화해줘", "개선 목록 엑셀" 같은 요청일 때 사용.
+description: Use when the user wants vault issues exported to (or re-synced with) the 「개선수정사항 체크리스트」 Excel report for the client — "이슈 엑셀", "체크리스트 엑셀 만들어줘", "개선사항 엑셀로 뽑아줘".
 ---
 
-# 개선 체크리스트 엑셀
+# 이슈 체크리스트 엑셀
 
-`type: 개선` 노트를 발주처 보고용 엑셀 한 장으로 뽑는다.
+`type: 이슈` 노트를 발주처 보고용 엑셀 한 장으로 뽑는다. 기존 `type: 개선` 노트도 호환하여 함께 읽는다.
 
 정본은 **언제나 볼트 노트**다. 엑셀은 볼트에서 만들어지는 산출물이지 입력처가 아니다.
 예외는 **요구자·담당자처럼 볼트에 없는 열** 하나뿐이고, 이건 엑셀이 정본이라 다시 뽑을 때 이어받는다.
@@ -32,7 +32,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/improve-excel/scripts/improve-xlsx.mjs \
 | `--owner <이름>` | 담당자 기본값 (`--prev` 에 값이 없는 행에만) |
 | `--org <이름>` | 요구기관 고정값 (기본은 `origin` 에서 파생) |
 | `--title <문자열>` | A1 제목 |
-| `--status <목록>` | `구현완료,승인대기` 처럼 status 로 거른다 |
+| `--status <목록>` | `완료,승인대기` 처럼 status 로 거른다 (레거시 `구현완료`도 지원) |
 | `--no-images` | 「근거이미지」 시트를 뺀다 (파일이 무거울 때) |
 | `--max-image-w <px>` | 이미지 최대 가로. 기본 860 |
 | `--json <경로>` | 행 데이터를 JSON 으로도 떨군다 (점검용) |
@@ -54,7 +54,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/improve-excel/scripts/improve-xlsx.mjs \
 | I 조치내용 | `action` (신규 / 수정 / 기존) |
 | J 완료일(예정일) | `due` |
 | K 우선순위 | `priority` 에서 파생 — 최우선→상 / 중요→중 / 보통→하 |
-| L 완료여부 | `status` 에서 파생 — 구현완료→완료 / 구현중·부분구현→진행 / 보류→보류 / 반려→반려 / 나머지→대기 |
+| L 완료여부 | `status` 에서 파생 — 완료·구현완료→완료 / 진행중·부분완료·구현중·부분구현→진행 / 보류→보류 / 취소·반려→취소 / 나머지→대기 |
 | M 담당자 | **엑셀 전용** (연노랑 칸) |
 | N 비고 | `remark` |
 | O FDR | 노트의 `id`. **숨김 열이고 동기화 매칭 키다 — 지우면 안 된다** |

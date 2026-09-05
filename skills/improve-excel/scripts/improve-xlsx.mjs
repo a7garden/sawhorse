@@ -114,13 +114,13 @@ for (const p of vaultFiles) {
   if (!p.startsWith(projectRoot)) continue;
   const text = fs.readFileSync(p, 'utf8');
   const { fm, body } = parseFrontmatter(text);
-  if (!fm || fm.type !== '개선' || !fm.id) continue;
+  if (!fm || !['이슈', '개선'].includes(fm.type) || !fm.id) continue;
   notes.push({ file: p, fm, body, title: path.basename(p, '.md') });
 }
 notes.sort((a, b) => String(a.fm.id).localeCompare(String(b.fm.id), 'en', { numeric: true }));
 
 if (!notes.length) {
-  console.error(`개선 노트를 찾지 못했습니다: ${projectRoot}`);
+  console.error(`이슈 노트를 찾지 못했습니다: ${projectRoot}`);
   process.exit(1);
 }
 
@@ -130,8 +130,9 @@ const ORG_BY_ORIGIN = { '사용자 제안': '내부리뷰', '인수인계': '인
 const RESULT_BY_CATEGORY = { '버그': '오류수정', 'UI 개선': '개선요청', '성능': '개선요청', '리팩터링': '기타' };
 const PRIORITY_MAP = { '최우선': '상', '중요': '중', '보통': '하', '': '하' };
 const DONE_BY_STATUS = {
-  '구현완료': '완료', '구현중': '진행', '부분구현': '진행',
-  '보류': '보류', '반려': '반려',
+  '완료': '완료', '구현완료': '완료',
+  '진행중': '진행', '부분완료': '진행', '구현중': '진행', '부분구현': '진행',
+  '보류': '보류', '취소': '취소', '반려': '취소',
   '제안': '대기', '승인대기': '대기', '승인': '대기',
 };
 
@@ -162,7 +163,7 @@ const rows = notes
   .filter((n) => !STATUS_FILTER || STATUS_FILTER.includes(n.fm.status))
   .map((n) => {
     const fm = n.fm;
-    const category = fm.category || '';
+    const category = fm.category || fm.issue_type || '';
     return {
       id: String(fm.id),
       note: n,

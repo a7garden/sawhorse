@@ -24,7 +24,7 @@ $V = (Resolve-Path -LiteralPath $VaultPath).Path.TrimEnd('\')
 $StdFolders  = @('일지','사업','개념','첨부','템플릿')
 $ImageExt    = @('.png','.jpg','.jpeg','.gif','.webp','.svg','.bmp')
 $AttachExt   = $ImageExt + @('.pdf','.xlsx','.xls','.docx','.doc','.hwp','.hwpx','.pptx','.zip','.csv')
-$IndexAssets = @('대시보드.md', '개념\개념.base', '사업\사업.base', '사업\개선.base', '일지\일지.base')
+$IndexAssets = @('대시보드.md', '개념\개념.base', '사업\사업.base', '사업\이슈.base', '사업\마일스톤.base', '일지\일지.base')
 
 function Get-Rel([string]$full) { return $full.Substring($V.Length + 1) }
 function Test-Excluded([string]$full) { return $full -match '\\\.(obsidian|git|trash)\\' }
@@ -135,7 +135,7 @@ if ($Mode -eq 'quick' -or $Mode -eq 'fix') {
   if ($missingAssets.Count -gt 0) {
     Write-Output "[자산] 없음: $($missingAssets -join ', ') — /si-workbench:init-vault 필요"
   } else {
-    Write-Output "[자산] 대시보드·base 4종 모두 있음"
+    Write-Output "[자산] 대시보드·base 5종 모두 있음"
   }
 
   # 5) .base 가 템플릿 폴더를 제외하는지 (템플릿 노트도 진짜 type 값을 갖고 있다)
@@ -158,30 +158,32 @@ if ($Mode -eq 'quick' -or $Mode -eq 'fix') {
     }
   }
 
-  # 5-b) 개선 폴더의 범위별 base 존재 확인 + 파생 표 잔존 탐지 (보고만 — 고치는 것은 improve 스킬)
+  # 5-b) 이슈(및 레거시 개선) 폴더의 범위별 base 존재 확인 + 파생 표 잔존 탐지
   $impRoot = Join-Path $V '사업'
   if (Test-Path -LiteralPath $impRoot) {
-    $impDirs = @(Get-ChildItem -LiteralPath $impRoot -Recurse -Directory -Filter '개선' -ErrorAction SilentlyContinue |
+    $impDirs = @(Get-ChildItem -LiteralPath $impRoot -Recurse -Directory -ErrorAction SilentlyContinue |
+                 Where-Object { $_.Name -in @('이슈','개선') } |
                  Where-Object { -not (Test-Excluded $_.FullName) })
     foreach ($d in $impDirs) {
       $hasNote = @(Get-ChildItem -LiteralPath $d.FullName -Recurse -File -Filter *.md |
-                   Where-Object { (Get-Content -LiteralPath $_.FullName -TotalCount 12 -Encoding UTF8) -match '^type:\s*개선\s*$' })
+                   Where-Object { (Get-Content -LiteralPath $_.FullName -TotalCount 16 -Encoding UTF8) -match '^type:\s*(이슈|개선)\s*$' })
       if ($hasNote.Count -eq 0) { continue }
       if (@(Get-ChildItem -LiteralPath $d.FullName -File -Filter *.base).Count -eq 0) {
-        Write-Output "[개선base] $(Get-Rel $d.FullName) — 사업 범위 base 없음 (/si-workbench:improve 가 만든다)"
+        $kind = if ($d.Name -eq '이슈') { '이슈' } else { '개선(레거시)' }
+        Write-Output "[이슈base] $(Get-Rel $d.FullName) — $kind 사업 범위 base 없음 (/si-workbench:issues 가 만든다)"
       }
-      # 개선 폴더는 평면이다 — 화면은 노트의 url 프로퍼티가 나눈다. 옛 화면단위 하위 폴더는 보고만 한다.
+      # 이슈 폴더는 평면이다 — 화면·마일스톤은 프로퍼티가 나눈다. 하위 폴더는 보고만 한다.
       foreach ($sd in @(Get-ChildItem -LiteralPath $d.FullName -Directory)) {
         $n = @(Get-ChildItem -LiteralPath $sd.FullName -File -Filter *.md).Count
         if ($n -gt 0) {
-          Write-Output "[개선폴더] $(Get-Rel $sd.FullName) — 화면단위 하위 폴더 (옛 구조). 문제 노트를 개선/ 바로 아래로 올릴 것 — 화면 구분은 url 프로퍼티가 한다"
+          Write-Output "[이슈폴더] $(Get-Rel $sd.FullName) — 하위 폴더. 이슈 노트를 이슈/ 바로 아래로 둘 것 — 화면·마일스톤은 프로퍼티가 나눈다"
         }
       }
       # 노트 프로퍼티를 베껴 둔 표(행이 [[링크]] 로 시작)는 반드시 어긋난다.
       foreach ($m in @(Get-ChildItem -LiteralPath $d.FullName -Recurse -File -Filter *.md)) {
         $rows = @([regex]::Matches((Get-Content -LiteralPath $m.FullName -Raw -Encoding UTF8), '(?m)^\|\s*\[\[')).Count
         if ($rows -ge 3) {
-          Write-Output "[파생표] $(Get-Rel $m.FullName) — 문제 노트를 베낀 표 $rows 행. .base 뷰 임베드로 바꿀 것"
+          Write-Output "[파생표] $(Get-Rel $m.FullName) — 이슈 노트를 베낀 표 $rows 행. .base 뷰 임베드로 바꿀 것"
         }
       }
     }
@@ -347,8 +349,9 @@ if ($Mode -eq 'scan' -or $Mode -eq 'fix') {
     $rel = Get-Rel $f.FullName
     if ($rel -like '템플릿\*') { continue }
     # improve 스킬이 의도적으로 frontmatter 없이 두는 산출물
-    if ($f.Name -like '문제목록 - *.md' -or $f.Name -like '* 문제목록.md') { continue }
+    if ($f.Name -like '문제목록 - *.md' -or $f.Name -like '* 문제목록.md' -or $f.Name -like '* 이슈목록.md') { continue }
     if ($f.Name -eq '개선.md' -and $rel -like '*\개선\개선.md') { continue }
+    if ($f.Name -eq '이슈.md' -and $rel -like '*\이슈\이슈.md') { continue }
     $raw = $bodies[$f.FullName]
     $m = [regex]::Match($raw, '(?s)\A---\r?\n(.*?)\r?\n---')
     if (-not $m.Success) { [void]$issues.Add("$rel : frontmatter 없음"); continue }
