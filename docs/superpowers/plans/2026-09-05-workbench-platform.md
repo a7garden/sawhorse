@@ -110,3 +110,20 @@ starter 가 실증한다.
 | 팩 원격 설치(URL·git) | 로컬 폴더 복사로 충분하고, 원격은 신뢰 경계 설계가 먼저다 |
 | 설정 화면의 팩 설정 통합 | 지금은 확장 탭에 있다. 설정 탭 재구성(형제 작업)과 충돌한다 |
 | 뷰 `kind` 확장(칸반·타임라인) | 표 하나로 어디까지 되는지 먼저 써 보고 정한다 |
+
+## 9단계 — feat/dashboard 병합 후속 (2026-09-05)
+
+`main` 병합(`261abd1`)은 충돌 13개를 가산적으로 잘 풀었지만 두 곳이 남았다. 둘 다
+컴파일·테스트를 통과하는 종류라 자동으로는 안 잡힌다.
+
+1. **설정 4탭 분할이 고아가 됐다.** `dashboard/src/pages/settings/*` 가 남아 있는데
+   아무도 import 하지 않았다. 4탭 분할이 문서화된 설계(`2026-09-05-settings-tabs-design.md`)
+   이므로 그쪽을 정본으로 삼고, 예약 편집기(선언형)를 `settings/ScheduleCard.tsx` 로
+   옮겨 실행 탭에 심었다. 자세한 내용은 그 스펙의 「병합 이후 정정」.
+2. **내장 작업이 설정 예약 목록에 먹통 컨트롤로 샜다.** `scheduler::entries()` 가
+   `tasks_entries()` 까지 붙이는데 `list_schedules()` 가 그대로 내보내고 있었다.
+   설정의 `set_schedule` 은 config 에만 쓰고 작업 예약 정본은 작업 정의 파일이라,
+   목록에서 켜고 꺼도 아무 일이 없었다. `editable_in_settings()` 술어로 걸러내고
+   테스트(`settings_list_hides_builtin_tasks`)로 못 박았다. 작업 예약은 예약 페이지가
+   `set_task_enabled`·`save_task` 로 다룬다.
+

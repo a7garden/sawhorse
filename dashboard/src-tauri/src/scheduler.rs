@@ -61,6 +61,10 @@ pub fn due_today(kind: &str, now: DateTime<Local>) -> bool {
 /// 예약이 조용히 멈추지 않도록 남겨 둔 안전망이다.
 pub const LEGACY_ROUTINES: [&str; 3] = ["morning", "lunch", "evening"];
 
+/// 호스트 내장 작업 엔트리의 pack_id. 팩이 선언한 예약과 구분하는 표식이다 —
+/// 이 값이 붙은 엔트리는 예약 정본이 config 가 아니라 작업 정의 파일이다.
+pub const TASKS_PACK_ID: &str = "tasks";
+
 fn legacy_entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
     LEGACY_ROUTINES
         .iter()
@@ -99,7 +103,7 @@ fn tasks_entries() -> Vec<ScheduledEntry> {
             };
             Some(ScheduledEntry {
                 key: t.id.clone(),
-                pack_id: "tasks".into(),
+                pack_id: TASKS_PACK_ID.into(),
                 action_id: t.id,
                 label: t.title,
                 kind: kind.into(),
@@ -126,7 +130,7 @@ pub fn entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
 
 /// 예약 하나를 잡 요청으로. 팩 액션이면 `action`, 안전망 엔트리면 예전 `routine` 잡.
 fn request_for(entry: &ScheduledEntry) -> JobRequest {
-    if entry.pack_id == "tasks" {
+    if entry.pack_id == TASKS_PACK_ID {
         // 호스트 내장 작업 — 작업 정의 파일의 프롬프트를 그대로 돌린다.
         JobRequest {
             kind: "task".into(),
@@ -199,7 +203,7 @@ fn mark_ran(state: &AppState, entry: &ScheduledEntry, today: &str) {
         st.last_run.insert(entry.key.clone(), today.to_string());
         st.missed.retain(|m| !(m.routine == entry.key && m.date == today));
     }
-    if entry.kind == "once" && entry.pack_id == "tasks" {
+    if entry.kind == "once" && entry.pack_id == TASKS_PACK_ID {
         // 1회 작업은 소화 후 조용히 꺼진다 — 다음 날 같은 카드가 다시 생기지 않게.
         let _ = crate::tasks::set_enabled(&crate::tasks::workbench_root(), &entry.action_id, false);
     }
@@ -385,10 +389,21 @@ pub struct ScheduleView {
     pub last_run: Option<String>,
 }
 
+/// 설정 화면의 예약 편집기가 실제로 바꿀 수 있는 엔트리인가.
+///
+/// 호스트 내장 작업은 예약 정본이 작업 정의 파일이고, 설정이 쓰는 `set_schedule` 은
+/// config 에만 쓴다 — 목록에 두면 켜고 꺼도 아무 일이 없는 먹통 스위치가 된다.
+/// 그쪽은 예약 페이지가 `set_task_enabled`·`save_task` 로 따로 다룬다.
+fn editable_in_settings(entry: &ScheduledEntry) -> bool {
+    entry.pack_id != TASKS_PACK_ID
+}
+
+/// 설정 화면이 보여줄 예약 목록. 편집이 닿지 않는 엔트리는 애초에 내보내지 않는다.
 pub fn list_schedules(state: &AppState) -> Vec<ScheduleView> {
     let view = config::load_view();
     entries(&view)
         .into_iter()
+        .filter(editable_in_settings)
         .map(|e| ScheduleView {
             last_run: last_run_of(state, &e),
             key: e.key,
@@ -513,5 +528,35 @@ mod tests {
         assert_eq!(req.kind, "action");
         assert_eq!(req.pack_id.as_deref(), Some("si"));
         assert_eq!(req.action_id.as_deref(), Some("morning"));
+    }
+
+    fn entry(pack_id: &str, key: &str) -> ScheduledEntry {
+        ScheduledEntry {
+            key: key.into(),
+            pack_id: pack_id.into(),
+            action_id: key.into(),
+            label: key.into(),
+            kind: "daily".into(),
+            time: "09:00".into(),
+            enabled: true,
+            date: None,
+        }
+    }
+
+    /// 스케줄러는 내장 작업까지 돌리지만 설정 화면은 그걸 편집할 수 없다.
+    /// 목록에 새어 나가면 사용자는 반응 없는 스위치를 만난다.
+    #[test]
+    fn settings_list_hides_builtin_tasks() {
+        assert!(editable_in_settings(&entry("si", "si.morning")));
+        assert!(editable_in_settings(&entry("", "morning")));
+        assert!(!editable_in_settings(&entry(TASKS_PACK_ID, "t-abc123")));
+    }
+
+    /// 내장 작업 엔트리는 config 가 아니라 작업 정의를 도는 `task` 잡이 되어야 한다.
+    #[test]
+    fn builtin_task_entries_produce_task_jobs() {
+        let req = request_for(&entry(TASKS_PACK_ID, "t-abc123"));
+        assert_eq!(req.kind, "task");
+        assert_eq!(req.task_id.as_deref(), Some("t-abc123"));
     }
 }
