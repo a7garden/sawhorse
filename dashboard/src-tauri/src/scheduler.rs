@@ -152,11 +152,10 @@ fn collect_entries(scheds: &config::Schedules, root: &Path) -> Vec<SchedEntry> {
 
 fn req_for(e: &SchedEntry) -> JobRequest {
     if e.builtin {
-        JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some(e.id.clone()) }
+        JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some(e.id.clone()), task_id: None }
     } else {
-        // Task 5 adds `task_id` to JobRequest; until then build_job rejects a
-        // kind:"task" request, so the tick retries with state untouched.
-        JobRequest { kind: "task".into(), project: e.project.clone(), ids: None, routine: None }
+        // build_job resolves everything from the task file via task_id.
+        JobRequest { kind: "task".into(), project: e.project.clone(), ids: None, routine: None, task_id: Some(e.id.clone()) }
     }
 }
 
@@ -255,10 +254,10 @@ pub fn run_task_now(mgr: &JobManager, state: &AppState, id: &str) -> Result<crat
     let root = tasks::workbench_root();
     let today = Local::now().format("%Y-%m-%d").to_string();
     let req = if ROUTINE_IDS.contains(&id) {
-        JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some(id.into()) }
+        JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some(id.into()), task_id: None }
     } else {
         let def = tasks::get_task(&root, id)?;
-        JobRequest { kind: "task".into(), project: def.project.clone(), ids: None, routine: None }
+        JobRequest { kind: "task".into(), project: def.project.clone(), ids: None, routine: None, task_id: Some(id.into()) }
     };
     // enqueue BEFORE mutating state so a failed enqueue leaves state untouched
     let job = mgr.enqueue(req)?;

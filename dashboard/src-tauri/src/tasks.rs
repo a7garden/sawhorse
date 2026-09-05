@@ -12,7 +12,14 @@ use serde::{Deserialize, Serialize};
 pub const TITLE_MAX: usize = 80;
 pub const PROMPT_MAX: usize = 20_000;
 
+/// Test injection point: when set, `workbench_root()` returns this instead of
+/// the real config dir. Production never sets it.
+pub static TASKS_ROOT_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 pub fn workbench_root() -> PathBuf {
+    if let Some(root) = TASKS_ROOT_OVERRIDE.get() {
+        return root.clone();
+    }
     crate::config::config_path().parent().map(Path::to_path_buf).unwrap_or_default()
 }
 pub fn tasks_dir(root: &Path) -> PathBuf { root.join("tasks") }
