@@ -224,7 +224,7 @@ pub fn run_routine_now(
     mgr: State<'_, Arc<JobManager>>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<Job, String> {
-    scheduler::run_routine_now(&mgr, &state, &routine)
+    scheduler::run_task_now(&mgr, &state, &routine)
 }
 
 #[tauri::command]

@@ -112,7 +112,7 @@ pub fn run() {
                     "morning" | "lunch" | "evening" => {
                         let st = app.state::<Arc<state::AppState>>();
                         let jm = app.state::<Arc<jobs::JobManager>>();
-                        let _ = scheduler::run_routine_now(&jm, &st, event.id.as_ref());
+                        let _ = scheduler::run_task_now(&jm, &st, event.id.as_ref());
                     }
                     "quit" => app.exit(0),
                     _ => {}

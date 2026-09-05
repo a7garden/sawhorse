@@ -176,8 +176,7 @@ pub fn delete_task(root: &Path, id: &str) -> Result<(), String> {
 
 // ---------- agent inbox ----------
 
-/// Temporary placeholder. Task 4 replaces this with `pub use crate::scheduler::ROUTINE_IDS;`.
-pub const ROUTINE_IDS: [&str; 3] = ["morning", "lunch", "evening"];
+pub use crate::scheduler::ROUTINE_IDS;
 
 /// Distinguishes JSON null (clear the value) from an absent key (keep it).
 #[derive(Clone, Debug)]
