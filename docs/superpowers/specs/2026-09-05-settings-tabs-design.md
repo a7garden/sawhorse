@@ -34,7 +34,7 @@ SettingsPage (draft 상태 소유)
 | --- | --- |
 | 일반 | 볼트 경로, 기본 프로젝트, 엑셀 출력 폴더, 로그인 시 자동 시작 |
 | 프로젝트 | 프로젝트 목록 (추가/삭제/필드 편집) |
-| 실행 | 루틴 예약 / claude 실행 파일·권한 모드 / herdr 세션. 탭 안 `lg:grid-cols-2`: 좌(루틴+claude+권한), 우(herdr). 기존 Card 스타일은 섹션 내 그룹 단위로 유지 |
+| 실행 | 예약 / claude 실행 파일·권한 모드 / 워크벤치 스킬 / herdr 세션. 탭 안 `lg:grid-cols-2`: 좌(예약+claude+권한+스킬), 우(herdr). 기존 Card 스타일은 섹션 내 그룹 단위로 유지 |
 | 진단 | 진단 배지 + 다시 검사 |
 
 ### 상태·동작 (기존 유지)
@@ -50,7 +50,7 @@ SettingsPage (draft 상태 소유)
   - `ProjectsSection.tsx` — props: `{ draft, patchDraft }`
   - `ExecutionSection.tsx` — props: `{ draft, patchDraft }`
   - `DiagnosticsSection.tsx` — props: `{ diag, vaultPath, onRefresh }` (draft 전체 대신 문자열 하나만)
-- 수정 `SettingsPage.tsx`: 상수(`ROUTINES`, `PERMISSION_OPTIONS`, `HERDR_MODE_OPTIONS`, `HERDR_CLEANUP_OPTIONS`)와 herdr 숫자 입력 전용인 `clampInt`는 `settings/constants.ts`로 이동. `validate`는 전역 저장 검증이므로 SettingsPage에 유지.
+- 수정 `SettingsPage.tsx`: 상수(`PERMISSION_OPTIONS`, `HERDR_MODE_OPTIONS`, `HERDR_CLEANUP_OPTIONS`)와 herdr 숫자 입력 전용인 `clampInt`는 `settings/constants.ts`로 이동. `validate`는 전역 저장 검증이므로 SettingsPage에 유지.
 - 탭은 기존 `components/ui/tabs.tsx` 프리미티브 재사용 (현재 미사용 상태).
 
 ## 검증
@@ -62,3 +62,20 @@ SettingsPage (draft 상태 소유)
 ## 위험
 
 - 공유 체크아웃: 워킹트리에 형제 세션의 미커밋 변경이 다수(App.tsx, common.tsx, card.tsx, index.css 등). 본 작업 커밋은 settings 관련 파일만 스테이징하고, `common.tsx`(PageHeader)와 `tabs.tsx`는 재사용만 하고 수정하지 않는다.
+
+## 병합 이후 정정 (2026-09-05)
+
+이 분할과 플랫폼(pack) 작업이 다른 세션에서 나란히 진행됐고, `main` 병합에서 충돌이
+`SettingsPage.tsx`를 플랫폼 쪽 단일 파일 버전으로 정리하는 바람에 여기 적힌 섹션 넷이
+**아무도 import 하지 않는 고아 파일로 남았다**(`tsc`는 미사용 파일도 통과시키므로 조용히
+지나갔다). 병합 후속으로 다음을 반영해 이 설계를 정본으로 되돌렸다:
+
+- `SettingsPage.tsx`는 이 문서의 껍데기 구조로 재작성. 섹션 넷이 다시 실제로 렌더된다.
+- **루틴 예약 카드는 폐기.** 하드코딩 `ROUTINES` 3종 + `draft.dashboard.schedules[key]`
+  편집은 팩이 예약을 선언하는 모델로 대체됐다. 새 `settings/ScheduleCard.tsx`가
+  `api.listSchedules()` 결과를 그리고 `api.setSchedule()` 로 즉시 커밋한다 —
+  이 카드만 draft·저장 버튼을 타지 않는다.
+- `settings/constants.ts` 에서 `ROUTINES` 제거 (`RoutineName` 은 안전망 `routine` 잡이
+  아직 쓰므로 `types.ts` 에 남는다).
+- 워크벤치 스킬 설치 카드(`settings/WorkbenchSkillCard.tsx`)는 실행 탭 좌측에 둔다 —
+  에이전트가 워크벤치와 말을 섞는 통로라 실행 정책과 한 묶음이다.

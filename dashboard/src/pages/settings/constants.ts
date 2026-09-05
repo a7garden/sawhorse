@@ -1,10 +1,4 @@
-import type { HerdrCleanup, HerdrMode, PermissionMode, RoutineName } from "@/lib/types";
-
-export const ROUTINES: { key: RoutineName; label: string }[] = [
-  { key: "morning", label: "아침" },
-  { key: "lunch", label: "점심" },
-  { key: "evening", label: "저녁" },
-];
+import type { HerdrCleanup, HerdrMode, PermissionMode } from "@/lib/types";
 
 export const PERMISSION_OPTIONS: { value: PermissionMode; label: string }[] = [
   { value: "default", label: "기본" },

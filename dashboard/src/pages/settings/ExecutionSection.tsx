@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import WorkbenchSkillCard from "@/settings/WorkbenchSkillCard";
+import ScheduleCard from "./ScheduleCard";
 import {
   HERDR_CLEANUP_OPTIONS,
   HERDR_MODE_OPTIONS,
   PERMISSION_OPTIONS,
-  ROUTINES,
   clampInt,
 } from "./constants";
 
@@ -21,46 +22,7 @@ export default function ExecutionSection({
   return (
     <div className="grid items-start gap-4 p-4 lg:grid-cols-2">
       <div className="space-y-4">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-[13px]">루틴 예약</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2.5">
-            {ROUTINES.map((r) => {
-              const s = draft.dashboard.schedules[r.key];
-              return (
-                <div key={r.key} className="flex items-center gap-2">
-                  <Switch
-                    id={`sched-${r.key}`}
-                    checked={s.enabled}
-                    onCheckedChange={(on) =>
-                      patchDraft((d) => {
-                        d.dashboard.schedules[r.key].enabled = on;
-                      })
-                    }
-                  />
-                  <Label htmlFor={`sched-${r.key}`} className="w-10">
-                    {r.label}
-                  </Label>
-                  <Input
-                    className="w-24"
-                    value={s.time}
-                    onChange={(e) =>
-                      patchDraft((d) => {
-                        d.dashboard.schedules[r.key].time = e.target.value;
-                      })
-                    }
-                    placeholder="HH:MM"
-                    aria-label={`${r.label} 루틴 시각`}
-                  />
-                </div>
-              );
-            })}
-            <p className="text-[11px] text-muted-foreground">
-              시각이 지나도 앱이 꺼져 있었다면 자동 실행하지 않고 홈에 알립니다.
-            </p>
-          </CardContent>
-        </Card>
+        <ScheduleCard />
 
         <Card>
           <CardHeader className="pb-1">
@@ -98,6 +60,8 @@ export default function ExecutionSection({
             </div>
           </CardContent>
         </Card>
+
+        <WorkbenchSkillCard />
       </div>
 
       <Card>
