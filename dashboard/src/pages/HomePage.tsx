@@ -137,7 +137,7 @@ export default function HomePage() {
         {missed.length > 0 && (
           <section className="space-y-2">
             {missed.map((m) => {
-              const label = ROUTINES.find((r) => r.key === m.taskId)?.label ?? m.taskId;
+              const label = m.title || m.taskId;
               return (
                 <div
                   key={m.key}
@@ -145,7 +145,7 @@ export default function HomePage() {
                 >
                   <TriangleAlert className={`size-4 shrink-0 ${WARN_TEXT}`} />
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold">{label} 루틴을 놓쳤습니다</div>
+                    <div className="text-[13px] font-semibold">{label} 작업을 놓쳤습니다</div>
                     <div className="text-xs text-muted-foreground">
                       {m.date} {m.scheduledAt} 예정 — 자동 실행되지 않았습니다. 확인 후 실행하세요.
                     </div>
