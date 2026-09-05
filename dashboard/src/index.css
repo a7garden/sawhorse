@@ -3,13 +3,13 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(1 0 0);
+  --background: oklch(0.995 0.002 260);
   --foreground: oklch(0.141 0.005 285.823);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.141 0.005 285.823);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.21 0.006 285.885);
+  --primary: oklch(0.55 0.19 259);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.967 0.001 286.375);
   --secondary-foreground: oklch(0.21 0.006 285.885);
@@ -24,10 +24,14 @@
   --warning-foreground: oklch(0.55 0.14 70);
   --border: oklch(0.92 0.004 286.32);
   --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.705 0.015 286.067);
-  --sidebar: oklch(0.985 0 0);
+  --ring: oklch(0.62 0.16 259);
+  --sidebar: oklch(0.98 0.006 260);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
   --scrollbar-thumb: oklch(0.87 0.006 286.3);
+  --brand: oklch(0.55 0.19 259);
+  --brand-soft: oklch(0.95 0.035 259);
+  --brand-border: oklch(0.82 0.08 259);
+  --workspace: oklch(0.975 0.005 260);
 }
 
 .dark {
@@ -37,8 +41,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.21 0.006 285.885);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.92 0.004 286.32);
-  --primary-foreground: oklch(0.21 0.006 285.885);
+  --primary: oklch(0.69 0.15 259);
+  --primary-foreground: oklch(0.16 0.02 259);
   --secondary: oklch(0.274 0.006 286.033);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.274 0.006 286.033);
@@ -53,9 +57,13 @@
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
   --ring: oklch(0.552 0.016 285.938);
-  --sidebar: oklch(0.21 0.006 285.885);
+  --sidebar: oklch(0.18 0.012 270);
   --sidebar-foreground: oklch(0.985 0 0);
   --scrollbar-thumb: oklch(0.32 0.007 286.1);
+  --brand: oklch(0.72 0.14 259);
+  --brand-soft: oklch(0.27 0.05 259);
+  --brand-border: oklch(0.47 0.09 259);
+  --workspace: oklch(0.125 0.008 270);
 }
 
 @theme inline {
@@ -102,6 +110,13 @@
       "Pretendard", -apple-system, BlinkMacSystemFont, "Segoe UI", "Malgun Gothic", sans-serif;
     font-size: 13px;
     user-select: none;
+    letter-spacing: -0.01em;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
   }
   pre,
   code,
@@ -121,4 +136,159 @@
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Editable dashboard grid */
+.dashboard-grid .react-grid-layout {
+  min-height: 1px;
+}
+
+.dashboard-grid .react-grid-item {
+  min-width: 0;
+}
+
+.dashboard-grid .widget-grid-item,
+.dashboard-grid .widget-host {
+  height: 100%;
+  min-height: 0;
+}
+
+.dashboard-grid .widget-host {
+  container-type: inline-size;
+}
+
+.dashboard-grid .widget-overview-grid,
+.dashboard-grid .widget-stage-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-grid .widget-routines-grid,
+.dashboard-grid .widget-recent-grid {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+@container (min-width: 680px) {
+  .dashboard-grid .widget-routines-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 560px) {
+  .dashboard-grid .widget-stage-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .dashboard-grid .widget-recent-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 820px) {
+  .dashboard-grid .widget-overview-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.dashboard-grid-editing .react-grid-item {
+  overflow: visible;
+  border: 1px dashed var(--brand-border);
+  border-radius: 0.875rem;
+  background: color-mix(in oklch, var(--brand-soft) 55%, transparent);
+  padding: 29px 4px 4px;
+  box-shadow: 0 6px 18px oklch(0 0 0 / 6%);
+}
+
+.dashboard-grid-editing .react-grid-layout {
+  border-radius: 0.875rem;
+  background-image: linear-gradient(
+    to bottom,
+    transparent 41px,
+    color-mix(in oklch, var(--brand-border) 28%, transparent) 42px
+  );
+  background-size: 100% 42px;
+}
+
+.dashboard-grid-editing .react-grid-item.react-draggable-dragging,
+.dashboard-grid-editing .react-grid-item.resizing {
+  border-style: solid;
+  border-color: var(--brand);
+  box-shadow: 0 14px 36px oklch(0 0 0 / 14%);
+}
+
+.dashboard-grid .widget-edit-bar {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 5;
+  display: flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 4px;
+}
+
+.dashboard-grid .widget-drag-handle,
+.dashboard-grid .widget-remove-button {
+  display: grid;
+  place-items: center;
+  color: var(--muted-foreground);
+  transition: color 120ms ease, background 120ms ease;
+}
+
+.dashboard-grid .widget-drag-handle {
+  width: 42px;
+  height: 22px;
+  cursor: grab;
+  border-radius: 999px;
+}
+
+.dashboard-grid .widget-drag-handle:active {
+  cursor: grabbing;
+}
+
+.dashboard-grid .widget-drag-handle:hover {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.dashboard-grid .widget-remove-button {
+  position: absolute;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 0.4rem;
+}
+
+.dashboard-grid .widget-remove-button:hover {
+  color: var(--destructive);
+  background: color-mix(in oklch, var(--destructive) 12%, transparent);
+}
+
+.dashboard-grid-editing .react-grid-item > .react-resizable-handle {
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  height: 28px;
+  opacity: 1;
+}
+
+.dashboard-grid-editing .react-grid-item > .react-resizable-handle::after {
+  right: 6px;
+  bottom: 6px;
+  width: 8px;
+  height: 8px;
+  border-color: var(--brand);
+}
+
+.dashboard-grid .react-grid-placeholder {
+  border: 1px solid var(--brand);
+  border-radius: 0.875rem;
+  background: var(--brand-soft);
+  opacity: 0.65;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-grid .react-grid-layout,
+  .dashboard-grid .react-grid-item {
+    transition: none;
+  }
 }
