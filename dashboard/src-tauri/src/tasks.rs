@@ -168,6 +168,7 @@ pub fn save_task(root: &Path, def: &TaskDef) -> Result<(), String> {
 }
 
 pub fn delete_task(root: &Path, id: &str) -> Result<(), String> {
+    if !valid_id(id) { return Err("잘못된 작업 ID".into()); }
     let src = tasks_dir(root).join(format!("{id}.json"));
     let dst = archive_dir(root).join(format!("{}-{}.json", id, Local::now().format("%Y%m%d%H%M%S")));
     std::fs::rename(&src, &dst).map_err(|e| format!("작업 삭제(보관 이동) 실패: {e}"))
@@ -240,5 +241,16 @@ mod tests {
             assert!(!valid_id(bad), "{bad}");
         }
         assert!(valid_id("t-20260905-ab12"));
+        // delete_task must refuse path-traversal ids before touching the FS.
+        let root = tempdir("idguard");
+        ensure_dirs(&root).unwrap();
+        for bad in ["../x", "a/b", "a\\b", ".."] {
+            assert!(delete_task(&root, bad).is_err(), "delete accepted {bad}");
+        }
+        assert_eq!(
+            delete_task(&root, "../x").unwrap_err(),
+            "잘못된 작업 ID"
+        );
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }
