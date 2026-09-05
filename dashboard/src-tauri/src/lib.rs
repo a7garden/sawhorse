@@ -2,6 +2,7 @@ mod commands;
 mod config;
 mod herdr;
 mod jobs;
+mod plugin;
 mod scheduler;
 mod state;
 mod transcript;
@@ -159,6 +160,9 @@ pub fn run() {
             commands::dismiss_missed,
             commands::set_launch_at_login,
             commands::get_launch_at_login,
+            commands::plugin_info,
+            commands::read_skill,
+            commands::open_external,
         ])
         .run(tauri::generate_context!())
         .expect("si-workbench 대시보드 실행 실패");
