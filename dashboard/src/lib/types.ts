@@ -44,9 +44,9 @@ export interface DashboardCfg {
   permissionMode: PermissionMode;
   launchAtLogin: boolean;
   herdr: HerdrCfg;
-  /** 마법사에서 고른 기본 에이전트 id. 스킬 설치와 안내의 기준. */
-  defaultAgent: string;
   customAgents: CustomAgent[];
+  /** 승인 정책·통합 방식. 새 세션의 초기값 계산에만 쓰인다. */
+  collaboration: CollaborationPolicy;
 }
 
 export interface ProjectCfg {
@@ -63,6 +63,8 @@ export interface ConfigView {
   vaultPath: string;
   defaultProject: string;
   projects: ProjectCfg[];
+  /** 새 코어 프로젝트 정본. key는 등록 때 만든 UUID projectId다. */
+  coreProjects: Record<string, CoreProjectCfg>;
   dashboard: DashboardCfg;
 }
 
@@ -70,6 +72,11 @@ export type ConfigPatch = Partial<DashboardCfg> & {
   vaultPath?: string;
   defaultProject?: string;
   projects?: ProjectCfg[];
+  coreProjects?: Record<string, CoreProjectCfg>;
+  /** 대시보드 블록 부분 갱신 — dashboard.collaboration 즉시 저장에 쓴다. */
+  dashboard?: Partial<Omit<DashboardCfg, "collaboration">> & {
+    collaboration?: Partial<CollaborationPolicy>;
+  };
 };
 
 export interface IssueNote {
@@ -586,3 +593,427 @@ export interface TasksView {
 }
 
 export interface SkillInstall { target: string; path: string; written: boolean }
+
+// ---------- 협업(멀티에이전트 통합 레인) ----------
+
+export type CollabSessionStatus = "active" | "paused" | "readyToFinalize" | "finalized";
+export type CollabSessionMode = "direct" | "isolated";
+export type CollabDriver = "claude" | "codex";
+
+export type CollabChangeSetStatus =
+  | "working"
+  | "review_pending"
+  | "changes_requested"
+  | "approved"
+  | "authorized_by_policy"
+  | "queued"
+  | "integrating"
+  | "conflicted"
+  | "integrated"
+  | "automated_verifying"
+  | "manual_verification_pending"
+  | "verification_failed"
+  | "fix_forward"
+  | "reverting"
+  | "reverted"
+  | "verified"
+  | "superseded"
+  | "stale_context"
+  | "baseline_failed"
+  | "redundant"
+  | "resolved_with_repair"
+  | "recovery_required"
+  | "revert_conflicted"
+  | "rejected";
+
+export interface CollabSession {
+  id: string;
+  projectId: string;
+  goal: string;
+  status: CollabSessionStatus;
+  mode: CollabSessionMode;
+  /** 대표 체크아웃 절대경로. */
+  integrationPath: string;
+  integrationBranch: string;
+  targetStartSha: string;
+  policyVersion: number;
+  verificationProfile: string;
+  createdAt: string;
+  finalizedAt: string;
+  pausedReason: string;
+}
+
+export interface CollabAgentRun {
+  id: string;
+  sessionId: string;
+  jobId: string;
+  taskId: string;
+  branch: string;
+  worktreePath: string;
+  driver: string;
+  status: string;
+  createdAt: string;
+  finishedAt: string;
+}
+
+export interface CollabManifestEntry {
+  path: string;
+  oldBlob: string;
+  newBlob: string;
+  mode: string;
+  renameFrom: string;
+  binary: boolean;
+}
+
+export interface CollabApproval {
+  id: string;
+  candidateId: string;
+  digest: string;
+  expectedHead: string;
+  policyVersion: number;
+  decision: string;
+  decidedBy: string;
+  reason: string;
+  createdAt: string;
+}
+
+export interface CollabChangeSet {
+  id: string;
+  sessionId: string;
+  taskId: string;
+  repositoryId: string;
+  baseSha: string;
+  sourceSha: string;
+  baseTreeSha: string;
+  sourceTreeSha: string;
+  manifestJson: string;
+  dependencyJson: string;
+  verificationPlanHash: string;
+  digest: string;
+  status: CollabChangeSetStatus;
+  summary: string;
+  supersededBy: string;
+  remediatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 검토 화면용 후보 스냅샷. CollabChangeSet 평탄화 + 구조화된 manifest. */
+export interface CollabChangeSetView {
+  id: string;
+  sessionId: string;
+  taskId: string;
+  repositoryId: string;
+  baseSha: string;
+  sourceSha: string;
+  baseTreeSha: string;
+  sourceTreeSha: string;
+  manifestJson: string;
+  dependencyJson: string;
+  verificationPlanHash: string;
+  digest: string;
+  status: CollabChangeSetStatus;
+  summary: string;
+  supersededBy: string;
+  remediatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  manifest: CollabManifestEntry[];
+  dependsOn: string[];
+  sessionGoal: string;
+  overlapPaths: string[];
+  expectedHead: string;
+  approvals: CollabApproval[];
+}
+
+export interface CollabSessionView {
+  id: string;
+  projectId: string;
+  goal: string;
+  status: CollabSessionStatus;
+  mode: CollabSessionMode;
+  integrationPath: string;
+  integrationBranch: string;
+  targetStartSha: string;
+  policyVersion: number;
+  verificationProfile: string;
+  createdAt: string;
+  finalizedAt: string;
+  pausedReason: string;
+  agentRuns: CollabAgentRun[];
+  changeSets: CollabChangeSetView[];
+  integrationHead: string;
+  integrationClean: boolean;
+}
+
+export interface CollabAuditEvent {
+  id: string;
+  kind: string;
+  projectId: string;
+  sessionId: string;
+  payloadJson: string;
+  createdAt: string;
+}
+
+export interface CollabLaneInput {
+  taskId: string;
+  taskPrompt: string;
+  driver: CollabDriver;
+}
+
+export interface CollabCreateSessionInput {
+  projectId: string;
+  goal: string;
+  mode: CollabSessionMode;
+  branch: string;
+  lanes: CollabLaneInput[];
+}
+
+export interface CollabIntegrationTarget {
+  path: string;
+  branch: string;
+  verifyProfile: string;
+}
+
+export interface CollabRegisteredProject {
+  id: string;
+  name: string;
+  path: string;
+  integration: CollabIntegrationTarget;
+}
+
+export interface CollabLegacyProject {
+  name: string;
+  path: string;
+  workBranch: string;
+  verify: string;
+}
+
+export interface CollabProjectsView {
+  registered: CollabRegisteredProject[];
+  legacy: CollabLegacyProject[];
+}
+
+export interface CollabInboxReport {
+  file: string;
+  accepted: boolean;
+  candidateId: string;
+  reason: string;
+}
+
+// 검증 프로필 — argv 배열만 허용(임의 shell 문자열 금지).
+export interface CollabVerifyCheckCommand {
+  kind: "command";
+  cwd: string;
+  argv: string[];
+}
+
+export interface CollabVerifyCheckHttp {
+  kind: "http";
+  url: string;
+}
+
+export type CollabVerifyCheck = CollabVerifyCheckCommand | CollabVerifyCheckHttp;
+
+export interface CollabVerifyProfile {
+  checks: CollabVerifyCheck[];
+  manual: string[];
+}
+
+export type LocalIntegrationApproval = "required" | "autoAfterPreflight";
+
+/** 승인 정책. 새 세션 초기값 계산에만 쓰인다 — 활성 세션은 시작 때 찍은 snapshot을 따른다. */
+export interface CollaborationPolicy {
+  localIntegrationApproval: LocalIntegrationApproval;
+  verificationMode: string;
+  failurePolicy: string;
+  integrationStrategy: string;
+  remoteWriteApproval: string;
+}
+
+/** 새 코어 프로젝트 정본. key는 등록 때 만든 UUID projectId다. */
+export interface CoreProjectCfg {
+  path: string;
+  integration: CollabIntegrationTarget;
+  verifyProfiles: Record<string, CollabVerifyProfile>;
+}
+
+// ---------- 소스 커넥터 · 읽을거리 ----------
+
+export type ExtensionSourceKind = "builtin" | "user";
+
+export interface ExtensionSourceContribution {
+  id: string;
+  /** issue | article */
+  type: string;
+}
+
+export interface ExtensionViewContribution {
+  id: string;
+  renderer: string;
+}
+
+export interface ExtensionPermissionRequests {
+  /** 예: ["read"], ["read", "write"] */
+  repository: string[];
+  issues: string[];
+  /** 네트워크 도메인 allowlist 요청 */
+  network: string[];
+  /** secret ref 이름 — 토큰 자체는 오지 않는다 */
+  secrets: string[];
+}
+
+export interface ExtensionComponentManifest {
+  id: string;
+  /** connector | pack */
+  type: string;
+  /** builtin:github | builtin:rss */
+  adapter: string;
+  requests: ExtensionPermissionRequests;
+  subscriptions: string[];
+  commands: string[];
+  contributes: {
+    sources: ExtensionSourceContribution[];
+    views: ExtensionViewContribution[];
+  };
+}
+
+export interface ExtensionManifest {
+  schemaVersion: number;
+  id: string;
+  name: string;
+  version: string;
+  minCoreVersion: string;
+  components: ExtensionComponentManifest[];
+}
+
+export interface ExtensionBundle {
+  manifest: ExtensionManifest;
+  source: ExtensionSourceKind;
+  dir: string;
+}
+
+export interface ExtensionsListView {
+  bundles: ExtensionBundle[];
+}
+
+/** feed instance 설정(FeedSourceConfig, camelCase). */
+export interface FeedEntryCfg {
+  name: string;
+  url: string;
+  tags: string[];
+}
+
+export interface FeedSourceCfg {
+  feeds: FeedEntryCfg[];
+  refreshMinutes: number;
+  storeContent: boolean;
+}
+
+/** GitHub source instance 설정(GitHubSourceConfig). */
+export interface GitHubSourceCfg {
+  account: string;
+  repository: string;
+  repositoryId: string;
+  /** open | closed | all */
+  state: string;
+}
+
+export type SourceInstanceCfg = FeedSourceCfg | GitHubSourceCfg;
+
+/** feed 설정은 feeds 배열이 있다 — instance 목록이 확장 id를 안 주므로 형태로 판별한다. */
+export function isFeedCfg(c: SourceInstanceCfg): c is FeedSourceCfg {
+  return "feeds" in c;
+}
+
+export function isGitHubCfg(c: SourceInstanceCfg): c is GitHubSourceCfg {
+  return !("feeds" in c);
+}
+
+export interface SourceInstanceRow {
+  instanceId: string;
+  config: SourceInstanceCfg;
+}
+
+export interface DeadLetter {
+  id: string;
+  source: string;
+  kind: string;
+  error: string;
+  createdAt: string;
+}
+
+export interface SourcesInstancesView {
+  instances: SourceInstanceRow[];
+  deadLetters: DeadLetter[];
+}
+
+export interface ArticleRow {
+  id: string;
+  url: string;
+  title: string;
+  summary: string;
+  /** JSON 문자열: string[] */
+  tags: string;
+  publishedAt: string;
+  discoveredAt: string;
+  /** 0 | 1 */
+  read: number;
+  /** 0 | 1 */
+  archived: number;
+}
+
+export interface ArticlesListView {
+  articles: ArticleRow[];
+}
+
+export interface GitHubPollReport {
+  fetched: number;
+  stagedNew: number;
+  stagedUpdates: number;
+  skippedPullRequests: number;
+  cursor: string;
+}
+
+export interface GitHubIssuePayload {
+  number: number;
+  title: string;
+  body: string;
+  state: string;
+  url: string;
+  updatedAt: string;
+}
+
+export interface InboundChange {
+  id: string;
+  /** 빈 문자열이면 가져오기 후보(새 이슈), 아니면 연결된 노트의 field update 후보. */
+  linkId: string;
+  sourceInstance: string;
+  externalId: string;
+  /** JSON 문자열: GitHubIssuePayload */
+  payload: string;
+  targetPath: string;
+  createdAt: string;
+}
+
+export interface InboundListView {
+  inbound: InboundChange[];
+}
+
+/** prepared → approved → sending → succeeded | uncertain → reconciled | failed | stale */
+export interface RemoteOperation {
+  id: string;
+  kind: string;
+  capability: string;
+  payloadHash: string;
+  status: string;
+  observedRevision: string;
+  /** JSON 문자열 또는 짧은 텍스트 */
+  resultJson: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RemoteOperationsView {
+  operations: RemoteOperation[];
+}

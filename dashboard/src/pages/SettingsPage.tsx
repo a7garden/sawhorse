@@ -9,17 +9,19 @@ import { useApp } from "@/lib/store";
 import type { ConfigPatch, ConfigView } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
+import CollaborationSection from "./settings/CollaborationSection";
 import DiagnosticsSection from "./settings/DiagnosticsSection";
 import ExecutionSection from "./settings/ExecutionSection";
 import GeneralSection from "./settings/GeneralSection";
 import ProjectsSection from "./settings/ProjectsSection";
 import { Empty, PageHeader } from "./common";
 
-type SectionId = "general" | "projects" | "execution" | "diagnostics";
+type SectionId = "general" | "projects" | "collaboration" | "execution" | "diagnostics";
 
 const SECTIONS: { value: SectionId; label: string }[] = [
   { value: "general", label: "일반" },
   { value: "projects", label: "프로젝트" },
+  { value: "collaboration", label: "협업" },
   { value: "execution", label: "실행" },
   { value: "diagnostics", label: "진단" },
 ];
@@ -156,6 +158,7 @@ export default function SettingsPage() {
             <GeneralSection draft={draft} patchDraft={patchDraft} onLaunchAtLogin={toggleLogin} />
           )}
           {section === "projects" && <ProjectsSection draft={draft} patchDraft={patchDraft} />}
+          {section === "collaboration" && <CollaborationSection draft={draft} patchDraft={patchDraft} />}
           {section === "execution" && <ExecutionSection draft={draft} patchDraft={patchDraft} />}
           {section === "diagnostics" && (
             <DiagnosticsSection

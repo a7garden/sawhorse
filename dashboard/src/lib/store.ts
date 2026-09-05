@@ -13,6 +13,7 @@ import type {
   ProgressEntry,
   RequirementStatus,
   ScheduleView,
+  CollabSession,
   TodoSections,
   UnpromotedItem,
   VaultAudit,
@@ -23,7 +24,7 @@ import type {
  * 코어 페이지는 호스트가 항상 들고 있고, 그 사이의 화면은 팩이 기여한다.
  * 팩 화면의 id 는 `view:<packId>:<viewId>`.
  */
-export const CORE_PAGES = ["home", "jobs", "tasks", "terminal", "packs", "settings"] as const;
+export const CORE_PAGES = ["home", "jobs", "tasks", "sessions", "review", "sources", "reading", "terminal", "packs", "settings"] as const;
 export type CorePage = (typeof CORE_PAGES)[number];
 export type PageId = CorePage | `view:${string}:${string}`;
 
@@ -55,6 +56,8 @@ interface AppState {
   defaultAgent: string;
   requirements: RequirementStatus[];
   schedules: ScheduleView[];
+  /** 협업 세션 목록 — collab-changed 이벤트마다 다시 읽는다. */
+  collabSessions: CollabSession[];
 
   config: ConfigView | null;
   diag: Diagnostics | null;
@@ -74,9 +77,10 @@ interface AppState {
   closeWizard: () => void;
   refreshConfig: () => Promise<void>;
   refreshPacks: () => Promise<void>;
-  refreshAgents: () => Promise<void>;
-  refreshRequirements: () => Promise<void>;
   refreshSchedules: () => Promise<void>;
+  refreshCollabSessions: () => Promise<void>;
+  refreshRequirements: () => Promise<void>;
+  refreshAgents: () => Promise<void>;
   refreshImprovements: () => Promise<void>;
   refreshTodos: () => Promise<void>;
   refreshJobs: () => Promise<void>;
@@ -114,6 +118,7 @@ export const useApp = create<AppState>((set, get) => ({
   defaultAgent: "claude",
   requirements: [],
   schedules: [],
+  collabSessions: [],
 
   wizardOpen: false,
   openWizard: () => set({ wizardOpen: true }),
@@ -154,10 +159,16 @@ export const useApp = create<AppState>((set, get) => ({
         void get().refreshMissed(),
       ),
     );
+    unlisteners.push(
+      await listen<{ reason?: string }>(EVENTS.collabChanged, () =>
+        void get().refreshCollabSessions(),
+      ),
+    );
     await Promise.all([
       get().refreshConfig(),
       get().refreshPacks(),
       get().refreshSchedules(),
+      get().refreshCollabSessions(),
       get().refreshJobs(),
       get().refreshMissed(),
       get().refreshImprovements(),
@@ -195,6 +206,8 @@ export const useApp = create<AppState>((set, get) => ({
   refreshRequirements: async () =>
     set({ requirements: await api.checkRequirements().catch(() => []) }),
   refreshSchedules: async () => set({ schedules: await api.listSchedules().catch(() => []) }),
+  refreshCollabSessions: async () =>
+    set({ collabSessions: await api.collabListSessions().catch(() => []) }),
   refreshImprovements: async () => {
     const improvements = await api.listIssues().catch(() => [] as IssueNote[]);
     set({

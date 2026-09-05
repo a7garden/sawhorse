@@ -21,7 +21,9 @@ pub fn claude_home() -> PathBuf {
             return PathBuf::from(dir);
         }
     }
-    dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".claude")
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".claude")
 }
 
 pub fn projects_dir() -> PathBuf {
@@ -51,13 +53,19 @@ pub struct Tailer {
 
 impl Tailer {
     pub fn new(path: PathBuf) -> Self {
-        Self { path, pos: 0, partial: String::new() }
+        Self {
+            path,
+            pos: 0,
+            partial: String::new(),
+        }
     }
 
     /// Read every complete line written since the last call. A trailing fragment
     /// is buffered until its newline arrives, so half-written JSON is never parsed.
     pub fn read_new_lines(&mut self) -> Vec<String> {
-        let Ok(mut f) = std::fs::File::open(&self.path) else { return Vec::new() };
+        let Ok(mut f) = std::fs::File::open(&self.path) else {
+            return Vec::new();
+        };
         let len = f.metadata().map(|m| m.len()).unwrap_or(0);
         if len < self.pos {
             // truncated/replaced under us — start over rather than emit garbage
@@ -79,7 +87,11 @@ impl Tailer {
 
         let ends_clean = self.partial.ends_with('\n');
         let mut parts: Vec<String> = self.partial.split('\n').map(str::to_string).collect();
-        let tail = if ends_clean { String::new() } else { parts.pop().unwrap_or_default() };
+        let tail = if ends_clean {
+            String::new()
+        } else {
+            parts.pop().unwrap_or_default()
+        };
         self.partial = tail;
         parts.into_iter().filter(|l| !l.trim().is_empty()).collect()
     }
@@ -96,7 +108,11 @@ pub fn map_transcript_line(line: &str) -> Option<Value> {
     }
     let content = v.pointer("/message/content")?.as_array()?;
     let entries = crate::jobs::map_assistant_content(content);
-    if entries.is_empty() { None } else { Some(Value::Array(entries)) }
+    if entries.is_empty() {
+        None
+    } else {
+        Some(Value::Array(entries))
+    }
 }
 
 #[cfg(test)]
@@ -119,7 +135,10 @@ mod tests {
         std::fs::write(proj.join(format!("{id}.jsonl")), "").unwrap();
         std::fs::write(proj.join("other.jsonl"), "").unwrap();
 
-        assert_eq!(find_session_file(&root, id).unwrap(), proj.join(format!("{id}.jsonl")));
+        assert_eq!(
+            find_session_file(&root, id).unwrap(),
+            proj.join(format!("{id}.jsonl"))
+        );
         assert!(find_session_file(&root, "nope").is_none());
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -133,15 +152,22 @@ mod tests {
         assert_eq!(t.read_new_lines(), vec!["one".to_string()]);
         assert!(t.read_new_lines().is_empty());
 
-        let mut f = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
         writeln!(f, "o\nthree").unwrap();
-        assert_eq!(t.read_new_lines(), vec!["two".to_string(), "three".to_string()]);
+        assert_eq!(
+            t.read_new_lines(),
+            vec!["two".to_string(), "three".to_string()]
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn maps_assistant_lines_only() {
-        let text = r#"{"type":"assistant","message":{"content":[{"type":"text","text":"확인했습니다"}]}}"#;
+        let text =
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"확인했습니다"}]}}"#;
         let mapped = map_transcript_line(text).unwrap();
         let arr = mapped.as_array().unwrap();
         assert_eq!(arr[0]["kind"], "text");
@@ -153,7 +179,8 @@ mod tests {
         assert_eq!(arr[0]["summary"], "git status");
 
         // thinking-only turns and user/tool-result lines produce nothing
-        let thinking = r#"{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"음"}]}}"#;
+        let thinking =
+            r#"{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"음"}]}}"#;
         assert!(map_transcript_line(thinking).is_none());
         assert!(map_transcript_line(r#"{"type":"user","message":{"content":[]}}"#).is_none());
         assert!(map_transcript_line("not json").is_none());

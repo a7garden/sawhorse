@@ -1,7 +1,9 @@
 mod agents;
+mod collab;
 mod commands;
 mod config;
 mod detect;
+mod extensions;
 mod herdr;
 mod jobs;
 mod notes;
@@ -15,8 +17,8 @@ mod vault;
 mod watcher;
 mod workspace;
 
-use std::sync::Arc;
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 use tauri::{
     menu::{Menu, MenuItem},
@@ -85,7 +87,51 @@ pub fn run() {
                 let _ = handle.emit(event, payload.clone());
             });
             let mgr = jobs::JobManager::start(state.clone(), emit_fn.clone());
-            scheduler::start_tick(mgr.clone(), state.clone(), emit_fn.clone());
+            // 협업 서비스: 장부 열기 + 인박스 감시 + 큐 틱.
+            let collab_tick_emit = emit_fn.clone();
+            match collab::store::Store::open() {
+                Ok(store) => {
+                    let svc = collab::service::CollabService::new(store, mgr.clone());
+                    app.manage(svc.clone());
+                    // 재시작 복구(설계 479-486줄) — 앱이 뜨자마자 미종료 시도를 복구한다.
+                    {
+                        let svc = svc.clone();
+                        let emit = collab_tick_emit.clone();
+                        tauri::async_runtime::spawn_blocking(move || {
+                            if let Ok(actions) = collab::integration::recover_on_startup(&svc.store) {
+                                if !actions.is_empty() {
+                                    emit("collab-changed", &serde_json::json!({ "reason": "recovery", "actions": actions }));
+                                }
+                            }
+                        });
+                    }
+                    // 인박스+큐 틱. tasks 스케줄러 틱과 별개로 협업 상태를 앞으로 민다.
+                    {
+                        let svc = svc.clone();
+                        let emit = collab_tick_emit.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let mut interval = tokio::time::interval(std::time::Duration::from_secs(3));
+                            loop {
+                                interval.tick().await;
+                                let svc = svc.clone();
+                                let emit = emit.clone();
+                                let _ = tauri::async_runtime::spawn_blocking(move || {
+                                    let view = config::load_view();
+                                    if let Ok(reports) = svc.tick(&view) {
+                                        if !reports.is_empty() {
+                                            emit("collab-changed", &serde_json::json!({ "reason": "inbox" }));
+                                        }
+                                    }
+                                })
+                                .await;
+                            }
+                        });
+                    }
+                }
+                Err(e) => {
+                    eprintln!("협업 장부 열기 실패: {e}");
+                }
+            }
             {
                 let mgr = mgr.clone();
                 tauri::async_runtime::spawn(async move { mgr.reattach_herdr(resumable).await });
@@ -186,6 +232,41 @@ pub fn run() {
             commands::job_report,
             commands::list_tasks,
             commands::save_task,
+            // 협업(멀티에이전트 통합 레인)
+            commands::collab_create_session,
+            commands::collab_list_sessions,
+            commands::collab_session_detail,
+            commands::collab_session_audit,
+            commands::collab_projects_view,
+            commands::collab_register_project,
+            commands::collab_save_verify_profile,
+            commands::collab_approve,
+            commands::collab_reject,
+            commands::collab_request_changes,
+            commands::collab_manual_ok,
+            commands::collab_manual_fail,
+            commands::collab_repair,
+            commands::collab_revert,
+            commands::collab_finalize,
+            commands::collab_pause,
+            commands::collab_resume,
+            commands::collab_run_queue,
+            commands::collab_inbox_tick,
+            // 확장·소스(connector)
+            commands::extensions_list,
+            commands::sources_upsert_instance,
+            commands::sources_list_instances,
+            commands::sources_refresh,
+            commands::articles_list,
+            commands::article_set_state,
+            commands::github_import_tick,
+            commands::inbound_list,
+            commands::inbound_accept_import,
+            commands::inbound_accept_update,
+            commands::remote_operations_list,
+            commands::remote_operation_approve,
+            commands::remote_operation_execute,
+            commands::remote_operation_reconcile,
             commands::delete_task,
             commands::set_task_enabled,
             commands::run_task_now,

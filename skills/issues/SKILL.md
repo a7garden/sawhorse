@@ -89,6 +89,49 @@ description: Use when the user wants to register, plan, approve, execute, verify
 - 검증 후 이슈별 경로 한정 커밋을 남긴다. 결과에 커밋 SHA·브랜치·검증·`git revert` 순서를 기록한다.
 - SVN은 읽기 전용 조회만 허용한다. 원격 push·commit은 하지 않는다.
 
+## 세션 모드 (멀티에이전트)
+
+세션 모드는 **사람이 시작한 협업 세션**이 있을 때만 적용한다. 판단 근거는 lane 프롬프트에 호스트가 내려준 세션 디스크립터뿐이다. **세션 밖에서는 기존 규칙 그대로**다 — 단일 `workBranch`, 경로 한정 커밋, 이슈 노트 직접 갱신을 앞 절 규칙대로 수행한다.
+
+세션 안에서는 아래가 브랜치 검사와 노트 갱신 절차를 대체한다. 경로 한정 커밋 같은 나머지 안전 규칙은 자기 worktree 안에서 그대로 적용한다.
+
+1. **디스크립터 검사.** 현재 브랜치가 `workBranch`와 같은지 검사하지 않는다. 대신 디스크립터가 알려준 worktree 경로와 에이전트 브랜치 `sawhorse/agent/<session-id>/<task-id>`가 실제 worktree·브랜치 상태와 일치하는지 확인하고, 어긋나면 멈추고 보고한다. 기존 `workBranch`는 통합 브랜치의 호환 입력값으로 읽는다.
+2. **노트 intent.** 공유 이슈 노트를 직접 고치지 않는다. 노트 변경은 후보 제안 파일의 `noteIntents` 배열(`notePath`, `expectedLocalHash`, `field`, `value`)로 함께 제출하고, 코어가 검증 뒤 file WAL을 거쳐 한 번만 적용한다.
+3. **후보 제출.** 후보는 lane 프롬프트가 알려준 인박스 경로에 아래 요청 파일을 써서만 제출한다. 가능한 lint·typecheck·테스트는 자기 worktree에서 돌리고 결과를 `checks`에 담는다. 대표 체크아웃은 만지지 않으며, 병합은 사람 승인 후 앱이 수행한다.
+4. **rebase 금지.** 통합 브랜치는 rebase하지 않는다. 격리 브랜치의 promotion은 승인된 merge 또는 PR 게시로만 처리한다.
+
+```json
+{
+  "op": "propose",
+  "sessionId": "s-20260905-a1b2",
+  "taskId": "ui-shell",
+  "agent": "claude-code",
+  "worktree": "/local/path/to/worktree",
+  "baseSha": "0123456...",
+  "sourceSha": "abcdef0...",
+  "summary": "변경 요약",
+  "checks": [{ "name": "typecheck", "status": "passed" }],
+  "noteIntents": [
+    { "notePath": "사업/<사업명>/이슈/<ID> <제목>.md", "expectedLocalHash": "<노트 로컬 해시>", "field": "<필드>", "value": "<새 값>" }
+  ]
+}
+```
+
+제출 전 자기 worktree는 clean이어야 한다(모든 변경이 커밋된 상태). amend·추가 커밋은 같은 후보의 수정이 아니라 새 후보다 — 이전 후보는 `superseded`가 된다.
+
+### 세션 노트 필드
+
+| 필드 | 세션 모드에서의 의미 |
+|---|---|
+| `approve` | 기존 의미 유지 — 이슈 설계·실행 권한. 병합 승인과 별개 |
+| `base` | 세션의 `target_start_sha` |
+| `branch` | 통합 대상 branch |
+| `commits` | 기존 의미 유지 — 후보를 구성한 구현 commit |
+| `verified` | 기존 문자열 `확인\|부분확인\|미확인` 유지 — 대표 체크아웃 검증 뒤 갱신 |
+| `integration_commits` | (신규) 통합 체크아웃에 생긴 merge commit과 후보 연결 |
+| `integration_reverts` | (신규) 실패 후보를 제거한 revert commit |
+| `session_id`·`candidate_ids` | (신규) 세션·후보 감사 연결 |
+
 ## 마일스톤
 
 마일스톤에는 목표·완료 기준·목표일을 적는다. 이슈의 상태를 손으로 표로 옮기지 말고 사업 이슈 Base의 `마일스톤별` 뷰를 임베드한다. 마일스톤을 `완료`로 닫기 전에는 열린 이슈·부분완료 이슈·검증 미완료 이슈를 보고하고, 예외가 있다면 `## 메모`에 근거를 남긴다.

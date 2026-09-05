@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import {
   CalendarClock,
+  ClipboardCheck,
   LayoutDashboard,
+  Network,
+  Newspaper,
+  Rss,
   SquareTerminal,
   Terminal,
   Settings,
@@ -22,6 +26,10 @@ import TasksPage from "@/pages/TasksPage";
 import TodosPage from "@/pages/TodosPage";
 import DocsPage from "@/pages/DocsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import SessionsPage from "@/pages/SessionsPage";
+import ReviewPage from "@/pages/ReviewPage";
+import SourcesPage from "@/pages/SourcesPage";
+import ReadingPage from "@/pages/ReadingPage";
 import VaultPage from "@/pages/VaultPage";
 import PacksPage from "@/pages/PacksPage";
 import PackViewPage from "@/pages/PackViewPage";
@@ -33,6 +41,10 @@ import SetupWizard from "@/pages/SetupWizard";
 const TOP_NAV: { id: PageId; label: string; icon: IconComponent }[] = [
   { id: "home", label: "홈", icon: LayoutDashboard },
   { id: "jobs", label: "작업", icon: SquareTerminal },
+  { id: "sessions", label: "세션", icon: Network },
+  { id: "review", label: "검토", icon: ClipboardCheck },
+  { id: "sources", label: "소스", icon: Rss },
+  { id: "reading", label: "읽을거리", icon: Newspaper },
   { id: "tasks", label: "예약", icon: CalendarClock },
   { id: "terminal", label: "터미널", icon: Terminal },
 ];
@@ -78,6 +90,14 @@ export default function App() {
         return <JobsPage />;
       case "terminal":
         return <TerminalPage />;
+      case "sessions":
+        return <SessionsPage />;
+      case "review":
+        return <ReviewPage />;
+      case "sources":
+        return <SourcesPage />;
+      case "reading":
+        return <ReadingPage />;
       case "packs":
         return <PacksPage />;
       case "tasks":

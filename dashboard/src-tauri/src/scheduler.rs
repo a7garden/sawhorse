@@ -201,7 +201,8 @@ fn mark_ran(state: &AppState, entry: &ScheduledEntry, today: &str) {
     {
         let mut st = state.state.lock();
         st.last_run.insert(entry.key.clone(), today.to_string());
-        st.missed.retain(|m| !(m.routine == entry.key && m.date == today));
+        st.missed
+            .retain(|m| !(m.routine == entry.key && m.date == today));
     }
     if entry.kind == "once" && entry.pack_id == TASKS_PACK_ID {
         // 1회 작업은 소화 후 조용히 꺼진다 — 다음 날 같은 카드가 다시 생기지 않게.
@@ -231,7 +232,9 @@ pub fn tick_once(
     let mut missed_events: Vec<MissedEntry> = Vec::new();
 
     for entry in entries(&view) {
-        let Ok(time) = NaiveTime::parse_from_str(&entry.time, "%H:%M") else { continue };
+        let Ok(time) = NaiveTime::parse_from_str(&entry.time, "%H:%M") else {
+            continue;
+        };
         let last = last_run_of(state, &entry);
         if entry.kind == "once" {
             match decide_once(now, &entry, time, last.as_deref(), booted_at) {
@@ -343,7 +346,6 @@ pub fn run_scheduled_now(
     Err(format!("알 수 없는 예약: {key}"))
 }
 
-
 /// Missed-card dismissal. `run=true` also enqueues the entry immediately.
 pub fn dismiss_missed(
     mgr: &JobManager,
@@ -353,7 +355,10 @@ pub fn dismiss_missed(
 ) -> Result<Vec<MissedEntry>, String> {
     let found = {
         let st = state.state.lock();
-        st.missed.iter().find(|m| m.key == key).map(|m| (m.routine.clone(), m.date.clone()))
+        st.missed
+            .iter()
+            .find(|m| m.key == key)
+            .map(|m| (m.routine.clone(), m.date.clone()))
     };
     let Some((entry_key, date)) = found else {
         return Err("해당 알림이 없습니다".into());
@@ -362,7 +367,8 @@ pub fn dismiss_missed(
         // enqueue BEFORE mutating state so a failed enqueue leaves the card intact
         run_scheduled_now(mgr, state, &entry_key)?;
         let mut st = state.state.lock();
-        st.missed.retain(|m| !(m.routine == entry_key && m.date == date));
+        st.missed
+            .retain(|m| !(m.routine == entry_key && m.date == date));
     } else {
         let mut st = state.state.lock();
         st.missed.retain(|m| m.key != key);
@@ -454,17 +460,30 @@ mod tests {
     fn idle_before_time_and_after_run_and_disabled() {
         let booted = at(2026, 9, 4, 8, 0);
         let now = at(2026, 9, 4, 8, 30);
-        assert_eq!(decide(now, sched(9, 0), true, None, "2026-09-04", booted), Decision::Idle);
+        assert_eq!(
+            decide(now, sched(9, 0), true, None, "2026-09-04", booted),
+            Decision::Idle
+        );
 
         // already ran today
         let now2 = at(2026, 9, 4, 10, 0);
         assert_eq!(
-            decide(now2, sched(9, 0), true, Some("2026-09-04"), "2026-09-04", booted),
+            decide(
+                now2,
+                sched(9, 0),
+                true,
+                Some("2026-09-04"),
+                "2026-09-04",
+                booted
+            ),
             Decision::Idle
         );
 
         // disabled
-        assert_eq!(decide(now2, sched(9, 0), false, None, "2026-09-04", booted), Decision::Idle);
+        assert_eq!(
+            decide(now2, sched(9, 0), false, None, "2026-09-04", booted),
+            Decision::Idle
+        );
     }
 
     #[test]

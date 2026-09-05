@@ -114,7 +114,11 @@ pub fn expand_path(raw: &str) -> Option<PathBuf> {
             None => (rest, ""),
         };
         let base = PathBuf::from(std::env::var_os(var)?);
-        return Some(if tail.is_empty() { base } else { base.join(tail) });
+        return Some(if tail.is_empty() {
+            base
+        } else {
+            base.join(tail)
+        });
     }
     Some(PathBuf::from(raw))
 }
@@ -191,7 +195,10 @@ pub async fn version_of(path: &Path, args: &[&str]) -> Option<String> {
         // `--version` 을 모르고 대화형으로 뜨는 CLI 가 있다. 타임아웃으로 기다리기를
         // 그만두는 것만으로는 그 프로세스가 남는다 — 검사할 때마다 좀비가 쌓이지 않게 죽인다.
         .kill_on_drop(true);
-    let out = tokio::time::timeout(PROBE_TIMEOUT, c.output()).await.ok()?.ok()?;
+    let out = tokio::time::timeout(PROBE_TIMEOUT, c.output())
+        .await
+        .ok()?
+        .ok()?;
     if !out.status.success() {
         return None;
     }
@@ -379,7 +386,9 @@ pub async fn check_requirements() -> Vec<RequirementStatus> {
         .iter()
         .zip(&found)
         .filter_map(|(spec, f)| match f {
-            Some((p, true)) if !spec.version_args.is_empty() => Some((p.clone(), spec.version_args)),
+            Some((p, true)) if !spec.version_args.is_empty() => {
+                Some((p.clone(), spec.version_args))
+            }
             _ => None,
         })
         .collect();
@@ -445,7 +454,10 @@ mod tests {
         let h = home();
         assert_eq!(expand_path("~/x/y"), Some(h.join("x").join("y")));
         std::env::set_var("SW_DETECT_TEST_DIR", "/tmp/sw");
-        assert_eq!(expand_path("$SW_DETECT_TEST_DIR/z"), Some(PathBuf::from("/tmp/sw/z")));
+        assert_eq!(
+            expand_path("$SW_DETECT_TEST_DIR/z"),
+            Some(PathBuf::from("/tmp/sw/z"))
+        );
         assert_eq!(expand_path("$SW_DETECT_NO_SUCH_VAR/z"), None);
         assert_eq!(expand_path("   "), None);
     }
@@ -500,7 +512,11 @@ mod tests {
     fn catalog_entries_are_well_formed() {
         for spec in REQUIREMENTS {
             assert!(!spec.id.is_empty() && !spec.name.is_empty(), "{}", spec.id);
-            assert!(!spec.why.is_empty(), "{} 는 왜 필요한지 적혀 있어야 한다", spec.id);
+            assert!(
+                !spec.why.is_empty(),
+                "{} 는 왜 필요한지 적혀 있어야 한다",
+                spec.id
+            );
             assert!(
                 !spec.bins.is_empty() || !spec.paths.is_empty(),
                 "{} 를 찾을 방법이 없다",
@@ -519,7 +535,10 @@ mod tests {
         let rows = check_requirements().await;
         assert_eq!(rows.len(), REQUIREMENTS.len());
         for (row, spec) in rows.iter().zip(REQUIREMENTS) {
-            assert_eq!(row.id, spec.id, "카탈로그 순서가 어긋나면 버전이 엉뚱한 줄에 붙는다");
+            assert_eq!(
+                row.id, spec.id,
+                "카탈로그 순서가 어긋나면 버전이 엉뚱한 줄에 붙는다"
+            );
         }
         // git 은 이 저장소를 빌드하는 환경이면 반드시 있다
         let git = rows.iter().find(|r| r.id == "git").unwrap();
@@ -532,5 +551,3 @@ mod tests {
         }
     }
 }
-
-

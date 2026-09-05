@@ -46,7 +46,10 @@ pub enum JobStatus {
 impl JobStatus {
     #[allow(dead_code)] // test seam
     pub fn finished(self) -> bool {
-        matches!(self, Self::Success | Self::Failed | Self::Cancelled | Self::Interrupted)
+        matches!(
+            self,
+            Self::Success | Self::Failed | Self::Cancelled | Self::Interrupted
+        )
     }
 }
 
@@ -119,8 +122,27 @@ pub struct JobRequest {
     /// kind = "task" 일 때: 호스트 내장 작업 정의의 ID
     #[serde(default)]
     pub task_id: Option<String>,
+    #[serde(default)]
+    pub collab: Option<CollabLaneSpec>,
 }
 
+/// kind = "collab" 일 때: 세션 레인 실행에 필요한 정보. prompt는 호스트가 이 정보로
+/// 직접 조립하므로 잡 API에 임의 프롬프트 주입 경로가 생기지 않는다.
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CollabLaneSpec {
+    pub session_id: String,
+    pub run_id: String,
+    pub goal: String,
+    /// 전용 worktree 절대경로. 에이전트는 여기서만 작업한다.
+    pub worktree: String,
+    pub branch: String,
+    pub base_sha: String,
+    /// 레인이 수행할 작업 설명(사람이 세션 생성 때 쓴 lane task).
+    pub task_prompt: String,
+    /// 후보 제출 파일을 쓸 인박스 경로.
+    pub inbox_path: String,
+}
 
 #[derive(Clone, Debug)]
 pub struct SpawnOpts {
@@ -185,8 +207,10 @@ pub fn map_assistant_content(content: &[Value]) -> Vec<Value> {
             }
             "tool_use" => {
                 let name = item.get("name").and_then(Value::as_str).unwrap_or("");
-                let summary =
-                    item.get("input").and_then(|i| summarize_tool(name, i)).unwrap_or_default();
+                let summary = item
+                    .get("input")
+                    .and_then(|i| summarize_tool(name, i))
+                    .unwrap_or_default();
                 entries.push(json!({
                     "tsMs": ts, "kind": "tool", "tool": name, "summary": summary
                 }));
@@ -216,7 +240,11 @@ pub fn map_stream_line(line: &str) -> Option<Value> {
         "assistant" => {
             let content = v.pointer("/message/content")?.as_array()?;
             let entries = map_assistant_content(content);
-            if entries.is_empty() { None } else { Some(Value::Array(entries)) }
+            if entries.is_empty() {
+                None
+            } else {
+                Some(Value::Array(entries))
+            }
         }
         "result" => {
             let is_error = v.get("is_error").and_then(Value::as_bool).unwrap_or(false);
@@ -277,7 +305,11 @@ fn build_spawn_command(bin: &str, args: &[&str], cwd: &str) -> tokio::process::C
 /// herdr agent names must match `[a-z][a-z0-9_-]{0,31}` and be unique among live
 /// agents; the job's uuid prefix satisfies both.
 fn agent_name_for(job_id: &str) -> String {
-    let short: String = job_id.chars().filter(|c| c.is_ascii_alphanumeric()).take(8).collect();
+    let short: String = job_id
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(8)
+        .collect();
     format!("sw-{}", short.to_ascii_lowercase())
 }
 
@@ -335,7 +367,10 @@ fn build_job(
     };
     match req.kind.as_str() {
         "design" | "implement" => {
-            let project_name = req.project.clone().unwrap_or_else(|| view.default_project.clone());
+            let project_name = req
+                .project
+                .clone()
+                .unwrap_or_else(|| view.default_project.clone());
             if project_name.is_empty() {
                 return Err("실행할 사업이 지정되지 않았습니다".into());
             }
@@ -349,9 +384,15 @@ fn build_job(
                 .and_then(|p| (!p.path.is_empty()).then(|| p.path.clone()))
                 .unwrap_or_else(|| view.vault_path.clone());
             if cwd.is_empty() {
-                return Err(format!("{project_name} 사업에 작업 경로 또는 볼트 경로가 없습니다"));
+                return Err(format!(
+                    "{project_name} 사업에 작업 경로 또는 볼트 경로가 없습니다"
+                ));
             }
-            let verb = if req.kind == "design" { "설계" } else { "실행" };
+            let verb = if req.kind == "design" {
+                "설계"
+            } else {
+                "실행"
+            };
             Ok(Job {
                 label: format!("{verb} {} ({project_name})", id_label(&req.kind, &req.ids)),
                 prompt: format!("/sawhorse:issues {verb}{}", list_suffix(&req.ids)),
@@ -449,15 +490,19 @@ fn build_job(
             let pack_id = req.pack_id.clone().ok_or("팩이 지정되지 않았습니다")?;
             let action_id = req.action_id.clone().ok_or("액션이 지정되지 않았습니다")?;
             let reg = crate::packs::load_registry(&view.packs.enabled);
-            let (pack, action) = reg
-                .action(&pack_id, &action_id)
-                .ok_or_else(|| format!("활성 팩에서 액션을 찾지 못했습니다: {pack_id}.{action_id}"))?;
+            let (pack, action) = reg.action(&pack_id, &action_id).ok_or_else(|| {
+                format!("활성 팩에서 액션을 찾지 못했습니다: {pack_id}.{action_id}")
+            })?;
             let mut params = req.params.clone();
             if let Some(ids) = &req.ids {
-                params.entry("ids".to_string()).or_insert_with(|| json!(ids));
+                params
+                    .entry("ids".to_string())
+                    .or_insert_with(|| json!(ids));
             }
             if let Some(project) = &req.project {
-                params.entry("project".to_string()).or_insert_with(|| json!(project));
+                params
+                    .entry("project".to_string())
+                    .or_insert_with(|| json!(project));
             }
             for p in action.params.iter().filter(|p| p.required) {
                 let given = params.get(&p.key).is_some_and(|v| match v {
@@ -474,9 +519,62 @@ fn build_job(
             let cwd = crate::packs::resolve_cwd(action, &params, view)?;
             Ok(Job {
                 label: format!("{} ({})", action.label, pack.manifest.name),
-                project: params.get("project").and_then(Value::as_str).map(str::to_string),
+                project: params
+                    .get("project")
+                    .and_then(Value::as_str)
+                    .map(str::to_string),
                 prompt,
                 cwd,
+                ..base
+            })
+        }
+        // 협업 세션 레인. worktree에서 작업하고 후보 인박스 파일로만 제출한다.
+        // 승인·병합은 대시보드가 하므로 에이전트에게 병합 권한을 알려주지 않는다.
+        "collab" => {
+            let lane = req.collab.clone().ok_or("collab 레인 정보가 없습니다")?;
+            if lane.worktree.is_empty() {
+                return Err("collab 레인에 worktree가 지정되지 않았습니다".into());
+            }
+            let prompt = format!(
+                "협업 세션 {session}의 레인 작업을 수행한다.\n\
+                 \n\
+                 세션 목표: {goal}\n\
+                 레인 작업: {task}\n\
+                 \n\
+                 규칙:\n\
+                 - 작업은 반드시 지정된 worktree({worktree})의 branch {branch}에서만 한다. base는 {base}다.\n\
+                 - lint·typecheck·단위 테스트를 worktree에서 실행하고 결과를 후보에 첨부한다.\n\
+                 - 모든 변경을 커밋한 뒤 worktree를 clean으로 유지한다.\n\
+                 - 완료하면 아래 JSON을 파일 하나로 써서 제출한다. 다른 제출 수단은 없다.\n\
+                   경로: {inbox}<run_id>.json\n\
+                   {{\n\
+                     \"op\": \"propose\",\n\
+                     \"sessionId\": \"{session}\",\n\
+                     \"taskId\": \"{run}\",\n\
+                     \"agent\": \"claude-code\",\n\
+                     \"worktree\": \"{worktree}\",\n\
+                     \"baseSha\": \"<작업 시작 시 base SHA>\",\n\
+                     \"sourceSha\": \"<최종 커밋 SHA>\",\n\
+                     \"summary\": \"변경 요약\",\n\
+                     \"checks\": [{{ \"name\": \"typecheck\", \"status\": \"passed\" }}]\n\
+                   }}\n\
+                 - 대표 체크아웃을 건드리지 않는다. 병합은 사람이 검토·승인한 뒤 앱이 수행한다.",
+                session = lane.session_id,
+                goal = lane.goal,
+                task = lane.task_prompt,
+                worktree = lane.worktree,
+                branch = lane.branch,
+                base = lane.base_sha,
+                inbox = lane.inbox_path,
+                run = lane.run_id,
+            );
+            Ok(Job {
+                label: format!(
+                    "세션 레인 {}",
+                    lane.task_prompt.chars().take(18).collect::<String>()
+                ),
+                prompt,
+                cwd: lane.worktree.clone(),
                 ..base
             })
         }
@@ -521,7 +619,8 @@ impl JobManager {
             // wants, then waits for a slot that runner can use.
             while let Some(mut job) = rx.recv().await {
                 let runner = mgr2.decide_runner(&mut job).await;
-                mgr2.await_slot(&job.id, runner, job.herdr_cfg.max_parallel).await;
+                mgr2.await_slot(&job.id, runner, job.herdr_cfg.max_parallel)
+                    .await;
                 let mgr3 = mgr2.clone();
                 tauri::async_runtime::spawn(async move {
                     mgr3.run_one(&mut job, runner).await;
@@ -562,8 +661,7 @@ impl JobManager {
         loop {
             {
                 let mut running = self.running.lock();
-                let has_headless =
-                    running.values().any(|c| c.runner() == JobRunner::Headless);
+                let has_headless = running.values().any(|c| c.runner() == JobRunner::Headless);
                 let admitted = match runner {
                     JobRunner::Headless => running.is_empty(),
                     JobRunner::Herdr => {
@@ -577,8 +675,8 @@ impl JobManager {
             }
             // Poll alongside the notify so a wake-up that lands between the check
             // and the await cannot strand the queue.
-            let _ = tokio::time::timeout(Duration::from_millis(250), self.slot_free.notified())
-                .await;
+            let _ =
+                tokio::time::timeout(Duration::from_millis(250), self.slot_free.notified()).await;
         }
     }
 
@@ -599,8 +697,10 @@ impl JobManager {
     /// Append one operational note to the job's log file (same file the stream /
     /// transcript lines are mirrored to, so the 로그 dialog shows it in order).
     fn log_line(&self, job: &Job, text: &str) {
-        if let Ok(mut f) =
-            std::fs::OpenOptions::new().create(true).append(true).open(self.state.log_path(&job.id))
+        if let Ok(mut f) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(self.state.log_path(&job.id))
         {
             let _ = writeln!(f, "# {text}");
         }
@@ -621,7 +721,9 @@ impl JobManager {
     ) -> Result<Job, String> {
         let job = build_job(req, &opts, view, &self.state)?;
         self.state.record_job(&job);
-        self.tx.send(job.clone()).map_err(|_| "작업 큐가 닫혔습니다".to_string())?;
+        self.tx
+            .send(job.clone())
+            .map_err(|_| "작업 큐가 닫혔습니다".to_string())?;
         Ok(job)
     }
 
@@ -663,7 +765,9 @@ impl JobManager {
             let _ = c.kill().await;
         }
         if let Some(c) = child {
-            self.running.lock().insert(id.to_string(), RunCtl::Headless(c));
+            self.running
+                .lock()
+                .insert(id.to_string(), RunCtl::Headless(c));
         }
         Ok(())
     }
@@ -674,7 +778,9 @@ impl JobManager {
     fn herdr_cfg_for(&self, id: &str) -> HerdrCfg {
         let snapshot = {
             let jobs = self.state.jobs.lock();
-            jobs.iter().find(|j| j.id == id).map(|j| j.herdr_cfg.clone())
+            jobs.iter()
+                .find(|j| j.id == id)
+                .map(|j| j.herdr_cfg.clone())
         };
         match snapshot {
             Some(c) if c != HerdrCfg::default() => c,
@@ -700,8 +806,14 @@ impl JobManager {
             }
         }
         // the agent may already be gone; the tab it ran in usually is not
-        let tab = job.herdr_tab_id.as_deref().ok_or_else(|| "herdr 세션 정보가 없습니다".to_string())?;
-        h.focus_tab(tab).await.map(|_| ()).map_err(|e| format!("herdr 포커스 실패: {e}"))
+        let tab = job
+            .herdr_tab_id
+            .as_deref()
+            .ok_or_else(|| "herdr 세션 정보가 없습니다".to_string())?;
+        h.focus_tab(tab)
+            .await
+            .map(|_| ())
+            .map_err(|e| format!("herdr 포커스 실패: {e}"))
     }
 
     async fn run_one(&self, job: &mut Job, runner: JobRunner) {
@@ -709,7 +821,10 @@ impl JobManager {
         job.status = JobStatus::Running;
         job.started_at_ms = Some(now_ms());
         self.state.record_job(job);
-        (self.emit)("job-finished", &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}));
+        (self.emit)(
+            "job-finished",
+            &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}),
+        );
         match runner {
             JobRunner::Headless => self.run_headless(job).await,
             JobRunner::Herdr => self.run_herdr(job).await,
@@ -737,7 +852,13 @@ impl JobManager {
         {
             Ok(c) => c,
             Err(e) => {
-                self.finish(job, JobStatus::Failed, None, Some(format!("claude 실행 실패: {e}")), None);
+                self.finish(
+                    job,
+                    JobStatus::Failed,
+                    None,
+                    Some(format!("claude 실행 실패: {e}")),
+                    None,
+                );
                 return;
             }
         };
@@ -751,8 +872,16 @@ impl JobManager {
         let mut report: Option<String> = None;
         let mut result_is_error = false;
 
-        let mut log = std::fs::OpenOptions::new().create(true).append(true).open(&log_path).ok();
-        let mut log_err = std::fs::OpenOptions::new().create(true).append(true).open(&log_path_err).ok();
+        let mut log = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path)
+            .ok();
+        let mut log_err = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&log_path_err)
+            .ok();
 
         let err_task = stderr.map(|mut st| {
             tokio::spawn(async move {
@@ -779,11 +908,17 @@ impl JobManager {
                             if let Some(arr) = entries.as_array() {
                                 for entry in arr {
                                     track_entry(entry, &mut report, &mut result_is_error);
-                                    (self.emit)("job-progress", &json!({"jobId": job.id, "entry": entry}));
+                                    (self.emit)(
+                                        "job-progress",
+                                        &json!({"jobId": job.id, "entry": entry}),
+                                    );
                                 }
                             } else {
                                 track_entry(&entries, &mut report, &mut result_is_error);
-                                (self.emit)("job-progress", &json!({"jobId": job.id, "entry": entries}));
+                                (self.emit)(
+                                    "job-progress",
+                                    &json!({"jobId": job.id, "entry": entries}),
+                                );
                             }
                         }
                     }
@@ -807,12 +942,32 @@ impl JobManager {
         if cancelled {
             self.finish(job, JobStatus::Cancelled, exit_code, None, report);
         } else if result_is_error {
-            self.finish(job, JobStatus::Failed, exit_code, Some("claude가 오류로 종료했습니다".into()), report);
+            self.finish(
+                job,
+                JobStatus::Failed,
+                exit_code,
+                Some("claude가 오류로 종료했습니다".into()),
+                report,
+            );
         } else {
             match exit {
-                Some(s) if s.success() => self.finish(job, JobStatus::Success, exit_code, None, report),
-                Some(_) => self.finish(job, JobStatus::Failed, exit_code, Some("비정상 종료".into()), report),
-                None => self.finish(job, JobStatus::Failed, None, Some("프로세스 상태를 알 수 없습니다".into()), report),
+                Some(s) if s.success() => {
+                    self.finish(job, JobStatus::Success, exit_code, None, report)
+                }
+                Some(_) => self.finish(
+                    job,
+                    JobStatus::Failed,
+                    exit_code,
+                    Some("비정상 종료".into()),
+                    report,
+                ),
+                None => self.finish(
+                    job,
+                    JobStatus::Failed,
+                    None,
+                    Some("프로세스 상태를 알 수 없습니다".into()),
+                    report,
+                ),
             }
         }
     }
@@ -853,14 +1008,26 @@ impl JobManager {
         let workspace = match self.ensure_workspace(&h).await {
             Ok(w) => w,
             Err(e) => {
-                self.finish(job, JobStatus::Failed, None, Some(format!("herdr 워크스페이스 준비 실패: {e}")), None);
+                self.finish(
+                    job,
+                    JobStatus::Failed,
+                    None,
+                    Some(format!("herdr 워크스페이스 준비 실패: {e}")),
+                    None,
+                );
                 return;
             }
         };
         let tab = match h.create_tab(&workspace, &job.label, &job.cwd).await {
             Ok(t) => t,
             Err(e) => {
-                self.finish(job, JobStatus::Failed, None, Some(format!("herdr 탭 생성 실패: {e}")), None);
+                self.finish(
+                    job,
+                    JobStatus::Failed,
+                    None,
+                    Some(format!("herdr 탭 생성 실패: {e}")),
+                    None,
+                );
                 return;
             }
         };
@@ -869,9 +1036,17 @@ impl JobManager {
         job.herdr_tab_id = Some(tab.tab_id.clone());
         job.herdr_pane_id = Some(tab.pane_id.clone());
         job.herdr_agent = Some(name.clone());
-        self.set_ctl(&job.id, RunCtl::Herdr { agent: name.clone() });
+        self.set_ctl(
+            &job.id,
+            RunCtl::Herdr {
+                agent: name.clone(),
+            },
+        );
         self.state.record_job(job);
-        (self.emit)("job-finished", &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}));
+        (self.emit)(
+            "job-finished",
+            &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}),
+        );
 
         let extra = vec![
             "--session-id".to_string(),
@@ -881,7 +1056,10 @@ impl JobManager {
             job.prompt.clone(),
         ];
         let start_ms = (job.herdr_cfg.start_timeout_sec as u64) * 1000;
-        let target = match h.agent_start(&name, "claude", &tab.pane_id, start_ms, &extra).await {
+        let target = match h
+            .agent_start(&name, "claude", &tab.pane_id, start_ms, &extra)
+            .await
+        {
             Ok(_) => name.clone(),
             Err(e) => {
                 // `agent start` only returns once herdr calls the agent ready for
@@ -889,12 +1067,23 @@ impl JobManager {
                 // trip that. Trust the pane over the error.
                 match h.agent_get(&tab.pane_id).await {
                     Ok(a) if a.agent.is_some() => {
-                        self.log_line(job, &format!("herdr agent start 경고: {e} — 페인에서 에이전트를 확인했습니다"));
+                        self.log_line(
+                            job,
+                            &format!(
+                                "herdr agent start 경고: {e} — 페인에서 에이전트를 확인했습니다"
+                            ),
+                        );
                         tab.pane_id.clone()
                     }
                     _ => {
                         self.herdr_cleanup(job, &h, JobStatus::Failed).await;
-                        self.finish(job, JobStatus::Failed, None, Some(format!("herdr 세션 시작 실패: {e}")), None);
+                        self.finish(
+                            job,
+                            JobStatus::Failed,
+                            None,
+                            Some(format!("herdr 세션 시작 실패: {e}")),
+                            None,
+                        );
                         return;
                     }
                 }
@@ -902,10 +1091,24 @@ impl JobManager {
         };
         if target != name {
             job.herdr_agent = Some(target.clone());
-            self.set_ctl(&job.id, RunCtl::Herdr { agent: target.clone() });
+            self.set_ctl(
+                &job.id,
+                RunCtl::Herdr {
+                    agent: target.clone(),
+                },
+            );
         }
-        self.log_line(job, &format!("herdr {} / {} / session {session_id}", tab.tab_id, tab.pane_id));
-        self.emit_entry(job, &json!({"tsMs": now_ms(), "kind": "init", "text": "herdr 세션 시작"}));
+        self.log_line(
+            job,
+            &format!(
+                "herdr {} / {} / session {session_id}",
+                tab.tab_id, tab.pane_id
+            ),
+        );
+        self.emit_entry(
+            job,
+            &json!({"tsMs": now_ms(), "kind": "init", "text": "herdr 세션 시작"}),
+        );
 
         self.watch_herdr(job, &h, &target, &session_id, true).await;
     }
@@ -969,12 +1172,17 @@ impl JobManager {
                     if let Some(f) = log.as_mut() {
                         let _ = writeln!(f, "{raw}");
                     }
-                    let Some(entries) = transcript::map_transcript_line(&raw) else { continue };
+                    let Some(entries) = transcript::map_transcript_line(&raw) else {
+                        continue;
+                    };
                     for entry in entries.as_array().into_iter().flatten() {
                         saw_transcript = true;
                         saw_activity = true;
                         if entry.get("kind").and_then(Value::as_str) == Some("text") {
-                            report = entry.get("text").and_then(Value::as_str).map(str::to_string);
+                            report = entry
+                                .get("text")
+                                .and_then(Value::as_str)
+                                .map(str::to_string);
                         }
                         self.emit_entry(job, entry);
                     }
@@ -990,14 +1198,24 @@ impl JobManager {
                     if job.agent_status.as_deref() != Some(info.status.as_str()) {
                         job.agent_status = Some(info.status.clone());
                         self.state.record_job(job);
-                        (self.emit)("job-finished", &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}));
+                        (self.emit)(
+                            "job-finished",
+                            &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}),
+                        );
                         if info.blocked() {
                             self.log_line(job, "herdr에서 승인/입력을 기다리는 중입니다");
-                            h.notify("승인 대기", &format!("{} — herdr에서 확인하세요", job.label)).await;
+                            h.notify(
+                                "승인 대기",
+                                &format!("{} — herdr에서 확인하세요", job.label),
+                            )
+                            .await;
                         }
                     }
-                    settled_ticks =
-                        if info.settled() && saw_activity { settled_ticks + 1 } else { 0 };
+                    settled_ticks = if info.settled() && saw_activity {
+                        settled_ticks + 1
+                    } else {
+                        0
+                    };
                     if settled_ticks >= SETTLE_TICKS {
                         self.finish_herdr(job, h, saw_transcript, report).await;
                         return;
@@ -1011,7 +1229,13 @@ impl JobManager {
                         if saw_activity {
                             self.finish_herdr(job, h, saw_transcript, report).await;
                         } else {
-                            self.finish(job, JobStatus::Failed, None, Some("herdr 세션이 아무 것도 하지 못하고 사라졌습니다".into()), None);
+                            self.finish(
+                                job,
+                                JobStatus::Failed,
+                                None,
+                                Some("herdr 세션이 아무 것도 하지 못하고 사라졌습니다".into()),
+                                None,
+                            );
                         }
                         return;
                     }
@@ -1021,13 +1245,28 @@ impl JobManager {
 
             if fresh && !saw_activity && started.elapsed() > start_grace {
                 self.herdr_cleanup(job, h, JobStatus::Failed).await;
-                self.finish(job, JobStatus::Failed, None, Some("herdr 세션이 시간 안에 응답하지 않았습니다".into()), None);
+                self.finish(
+                    job,
+                    JobStatus::Failed,
+                    None,
+                    Some("herdr 세션이 시간 안에 응답하지 않았습니다".into()),
+                    None,
+                );
                 return;
             }
             if let Some(d) = job_deadline {
                 if started.elapsed() > d {
                     self.herdr_cleanup(job, h, JobStatus::Failed).await;
-                    self.finish(job, JobStatus::Failed, None, Some(format!("herdr 세션이 {}분을 넘겨 중단했습니다", job.herdr_cfg.job_timeout_min)), report);
+                    self.finish(
+                        job,
+                        JobStatus::Failed,
+                        None,
+                        Some(format!(
+                            "herdr 세션이 {}분을 넘겨 중단했습니다",
+                            job.herdr_cfg.job_timeout_min
+                        )),
+                        report,
+                    );
                     return;
                 }
             }
@@ -1059,7 +1298,9 @@ impl JobManager {
     /// Close the job's tab according to the cleanup policy. A failed or cancelled
     /// session is worth keeping around by default — that is where the evidence is.
     async fn herdr_cleanup(&self, job: &Job, h: &Herdr, status: JobStatus) {
-        let Some(tab) = job.herdr_tab_id.as_deref() else { return };
+        let Some(tab) = job.herdr_tab_id.as_deref() else {
+            return;
+        };
         let close = match job.herdr_cfg.cleanup.as_str() {
             "closeAlways" => true,
             "keep" => false,
@@ -1067,7 +1308,11 @@ impl JobManager {
         };
         if !close {
             if status != JobStatus::Success {
-                h.notify("작업 실패", &format!("{} — herdr 탭에 세션이 남아 있습니다", job.label)).await;
+                h.notify(
+                    "작업 실패",
+                    &format!("{} — herdr 탭에 세션이 남아 있습니다", job.label),
+                )
+                .await;
             }
             return;
         }
@@ -1116,11 +1361,17 @@ impl JobManager {
                 continue;
             }
             self.log_line(&job, "herdr 세션이 살아 있어 감시를 재개합니다");
-            self.set_ctl(&job.id, RunCtl::Herdr { agent: target.clone() });
+            self.set_ctl(
+                &job.id,
+                RunCtl::Herdr {
+                    agent: target.clone(),
+                },
+            );
             let mgr = self.clone();
             tauri::async_runtime::spawn(async move {
                 let h = Herdr::new(&job.herdr_cfg);
-                mgr.watch_herdr(&mut job, &h, &target, &session_id, false).await;
+                mgr.watch_herdr(&mut job, &h, &target, &session_id, false)
+                    .await;
                 mgr.release(&job.id);
             });
         }
@@ -1131,7 +1382,10 @@ impl JobManager {
         job.error = Some(reason.to_string());
         job.finished_at_ms = Some(now_ms());
         self.state.record_job(job);
-        (self.emit)("job-finished", &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}));
+        (self.emit)(
+            "job-finished",
+            &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}),
+        );
     }
 
     fn finish(
@@ -1163,14 +1417,23 @@ impl JobManager {
             }
         }
         self.running.lock().remove(&job.id);
-        (self.emit)("job-finished", &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}));
+        (self.emit)(
+            "job-finished",
+            &json!({"job": serde_json::to_value(&*job).unwrap_or(Value::Null)}),
+        );
     }
 }
 
 fn track_entry(entry: &Value, report: &mut Option<String>, result_is_error: &mut bool) {
     if entry.get("kind").and_then(Value::as_str) == Some("result") {
-        *result_is_error = entry.get("isError").and_then(Value::as_bool).unwrap_or(false);
-        *report = entry.get("text").and_then(Value::as_str).map(str::to_string);
+        *result_is_error = entry
+            .get("isError")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+        *report = entry
+            .get("text")
+            .and_then(Value::as_str)
+            .map(str::to_string);
     }
 }
 
@@ -1212,8 +1475,17 @@ mod tests {
             ev2.lock().push((name.to_string(), payload.to_string()));
         });
         let mgr = JobManager::start(state.clone(), emit);
-        let view = config::view(&serde_json::json!({"vaultPath": dir.to_string_lossy()}), true);
-        TestRig { mgr, state, events, dir, view }
+        let view = config::view(
+            &serde_json::json!({"vaultPath": dir.to_string_lossy()}),
+            true,
+        );
+        TestRig {
+            mgr,
+            state,
+            events,
+            dir,
+            view,
+        }
     }
 
     /// Headless spawn options — the default for tests that do not exercise herdr.
@@ -1222,7 +1494,10 @@ mod tests {
             claude_bin: bin,
             permission_mode: "bypassPermissions".into(),
             vault_path: vault.to_string_lossy().to_string(),
-            herdr: HerdrCfg { mode: "headless".into(), ..HerdrCfg::default() },
+            herdr: HerdrCfg {
+                mode: "headless".into(),
+                ..HerdrCfg::default()
+            },
         }
     }
 
@@ -1259,9 +1534,14 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             routine: Some("morning".into()),
             ..Default::default()
         };
-        let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
+        let job = rig
+            .mgr
+            .enqueue_with(req, opts(bin, &rig.dir), &rig.view)
+            .unwrap();
         assert_eq!(job.prompt, "/sawhorse:morning");
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Success, "error: {:?}", done.error);
         assert_eq!(done.exit_code, Some(0));
 
@@ -1271,29 +1551,48 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             .filter(|(n, _)| n == "job-progress")
             .map(|(_, p)| p.as_str())
             .collect();
-        assert!(progress.len() >= 4, "expected init/text/tool/result, got {progress:?}");
+        assert!(
+            progress.len() >= 4,
+            "expected init/text/tool/result, got {progress:?}"
+        );
         let joined = progress.join(" ");
         let init_pos = joined.find("\"kind\":\"init\"").unwrap();
         let text_pos = joined.find("\"kind\":\"text\"").unwrap();
         let tool_pos = joined.find("\"kind\":\"tool\"").unwrap();
         let result_pos = joined.find("\"kind\":\"result\"").unwrap();
         assert!(init_pos < text_pos && text_pos < tool_pos && tool_pos < result_pos);
-        assert!(joined.contains("git status"), "tool summary missing: {joined}");
+        assert!(
+            joined.contains("git status"),
+            "tool summary missing: {joined}"
+        );
 
         let report = std::fs::read_to_string(rig.state.report_path(&job.id)).unwrap();
         assert!(report.contains("결과 보고"));
         let log = std::fs::read_to_string(rig.state.log_path(&job.id)).unwrap();
         assert!(log.contains("\"subtype\":\"init\""));
-        assert!(events.iter().any(|(n, p)| n == "job-finished" && p.contains(&job.id)));
+        assert!(events
+            .iter()
+            .any(|(n, p)| n == "job-finished" && p.contains(&job.id)));
     }
 
     #[tokio::test]
     async fn failure_without_result_marks_failed() {
         let rig = rig("fail");
         let bin = write_script(&rig.dir, "echo 'boom' >&2\nexit 1\n");
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("lunch".into()), ..Default::default() };
-        let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let req = JobRequest {
+            kind: "routine".into(),
+            project: None,
+            ids: None,
+            routine: Some("lunch".into()),
+            ..Default::default()
+        };
+        let job = rig
+            .mgr
+            .enqueue_with(req, opts(bin, &rig.dir), &rig.view)
+            .unwrap();
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Failed);
         assert_eq!(done.exit_code, Some(1));
         let log = std::fs::read_to_string(rig.state.log_path(&job.id)).unwrap();
@@ -1307,31 +1606,57 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             &rig.dir,
             "echo '{\"type\":\"system\",\"subtype\":\"init\"}'\nsleep 30\n",
         );
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("evening".into()), ..Default::default() };
-        let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
+        let req = JobRequest {
+            kind: "routine".into(),
+            project: None,
+            ids: None,
+            routine: Some("evening".into()),
+            ..Default::default()
+        };
+        let job = rig
+            .mgr
+            .enqueue_with(req, opts(bin, &rig.dir), &rig.view)
+            .unwrap();
         for _ in 0..100 {
             {
                 let jobs = rig.state.jobs.lock();
-                if jobs.iter().any(|j| j.id == job.id && j.status == JobStatus::Running) {
+                if jobs
+                    .iter()
+                    .any(|j| j.id == job.id && j.status == JobStatus::Running)
+                {
                     break;
                 }
             }
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
         rig.mgr.cancel(&job.id).await.unwrap();
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Cancelled);
     }
 
     #[tokio::test]
     async fn missing_binary_fails_fast() {
         let rig = rig("nobin");
-        let req = JobRequest { kind: "routine".into(), project: None, ids: None, routine: Some("morning".into()), ..Default::default() };
+        let req = JobRequest {
+            kind: "routine".into(),
+            project: None,
+            ids: None,
+            routine: Some("morning".into()),
+            ..Default::default()
+        };
         let job = rig
             .mgr
-            .enqueue_with(req, opts("/nonexistent/claude-bin".into(), &rig.dir), &rig.view)
+            .enqueue_with(
+                req,
+                opts("/nonexistent/claude-bin".into(), &rig.dir),
+                &rig.view,
+            )
             .unwrap();
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Failed);
         assert!(done.error.unwrap_or_default().contains("claude 실행 실패"));
     }
@@ -1354,19 +1679,44 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             true,
         );
         let job = build_job(
-            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None, ..Default::default() },
+            JobRequest {
+                kind: "excel".into(),
+                project: None,
+                ids: None,
+                routine: None,
+                ..Default::default()
+            },
             &SpawnOpts::from(&view),
             &view,
             &state,
         )
         .unwrap();
-        assert!(job.prompt.contains(&format!("--out \"{}\"", out_dir.join(EXCEL_FILENAME).display())));
-        assert!(job.prompt.contains("--prev"), "prev must be included: {}", job.prompt);
-        assert_eq!(job.excel_out.as_deref(), Some(out_dir.join(EXCEL_FILENAME).to_str().unwrap()));
+        assert!(job.prompt.contains(&format!(
+            "--out \"{}\"",
+            out_dir.join(EXCEL_FILENAME).display()
+        )));
+        assert!(
+            job.prompt.contains("--prev"),
+            "prev must be included: {}",
+            job.prompt
+        );
+        assert_eq!(
+            job.excel_out.as_deref(),
+            Some(out_dir.join(EXCEL_FILENAME).to_str().unwrap())
+        );
 
-        let view2 = config::view(&serde_json::json!({"vaultPath": rig_dir.to_string_lossy()}), true);
+        let view2 = config::view(
+            &serde_json::json!({"vaultPath": rig_dir.to_string_lossy()}),
+            true,
+        );
         let err = build_job(
-            JobRequest { kind: "excel".into(), project: None, ids: None, routine: None, ..Default::default() },
+            JobRequest {
+                kind: "excel".into(),
+                project: None,
+                ids: None,
+                routine: None,
+                ..Default::default()
+            },
             &SpawnOpts::from(&view2),
             &view2,
             &state,
@@ -1394,27 +1744,44 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
                 routine: None,
                 ..Default::default()
             },
-            &opts, &view, &state,
+            &opts,
+            &view,
+            &state,
         )
         .unwrap();
         assert_eq!(j.prompt, "/sawhorse:issues 설계 FDR-001 FDR-002");
         assert_eq!(j.cwd, "/w");
         assert_eq!(j.label, "설계 FDR-001 외 1건 (FDR)");
         let j2 = build_job(
-            JobRequest { kind: "implement".into(), project: None, ids: None, routine: None, ..Default::default() },
-            &opts, &view, &state,
+            JobRequest {
+                kind: "implement".into(),
+                project: None,
+                ids: None,
+                routine: None,
+                ..Default::default()
+            },
+            &opts,
+            &view,
+            &state,
         )
         .unwrap();
         assert_eq!(j2.prompt, "/sawhorse:issues 실행");
         assert_eq!(j2.label, "실행 승인된 전체 (FDR)");
         let generic = build_job(
-            JobRequest { kind: "design".into(), project: Some("없는사업".into()), ids: None, routine: None, ..Default::default() },
-            &opts, &view, &state,
+            JobRequest {
+                kind: "design".into(),
+                project: Some("없는사업".into()),
+                ids: None,
+                routine: None,
+                ..Default::default()
+            },
+            &opts,
+            &view,
+            &state,
         )
         .unwrap();
         assert_eq!(generic.cwd, "/v");
     }
-
 
     /// 팩 액션 잡: 동봉한 SI 팩의 선언이 그대로 프롬프트·cwd·라벨이 된다.
     ///
@@ -1445,7 +1812,9 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
                 action_id: Some("morning".into()),
                 ..Default::default()
             },
-            &opts, &view, &state,
+            &opts,
+            &view,
+            &state,
         )
         .unwrap();
         assert_eq!(j.prompt, "/sawhorse:morning");
@@ -1461,7 +1830,9 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
                 ids: Some(vec!["FDR-001".into()]),
                 ..Default::default()
             },
-            &opts, &view, &state,
+            &opts,
+            &view,
+            &state,
         )
         .unwrap();
         assert_eq!(d.prompt, "/sawhorse:issues 설계 FDR-001");
@@ -1476,7 +1847,9 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
                     action_id: Some(action.into()),
                     ..Default::default()
                 },
-                &opts, &view, &state,
+                &opts,
+                &view,
+                &state,
             )
             .unwrap_err();
             assert!(err.contains("액션을 찾지 못했습니다"), "{err}");
@@ -1490,7 +1863,9 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
                 action_id: Some("capture".into()),
                 ..Default::default()
             },
-            &opts, &view, &state,
+            &opts,
+            &view,
+            &state,
         )
         .unwrap_err();
         assert!(err.contains("값이 필요합니다"), "{err}");
@@ -1503,8 +1878,16 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         let mut opts = opts("/bin/claude-fake".into(), &rig.dir);
         opts.vault_path = rig.dir.join("vault").to_string_lossy().to_string();
         let job = build_job(
-            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None, ..Default::default() },
-            &opts, &view, &rig.state,
+            JobRequest {
+                kind: "promote".into(),
+                project: None,
+                ids: None,
+                routine: None,
+                ..Default::default()
+            },
+            &opts,
+            &view,
+            &rig.state,
         )
         .unwrap();
         assert_eq!(job.label, "인박스 승격 검토");
@@ -1514,8 +1897,16 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         let mut empty_vault = opts.clone();
         empty_vault.vault_path = String::new();
         let err = build_job(
-            JobRequest { kind: "promote".into(), project: None, ids: None, routine: None, ..Default::default() },
-            &empty_vault, &view, &rig.state,
+            JobRequest {
+                kind: "promote".into(),
+                project: None,
+                ids: None,
+                routine: None,
+                ..Default::default()
+            },
+            &empty_vault,
+            &view,
+            &rig.state,
         )
         .unwrap_err();
         assert!(err.contains("볼트 경로"));
@@ -1603,16 +1994,28 @@ esac
         let bin = write_fake_herdr(&rig.dir, &rig.dir.join("projects"), "idle,idle,idle,idle");
         let job = rig
             .mgr
-            .enqueue_with(routine_req("morning"), herdr_opts("claude", &rig.dir, bin), &rig.view)
+            .enqueue_with(
+                routine_req("morning"),
+                herdr_opts("claude", &rig.dir, bin),
+                &rig.view,
+            )
             .unwrap();
 
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Success, "error: {:?}", done.error);
         assert_eq!(done.runner, JobRunner::Herdr);
         assert_eq!(done.herdr_tab_id.as_deref(), Some("w1:t2"));
         assert_eq!(done.herdr_pane_id.as_deref(), Some("w1:p2"));
-        assert!(done.session_id.is_some(), "session id must be minted up front");
-        assert!(done.agent_status.is_none(), "finished jobs carry no live agent status");
+        assert!(
+            done.session_id.is_some(),
+            "session id must be minted up front"
+        );
+        assert!(
+            done.agent_status.is_none(),
+            "finished jobs carry no live agent status"
+        );
 
         let events = rig.events.lock();
         let joined: String = events
@@ -1624,10 +2027,15 @@ esac
         let init = joined.find("\"kind\":\"init\"").expect("init entry");
         let tool = joined.find("\"kind\":\"tool\"").expect("tool entry");
         let text = joined.find("\"kind\":\"text\"").expect("text entry");
-        let result = joined.find("\"kind\":\"result\"").expect("synthesized result entry");
+        let result = joined
+            .find("\"kind\":\"result\"")
+            .expect("synthesized result entry");
         assert!(init < tool && tool < text && text < result);
         assert!(joined.contains("git status"));
-        assert!(!joined.contains("thinking"), "thinking blocks stay out of the timeline");
+        assert!(
+            !joined.contains("thinking"),
+            "thinking blocks stay out of the timeline"
+        );
 
         // report comes from the last assistant text, like the headless runner
         let report = std::fs::read_to_string(rig.state.report_path(&job.id)).unwrap();
@@ -1636,7 +2044,10 @@ esac
         let closed = std::fs::read_to_string(rig.dir.join("closed-tab")).unwrap();
         assert_eq!(closed.trim(), "w1:t2");
         // the workspace is remembered for the next job
-        assert_eq!(rig.state.state.lock().herdr_workspace_id.as_deref(), Some("w1"));
+        assert_eq!(
+            rig.state.state.lock().herdr_workspace_id.as_deref(),
+            Some("w1")
+        );
     }
 
     #[tokio::test]
@@ -1650,10 +2061,16 @@ esac
         );
         let job = rig
             .mgr
-            .enqueue_with(routine_req("lunch"), herdr_opts("claude", &rig.dir, bin), &rig.view)
+            .enqueue_with(
+                routine_req("lunch"),
+                herdr_opts("claude", &rig.dir, bin),
+                &rig.view,
+            )
             .unwrap();
 
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Success, "error: {:?}", done.error);
 
         // the blocked state must have reached the UI while the job was still running
@@ -1679,13 +2096,21 @@ echo '{"type":"result","is_error":false,"result":"ok"}'
         );
         let mut opts = herdr_opts(&claude, &rig.dir, "/nonexistent/herdr".into());
         opts.herdr.mode = "auto".into();
-        let job = rig.mgr.enqueue_with(routine_req("evening"), opts, &rig.view).unwrap();
+        let job = rig
+            .mgr
+            .enqueue_with(routine_req("evening"), opts, &rig.view)
+            .unwrap();
 
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Success, "error: {:?}", done.error);
         assert_eq!(done.runner, JobRunner::Headless);
         let log = std::fs::read_to_string(rig.state.log_path(&job.id)).unwrap();
-        assert!(log.contains("헤드리스로 실행합니다"), "fallback reason missing: {log}");
+        assert!(
+            log.contains("헤드리스로 실행합니다"),
+            "fallback reason missing: {log}"
+        );
     }
 
     #[tokio::test]
@@ -1699,19 +2124,28 @@ echo '{"type":"result","is_error":false,"result":"ok"}'
         );
         let job = rig
             .mgr
-            .enqueue_with(routine_req("evening"), herdr_opts("claude", &rig.dir, bin), &rig.view)
+            .enqueue_with(
+                routine_req("evening"),
+                herdr_opts("claude", &rig.dir, bin),
+                &rig.view,
+            )
             .unwrap();
         for _ in 0..100 {
             {
                 let jobs = rig.state.jobs.lock();
-                if jobs.iter().any(|j| j.id == job.id && j.herdr_agent.is_some()) {
+                if jobs
+                    .iter()
+                    .any(|j| j.id == job.id && j.herdr_agent.is_some())
+                {
                     break;
                 }
             }
             tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         }
         rig.mgr.cancel(&job.id).await.unwrap();
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Cancelled);
         assert_eq!(done.runner, JobRunner::Herdr);
     }
@@ -1720,14 +2154,26 @@ echo '{"type":"result","is_error":false,"result":"ok"}'
     async fn herdr_start_failure_fails_the_job() {
         let rig = rig("herdr-nostart");
         // every command errors: workspace creation already fails in herdr-only mode
-        let bin = write_script(&rig.dir, "echo '{\"error\":{\"code\":\"boom\",\"message\":\"안됨\"}}' >&2\nexit 1\n");
+        let bin = write_script(
+            &rig.dir,
+            "echo '{\"error\":{\"code\":\"boom\",\"message\":\"안됨\"}}' >&2\nexit 1\n",
+        );
         let job = rig
             .mgr
-            .enqueue_with(routine_req("morning"), herdr_opts("claude", &rig.dir, bin), &rig.view)
+            .enqueue_with(
+                routine_req("morning"),
+                herdr_opts("claude", &rig.dir, bin),
+                &rig.view,
+            )
             .unwrap();
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Failed);
-        assert!(done.error.unwrap_or_default().contains("herdr 워크스페이스 준비 실패"));
+        assert!(done
+            .error
+            .unwrap_or_default()
+            .contains("herdr 워크스페이스 준비 실패"));
     }
 
     #[tokio::test]
@@ -1743,13 +2189,22 @@ echo '{"type":"result","is_error":false,"result":"ok"}'
         );
         let job = rig
             .mgr
-            .enqueue_with(routine_req("morning"), herdr_opts("claude", &rig.dir, bin), &rig.view)
+            .enqueue_with(
+                routine_req("morning"),
+                herdr_opts("claude", &rig.dir, bin),
+                &rig.view,
+            )
             .unwrap();
 
-        let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
+        let done = wait_finished(&rig.state, &job.id, 300)
+            .await
+            .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Success, "error: {:?}", done.error);
         let log = std::fs::read_to_string(rig.state.log_path(&job.id)).unwrap();
-        assert!(log.contains("트랜스크립트를 읽지 못해"), "no explanation logged: {log}");
+        assert!(
+            log.contains("트랜스크립트를 읽지 못해"),
+            "no explanation logged: {log}"
+        );
         // and the user is told why the timeline is empty rather than left guessing
         let events = rig.events.lock();
         assert!(events.iter().any(|(n, p)| n == "job-progress"
@@ -1763,7 +2218,9 @@ echo '{"type":"result","is_error":false,"result":"ok"}'
         assert_eq!(name, "sw-3f2a91bc");
         assert!(name.len() <= 32);
         assert!(name.starts_with(|c: char| c.is_ascii_lowercase()));
-        assert!(name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
+        assert!(name
+            .chars()
+            .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-'));
     }
 
     #[test]

@@ -130,7 +130,9 @@ fn expand_folders(root: &Path, pattern: &str) -> Vec<PathBuf> {
         let mut next = Vec::new();
         for dir in &current {
             if seg.contains('*') {
-                let Ok(rd) = std::fs::read_dir(dir) else { continue };
+                let Ok(rd) = std::fs::read_dir(dir) else {
+                    continue;
+                };
                 let mut hits: Vec<PathBuf> = rd
                     .flatten()
                     .map(|e| e.path())
@@ -195,7 +197,9 @@ pub fn matches(fields: &Map<String, Value>, p: &Predicate) -> bool {
         "ne" => as_strings(got.unwrap_or(&Value::Null)) != as_strings(&p.value),
         "in" => {
             let wanted = as_strings(&p.value);
-            as_strings(got.unwrap_or(&Value::Null)).iter().any(|g| wanted.contains(g))
+            as_strings(got.unwrap_or(&Value::Null))
+                .iter()
+                .any(|g| wanted.contains(g))
         }
         "contains" => {
             let needle = as_strings(&p.value).join(" ").to_lowercase();
@@ -233,7 +237,11 @@ pub fn read_row(root: &Path, path: &Path) -> Option<NoteRow> {
         }
         None => (Map::new(), text.clone()),
     };
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
+    let stem = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("")
+        .to_string();
     let rel = path
         .strip_prefix(root)
         .ok()?
@@ -266,7 +274,11 @@ pub fn query(root: &Path, q: &NoteQuery) -> QueryResult {
     let mut truncated = false;
 
     if root.as_os_str().is_empty() || !root.is_dir() {
-        return QueryResult { rows, folders, truncated };
+        return QueryResult {
+            rows,
+            folders,
+            truncated,
+        };
     }
 
     let mut dirs: Vec<PathBuf> = Vec::new();
@@ -282,7 +294,9 @@ pub fn query(root: &Path, q: &NoteQuery) -> QueryResult {
         if let Ok(rel) = dir.strip_prefix(root) {
             folders.push(rel.to_string_lossy().replace('\\', "/"));
         }
-        let Ok(rd) = std::fs::read_dir(&dir) else { continue };
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            continue;
+        };
         let mut files: Vec<PathBuf> = rd
             .flatten()
             .map(|e| e.path())
@@ -294,7 +308,9 @@ pub fn query(root: &Path, q: &NoteQuery) -> QueryResult {
             if q.exclude.iter().any(|pat| wildcard_match(pat, name)) {
                 continue;
             }
-            let Some(row) = read_row(root, &file) else { continue };
+            let Some(row) = read_row(root, &file) else {
+                continue;
+            };
             if !q.predicates.iter().all(|p| matches(&row.fields, p)) {
                 continue;
             }
@@ -318,7 +334,11 @@ pub fn query(root: &Path, q: &NoteQuery) -> QueryResult {
             truncated = true;
         }
     }
-    QueryResult { rows, folders, truncated }
+    QueryResult {
+        rows,
+        folders,
+        truncated,
+    }
 }
 
 #[cfg(test)]
@@ -353,7 +373,11 @@ mod tests {
     #[test]
     fn folders_expand_one_level_and_never_escape() {
         let root = tempdir("glob");
-        note(&root, "사업/알파/이슈/A-1.md", "---\ntype: 이슈\n---\n# 첫째\n");
+        note(
+            &root,
+            "사업/알파/이슈/A-1.md",
+            "---\ntype: 이슈\n---\n# 첫째\n",
+        );
         note(&root, "사업/베타/이슈/B-1.md", "---\ntype: 이슈\n---\n");
         note(&root, "사업/베타/회의/M-1.md", "---\ntype: 회의\n---\n");
 
@@ -367,9 +391,21 @@ mod tests {
     #[test]
     fn query_filters_excludes_and_reads_title() {
         let root = tempdir("query");
-        note(&root, "사업/알파/이슈/A-1.md", "---\ntype: 이슈\nstatus: 승인대기\n---\n\n# 로그인 오류\n본문");
-        note(&root, "사업/알파/이슈/A-2.md", "---\ntype: 이슈\nstatus: 완료\n---\n");
-        note(&root, "사업/알파/이슈/알파 문제목록.md", "---\ntype: 이슈\n---\n");
+        note(
+            &root,
+            "사업/알파/이슈/A-1.md",
+            "---\ntype: 이슈\nstatus: 승인대기\n---\n\n# 로그인 오류\n본문",
+        );
+        note(
+            &root,
+            "사업/알파/이슈/A-2.md",
+            "---\ntype: 이슈\nstatus: 완료\n---\n",
+        );
+        note(
+            &root,
+            "사업/알파/이슈/알파 문제목록.md",
+            "---\ntype: 이슈\n---\n",
+        );
         note(&root, "사업/알파/이슈/메모.md", "프론트매터 없음");
 
         let q = NoteQuery {
@@ -404,16 +440,28 @@ mod tests {
             op: op.into(),
             value,
         };
-        assert!(matches(&f, &p("status", "eq", serde_json::json!("승인대기"))));
+        assert!(matches(
+            &f,
+            &p("status", "eq", serde_json::json!("승인대기"))
+        ));
         assert!(matches(&f, &p("status", "ne", serde_json::json!("완료"))));
-        assert!(matches(&f, &p("status", "in", serde_json::json!(["완료", "승인대기"]))));
+        assert!(matches(
+            &f,
+            &p("status", "in", serde_json::json!(["완료", "승인대기"]))
+        ));
         assert!(matches(&f, &p("labels", "in", serde_json::json!(["긴급"]))));
-        assert!(matches(&f, &p("labels", "contains", serde_json::json!("버그"))));
+        assert!(matches(
+            &f,
+            &p("labels", "contains", serde_json::json!("버그"))
+        ));
         assert!(matches(&f, &p("approve", "exists", Value::Null)));
         assert!(!matches(&f, &p("approve", "truthy", Value::Null)));
         assert!(!matches(&f, &p("note", "notEmpty", Value::Null)));
         assert!(!matches(&f, &p("missing", "exists", Value::Null)));
-        assert!(matches(&f, &p("status", "몰라요", Value::Null)), "모르는 연산자는 통과");
+        assert!(
+            matches(&f, &p("status", "몰라요", Value::Null)),
+            "모르는 연산자는 통과"
+        );
     }
 
     #[test]
@@ -425,7 +473,11 @@ mod tests {
 
         let mut q = NoteQuery {
             folders: vec!["일지".into()],
-            sort: Some(Sort { field: String::new(), source: "title".into(), desc: true }),
+            sort: Some(Sort {
+                field: String::new(),
+                source: "title".into(),
+                desc: true,
+            }),
             ..Default::default()
         };
         let r = query(&root, &q);
@@ -440,10 +492,13 @@ mod tests {
 
     #[test]
     fn missing_vault_is_empty_not_an_error() {
-        let r = query(Path::new("/nonexistent-vault"), &NoteQuery {
-            folders: vec!["일지".into()],
-            ..Default::default()
-        });
+        let r = query(
+            Path::new("/nonexistent-vault"),
+            &NoteQuery {
+                folders: vec!["일지".into()],
+                ..Default::default()
+            },
+        );
         assert!(r.rows.is_empty() && r.folders.is_empty());
     }
 }

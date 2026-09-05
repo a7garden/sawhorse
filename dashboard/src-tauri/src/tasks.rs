@@ -18,16 +18,32 @@ pub fn workbench_root() -> PathBuf {
     if let Some(root) = TASKS_ROOT_OVERRIDE.get() {
         return root.clone();
     }
-    crate::config::config_path().parent().map(Path::to_path_buf).unwrap_or_default()
+    crate::config::config_path()
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default()
 }
-pub fn tasks_dir(root: &Path) -> PathBuf { root.join("tasks") }
+pub fn tasks_dir(root: &Path) -> PathBuf {
+    root.join("tasks")
+}
 
-pub fn inbox_dir(root: &Path) -> PathBuf { tasks_dir(root).join("inbox") }
-pub fn rejected_dir(root: &Path) -> PathBuf { tasks_dir(root).join("rejected") }
-pub fn archive_dir(root: &Path) -> PathBuf { tasks_dir(root).join("archive") }
+pub fn inbox_dir(root: &Path) -> PathBuf {
+    tasks_dir(root).join("inbox")
+}
+pub fn rejected_dir(root: &Path) -> PathBuf {
+    tasks_dir(root).join("rejected")
+}
+pub fn archive_dir(root: &Path) -> PathBuf {
+    tasks_dir(root).join("archive")
+}
 
 pub fn ensure_dirs(root: &Path) -> std::io::Result<()> {
-    for d in [tasks_dir(root), inbox_dir(root), rejected_dir(root), archive_dir(root)] {
+    for d in [
+        tasks_dir(root),
+        inbox_dir(root),
+        rejected_dir(root),
+        archive_dir(root),
+    ] {
         std::fs::create_dir_all(d)?;
     }
     Ok(())
@@ -43,10 +59,15 @@ pub(crate) fn test_root() -> PathBuf {
         std::fs::create_dir_all(&d).unwrap();
         TASKS_ROOT_OVERRIDE.set(d).ok();
     });
-    TASKS_ROOT_OVERRIDE.get().cloned().expect("test root must be injected")
+    TASKS_ROOT_OVERRIDE
+        .get()
+        .cloned()
+        .expect("test root must be injected")
 }
 
-pub fn now_iso() -> String { Local::now().to_rfc3339() }
+pub fn now_iso() -> String {
+    Local::now().to_rfc3339()
+}
 
 pub fn new_id() -> String {
     let tail = uuid::Uuid::new_v4().simple().to_string();
@@ -55,7 +76,11 @@ pub fn new_id() -> String {
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
-pub enum ScheduleKind { Daily, Weekdays, Once }
+pub enum ScheduleKind {
+    Daily,
+    Weekdays,
+    Once,
+}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -93,9 +118,17 @@ pub struct TaskDef {
 impl Default for TaskDef {
     fn default() -> Self {
         Self {
-            id: String::new(), title: String::new(), prompt: String::new(),
-            schedule: None, enabled: true, builtin: false, skill: None, project: None,
-            source: Source::default(), created_at: now_iso(), updated_at: now_iso(),
+            id: String::new(),
+            title: String::new(),
+            prompt: String::new(),
+            schedule: None,
+            enabled: true,
+            builtin: false,
+            skill: None,
+            project: None,
+            source: Source::default(),
+            created_at: now_iso(),
+            updated_at: now_iso(),
         }
     }
 }
@@ -109,14 +142,18 @@ pub fn validate_schedule(s: &Schedule, today: &str) -> Result<(), String> {
     if !s.time.as_bytes()[0].is_ascii_digit()
         || !s.time.as_bytes()[1].is_ascii_digit()
         || !s.time.as_bytes()[3].is_ascii_digit()
-        || !s.time.as_bytes()[4].is_ascii_digit() {
+        || !s.time.as_bytes()[4].is_ascii_digit()
+    {
         return Err(format!("잘못된 시간 형식: {} (HH:MM)", s.time));
     }
     NaiveTime::parse_from_str(&s.time, "%H:%M")
         .map_err(|_| format!("잘못된 시간 형식: {} (HH:MM)", s.time))?;
     match s.kind {
         ScheduleKind::Once => {
-            let date = s.date.as_deref().ok_or("once 스케줄에는 date가 필요합니다")?;
+            let date = s
+                .date
+                .as_deref()
+                .ok_or("once 스케줄에는 date가 필요합니다")?;
             NaiveDate::parse_from_str(date, "%Y-%m-%d")
                 .map_err(|_| format!("잘못된 날짜 형식: {date} (YYYY-MM-DD)"))?;
             if date < today {
@@ -153,12 +190,20 @@ pub fn validate_new(def: &TaskDef, today: &str) -> Result<(), String> {
 
 pub fn list_tasks(root: &Path) -> Vec<TaskDef> {
     let mut out = Vec::new();
-    let Ok(rd) = std::fs::read_dir(tasks_dir(root)) else { return out };
+    let Ok(rd) = std::fs::read_dir(tasks_dir(root)) else {
+        return out;
+    };
     for e in rd.flatten() {
         let p = e.path();
-        if p.extension().and_then(|x| x.to_str()) != Some("json") { continue; }
-        let Ok(text) = std::fs::read_to_string(&p) else { continue };
-        let Ok(def) = serde_json::from_str::<TaskDef>(&text) else { continue };
+        if p.extension().and_then(|x| x.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(&p) else {
+            continue;
+        };
+        let Ok(def) = serde_json::from_str::<TaskDef>(&text) else {
+            continue;
+        };
         out.push(def);
     }
     out.sort_by(|a, b| a.created_at.cmp(&b.created_at).then(a.id.cmp(&b.id)));
@@ -166,7 +211,9 @@ pub fn list_tasks(root: &Path) -> Vec<TaskDef> {
 }
 
 pub fn get_task(root: &Path, id: &str) -> Result<TaskDef, String> {
-    if !valid_id(id) { return Err("잘못된 작업 ID".into()); }
+    if !valid_id(id) {
+        return Err("잘못된 작업 ID".into());
+    }
     let p = tasks_dir(root).join(format!("{id}.json"));
     std::fs::read_to_string(&p)
         .map_err(|_| format!("작업을 찾을 수 없습니다: {id}"))
@@ -178,16 +225,24 @@ pub fn valid_id(id: &str) -> bool {
 }
 
 pub fn save_task(root: &Path, def: &TaskDef) -> Result<(), String> {
-    if !valid_id(&def.id) { return Err("잘못된 작업 ID".into()); }
+    if !valid_id(&def.id) {
+        return Err("잘못된 작업 ID".into());
+    }
     let bytes = serde_json::to_vec_pretty(def).map_err(|e| e.to_string())?;
     crate::config::write_atomic(&tasks_dir(root).join(format!("{}.json", def.id)), &bytes)
         .map_err(|e| format!("작업 저장 실패: {e}"))
 }
 
 pub fn delete_task(root: &Path, id: &str) -> Result<(), String> {
-    if !valid_id(id) { return Err("잘못된 작업 ID".into()); }
+    if !valid_id(id) {
+        return Err("잘못된 작업 ID".into());
+    }
     let src = tasks_dir(root).join(format!("{id}.json"));
-    let dst = archive_dir(root).join(format!("{}-{}.json", id, Local::now().format("%Y%m%d%H%M%S")));
+    let dst = archive_dir(root).join(format!(
+        "{}-{}.json",
+        id,
+        Local::now().format("%Y%m%d%H%M%S")
+    ));
     std::fs::rename(&src, &dst).map_err(|e| format!("작업 삭제(보관 이동) 실패: {e}"))
 }
 
@@ -230,10 +285,14 @@ pub struct TaskDraft {
 #[serde(rename_all = "camelCase")]
 pub struct InboxRequest {
     pub op: String,
-    #[serde(default)] pub agent: String,
-    #[serde(default)] pub note: String,
-    #[serde(default)] pub task: Option<TaskDraft>,
-    #[serde(default)] pub id: Option<String>,
+    #[serde(default)]
+    pub agent: String,
+    #[serde(default)]
+    pub note: String,
+    #[serde(default)]
+    pub task: Option<TaskDraft>,
+    #[serde(default)]
+    pub id: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -250,13 +309,21 @@ pub struct PendingRequest {
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct RejectedRequest { pub id: String, pub error: String }
+pub struct RejectedRequest {
+    pub id: String,
+    pub error: String,
+}
 
 const OPS: [&str; 5] = ["create", "update", "pause", "resume", "delete"];
 
-fn req_path(root: &Path, stem: &str) -> PathBuf { inbox_dir(root).join(format!("{stem}.json")) }
+fn req_path(root: &Path, stem: &str) -> PathBuf {
+    inbox_dir(root).join(format!("{stem}.json"))
+}
 fn valid_stem(stem: &str) -> bool {
-    !stem.is_empty() && stem.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    !stem.is_empty()
+        && stem
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
         && !stem.contains("..")
 }
 
@@ -269,7 +336,10 @@ fn move_to_rejected(root: &Path, stem: &str, error: &str) -> std::io::Result<()>
     let bytes = serde_json::to_vec_pretty(&payload)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
     // write_atomic creates rejected/ and is the same convention as task files.
-    crate::config::write_atomic(&rejected_dir(root).join(format!("{stem}.rejected.json")), &bytes)?;
+    crate::config::write_atomic(
+        &rejected_dir(root).join(format!("{stem}.rejected.json")),
+        &bytes,
+    )?;
     // Drop the inbox original only after the rejected copy is safely on disk.
     // On failure the request stays in the inbox: process_inbox retries it on
     // the next tick instead of losing the agent's request.
@@ -292,7 +362,10 @@ fn validate_req(root: &Path, req: &InboxRequest, today: &str) -> Result<(), Stri
         let cand = draft_to_def(draft, String::new())?;
         return validate_new(&cand, today);
     }
-    let id = req.id.as_deref().ok_or("create 외 op에는 id가 필요합니다")?;
+    let id = req
+        .id
+        .as_deref()
+        .ok_or("create 외 op에는 id가 필요합니다")?;
     if ROUTINE_IDS.contains(&id) {
         return Err("내장 작업(morning/lunch/evening)은 인박스로 바꿀 수 없습니다".into());
     }
@@ -308,22 +381,42 @@ fn validate_req(root: &Path, req: &InboxRequest, today: &str) -> Result<(), Stri
 }
 
 fn draft_to_def(d: &TaskDraft, id: String) -> Result<TaskDef, String> {
-    let mut def = TaskDef { id, ..TaskDef::default() };
-    if let Some(t) = &d.title { def.title = t.clone(); }
-    if let Some(p) = &d.prompt { def.prompt = p.clone(); }
+    let mut def = TaskDef {
+        id,
+        ..TaskDef::default()
+    };
+    if let Some(t) = &d.title {
+        def.title = t.clone();
+    }
+    if let Some(p) = &d.prompt {
+        def.prompt = p.clone();
+    }
     def.schedule.clone_from(&d.schedule);
     def.enabled = d.enabled.unwrap_or(true);
-    if let Some(NullableString(v)) = &d.project { def.project = v.clone(); }
+    if let Some(NullableString(v)) = &d.project {
+        def.project = v.clone();
+    }
     Ok(def)
 }
 
 fn apply_draft(mut cur: TaskDef, d: &TaskDraft) -> Result<TaskDef, String> {
-    if let Some(t) = &d.title { cur.title = t.clone(); }
-    if let Some(p) = &d.prompt { cur.prompt = p.clone(); }
-    if d.clear_schedule { cur.schedule = None; }
-    else if d.schedule.is_some() { cur.schedule.clone_from(&d.schedule); }
-    if let Some(e) = d.enabled { cur.enabled = e; }
-    if let Some(NullableString(v)) = &d.project { cur.project = v.clone(); }
+    if let Some(t) = &d.title {
+        cur.title = t.clone();
+    }
+    if let Some(p) = &d.prompt {
+        cur.prompt = p.clone();
+    }
+    if d.clear_schedule {
+        cur.schedule = None;
+    } else if d.schedule.is_some() {
+        cur.schedule.clone_from(&d.schedule);
+    }
+    if let Some(e) = d.enabled {
+        cur.enabled = e;
+    }
+    if let Some(NullableString(v)) = &d.project {
+        cur.project = v.clone();
+    }
     Ok(cur)
 }
 
@@ -339,65 +432,112 @@ pub fn schedule_label(s: &Schedule) -> String {
 fn summarize(req: &InboxRequest, root: &Path) -> Vec<String> {
     let mut rows = Vec::new();
     let Some(d) = &req.task else { return rows };
-    if d.title.is_some() { rows.push(format!("제목: {}", d.title.clone().unwrap_or_default())); }
-    if d.prompt.is_some() { rows.push("프롬프트 변경".into()); }
-    if d.clear_schedule { rows.push("스케줄 제거 → 수동 작업".into()); }
-    if let Some(s) = &d.schedule { rows.push(format!("스케줄: {}", schedule_label(s))); }
-    if let Some(e) = d.enabled { rows.push(format!("활성: {e}")); }
+    if d.title.is_some() {
+        rows.push(format!("제목: {}", d.title.clone().unwrap_or_default()));
+    }
+    if d.prompt.is_some() {
+        rows.push("프롬프트 변경".into());
+    }
+    if d.clear_schedule {
+        rows.push("스케줄 제거 → 수동 작업".into());
+    }
+    if let Some(s) = &d.schedule {
+        rows.push(format!("스케줄: {}", schedule_label(s)));
+    }
+    if let Some(e) = d.enabled {
+        rows.push(format!("활성: {e}"));
+    }
     let _ = root;
     rows
 }
 
 pub fn process_inbox(root: &Path, today: &str) {
-    let Ok(rd) = std::fs::read_dir(inbox_dir(root)) else { return };
+    let Ok(rd) = std::fs::read_dir(inbox_dir(root)) else {
+        return;
+    };
     for e in rd.flatten() {
         let p = e.path();
-        let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else { continue };
-        if p.extension().and_then(|x| x.to_str()) != Some("json") || !valid_stem(stem) { continue; }
+        let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if p.extension().and_then(|x| x.to_str()) != Some("json") || !valid_stem(stem) {
+            continue;
+        }
         // skip files written too recently (agent may still be mid-write)
         if let Ok(meta) = p.metadata() {
             if let Ok(mtime) = meta.modified() {
-                if std::time::SystemTime::now().duration_since(mtime)
-                    .map(|age| age < std::time::Duration::from_secs(2)).unwrap_or(true) { continue; }
+                if std::time::SystemTime::now()
+                    .duration_since(mtime)
+                    .map(|age| age < std::time::Duration::from_secs(2))
+                    .unwrap_or(true)
+                {
+                    continue;
+                }
             }
         }
         match parse_req(root, stem).and_then(|req| validate_req(root, &req, today).map(|_| req)) {
             Ok(_) => {}
             // move failure keeps the request in the inbox for the next tick
-            Err(err) => { let _ = move_to_rejected(root, stem, &err); }
+            Err(err) => {
+                let _ = move_to_rejected(root, stem, &err);
+            }
         }
     }
 }
 
 fn summarize_for_list(root: &Path, stem: &str, req: &InboxRequest) -> PendingRequest {
     let target = if req.op == "create" {
-        req.task.as_ref().and_then(|t| t.title.clone()).unwrap_or_default()
+        req.task
+            .as_ref()
+            .and_then(|t| t.title.clone())
+            .unwrap_or_default()
     } else {
-        req.id.as_deref().and_then(|id| get_task(root, id).ok().map(|d| d.title)).unwrap_or_else(|| req.id.clone().unwrap_or_default())
+        req.id
+            .as_deref()
+            .and_then(|id| get_task(root, id).ok().map(|d| d.title))
+            .unwrap_or_else(|| req.id.clone().unwrap_or_default())
     };
     let duplicate_of = if req.op == "create" {
-        find_duplicate(root, &target, req.task.as_ref().and_then(|t| t.schedule.clone()))
-    } else { None };
+        find_duplicate(
+            root,
+            &target,
+            req.task.as_ref().and_then(|t| t.schedule.clone()),
+        )
+    } else {
+        None
+    };
     PendingRequest {
-        id: stem.into(), op: req.op.clone(), agent: req.agent.clone(), note: req.note.clone(),
-        target_title: target, summary: summarize(req, root), duplicate_of,
+        id: stem.into(),
+        op: req.op.clone(),
+        agent: req.agent.clone(),
+        note: req.note.clone(),
+        target_title: target,
+        summary: summarize(req, root),
+        duplicate_of,
     }
 }
 
 fn find_duplicate(root: &Path, title: &str, schedule: Option<Schedule>) -> Option<String> {
     let norm = |t: &str| t.trim().to_lowercase();
-    list_tasks(root).into_iter().find(|d| {
-        norm(&d.title) == norm(title) && d.schedule == schedule && d.enabled
-    }).map(|d| d.id)
+    list_tasks(root)
+        .into_iter()
+        .find(|d| norm(&d.title) == norm(title) && d.schedule == schedule && d.enabled)
+        .map(|d| d.id)
 }
 
 pub fn list_pending(root: &Path) -> Vec<PendingRequest> {
     let mut out = Vec::new();
-    let Ok(rd) = std::fs::read_dir(inbox_dir(root)) else { return out };
+    let Ok(rd) = std::fs::read_dir(inbox_dir(root)) else {
+        return out;
+    };
     for e in rd.flatten() {
         let p = e.path();
-        let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else { continue };
-        if p.extension().and_then(|x| x.to_str()) != Some("json") || !valid_stem(stem) { continue; }
+        let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if p.extension().and_then(|x| x.to_str()) != Some("json") || !valid_stem(stem) {
+            continue;
+        }
         if let Ok(req) = parse_req(root, stem) {
             out.push(summarize_for_list(root, stem, &req));
         }
@@ -408,15 +548,23 @@ pub fn list_pending(root: &Path) -> Vec<PendingRequest> {
 
 pub fn list_rejected(root: &Path) -> Vec<RejectedRequest> {
     let mut out = Vec::new();
-    let Ok(rd) = std::fs::read_dir(rejected_dir(root)) else { return out };
+    let Ok(rd) = std::fs::read_dir(rejected_dir(root)) else {
+        return out;
+    };
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().to_string();
-        let Some(id) = name.strip_suffix(".rejected.json") else { continue };
-        let error = std::fs::read_to_string(e.path()).ok()
+        let Some(id) = name.strip_suffix(".rejected.json") else {
+            continue;
+        };
+        let error = std::fs::read_to_string(e.path())
+            .ok()
             .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
             .and_then(|v| v.get("error").and_then(|e| e.as_str()).map(str::to_string))
             .unwrap_or_else(|| "알 수 없는 사유".into());
-        out.push(RejectedRequest { id: id.into(), error });
+        out.push(RejectedRequest {
+            id: id.into(),
+            error,
+        });
     }
     out.sort_by(|a, b| a.id.cmp(&b.id));
     out
@@ -430,15 +578,26 @@ pub fn reject_request(root: &Path, stem: &str, reason: &str) -> Result<(), Strin
         .map_err(|e| format!("반려 처리 실패: {e}"))
 }
 
-pub fn approve_request(root: &Path, stem: &str, agent: &str, today: &str) -> Result<TaskDef, String> {
-    if !valid_stem(stem) { return Err("잘못된 요청 ID".into()); }
+pub fn approve_request(
+    root: &Path,
+    stem: &str,
+    agent: &str,
+    today: &str,
+) -> Result<TaskDef, String> {
+    if !valid_stem(stem) {
+        return Err("잘못된 요청 ID".into());
+    }
     let req = parse_req(root, stem)?;
     validate_req(root, &req, today)?;
     let applied = match req.op.as_str() {
         "create" => {
             let draft = req.task.clone().unwrap_or_default();
             let mut def = draft_to_def(&draft, new_id())?;
-            def.source = Source { kind: "agent".into(), agent: Some(agent.into()), request: Some(stem.into()) };
+            def.source = Source {
+                kind: "agent".into(),
+                agent: Some(agent.into()),
+                request: Some(stem.into()),
+            };
             def.created_at = now_iso();
             def.updated_at = def.created_at.clone();
             save_task(root, &def)?;
@@ -447,7 +606,10 @@ pub fn approve_request(root: &Path, stem: &str, agent: &str, today: &str) -> Res
         "update" => {
             let id = req.id.clone().ok_or("id가 필요합니다")?;
             let mut cur = get_task(root, &id)?;
-            cur = apply_draft(cur, req.task.as_ref().ok_or("update에는 task가 필요합니다")?)?;
+            cur = apply_draft(
+                cur,
+                req.task.as_ref().ok_or("update에는 task가 필요합니다")?,
+            )?;
             cur.updated_at = now_iso();
             save_task(root, &cur)?;
             cur
@@ -483,7 +645,12 @@ mod tests {
     }
 
     fn def(id: &str, title: &str) -> TaskDef {
-        TaskDef { id: id.into(), title: title.into(), prompt: "본문".into(), ..TaskDef::default() }
+        TaskDef {
+            id: id.into(),
+            title: title.into(),
+            prompt: "본문".into(),
+            ..TaskDef::default()
+        }
     }
 
     #[test]
@@ -491,13 +658,23 @@ mod tests {
         let root = tempdir("round");
         ensure_dirs(&root).unwrap();
         let mut d = def("t-20260905-aaaa", "주간 정리");
-        d.schedule = Some(Schedule { kind: ScheduleKind::Daily, time: "08:30".into(), date: None });
+        d.schedule = Some(Schedule {
+            kind: ScheduleKind::Daily,
+            time: "08:30".into(),
+            date: None,
+        });
         save_task(&root, &d).unwrap();
         assert_eq!(list_tasks(&root).len(), 1);
-        assert_eq!(get_task(&root, "t-20260905-aaaa").unwrap().title, "주간 정리");
+        assert_eq!(
+            get_task(&root, "t-20260905-aaaa").unwrap().title,
+            "주간 정리"
+        );
         delete_task(&root, "t-20260905-aaaa").unwrap();
         assert!(list_tasks(&root).is_empty());
-        assert_eq!(get_task(&root, "t-20260905-aaaa").unwrap_err(), "작업을 찾을 수 없습니다: t-20260905-aaaa");
+        assert_eq!(
+            get_task(&root, "t-20260905-aaaa").unwrap_err(),
+            "작업을 찾을 수 없습니다: t-20260905-aaaa"
+        );
         // archived, not gone
         assert!(std::fs::read_dir(archive_dir(&root)).unwrap().count() == 1);
         std::fs::remove_dir_all(&root).unwrap();
@@ -523,13 +700,29 @@ mod tests {
         d.prompt = String::new();
         assert!(validate_new(&d, today).is_err());
         d.prompt = "본문".into();
-        d.schedule = Some(Schedule { kind: ScheduleKind::Once, time: "09:00".into(), date: None });
+        d.schedule = Some(Schedule {
+            kind: ScheduleKind::Once,
+            time: "09:00".into(),
+            date: None,
+        });
         assert!(validate_new(&d, today).is_err()); // once without date
-        d.schedule = Some(Schedule { kind: ScheduleKind::Once, time: "09:00".into(), date: Some("2026-09-01".into()) });
+        d.schedule = Some(Schedule {
+            kind: ScheduleKind::Once,
+            time: "09:00".into(),
+            date: Some("2026-09-01".into()),
+        });
         assert!(validate_new(&d, today).is_err()); // past date
-        d.schedule = Some(Schedule { kind: ScheduleKind::Daily, time: "9:0".into(), date: None });
+        d.schedule = Some(Schedule {
+            kind: ScheduleKind::Daily,
+            time: "9:0".into(),
+            date: None,
+        });
         assert!(validate_new(&d, today).is_err()); // bad time
-        d.schedule = Some(Schedule { kind: ScheduleKind::Weekdays, time: "09:00".into(), date: None });
+        d.schedule = Some(Schedule {
+            kind: ScheduleKind::Weekdays,
+            time: "09:00".into(),
+            date: None,
+        });
         assert!(validate_new(&d, today).is_ok());
     }
 
@@ -545,10 +738,7 @@ mod tests {
         for bad in ["../x", "a/b", "a\\b", ".."] {
             assert!(delete_task(&root, bad).is_err(), "delete accepted {bad}");
         }
-        assert_eq!(
-            delete_task(&root, "../x").unwrap_err(),
-            "잘못된 작업 ID"
-        );
+        assert_eq!(delete_task(&root, "../x").unwrap_err(), "잘못된 작업 ID");
         std::fs::remove_dir_all(&root).unwrap();
     }
 
@@ -560,18 +750,34 @@ mod tests {
         // process_inbox의 mtime 2초 안정화를 우회: 파일 시간을 10초 전으로
         let p = inbox_dir(root).join(format!("{stem}.json"));
         let old = std::time::SystemTime::now() - std::time::Duration::from_secs(10);
-        filetime::set_file_mtime(&p, filetime::FileTime::from_unix_time(
-            old.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64, 0)).unwrap();
+        filetime::set_file_mtime(
+            &p,
+            filetime::FileTime::from_unix_time(
+                old.duration_since(std::time::UNIX_EPOCH).unwrap().as_secs() as i64,
+                0,
+            ),
+        )
+        .unwrap();
     }
 
     #[test]
     fn process_inbox_validates_and_rejects_bad_requests() {
         let root = tempdir("inbox");
         ensure_dirs(&root).unwrap();
-        write_req(&root, "req-ok", r#"{"op":"create","agent":"claude-code","note":"테스트","task":{"title":"주간 정리","prompt":"p","schedule":{"kind":"daily","time":"08:30"}}}"#);
-        write_req(&root, "req-badsched", r#"{"op":"create","task":{"title":"x","prompt":"p","schedule":{"kind":"once","time":"09:00"}}}"#);
+        write_req(
+            &root,
+            "req-ok",
+            r#"{"op":"create","agent":"claude-code","note":"테스트","task":{"title":"주간 정리","prompt":"p","schedule":{"kind":"daily","time":"08:30"}}}"#,
+        );
+        write_req(
+            &root,
+            "req-badsched",
+            r#"{"op":"create","task":{"title":"x","prompt":"p","schedule":{"kind":"once","time":"09:00"}}}"#,
+        );
         write_req(&root, "req-builtin", r#"{"op":"delete","id":"morning"}"#);
-        aged(&root, "req-ok"); aged(&root, "req-badsched"); aged(&root, "req-builtin");
+        aged(&root, "req-ok");
+        aged(&root, "req-badsched");
+        aged(&root, "req-builtin");
         process_inbox(&root, "2026-09-05");
         let pend = list_pending(&root);
         assert_eq!(pend.len(), 1);
@@ -586,7 +792,11 @@ mod tests {
     fn approve_create_makes_agent_sourced_task() {
         let root = tempdir("approve");
         ensure_dirs(&root).unwrap();
-        write_req(&root, "req-1", r#"{"op":"create","agent":"codex","task":{"title":"야간 빌드","prompt":"빌드 돌려라"}}"#);
+        write_req(
+            &root,
+            "req-1",
+            r#"{"op":"create","agent":"codex","task":{"title":"야간 빌드","prompt":"빌드 돌려라"}}"#,
+        );
         aged(&root, "req-1");
         process_inbox(&root, "2026-09-05");
         let d = approve_request(&root, "req-1", "codex", "2026-09-05").unwrap();
@@ -605,21 +815,41 @@ mod tests {
         let root = tempdir("flow");
         ensure_dirs(&root).unwrap();
         let mut base = def("t-20260905-cccc", "원래 제목");
-        base.schedule = Some(Schedule { kind: ScheduleKind::Daily, time: "09:00".into(), date: None });
+        base.schedule = Some(Schedule {
+            kind: ScheduleKind::Daily,
+            time: "09:00".into(),
+            date: None,
+        });
         save_task(&root, &base).unwrap();
         for (stem, body) in [
-            ("req-u", r#"{"op":"update","id":"t-20260905-cccc","task":{"title":"바꾼 제목","clearSchedule":true}}"#),
+            (
+                "req-u",
+                r#"{"op":"update","id":"t-20260905-cccc","task":{"title":"바꾼 제목","clearSchedule":true}}"#,
+            ),
             ("req-p", r#"{"op":"pause","id":"t-20260905-cccc"}"#),
             ("req-r", r#"{"op":"resume","id":"t-20260905-cccc"}"#),
             ("req-d", r#"{"op":"delete","id":"t-20260905-cccc"}"#),
-        ] { write_req(&root, stem, body); aged(&root, stem); }
+        ] {
+            write_req(&root, stem, body);
+            aged(&root, stem);
+        }
         process_inbox(&root, "2026-09-05");
 
         let d = approve_request(&root, "req-u", "agent", "2026-09-05").unwrap();
         assert_eq!(d.title, "바꾼 제목");
         assert!(d.schedule.is_none());
-        assert_eq!(approve_request(&root, "req-p", "agent", "2026-09-05").unwrap().enabled, false);
-        assert_eq!(approve_request(&root, "req-r", "agent", "2026-09-05").unwrap().enabled, true);
+        assert_eq!(
+            approve_request(&root, "req-p", "agent", "2026-09-05")
+                .unwrap()
+                .enabled,
+            false
+        );
+        assert_eq!(
+            approve_request(&root, "req-r", "agent", "2026-09-05")
+                .unwrap()
+                .enabled,
+            true
+        );
         approve_request(&root, "req-d", "agent", "2026-09-05").unwrap();
         assert!(get_task(&root, "t-20260905-cccc").is_err());
         std::fs::remove_dir_all(&root).unwrap();
@@ -629,7 +859,11 @@ mod tests {
     fn reject_request_moves_with_reason() {
         let root = tempdir("reject");
         ensure_dirs(&root).unwrap();
-        write_req(&root, "req-9", r#"{"op":"create","task":{"title":"t","prompt":"p"}}"#);
+        write_req(
+            &root,
+            "req-9",
+            r#"{"op":"create","task":{"title":"t","prompt":"p"}}"#,
+        );
         aged(&root, "req-9");
         process_inbox(&root, "2026-09-05");
         reject_request(&root, "req-9", "중복").unwrap();
@@ -644,7 +878,11 @@ mod tests {
     fn move_to_rejected_preserves_original_when_copy_write_fails() {
         let root = tempdir("rejectfail");
         std::fs::create_dir_all(inbox_dir(&root)).unwrap();
-        write_req(&root, "req-f", r#"{"op":"create","task":{"title":"t","prompt":"p"}}"#);
+        write_req(
+            &root,
+            "req-f",
+            r#"{"op":"create","task":{"title":"t","prompt":"p"}}"#,
+        );
         // occupy the rejected path with a regular file so the copy write fails
         std::fs::write(rejected_dir(&root), "blocker").unwrap();
         assert!(reject_request(&root, "req-f", "사유").is_err());
@@ -669,6 +907,4 @@ mod tests {
         assert!(!inbox_dir(&root).join("../evil.json").exists());
         std::fs::remove_dir_all(&root).unwrap();
     }
-
-
 }

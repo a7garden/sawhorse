@@ -3,20 +3,20 @@
 use std::path::Path;
 use std::sync::Arc;
 
+use crate::agents;
+use crate::config;
+use crate::herdr::{Herdr, HerdrSnapshot};
+use crate::jobs::{Job, JobManager, JobRequest};
+use crate::notes;
+use crate::packs;
+use crate::plugin;
+use crate::scheduler;
+use crate::state::{AppState, MissedEntry};
+use crate::vault;
+use crate::workspace;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use tauri::{AppHandle, State};
-use crate::agents;
-use crate::jobs::{Job, JobManager, JobRequest};
-use crate::config;
-use crate::herdr::{Herdr, HerdrSnapshot};
-use crate::notes;
-use crate::packs;
-use crate::scheduler;
-use crate::state::{AppState, MissedEntry};
-use crate::plugin;
-use crate::vault;
-use crate::workspace;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -33,7 +33,12 @@ pub struct VaultNoteView {
 }
 
 fn empty_todos(date: String) -> vault::TodoSections {
-    vault::TodoSections { date, today: vec![], tomorrow: vec![], file_exists: false }
+    vault::TodoSections {
+        date,
+        today: vec![],
+        tomorrow: vec![],
+        file_exists: false,
+    }
 }
 
 #[tauri::command]
@@ -59,8 +64,11 @@ pub fn list_improvements(project: Option<String>) -> Vec<vault::ImprovementNote>
     if view.vault_path.is_empty() {
         return vec![];
     }
-    let configured: Vec<(String, String)> =
-        view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    let configured: Vec<(String, String)> = view
+        .projects
+        .iter()
+        .map(|p| (p.name.clone(), p.id_prefix.clone()))
+        .collect();
     let names: Vec<String> = vault::project_pairs(vault_path, &configured)
         .into_iter()
         .map(|(name, _)| name)
@@ -77,7 +85,10 @@ pub fn list_issues(project: Option<String>) -> Vec<vault::ImprovementNote> {
 #[tauri::command]
 pub fn read_note(path: String) -> Result<NoteView, String> {
     let (frontmatter, markdown) = vault::read_note(Path::new(&path))?;
-    Ok(NoteView { frontmatter, markdown })
+    Ok(NoteView {
+        frontmatter,
+        markdown,
+    })
 }
 
 #[tauri::command]
@@ -100,8 +111,11 @@ pub fn list_inbox_count(project: Option<String>) -> u64 {
     if view.vault_path.is_empty() {
         return 0;
     }
-    let configured: Vec<(String, String)> =
-        view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    let configured: Vec<(String, String)> = view
+        .projects
+        .iter()
+        .map(|p| (p.name.clone(), p.id_prefix.clone()))
+        .collect();
     let pairs = vault::project_pairs(Path::new(&view.vault_path), &configured);
     vault::inbox_count(Path::new(&view.vault_path), &pairs, project.as_deref())
 }
@@ -112,8 +126,11 @@ pub fn list_unpromoted() -> Vec<vault::UnpromotedItem> {
     if view.vault_path.is_empty() {
         return vec![];
     }
-    let configured: Vec<(String, String)> =
-        view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    let configured: Vec<(String, String)> = view
+        .projects
+        .iter()
+        .map(|p| (p.name.clone(), p.id_prefix.clone()))
+        .collect();
     let pairs = vault::project_pairs(Path::new(&view.vault_path), &configured);
     vault::list_unpromoted(Path::new(&view.vault_path), &pairs)
 }
@@ -124,12 +141,18 @@ pub fn audit_vault() -> vault::VaultAudit {
     if view.vault_path.is_empty() {
         return vault::VaultAudit {
             issues: vec![],
-            journal: vault::JournalAudit { today_exists: false, missing: vec![] },
+            journal: vault::JournalAudit {
+                today_exists: false,
+                missing: vec![],
+            },
             scanned_at_ms: 0,
         };
     }
-    let configured: Vec<(String, String)> =
-        view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    let configured: Vec<(String, String)> = view
+        .projects
+        .iter()
+        .map(|p| (p.name.clone(), p.id_prefix.clone()))
+        .collect();
     let pairs = vault::project_pairs(Path::new(&view.vault_path), &configured);
     vault::audit_vault(Path::new(&view.vault_path), &pairs)
 }
@@ -212,7 +235,9 @@ pub fn list_jobs(state: State<'_, Arc<AppState>>) -> Vec<Job> {
 #[tauri::command]
 pub fn job_log(id: String, state: State<'_, Arc<AppState>>) -> Vec<String> {
     let path = state.log_path(&id);
-    let Ok(content) = std::fs::read_to_string(path) else { return vec![] };
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return vec![];
+    };
     let lines: Vec<String> = content.lines().map(str::to_string).collect();
     let start = lines.len().saturating_sub(500);
     lines[start..].to_vec()
@@ -222,7 +247,6 @@ pub fn job_log(id: String, state: State<'_, Arc<AppState>>) -> Vec<String> {
 pub fn job_report(id: String, state: State<'_, Arc<AppState>>) -> Option<String> {
     std::fs::read_to_string(state.report_path(&id)).ok()
 }
-
 
 #[tauri::command]
 pub fn list_missed(state: State<'_, Arc<AppState>>) -> Vec<MissedEntry> {
@@ -243,7 +267,11 @@ pub fn dismiss_missed(
 pub fn set_launch_at_login(app: AppHandle, on: bool) -> Result<(), String> {
     use tauri_plugin_autostart::ManagerExt;
     let autostart = app.autolaunch();
-    let r = if on { autostart.enable() } else { autostart.disable() };
+    let r = if on {
+        autostart.enable()
+    } else {
+        autostart.disable()
+    };
     r.map_err(|e| format!("자동 시작 설정 실패: {e}"))
 }
 
@@ -345,7 +373,9 @@ pub fn run_pack_action(
 #[tauri::command]
 pub fn read_pack_skill(pack_id: String, name: String) -> Result<String, String> {
     let (reg, _) = registry();
-    let pack = reg.get(&pack_id).ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
+    let pack = reg
+        .get(&pack_id)
+        .ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
     plugin::read_skill_at(&pack.skills_dir, &name)
 }
 
@@ -394,7 +424,11 @@ pub fn set_default_agent(id: String) -> Result<config::ConfigView, String> {
     let id = id.trim().to_string();
     let view = config::load_view();
     let known = agents::spec(&id).is_some()
-        || view.dashboard.custom_agents.iter().any(|c| c.id.trim() == id);
+        || view
+            .dashboard
+            .custom_agents
+            .iter()
+            .any(|c| c.id.trim() == id);
     if !known {
         return Err(format!("모르는 에이전트입니다: {id}"));
     }
@@ -413,7 +447,9 @@ pub fn suggest_vault_path() -> String {
 #[tauri::command]
 pub fn pack_agent_status(pack_id: String) -> Result<PackAgentStatus, String> {
     let (reg, _) = registry();
-    let pack = reg.get(&pack_id).ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
+    let pack = reg
+        .get(&pack_id)
+        .ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
     Ok(PackAgentStatus {
         claude: agents::pack_skill_status(pack, agents::CLAUDE),
         codex: agents::pack_skill_status(pack, agents::CODEX),
@@ -429,7 +465,9 @@ pub fn install_pack_skills(
     force: bool,
 ) -> Result<agents::InstallReport, String> {
     let (reg, _) = registry();
-    let pack = reg.get(&pack_id).ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
+    let pack = reg
+        .get(&pack_id)
+        .ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
     agents::install_pack_skills(pack, &agent, force)
 }
 
@@ -439,7 +477,9 @@ pub fn uninstall_pack_skills(
     agent: String,
 ) -> Result<agents::InstallReport, String> {
     let (reg, _) = registry();
-    let pack = reg.get(&pack_id).ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
+    let pack = reg
+        .get(&pack_id)
+        .ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
     agents::uninstall_pack_skills(pack, &agent)
 }
 
@@ -454,7 +494,9 @@ pub fn workspace_plan() -> Vec<String> {
 
 /// 활성 팩의 폴더·템플릿을 작업공간에 만든다. 기존 파일은 덮지 않는다.
 #[tauri::command]
-pub fn provision_workspace(vault_path: Option<String>) -> Result<workspace::ProvisionReport, String> {
+pub fn provision_workspace(
+    vault_path: Option<String>,
+) -> Result<workspace::ProvisionReport, String> {
     let (reg, view) = registry();
     let root = vault_path.unwrap_or(view.vault_path.clone());
     if root.is_empty() {
@@ -507,34 +549,48 @@ pub async fn herdr_snapshot() -> HerdrSnapshot {
 
 #[tauri::command]
 pub async fn herdr_focus_workspace(id: String) -> Result<(), String> {
-    herdr().focus_workspace(&id).await.map(|_| ()).map_err(|e| e.to_string())
+    herdr()
+        .focus_workspace(&id)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn herdr_focus_pane(id: String) -> Result<(), String> {
-    herdr().focus_pane(&id).await.map(|_| ()).map_err(|e| e.to_string())
+    herdr()
+        .focus_pane(&id)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// 페인의 최근 출력. 앱을 떠나지 않고 승인 프롬프트 내용을 확인하기 위한 것이다.
 #[tauri::command]
 pub async fn herdr_read_pane(id: String, lines: Option<u32>) -> Result<String, String> {
-    herdr().agent_read(&id, lines.unwrap_or(40)).await.map_err(|e| e.to_string())
+    herdr()
+        .agent_read(&id, lines.unwrap_or(40))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub async fn herdr_close_tab(id: String) -> Result<(), String> {
-    herdr().close_tab(&id).await.map(|_| ()).map_err(|e| e.to_string())
+    herdr()
+        .close_tab(&id)
+        .await
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 /// 사람이 쓸 빈 탭 하나. cwd 를 주지 않으면 작업공간에서 연다.
 #[tauri::command]
-pub async fn herdr_open_tab(
-    cwd: Option<String>,
-    label: Option<String>,
-) -> Result<Value, String> {
+pub async fn herdr_open_tab(cwd: Option<String>, label: Option<String>) -> Result<Value, String> {
     let view = config::load_view();
     let h = Herdr::new(&view.dashboard.herdr);
-    let dir = cwd.filter(|c| !c.is_empty()).unwrap_or(view.vault_path.clone());
+    let dir = cwd
+        .filter(|c| !c.is_empty())
+        .unwrap_or(view.vault_path.clone());
     if dir.is_empty() {
         return Err("열 경로가 없습니다 (작업공간을 먼저 설정하세요)".into());
     }
@@ -542,7 +598,10 @@ pub async fn herdr_open_tab(
     let ws_label = view.dashboard.herdr.sanitized().workspace_label;
     let workspace = match h.find_workspace_by_label(&ws_label).await {
         Some(id) => id,
-        None => h.create_workspace(&ws_label).await.map_err(|e| e.to_string())?,
+        None => h
+            .create_workspace(&ws_label)
+            .await
+            .map_err(|e| e.to_string())?,
     };
     let tab = h
         .open_shell_tab(&workspace, &label, &dir)
@@ -616,7 +675,11 @@ fn builtin_rows(view: &config::ConfigView, state: &AppState) -> Vec<TaskRow> {
                 time: sched.time.clone(),
                 date: None,
             }),
-            source: crate::tasks::Source { kind: "builtin".into(), agent: None, request: None },
+            source: crate::tasks::Source {
+                kind: "builtin".into(),
+                agent: None,
+                request: None,
+            },
             ..crate::tasks::TaskDef::default()
         },
     })
@@ -636,7 +699,10 @@ pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
         drop(st);
         crate::tasks::list_tasks(&root)
             .into_iter()
-            .map(|def| TaskRow { last_run: last_run.get(&def.id).cloned(), def })
+            .map(|def| TaskRow {
+                last_run: last_run.get(&def.id).cloned(),
+                def,
+            })
             .collect()
     };
     TasksView {
@@ -661,7 +727,11 @@ pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef
     def.builtin = false;
     def.skill = None;
     if is_new {
-        def.source = crate::tasks::Source { kind: "gui".into(), agent: None, request: None };
+        def.source = crate::tasks::Source {
+            kind: "gui".into(),
+            agent: None,
+            request: None,
+        };
         def.created_at = crate::tasks::now_iso();
     }
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -707,10 +777,7 @@ pub fn run_task_now(
 }
 
 #[tauri::command]
-pub fn approve_request(
-    id: String,
-    app: AppHandle,
-) -> Result<crate::tasks::TaskDef, String> {
+pub fn approve_request(id: String, app: AppHandle) -> Result<crate::tasks::TaskDef, String> {
     use tauri::Emitter;
     let root = crate::tasks::workbench_root();
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -729,8 +796,11 @@ pub fn approve_request(
 #[tauri::command]
 pub fn reject_request(id: String, reason: Option<String>, app: AppHandle) -> Result<(), String> {
     use tauri::Emitter;
-    let result =
-        crate::tasks::reject_request(&crate::tasks::workbench_root(), &id, reason.as_deref().unwrap_or("사유 없음"));
+    let result = crate::tasks::reject_request(
+        &crate::tasks::workbench_root(),
+        &id,
+        reason.as_deref().unwrap_or("사유 없음"),
+    );
     if result.is_ok() {
         let _ = app.emit("tasks-changed", serde_json::json!({}));
     }
@@ -745,4 +815,498 @@ pub fn install_skill(target: String) -> Result<plugin::SkillInstall, String> {
 #[tauri::command]
 pub fn skill_status() -> Vec<plugin::SkillInstall> {
     plugin::skill_status()
+}
+
+// ---------- 협업(멀티에이전트 통합 레인) ----------
+
+#[tauri::command]
+pub fn collab_create_session(
+    input: crate::collab::service::CreateSessionInput,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<crate::collab::model::Session, String> {
+    let view = config::load_view();
+    svc.create_session(&view, &input)
+}
+
+#[tauri::command]
+pub fn collab_list_sessions(
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<Vec<crate::collab::model::Session>, String> {
+    svc.store.list_sessions()
+}
+
+#[tauri::command]
+pub fn collab_session_detail(
+    id: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<crate::collab::model::SessionView, String> {
+    svc.session_view(&id)
+}
+
+#[tauri::command]
+pub fn collab_session_audit(
+    id: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<Vec<crate::collab::model::AuditEvent>, String> {
+    svc.store.list_audit_events(&id, 200)
+}
+
+/// 프로젝트 레지스트리 조회. 새 정본(UUID)과 legacy 후보를 함께 내려준다(설계 297줄).
+#[tauri::command]
+pub fn collab_projects_view() -> Result<serde_json::Value, String> {
+    let view = config::load_view();
+    let registered: Vec<serde_json::Value> = view
+        .core_projects
+        .iter()
+        .map(|(id, p)| {
+            serde_json::json!({ "id": id, "name": id, "path": p.path, "integration": {
+                "path": p.integration.path, "branch": p.integration.branch,
+                "verifyProfile": p.integration.verify_profile,
+            }})
+        })
+        .collect();
+    let legacy: Vec<serde_json::Value> = view
+        .projects
+        .iter()
+        .map(|p| {
+            serde_json::json!({ "name": p.name, "path": p.path, "workBranch": p.work_branch, "verify": p.verify })
+        })
+        .collect();
+    Ok(serde_json::json!({ "registered": registered, "legacy": legacy }))
+}
+
+/// 사용자가 등록을 확인하면 UUID projectId를 만들어 새 블록으로 복사한다(설계 299-300줄).
+#[tauri::command]
+pub fn collab_register_project(
+    name: String,
+    path: String,
+    branch: String,
+    verify_profile: String,
+) -> Result<serde_json::Value, String> {
+    let mut view = config::load_view();
+    let id = uuid::Uuid::new_v4().to_string();
+    let project = crate::collab::model::CoreProject {
+        path: path.clone(),
+        integration: crate::collab::model::IntegrationTarget {
+            path: String::new(), // 비어 두면 코어가 path로 해석한다
+            branch: branch.clone(),
+            verify_profile: verify_profile.clone(),
+        },
+        verify_profiles: Default::default(),
+    };
+    let mut map = serde_json::Map::new();
+    for (existing_id, p) in &view.core_projects {
+        map.insert(
+            existing_id.clone(),
+            serde_json::to_value(p).unwrap_or_default(),
+        );
+    }
+    map.insert(
+        id.clone(),
+        serde_json::to_value(&project).unwrap_or_default(),
+    );
+    let config_path = config::config_path();
+    let mut patch = serde_json::Map::new();
+    patch.insert("coreProjects".into(), Value::Object(map));
+    view = config::save_patch_at(&config_path, &Value::Object(patch))?;
+    let _ = &view;
+    Ok(serde_json::json!({ "id": id, "name": name, "path": path, "branch": branch }))
+}
+
+/// 프로젝트 검증 프로필 저장(argv 배열만 허용 — 임의 shell 문자열 금지, 설계 307줄).
+#[tauri::command]
+pub fn collab_save_verify_profile(
+    project_id: String,
+    profile_name: String,
+    profile: crate::collab::model::VerifyProfile,
+) -> Result<serde_json::Value, String> {
+    let view = config::load_view();
+    let mut map = serde_json::Map::new();
+    for (existing_id, p) in &view.core_projects {
+        let mut p = p.clone();
+        if existing_id == &project_id {
+            p.verify_profiles
+                .insert(profile_name.clone(), profile.clone());
+        }
+        map.insert(
+            existing_id.clone(),
+            serde_json::to_value(&p).unwrap_or_default(),
+        );
+    }
+    if !map.contains_key(&project_id) {
+        return Err(format!("등록되지 않은 프로젝트: {project_id}"));
+    }
+    let config_path = config::config_path();
+    let mut patch = serde_json::Map::new();
+    patch.insert("coreProjects".into(), Value::Object(map));
+    config::save_patch_at(&config_path, &Value::Object(patch))?;
+    Ok(serde_json::json!({ "ok": true }))
+}
+
+#[tauri::command]
+pub fn collab_approve(
+    candidate_id: String,
+    decided_by: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<(), String> {
+    svc.approve_candidate(&candidate_id, &decided_by)
+}
+
+#[tauri::command]
+pub fn collab_reject(
+    candidate_id: String,
+    decided_by: String,
+    reason: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<(), String> {
+    svc.reject_candidate(&candidate_id, &decided_by, &reason)
+}
+
+#[tauri::command]
+pub fn collab_request_changes(
+    candidate_id: String,
+    reason: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<(), String> {
+    svc.request_changes(&candidate_id, &reason)
+}
+
+#[tauri::command]
+pub fn collab_manual_ok(
+    candidate_id: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<(), String> {
+    svc.confirm_manual_ok(&candidate_id)
+}
+
+#[tauri::command]
+pub fn collab_manual_fail(
+    candidate_id: String,
+    reason: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<(), String> {
+    svc.confirm_manual_failed(&candidate_id, &reason)
+}
+
+#[tauri::command]
+pub fn collab_repair(
+    candidate_id: String,
+    instruction: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<crate::collab::model::AgentRun, String> {
+    svc.create_repair_lane(&candidate_id, &instruction)
+}
+
+#[tauri::command]
+pub fn collab_revert(
+    candidate_id: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<String, String> {
+    let phase = svc.revert_candidate(&candidate_id)?;
+    Ok(phase.as_str().to_string())
+}
+
+#[tauri::command]
+pub fn collab_finalize(
+    session_id: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<crate::collab::model::Session, String> {
+    svc.finalize_session(&session_id)
+}
+
+#[tauri::command]
+pub fn collab_pause(
+    session_id: String,
+    reason: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<(), String> {
+    svc.pause_session(&session_id, &reason)
+}
+
+#[tauri::command]
+pub fn collab_resume(
+    session_id: String,
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<(), String> {
+    svc.resume_session(&session_id)
+}
+
+/// 큐 즉시 진행(검토 화면의 「큐 진행」 버튼).
+#[tauri::command]
+pub async fn collab_run_queue(
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<Option<String>, String> {
+    let svc = svc.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let view = config::load_view();
+        svc.run_queue(&view)
+            .map(|p| p.map(|phase| phase.as_str().to_string()))
+    })
+    .await
+    .map_err(|e| format!("큐 스레드 실패: {e}"))?
+}
+
+/// 인박스 즉시 확인(에이전트 제출 수동 가져오기).
+#[tauri::command]
+pub fn collab_inbox_tick(
+    svc: State<'_, Arc<crate::collab::service::CollabService>>,
+) -> Result<Vec<crate::collab::inbox::InboxReport>, String> {
+    let view = config::load_view();
+    svc.tick(&view)
+}
+
+// ---------- 확장·소스(connector) ----------
+
+/// 내장 bundle manifest. 앱 리소스에 두지 않고 프로그램 상수로 등록한다(설계 648줄).
+pub fn builtin_extension_manifests() -> Vec<crate::extensions::manifest::ExtensionManifest> {
+    let feeds = crate::extensions::manifest::ExtensionManifest {
+        id: "core-feeds".into(),
+        name: "읽을거리".into(),
+        version: "0.1.0".into(),
+        components: vec![crate::extensions::manifest::ExtensionComponent {
+            id: "rss".into(),
+            kind: "connector".into(),
+            adapter: "builtin:rss".into(),
+            requests: crate::extensions::manifest::PermissionRequests {
+                network: vec![], // instance별 feed 도메인 grant
+                ..Default::default()
+            },
+            contributes: crate::extensions::manifest::ComponentContribution {
+                sources: vec![crate::extensions::manifest::SourceContribution {
+                    id: "articles".into(),
+                    kind: "article".into(),
+                }],
+                views: vec![crate::extensions::manifest::ViewContribution {
+                    id: "reading".into(),
+                    renderer: "reading-list".into(),
+                }],
+            },
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let github = crate::extensions::manifest::ExtensionManifest {
+        id: "github".into(),
+        name: "GitHub".into(),
+        version: "0.1.0".into(),
+        components: vec![crate::extensions::manifest::ExtensionComponent {
+            id: "issues".into(),
+            kind: "connector".into(),
+            adapter: "builtin:github".into(),
+            requests: crate::extensions::manifest::PermissionRequests {
+                repository: vec!["read".into()],
+                issues: vec!["read".into()],
+                network: vec!["api.github.com".into()],
+                secrets: vec!["github.oauth".into()],
+            },
+            contributes: crate::extensions::manifest::ComponentContribution {
+                sources: vec![crate::extensions::manifest::SourceContribution {
+                    id: "issues".into(),
+                    kind: "issue".into(),
+                }],
+                views: vec![crate::extensions::manifest::ViewContribution {
+                    id: "github-sync".into(),
+                    renderer: "sync-status".into(),
+                }],
+            },
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    vec![feeds, github]
+}
+
+#[tauri::command]
+pub fn extensions_list() -> Result<serde_json::Value, String> {
+    let user = crate::extensions::manifest::discover(None)?;
+    let mut all: Vec<serde_json::Value> = builtin_extension_manifests()
+        .into_iter()
+        .map(|m| {
+            serde_json::json!({ "manifest": serde_json::to_value(&m).unwrap_or_default(), "source": "builtin", "dir": "" })
+        })
+        .collect();
+    for b in user {
+        all.push(serde_json::json!({ "manifest": serde_json::to_value(&b.manifest).unwrap_or_default(), "source": b.source, "dir": b.dir }));
+    }
+    Ok(serde_json::json!({ "bundles": all }))
+}
+
+/// instance 생성/갱신. grant는 manifest 요청과 사용자 승인 결과를 합쳐 저장한다.
+#[tauri::command]
+pub fn sources_upsert_instance(
+    instance_id: String,
+    extension_id: String,
+    component_id: String,
+    config: Value,
+    network: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    let manifests = builtin_extension_manifests();
+    let known = manifests
+        .iter()
+        .find(|m| m.id == extension_id)
+        .and_then(|m| m.component(&component_id))
+        .ok_or_else(|| format!("알 수 없는 connector: {extension_id}.{component_id}"))?;
+    // 권한은 manifest 요청 ∩ 사용자 승인. network는 사용자가 도메인을 승인한다.
+    let mut grant = known.requests.clone();
+    grant.network = network;
+    let instance = crate::extensions::manifest::ConnectorInstance {
+        instance_id: instance_id.clone(),
+        extension_id,
+        component_id,
+        config,
+        grant,
+        paused: false,
+        created_at: crate::collab::now_ts(),
+        updated_at: crate::collab::now_ts(),
+    };
+    store.upsert_instance(&instance)?;
+    Ok(serde_json::json!({ "ok": true, "instanceId": instance_id }))
+}
+
+#[tauri::command]
+pub fn sources_list_instances() -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    let mut instances = Vec::new();
+    for id in store.list_instances()? {
+        if let Some(config) = store.instance_config(&id)? {
+            instances.push(serde_json::json!({ "instanceId": id, "config": config }));
+        }
+    }
+    Ok(serde_json::json!({ "instances": instances, "deadLetters": store.list_dead_letters(50)? }))
+}
+
+#[tauri::command]
+pub async fn sources_refresh(instance_id: String) -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    let config_value = store
+        .instance_config(&instance_id)?
+        .ok_or_else(|| format!("instance가 없다: {instance_id}"))?;
+    let config: crate::extensions::feeds::FeedSourceConfig =
+        serde_json::from_value(config_value).map_err(|e| format!("feed 설정 해석 실패: {e}"))?;
+    let granted: Vec<String> = config
+        .feeds
+        .iter()
+        .filter_map(|f| {
+            crate::extensions::broker::validate_url_scheme(&f.url)
+                .ok()
+                .map(|(_, host)| host)
+        })
+        .collect();
+    let ctx = crate::extensions::broker::ExtensionContext {
+        instance_id,
+        granted_domains: granted,
+        capabilities: vec![],
+    };
+    let discovered = crate::extensions::feeds::discover(&store, &ctx, &config).await?;
+    Ok(serde_json::json!({ "discovered": discovered }))
+}
+
+#[tauri::command]
+pub fn articles_list(
+    source_instance: String,
+    limit: Option<i64>,
+) -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    let rows = store.list_articles(&source_instance, limit.unwrap_or(200))?;
+    Ok(serde_json::json!({ "articles": rows }))
+}
+
+#[tauri::command]
+pub fn article_set_state(
+    article_id: String,
+    read: Option<bool>,
+    archived: Option<bool>,
+) -> Result<(), String> {
+    let store = crate::collab::store::Store::open()?;
+    store.set_article_state(&article_id, read, archived)
+}
+
+#[tauri::command]
+pub async fn github_import_tick(instance_id: String) -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    let config_value = store
+        .instance_config(&instance_id)?
+        .ok_or_else(|| format!("instance가 없다: {instance_id}"))?;
+    let config: crate::extensions::github::GitHubSourceConfig =
+        serde_json::from_value(config_value).map_err(|e| format!("GitHub 설정 해석 실패: {e}"))?;
+    let ctx = crate::extensions::broker::ExtensionContext {
+        instance_id,
+        granted_domains: vec!["api.github.com".into()],
+        capabilities: vec!["secret_use".into()],
+    };
+    let report = crate::extensions::github::poll_issues(&store, &ctx, &config).await?;
+    Ok(serde_json::to_value(&report).unwrap_or_default())
+}
+
+#[tauri::command]
+pub fn inbound_list(state: String) -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    Ok(serde_json::json!({ "inbound": store.list_inbound_changes(&state, 200)? }))
+}
+
+#[tauri::command]
+pub fn inbound_accept_import(
+    inbound_id: String,
+    project_id: String,
+    notes_dir: String,
+    id_prefix: String,
+) -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    let path = crate::extensions::github::accept_import(
+        &store,
+        &inbound_id,
+        &project_id,
+        std::path::Path::new(&notes_dir),
+        &id_prefix,
+    )?;
+    Ok(serde_json::json!({ "notePath": path }))
+}
+
+#[tauri::command]
+pub fn inbound_accept_update(inbound_id: String) -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    let path = crate::extensions::github::accept_field_update(&store, &inbound_id)?;
+    Ok(serde_json::json!({ "notePath": path }))
+}
+
+#[tauri::command]
+pub fn remote_operations_list(statuses: Vec<String>) -> Result<serde_json::Value, String> {
+    let store = crate::collab::store::Store::open()?;
+    let refs: Vec<&str> = statuses.iter().map(|s| s.as_str()).collect();
+    Ok(serde_json::json!({ "operations": store.list_remote_operations(&refs, 100)? }))
+}
+
+/// 사람의 원격 쓰기 승인(issue_write·push·pr_create는 별도 승인이다, 설계 710줄).
+#[tauri::command]
+pub fn remote_operation_approve(operation_id: String, decided_by: String) -> Result<(), String> {
+    let store = crate::collab::store::Store::open()?;
+    crate::extensions::github_outbound::approve_operation(&store, &operation_id, &decided_by)
+}
+
+/// 승인된 원격 쓰기 실행. 네트워크 오류 시 uncertain으로 남고 reconcile을 기다린다.
+#[tauri::command]
+pub fn remote_operation_execute(operation_id: String, repo_dir: String) -> Result<String, String> {
+    let store = crate::collab::store::Store::open()?;
+    crate::extensions::github_outbound::execute_operation(
+        &store,
+        &operation_id,
+        std::path::Path::new(&repo_dir),
+    )
+}
+
+/// uncertain operation의 재조정 결과 기록(사후 조회로 이미 생성됐는지 확인 뒤).
+#[tauri::command]
+pub fn remote_operation_reconcile(
+    operation_id: String,
+    remote_created: bool,
+    result: String,
+) -> Result<(), String> {
+    let store = crate::collab::store::Store::open()?;
+    crate::extensions::github_outbound::mark_reconciled(
+        &store,
+        &operation_id,
+        remote_created,
+        &result,
+    )
 }

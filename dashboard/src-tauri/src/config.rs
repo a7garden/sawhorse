@@ -21,7 +21,6 @@ fn load_raw_at(path: &Path) -> Value {
         .unwrap_or_else(|| Value::Object(Map::new()))
 }
 
-
 // ---------- wire types ----------
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -34,7 +33,10 @@ pub struct RoutineSched {
 impl Default for RoutineSched {
     fn default() -> Self {
         // missing/disabled by default; Schedules::default() overrides the three real routines
-        Self { enabled: false, time: "00:00".into() }
+        Self {
+            enabled: false,
+            time: "00:00".into(),
+        }
     }
 }
 
@@ -49,9 +51,18 @@ pub struct Schedules {
 impl Default for Schedules {
     fn default() -> Self {
         Self {
-            morning: RoutineSched { enabled: true, time: "09:00".into() },
-            lunch: RoutineSched { enabled: true, time: "12:30".into() },
-            evening: RoutineSched { enabled: true, time: "18:00".into() },
+            morning: RoutineSched {
+                enabled: true,
+                time: "09:00".into(),
+            },
+            lunch: RoutineSched {
+                enabled: true,
+                time: "12:30".into(),
+            },
+            evening: RoutineSched {
+                enabled: true,
+                time: "18:00".into(),
+            },
         }
     }
 }
@@ -144,6 +155,9 @@ pub struct DashboardCfg {
     /// 잡 실행기는 아직 Claude Code 에 묶여 있어 이 값이 실행기를 바꾸지는 않는다.
     pub default_agent: String,
     pub custom_agents: Vec<CustomAgent>,
+    /// 승인 정책·통합 방식(설계 255-264줄). 새 세션의 초기값 계산에만 쓰고,
+    /// 활성 세션은 시작 때 찍은 policy snapshot을 따른다.
+    pub collaboration: crate::collab::model::CollaborationPolicy,
 }
 
 impl Default for DashboardCfg {
@@ -157,6 +171,7 @@ impl Default for DashboardCfg {
             herdr: HerdrCfg::default(),
             default_agent: "claude".into(),
             custom_agents: Vec::new(),
+            collaboration: Default::default(),
         }
     }
 }
@@ -190,6 +205,8 @@ pub struct ConfigView {
     pub vault_path: String,
     pub default_project: String,
     pub projects: Vec<ProjectCfg>,
+    /// 새 코어 프로젝트 정본. key는 등록 때 생성한 UUID projectId다(설계 294-295줄).
+    pub core_projects: BTreeMap<String, crate::collab::model::CoreProject>,
     pub dashboard: DashboardCfg,
     pub packs: PacksCfg,
     /// `dashboard.schedules` 원본 전체. 정규 키는 `<packId>.<actionId>` 이고
@@ -232,7 +249,9 @@ pub fn view(raw: &Value, exists: bool) -> ConfigView {
         .and_then(Value::as_str)
         .unwrap_or("")
         .to_string();
-    let improve = obj.and_then(|o| o.get("improve")).and_then(Value::as_object);
+    let improve = obj
+        .and_then(|o| o.get("improve"))
+        .and_then(Value::as_object);
     let default_project = improve
         .and_then(|i| i.get("defaultProject"))
         .and_then(Value::as_str)
@@ -247,6 +266,19 @@ pub fn view(raw: &Value, exists: bool) -> ConfigView {
                     let mut p: ProjectCfg = serde_json::from_value(pv.clone()).unwrap_or_default();
                     p.name = name.clone();
                     p
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let core_projects = obj
+        .and_then(|o| o.get("projects"))
+        .and_then(Value::as_object)
+        .map(|m| {
+            m.iter()
+                .filter_map(|(id, pv)| {
+                    serde_json::from_value::<crate::collab::model::CoreProject>(pv.clone())
+                        .ok()
+                        .map(|p| (id.clone(), p))
                 })
                 .collect()
         })
@@ -266,12 +298,23 @@ pub fn view(raw: &Value, exists: bool) -> ConfigView {
         .map(|m| {
             m.iter()
                 .filter_map(|(k, v)| {
-                    serde_json::from_value::<RoutineSched>(v.clone()).ok().map(|s| (k.clone(), s))
+                    serde_json::from_value::<RoutineSched>(v.clone())
+                        .ok()
+                        .map(|s| (k.clone(), s))
                 })
                 .collect()
         })
         .unwrap_or_default();
-    ConfigView { exists, vault_path, default_project, projects, dashboard, packs, schedules }
+    ConfigView {
+        exists,
+        vault_path,
+        default_project,
+        projects,
+        core_projects,
+        dashboard,
+        packs,
+        schedules,
+    }
 }
 
 pub fn load_view() -> ConfigView {
@@ -300,13 +343,17 @@ fn validate_hhmm(s: &str) -> Result<(), String> {
 fn validate_herdr_key(key: &str, v: &Value) -> Result<(), String> {
     match key {
         "mode" => {
-            let m = v.as_str().ok_or_else(|| "herdr.mode는 문자열이어야 합니다".to_string())?;
+            let m = v
+                .as_str()
+                .ok_or_else(|| "herdr.mode는 문자열이어야 합니다".to_string())?;
             if !HERDR_MODES.contains(&m) {
                 return Err(format!("알 수 없는 herdr 실행 모드: {m}"));
             }
         }
         "cleanup" => {
-            let c = v.as_str().ok_or_else(|| "herdr.cleanup은 문자열이어야 합니다".to_string())?;
+            let c = v
+                .as_str()
+                .ok_or_else(|| "herdr.cleanup은 문자열이어야 합니다".to_string())?;
             if !HERDR_CLEANUPS.contains(&c) {
                 return Err(format!("알 수 없는 herdr 정리 정책: {c}"));
             }
@@ -338,6 +385,27 @@ fn validate_herdr_key(key: &str, v: &Value) -> Result<(), String> {
     }
     Ok(())
 }
+/// 승인 정책 키 검증. 정책값은 설계 255-264줄·238-241줄의 허용 집합으로 제한한다.
+fn validate_collaboration_key(key: &str, v: &Value) -> Result<(), String> {
+    let as_enum = |allowed: &[&str]| -> Result<(), String> {
+        let s = v
+            .as_str()
+            .ok_or_else(|| format!("collaboration.{key}는 문자열이어야 합니다"))?;
+        if allowed.contains(&s) {
+            Ok(())
+        } else {
+            Err(format!("알 수 없는 collaboration.{key}: {s}"))
+        }
+    };
+    match key {
+        "localIntegrationApproval" => as_enum(&["required", "autoAfterPreflight"]),
+        "verificationMode" => as_enum(&["perChange"]),
+        "failurePolicy" => as_enum(&["pause"]),
+        "integrationStrategy" => as_enum(&["mergeCommit"]),
+        "remoteWriteApproval" => as_enum(&["required"]),
+        _ => Ok(()), // 미래 키는 보존만 한다
+    }
+}
 
 /// Merge a patch (ConfigPatch from the frontend) into the raw config and write it back.
 /// Unknown keys anywhere in the document are preserved untouched.
@@ -366,7 +434,9 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
     }
 
     if let Some(arr) = patch.get("projects") {
-        let list = arr.as_array().ok_or_else(|| "projects는 배열이어야 합니다".to_string())?;
+        let list = arr
+            .as_array()
+            .ok_or_else(|| "projects는 배열이어야 합니다".to_string())?;
         let mut map = Map::new();
         for pv in list {
             let p: ProjectCfg = serde_json::from_value(pv.clone())
@@ -390,6 +460,36 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
             .insert("projects".into(), Value::Object(map));
     }
 
+    if let Some(map) = patch.get("coreProjects").and_then(Value::as_object) {
+        // 새 코어 프로젝트 정본(설계 294-300줄). key는 UUID projectId. legacy
+        // improve.projects와 별개 블록이라 서로를 지우지 않는다 — rollback 대응.
+        let mut cleaned = Map::new();
+        for (id, pv) in map {
+            if id.trim().is_empty() {
+                return Err("coreProjects 항목의 projectId가 비어 있습니다".into());
+            }
+            let p: crate::collab::model::CoreProject = serde_json::from_value(pv.clone())
+                .map_err(|e| format!("coreProjects.{id} 파싱 실패: {e}"))?;
+            if p.path.trim().is_empty() {
+                return Err(format!("coreProjects.{id}에 path가 필요합니다"));
+            }
+            let mut value = serde_json::to_value(&p)
+                .map_err(|e| format!("coreProjects.{id} 직렬화 실패: {e}"))?;
+            // 통합 경로가 비어 있으면 프로젝트 path 자체를 쓴다(설계 269-271줄).
+            if value
+                .get("integration")
+                .and_then(|i| i.get("path"))
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .is_empty()
+            {
+                value["integration"]["path"] = Value::String(p.path.clone());
+            }
+            cleaned.insert(id.clone(), value);
+        }
+        obj.insert("projects".into(), Value::Object(cleaned));
+    }
+
     if let Some(dash) = patch.get("dashboard").and_then(Value::as_object) {
         let target = obj
             .entry("dashboard")
@@ -399,7 +499,9 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
         for (k, v) in dash {
             match k.as_str() {
                 "schedules" => {
-                    let sv = v.as_object().ok_or_else(|| "schedules는 객체여야 합니다".to_string())?;
+                    let sv = v
+                        .as_object()
+                        .ok_or_else(|| "schedules는 객체여야 합니다".to_string())?;
                     let st = target
                         .entry("schedules")
                         .or_insert_with(|| Value::Object(Map::new()))
@@ -413,7 +515,9 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
                     }
                 }
                 "permissionMode" => {
-                    let mode = v.as_str().ok_or_else(|| "permissionMode는 문자열이어야 합니다".to_string())?;
+                    let mode = v
+                        .as_str()
+                        .ok_or_else(|| "permissionMode는 문자열이어야 합니다".to_string())?;
                     if !PERMISSION_MODES.contains(&mode) {
                         return Err(format!("알 수 없는 permissionMode: {mode}"));
                     }
@@ -448,7 +552,9 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
                     target.insert(k.clone(), v.clone());
                 }
                 "herdr" => {
-                    let hv = v.as_object().ok_or_else(|| "herdr는 객체여야 합니다".to_string())?;
+                    let hv = v
+                        .as_object()
+                        .ok_or_else(|| "herdr는 객체여야 합니다".to_string())?;
                     let ht = target
                         .entry("herdr")
                         .or_insert_with(|| Value::Object(Map::new()))
@@ -457,6 +563,20 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
                     for (hk, hvv) in hv {
                         validate_herdr_key(hk, hvv)?;
                         ht.insert(hk.clone(), hvv.clone());
+                    }
+                }
+                "collaboration" => {
+                    let cv = v
+                        .as_object()
+                        .ok_or_else(|| "collaboration은 객체여야 합니다".to_string())?;
+                    let ct = target
+                        .entry("collaboration")
+                        .or_insert_with(|| Value::Object(Map::new()))
+                        .as_object_mut()
+                        .ok_or_else(|| "collaboration 블록이 객체가 아닙니다".to_string())?;
+                    for (ck, cvv) in cv {
+                        validate_collaboration_key(ck, cvv)?;
+                        ct.insert(ck.clone(), cvv.clone());
                     }
                 }
                 _ => {} // launchAtLogin and unknown keys are ignored here
@@ -631,7 +751,12 @@ pub async fn run_diagnostics(view: &ConfigView) -> Diagnostics {
         } else {
             None
         };
-        projects.push(ProjectDiag { name: p.name.clone(), path_ok, git_ok, branch_ok });
+        projects.push(ProjectDiag {
+            name: p.name.clone(),
+            path_ok,
+            git_ok,
+            branch_ok,
+        });
     }
     Diagnostics {
         config_exists: view.exists,
@@ -648,11 +773,7 @@ mod tests {
     use super::*;
 
     fn temp_path(tag: &str) -> PathBuf {
-        std::env::temp_dir().join(format!(
-            "swdash-test-{}-{}.json",
-            tag,
-            uuid::Uuid::new_v4()
-        ))
+        std::env::temp_dir().join(format!("swdash-test-{}-{}.json", tag, uuid::Uuid::new_v4()))
     }
 
     #[test]
@@ -681,7 +802,11 @@ mod tests {
             }"#,
         )
         .unwrap();
-        write_atomic(&path, serde_json::to_string_pretty(&initial).unwrap().as_bytes()).unwrap();
+        write_atomic(
+            &path,
+            serde_json::to_string_pretty(&initial).unwrap().as_bytes(),
+        )
+        .unwrap();
 
         let patch = serde_json::json!({
             "vaultPath": "C:\\new",
@@ -692,7 +817,10 @@ mod tests {
         assert_eq!(v.vault_path, "C:\\new");
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("customTop"), "unknown key dropped: {text}");
-        assert!(text.contains("unknownProjectKey"), "project unknown key dropped: {text}");
+        assert!(
+            text.contains("unknownProjectKey"),
+            "project unknown key dropped: {text}"
+        );
         // key order: vaultPath stays before customTop, dashboard appended last
         let vp = text.find("\"vaultPath\"").unwrap();
         let ct = text.find("\"customTop\"").unwrap();
@@ -737,7 +865,10 @@ mod tests {
         let v = save_patch_at(&path, &patch).unwrap();
         assert!(!v.dashboard.schedules.lunch.enabled);
         assert_eq!(v.dashboard.schedules.lunch.time, "13:10");
-        assert!(v.dashboard.schedules.morning.enabled, "morning must keep default");
+        assert!(
+            v.dashboard.schedules.morning.enabled,
+            "morning must keep default"
+        );
         assert_eq!(v.dashboard.schedules.morning.time, "09:00");
         let _ = std::fs::remove_file(&path);
     }
@@ -762,7 +893,11 @@ mod tests {
                  "settings": {"si": {"excelOutputDir": "/out"}, "other": {"keep": true}}}}"#,
         )
         .unwrap();
-        write_atomic(&path, serde_json::to_string_pretty(&initial).unwrap().as_bytes()).unwrap();
+        write_atomic(
+            &path,
+            serde_json::to_string_pretty(&initial).unwrap().as_bytes(),
+        )
+        .unwrap();
 
         let v = save_patch_at(
             &path,
@@ -770,7 +905,10 @@ mod tests {
                                           "settings": {"si": {"excelOutputDir": "/new"}}}}),
         )
         .unwrap();
-        assert_eq!(v.packs.enabled, vec!["si".to_string(), "starter".to_string()]);
+        assert_eq!(
+            v.packs.enabled,
+            vec!["si".to_string(), "starter".to_string()]
+        );
         assert_eq!(v.pack_setting_str("si", "excelOutputDir"), "/new");
         assert!(
             v.packs.settings.get("other").is_some(),
@@ -778,7 +916,11 @@ mod tests {
         );
 
         assert!(save_patch_at(&path, &serde_json::json!({"packs": {"enabled": "si"}})).is_err());
-        assert!(save_patch_at(&path, &serde_json::json!({"packs": {"settings": {"si": 1}}})).is_err());
+        assert!(save_patch_at(
+            &path,
+            &serde_json::json!({"packs": {"settings": {"si": 1}}})
+        )
+        .is_err());
         let _ = std::fs::remove_file(&path);
     }
 
@@ -791,9 +933,15 @@ mod tests {
             true,
         );
         // 정규 키가 있으면 그것
-        assert_eq!(v.schedule_override("si.lunch", "lunch").unwrap().time, "13:00");
+        assert_eq!(
+            v.schedule_override("si.lunch", "lunch").unwrap().time,
+            "13:00"
+        );
         // 없으면 예전 루틴 키
-        assert_eq!(v.schedule_override("si.morning", "morning").unwrap().time, "08:10");
+        assert_eq!(
+            v.schedule_override("si.morning", "morning").unwrap().time,
+            "08:10"
+        );
         // 둘 다 없으면 팩 기본값을 쓰라는 뜻
         assert!(v.schedule_override("si.evening", "evening").is_none());
         // 기존 타입 계약도 유지

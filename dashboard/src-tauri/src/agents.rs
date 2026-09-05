@@ -42,7 +42,10 @@ pub fn agent_home(agent: &str) -> PathBuf {
 pub fn skill_target(agent: &str, name: &str) -> PathBuf {
     match agent {
         CODEX => agent_home(CODEX).join("prompts").join(format!("{name}.md")),
-        _ => agent_home(CLAUDE).join("skills").join(name).join("SKILL.md"),
+        _ => agent_home(CLAUDE)
+            .join("skills")
+            .join(name)
+            .join("SKILL.md"),
     }
 }
 
@@ -107,11 +110,20 @@ pub fn skill_status(pack: &Pack, agent: &str, name: &str) -> SkillStatus {
             }
         }
     };
-    SkillStatus { skill: name.into(), agent: agent.into(), state, target: target.display().to_string() }
+    SkillStatus {
+        skill: name.into(),
+        agent: agent.into(),
+        state,
+        target: target.display().to_string(),
+    }
 }
 
 pub fn pack_skill_status(pack: &Pack, agent: &str) -> Vec<SkillStatus> {
-    pack.manifest.skills.iter().map(|s| skill_status(pack, agent, s)).collect()
+    pack.manifest
+        .skills
+        .iter()
+        .map(|s| skill_status(pack, agent, s))
+        .collect()
 }
 
 // ---------- 설치 ----------
@@ -134,7 +146,9 @@ pub fn install_pack_skills(pack: &Pack, agent: &str, force: bool) -> Result<Inst
         let src = match std::fs::read_to_string(source_path(pack, name)) {
             Ok(s) => s,
             Err(_) => {
-                report.failed.push(format!("{name}: 팩에 SKILL.md 가 없습니다"));
+                report
+                    .failed
+                    .push(format!("{name}: 팩에 SKILL.md 가 없습니다"));
                 continue;
             }
         };
@@ -147,7 +161,9 @@ pub fn install_pack_skills(pack: &Pack, agent: &str, force: bool) -> Result<Inst
                 continue;
             }
             if !force {
-                report.skipped.push(format!("{name}: 수정된 파일이 있어 건너뜀"));
+                report
+                    .skipped
+                    .push(format!("{name}: 수정된 파일이 있어 건너뜀"));
                 continue;
             }
         }
@@ -416,7 +432,11 @@ fn candidates(dash: &crate::config::DashboardCfg) -> Vec<Candidate> {
         if id.is_empty() {
             continue;
         }
-        let bin = if c.bin.trim().is_empty() { id } else { c.bin.trim() };
+        let bin = if c.bin.trim().is_empty() {
+            id
+        } else {
+            c.bin.trim()
+        };
         // 카탈로그가 이미 아는 id 면 실행 파일만 앞에 끼운다 — 잘못 잡히는 경로를 바로잡는 용도다.
         if let Some(existing) = out.iter_mut().find(|x| x.id == id) {
             existing.bins.insert(0, bin.to_string());
@@ -427,7 +447,11 @@ fn candidates(dash: &crate::config::DashboardCfg) -> Vec<Candidate> {
         }
         out.push(Candidate {
             id: id.into(),
-            name: if c.name.trim().is_empty() { id.into() } else { c.name.trim().into() },
+            name: if c.name.trim().is_empty() {
+                id.into()
+            } else {
+                c.name.trim().into()
+            },
             bins: vec![bin.to_string()],
             install_url: c.install_url.trim().into(),
             install_hint: String::new(),
@@ -449,15 +473,22 @@ pub async fn detect_agents(dash: &crate::config::DashboardCfg) -> Vec<AgentPrese
         })
         .collect();
     // 버전은 찾은 것만, 동시에 물어본다. 하나가 느려도 목록 전체가 멈추지 않는다.
-    let probes: Vec<(PathBuf, &'static [&'static str])> =
-        found.iter().flatten().map(|p| (p.clone(), VERSION_ARGS)).collect();
+    let probes: Vec<(PathBuf, &'static [&'static str])> = found
+        .iter()
+        .flatten()
+        .map(|p| (p.clone(), VERSION_ARGS))
+        .collect();
     let mut versions = crate::detect::versions_of(probes).await.into_iter();
 
     let mut out: Vec<AgentPresence> = cands
         .into_iter()
         .zip(found)
         .map(|(c, path)| {
-            let version = if path.is_some() { versions.next().flatten() } else { None };
+            let version = if path.is_some() {
+                versions.next().flatten()
+            } else {
+                None
+            };
             let installable = is_install_target(&c.id);
             AgentPresence {
                 home: if installable {
@@ -508,15 +539,23 @@ pub struct PluginInstall {
 }
 
 fn installed_plugins_path() -> PathBuf {
-    agent_home(CLAUDE).join("plugins").join("installed_plugins.json")
+    agent_home(CLAUDE)
+        .join("plugins")
+        .join("installed_plugins.json")
 }
 
 /// 같은 스킬이 플러그인으로도 설치돼 있으면 개인 스킬 설치를 권하지 않는다
 /// (중복 등록은 슬래시 커맨드가 두 벌 뜨는 혼란을 만든다).
 pub fn plugin_installs_at(path: &Path, plugin_name: &str) -> Vec<PluginInstall> {
-    let Ok(text) = std::fs::read_to_string(path) else { return vec![] };
-    let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else { return vec![] };
-    let Some(map) = v.get("plugins").and_then(|p| p.as_object()) else { return vec![] };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return vec![];
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return vec![];
+    };
+    let Some(map) = v.get("plugins").and_then(|p| p.as_object()) else {
+        return vec![];
+    };
     let prefix = format!("{plugin_name}@");
     map.iter()
         .filter(|(k, _)| k.starts_with(&prefix) || k.as_str() == plugin_name)
@@ -524,7 +563,11 @@ pub fn plugin_installs_at(path: &Path, plugin_name: &str) -> Vec<PluginInstall> 
             let first = entries.as_array()?.first()?;
             Some(PluginInstall {
                 key: k.clone(),
-                version: first.get("version").and_then(|x| x.as_str()).unwrap_or("").into(),
+                version: first
+                    .get("version")
+                    .and_then(|x| x.as_str())
+                    .unwrap_or("")
+                    .into(),
                 install_path: first
                     .get("installPath")
                     .and_then(|x| x.as_str())
@@ -617,7 +660,9 @@ mod tests {
         assert!(c.ends_with("skills/morning/SKILL.md"), "{c:?}");
         let x = skill_target(CODEX, "morning");
         assert!(x.ends_with("prompts/morning.md"), "{x:?}");
-        assert!(is_install_target(CLAUDE) && is_install_target(CODEX) && !is_install_target("opencode"));
+        assert!(
+            is_install_target(CLAUDE) && is_install_target(CODEX) && !is_install_target("opencode")
+        );
     }
 
     #[test]
@@ -625,7 +670,11 @@ mod tests {
         let mut seen = std::collections::BTreeSet::new();
         for spec in AGENT_CATALOG {
             assert!(seen.insert(spec.id), "id 가 겹친다: {}", spec.id);
-            assert!(!spec.name.is_empty() && !spec.bins.is_empty(), "{}", spec.id);
+            assert!(
+                !spec.name.is_empty() && !spec.bins.is_empty(),
+                "{}",
+                spec.id
+            );
             assert!(
                 spec.install_url.is_empty() || spec.install_url.starts_with("https://"),
                 "{} 의 설치 링크는 https 여야 한다 (open_external 이 https 만 연다)",
@@ -633,15 +682,29 @@ mod tests {
             );
             // 스킬 설치 대상이 아닌 항목은 그 사실을 화면에 말해 줘야 한다
             if !is_install_target(spec.id) {
-                assert!(spec.note.contains("감지"), "{} 의 안내 문구가 범위를 밝히지 않는다", spec.id);
+                assert!(
+                    spec.note.contains("감지"),
+                    "{} 의 안내 문구가 범위를 밝히지 않는다",
+                    spec.id
+                );
             }
         }
-        let runners: Vec<&str> =
-            AGENT_CATALOG.iter().filter(|s| s.runs_jobs).map(|s| s.id).collect();
-        assert_eq!(runners, vec![CLAUDE], "잡 실행기는 아직 Claude Code 하나뿐이다");
+        let runners: Vec<&str> = AGENT_CATALOG
+            .iter()
+            .filter(|s| s.runs_jobs)
+            .map(|s| s.id)
+            .collect();
+        assert_eq!(
+            runners,
+            vec![CLAUDE],
+            "잡 실행기는 아직 Claude Code 하나뿐이다"
+        );
     }
 
-    fn dash(default_agent: &str, custom: Vec<crate::config::CustomAgent>) -> crate::config::DashboardCfg {
+    fn dash(
+        default_agent: &str,
+        custom: Vec<crate::config::CustomAgent>,
+    ) -> crate::config::DashboardCfg {
         crate::config::DashboardCfg {
             default_agent: default_agent.into(),
             custom_agents: custom,
@@ -660,10 +723,19 @@ mod tests {
 
     #[test]
     fn custom_agents_add_new_rows_and_override_known_binaries() {
-        let d = dash("claude", vec![custom("myagent", "/opt/my/agent"), custom(CODEX, "/opt/codex")]);
+        let d = dash(
+            "claude",
+            vec![
+                custom("myagent", "/opt/my/agent"),
+                custom(CODEX, "/opt/codex"),
+            ],
+        );
         let list = candidates(&d);
 
-        let mine = list.iter().find(|c| c.id == "myagent").expect("사용자 항목이 목록에 없다");
+        let mine = list
+            .iter()
+            .find(|c| c.id == "myagent")
+            .expect("사용자 항목이 목록에 없다");
         assert!(mine.custom && !mine.runs_jobs);
         assert_eq!(mine.name, "myagent", "이름을 비우면 id 를 쓴다");
         assert_eq!(mine.bins, vec!["/opt/my/agent"]);
@@ -675,7 +747,10 @@ mod tests {
         assert!(!codex.custom);
 
         // id 가 비면 조용히 버린다 (손으로 고친 설정 파일이 목록을 망가뜨리지 않게)
-        assert_eq!(candidates(&dash("claude", vec![custom("  ", "x")])).len(), AGENT_CATALOG.len());
+        assert_eq!(
+            candidates(&dash("claude", vec![custom("  ", "x")])).len(),
+            AGENT_CATALOG.len()
+        );
     }
 
     #[test]
@@ -684,8 +759,14 @@ mod tests {
         d.claude_bin = "/usr/local/bin/claude-2".into();
         let list = candidates(&d);
         let claude = list.iter().find(|c| c.id == CLAUDE).unwrap();
-        assert_eq!(claude.bins.first().map(String::as_str), Some("/usr/local/bin/claude-2"));
-        assert!(claude.bins.iter().any(|b| b == "claude"), "기본 이름도 폴백으로 남는다");
+        assert_eq!(
+            claude.bins.first().map(String::as_str),
+            Some("/usr/local/bin/claude-2")
+        );
+        assert!(
+            claude.bins.iter().any(|b| b == "claude"),
+            "기본 이름도 폴백으로 남는다"
+        );
     }
 
     #[test]
@@ -694,12 +775,19 @@ mod tests {
         assert_eq!(effective_default(&dash("nope", vec![])), CLAUDE);
         assert_eq!(effective_default(&dash("", vec![])), CLAUDE);
         // 설정에 등록한 에이전트도 기본이 될 수 있다
-        assert_eq!(effective_default(&dash("mine", vec![custom("mine", "m")])), "mine");
+        assert_eq!(
+            effective_default(&dash("mine", vec![custom("mine", "m")])),
+            "mine"
+        );
     }
 
     #[tokio::test]
     async fn detection_reports_the_resolved_path_and_sorts_found_first() {
-        let list = detect_agents(&dash("claude", vec![custom("sw-nope", "sawhorse-no-such-bin")])).await;
+        let list = detect_agents(&dash(
+            "claude",
+            vec![custom("sw-nope", "sawhorse-no-such-bin")],
+        ))
+        .await;
         assert_eq!(list.len(), AGENT_CATALOG.len() + 1);
         let first_missing = list.iter().position(|a| !a.detected).unwrap_or(list.len());
         assert!(

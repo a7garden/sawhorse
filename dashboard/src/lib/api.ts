@@ -1,6 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentsView,
+  CollabAgentRun,
+  CollabAuditEvent,
+  CollabCreateSessionInput,
+  CollabInboxReport,
+  CollabProjectsView,
   ConfigPatch,
   ConfigView,
   Diagnostics,
@@ -20,6 +25,8 @@ import type {
   QueryResult,
   RequirementStatus,
   ScheduleView,
+  CollabSession,
+  CollabSessionView,
   SkillInstall,
   TaskDef,
   TasksView,
@@ -30,6 +37,15 @@ import type {
   VaultCandidate,
   VaultNode,
   VaultNoteView,
+  CollabVerifyProfile,
+  ArticlesListView,
+  ExtensionsListView,
+  FeedSourceCfg,
+  GitHubPollReport,
+  GitHubSourceCfg,
+  InboundListView,
+  RemoteOperationsView,
+  SourcesInstancesView,
 } from "./types";
 
 export const api = {
@@ -140,12 +156,90 @@ export const api = {
     invoke("herdr_read_pane", { id, lines }),
   herdrOpenTab: (cwd?: string, label?: string): Promise<{ tabId: string; paneId: string; workspaceId: string }> =>
     invoke("herdr_open_tab", { cwd: cwd ?? null, label: label ?? null }),
-};
+  // 협업(멀티에이전트 통합 레인)
+  collabProjectsView: (): Promise<CollabProjectsView> => invoke("collab_projects_view"),
+  collabRegisterProject: (
+    name: string,
+    path: string,
+    branch: string,
+    verifyProfile: string,
+  ): Promise<{ id: string; name: string; path: string; branch: string }> =>
+    invoke("collab_register_project", { name, path, branch, verifyProfile }),
+  collabSaveVerifyProfile: (
+    projectId: string,
+    profileName: string,
+    profile: CollabVerifyProfile,
+  ): Promise<{ ok: boolean }> => invoke("collab_save_verify_profile", { projectId, profileName, profile }),
+  collabCreateSession: (input: CollabCreateSessionInput): Promise<CollabSession> =>
+    invoke("collab_create_session", { input }),
+  collabListSessions: (): Promise<CollabSession[]> => invoke("collab_list_sessions"),
+  collabSessionDetail: (id: string): Promise<CollabSessionView> => invoke("collab_session_detail", { id }),
+  collabSessionAudit: (id: string): Promise<CollabAuditEvent[]> => invoke("collab_session_audit", { id }),
+  collabApprove: (candidateId: string, decidedBy: string): Promise<void> =>
+    invoke("collab_approve", { candidateId, decidedBy }),
+  collabReject: (candidateId: string, decidedBy: string, reason: string): Promise<void> =>
+    invoke("collab_reject", { candidateId, decidedBy, reason }),
+  collabRequestChanges: (candidateId: string, reason: string): Promise<void> =>
+    invoke("collab_request_changes", { candidateId, reason }),
+  collabManualOk: (candidateId: string): Promise<void> => invoke("collab_manual_ok", { candidateId }),
+  collabManualFail: (candidateId: string, reason: string): Promise<void> =>
+    invoke("collab_manual_fail", { candidateId, reason }),
+  collabRepair: (candidateId: string, instruction: string): Promise<CollabAgentRun> =>
+    invoke("collab_repair", { candidateId, instruction }),
+  collabRevert: (candidateId: string): Promise<string> => invoke("collab_revert", { candidateId }),
+  collabFinalize: (sessionId: string): Promise<CollabSession> => invoke("collab_finalize", { sessionId }),
+  collabPause: (sessionId: string, reason: string): Promise<void> =>
+    invoke("collab_pause", { sessionId, reason }),
+  collabResume: (sessionId: string): Promise<void> => invoke("collab_resume", { sessionId }),
+  collabRunQueue: (): Promise<string | null> => invoke("collab_run_queue"),
+  collabInboxTick: (): Promise<CollabInboxReport[]> => invoke("collab_inbox_tick"),
+  // 소스 커넥터 · 읽을거리
+  extensionsList: (): Promise<ExtensionsListView> => invoke("extensions_list"),
+  sourcesUpsertInstance: (input: {
+    instanceId: string;
+    extensionId: string;
+    componentId: string;
+    config: FeedSourceCfg | GitHubSourceCfg;
+    network: string[];
+  }): Promise<{ ok: boolean; instanceId: string }> =>
+    invoke("sources_upsert_instance", { ...input }),
+  sourcesListInstances: (): Promise<SourcesInstancesView> => invoke("sources_list_instances"),
+  sourcesRefresh: (instanceId: string): Promise<{ discovered: number }> =>
+    invoke("sources_refresh", { instanceId }),
+  articlesList: (sourceInstance: string, limit?: number): Promise<ArticlesListView> =>
+    invoke("articles_list", { sourceInstance, limit: limit ?? null }),
+  articleSetState: (input: { articleId: string; read?: boolean; archived?: boolean }): Promise<void> =>
+    invoke("article_set_state", {
+      articleId: input.articleId,
+      read: input.read ?? null,
+      archived: input.archived ?? null,
+    }),
+  githubImportTick: (instanceId: string): Promise<GitHubPollReport> =>
+    invoke("github_import_tick", { instanceId }),
+  inboundList: (state: "staged"): Promise<InboundListView> => invoke("inbound_list", { state }),
+  inboundAcceptImport: (input: {
+    inboundId: string;
+    projectId: string;
+    notesDir: string;
+    idPrefix: string;
+  }): Promise<{ notePath: string }> => invoke("inbound_accept_import", { ...input }),
+  inboundAcceptUpdate: (inboundId: string): Promise<{ notePath: string }> =>
+    invoke("inbound_accept_update", { inboundId }),
+  remoteOperationsList: (statuses: string[]): Promise<RemoteOperationsView> =>
+    invoke("remote_operations_list", { statuses }),
+  remoteOperationApprove: (operationId: string, decidedBy: string): Promise<void> =>
+    invoke("remote_operation_approve", { operationId, decidedBy }),
+  remoteOperationExecute: (operationId: string, repoDir: string): Promise<string> =>
+    invoke("remote_operation_execute", { operationId, repoDir }),
+  remoteOperationReconcile: (operationId: string, remoteCreated: boolean, result: string): Promise<void> =>
+    invoke("remote_operation_reconcile", { operationId, remoteCreated, result }),
+ };
 
 // Tauri event names (mirrored by Rust side)
 export const EVENTS = {
   jobProgress: "job-progress", // { jobId, entry }
   jobFinished: "job-finished", // { job }
+  collabChanged: "collab-changed", // { reason?: string }
   vaultChanged: "vault-changed", // { areas: string[] }
   scheduleMissed: "schedule-missed", // { missed: MissedEntry }
   tasksChanged: "tasks-changed", // {}

@@ -40,10 +40,12 @@ fn safe_join(root: &Path, rel: &str) -> Option<PathBuf> {
     if candidate.is_absolute() {
         return None;
     }
-    if candidate
-        .components()
-        .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_) | Component::RootDir))
-    {
+    if candidate.components().any(|c| {
+        matches!(
+            c,
+            Component::ParentDir | Component::Prefix(_) | Component::RootDir
+        )
+    }) {
         return None;
     }
     Some(root.join(candidate))
@@ -58,7 +60,10 @@ pub fn ensure_root(vault: &Path) -> Result<(), String> {
         return Ok(());
     }
     if vault.exists() {
-        return Err(format!("작업공간 경로가 폴더가 아닙니다: {}", vault.display()));
+        return Err(format!(
+            "작업공간 경로가 폴더가 아닙니다: {}",
+            vault.display()
+        ));
     }
     std::fs::create_dir_all(vault).map_err(|e| format!("작업공간 생성 실패: {e}"))
 }
@@ -69,7 +74,8 @@ pub fn provision_pack(vault: &Path, pack: &Pack) -> ProvisionReport {
     let mut r = ProvisionReport::default();
     for folder in &pack.manifest.workspace.folders {
         let Some(target) = safe_join(vault, folder) else {
-            r.failed.push(format!("{folder}: 작업공간 밖을 가리키는 경로"));
+            r.failed
+                .push(format!("{folder}: 작업공간 밖을 가리키는 경로"));
             continue;
         };
         if target.is_dir() {
@@ -83,11 +89,13 @@ pub fn provision_pack(vault: &Path, pack: &Pack) -> ProvisionReport {
     }
     for seed in &pack.manifest.workspace.files {
         let Some(target) = safe_join(vault, &seed.dest) else {
-            r.failed.push(format!("{}: 작업공간 밖을 가리키는 경로", seed.dest));
+            r.failed
+                .push(format!("{}: 작업공간 밖을 가리키는 경로", seed.dest));
             continue;
         };
         let Some(source) = safe_join(&pack.dir, &seed.src) else {
-            r.failed.push(format!("{}: 팩 밖을 가리키는 원본 경로", seed.src));
+            r.failed
+                .push(format!("{}: 팩 밖을 가리키는 원본 경로", seed.src));
             continue;
         };
         if target.exists() {
@@ -100,7 +108,8 @@ pub fn provision_pack(vault: &Path, pack: &Pack) -> ProvisionReport {
         }
         if let Some(parent) = target.parent() {
             if let Err(e) = std::fs::create_dir_all(parent) {
-                r.failed.push(format!("{}: 폴더 생성 실패 ({e})", seed.dest));
+                r.failed
+                    .push(format!("{}: 폴더 생성 실패 ({e})", seed.dest));
                 continue;
             }
         }
@@ -166,7 +175,10 @@ mod tests {
                     folders: folders.iter().map(|s| s.to_string()).collect(),
                     files: files
                         .iter()
-                        .map(|(s, d)| FileSeed { src: s.to_string(), dest: d.to_string() })
+                        .map(|(s, d)| FileSeed {
+                            src: s.to_string(),
+                            dest: d.to_string(),
+                        })
                         .collect(),
                 },
                 ..Default::default()
@@ -182,20 +194,30 @@ mod tests {
     fn creates_folders_and_seeds_files_once() {
         let vault = tempdir("vault");
         let packdir = tempdir("pack");
-        let pack = pack_at(&packdir, &["일지", "개념"], &[("templates/일지.md", "템플릿/일지.md")]);
+        let pack = pack_at(
+            &packdir,
+            &["일지", "개념"],
+            &[("templates/일지.md", "템플릿/일지.md")],
+        );
 
         let first = provision(&vault, &[&pack]).unwrap();
         assert_eq!(first.created.len(), 3);
         assert!(first.failed.is_empty());
         assert!(vault.join("일지").is_dir());
-        assert_eq!(fs::read_to_string(vault.join("템플릿/일지.md")).unwrap(), "템플릿 본문");
+        assert_eq!(
+            fs::read_to_string(vault.join("템플릿/일지.md")).unwrap(),
+            "템플릿 본문"
+        );
 
         // 사용자가 템플릿을 고친 뒤 재실행 — 덮지 않는다
         fs::write(vault.join("템플릿/일지.md"), "내가 고친 템플릿").unwrap();
         let second = provision(&vault, &[&pack]).unwrap();
         assert!(second.created.is_empty());
         assert_eq!(second.skipped.len(), 3);
-        assert_eq!(fs::read_to_string(vault.join("템플릿/일지.md")).unwrap(), "내가 고친 템플릿");
+        assert_eq!(
+            fs::read_to_string(vault.join("템플릿/일지.md")).unwrap(),
+            "내가 고친 템플릿"
+        );
 
         fs::remove_dir_all(&vault).unwrap();
         fs::remove_dir_all(&packdir).unwrap();
@@ -234,7 +256,11 @@ mod tests {
     fn plan_lists_only_what_is_missing() {
         let vault = tempdir("plan");
         let packdir = tempdir("planpack");
-        let pack = pack_at(&packdir, &["일지", "개념"], &[("templates/a.md", "템플릿/a.md")]);
+        let pack = pack_at(
+            &packdir,
+            &["일지", "개념"],
+            &[("templates/a.md", "템플릿/a.md")],
+        );
         assert_eq!(plan(&vault, &[&pack]).len(), 3);
         fs::create_dir_all(vault.join("일지")).unwrap();
         assert_eq!(plan(&vault, &[&pack]).len(), 2);

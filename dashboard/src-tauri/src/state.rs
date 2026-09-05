@@ -1,8 +1,8 @@
 // App-scoped persistent state: app data dir, job history, scheduler bookkeeping.
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use parking_lot::Mutex;
 
 use serde::{Deserialize, Serialize};
 
@@ -99,14 +99,20 @@ impl AppState {
         };
         let mut order: Vec<String> = Vec::new();
         let mut latest: HashMap<String, Job> = HashMap::new();
-        for job in text.lines().filter_map(|l| serde_json::from_str::<Job>(l).ok()) {
+        for job in text
+            .lines()
+            .filter_map(|l| serde_json::from_str::<Job>(l).ok())
+        {
             if !latest.contains_key(&job.id) {
                 order.push(job.id.clone());
             }
             latest.insert(job.id.clone(), job);
         }
-        let mut jobs: Vec<Job> =
-            order.iter().rev().filter_map(|id| latest.remove(id)).collect();
+        let mut jobs: Vec<Job> = order
+            .iter()
+            .rev()
+            .filter_map(|id| latest.remove(id))
+            .collect();
         jobs.truncate(200);
         jobs
     }

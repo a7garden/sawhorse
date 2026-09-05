@@ -25,7 +25,10 @@ pub struct HerdrError {
 
 impl HerdrError {
     fn local(code: &str, message: impl Into<String>) -> Self {
-        Self { code: code.into(), message: message.into() }
+        Self {
+            code: code.into(),
+            message: message.into(),
+        }
     }
 }
 
@@ -58,7 +61,11 @@ impl AgentInfo {
         });
         Self {
             agent: v.get("agent").and_then(Value::as_str).map(str::to_string),
-            status: v.get("agent_status").and_then(Value::as_str).unwrap_or("unknown").to_string(),
+            status: v
+                .get("agent_status")
+                .and_then(Value::as_str)
+                .unwrap_or("unknown")
+                .to_string(),
             session_ref,
         }
     }
@@ -111,7 +118,9 @@ fn spawn_command(bin: &str, args: &[&str]) -> tokio::process::Command {
 
 impl Herdr {
     pub fn new(cfg: &HerdrCfg) -> Self {
-        Self { cfg: cfg.sanitized() }
+        Self {
+            cfg: cfg.sanitized(),
+        }
     }
 
     pub fn cfg(&self) -> &HerdrCfg {
@@ -137,7 +146,10 @@ impl Herdr {
                 ))
             }
             Ok(Err(e)) => {
-                return Err(HerdrError::local("spawn_failed", format!("herdr 실행 실패: {e}")))
+                return Err(HerdrError::local(
+                    "spawn_failed",
+                    format!("herdr 실행 실패: {e}"),
+                ))
             }
             Ok(Ok(o)) => o,
         };
@@ -148,16 +160,26 @@ impl Herdr {
         }
         let err_text = String::from_utf8_lossy(&out.stderr);
         let parsed: Value = serde_json::from_str(err_text.trim()).unwrap_or(Value::Null);
-        let code = parsed.pointer("/error/code").and_then(Value::as_str).unwrap_or("herdr_failed");
+        let code = parsed
+            .pointer("/error/code")
+            .and_then(Value::as_str)
+            .unwrap_or("herdr_failed");
         let message = parsed
             .pointer("/error/message")
             .and_then(Value::as_str)
             .map(str::to_string)
             .unwrap_or_else(|| {
                 let t = err_text.trim();
-                if t.is_empty() { "herdr 명령이 실패했습니다".into() } else { t.to_string() }
+                if t.is_empty() {
+                    "herdr 명령이 실패했습니다".into()
+                } else {
+                    t.to_string()
+                }
             });
-        Err(HerdrError { code: code.to_string(), message })
+        Err(HerdrError {
+            code: code.to_string(),
+            message,
+        })
     }
 
     pub async fn call(&self, args: &[&str]) -> HerdrResult<Value> {
@@ -168,17 +190,26 @@ impl Herdr {
     pub async fn version(&self) -> Option<String> {
         let mut cmd = spawn_command(&self.cfg.bin, &["--version"]);
         cmd.stdin(std::process::Stdio::null());
-        let out = tokio::time::timeout(Duration::from_secs(5), cmd.output()).await.ok()?.ok()?;
+        let out = tokio::time::timeout(Duration::from_secs(5), cmd.output())
+            .await
+            .ok()?
+            .ok()?;
         if !out.status.success() {
             return None;
         }
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
-        if s.is_empty() { None } else { Some(s) }
+        if s.is_empty() {
+            None
+        } else {
+            Some(s)
+        }
     }
 
     /// True when a herdr server is reachable — the cheapest command that proves it.
     pub async fn reachable(&self) -> bool {
-        self.call_with_timeout(&["workspace", "list"], Duration::from_secs(5)).await.is_ok()
+        self.call_with_timeout(&["workspace", "list"], Duration::from_secs(5))
+            .await
+            .is_ok()
     }
 
     // ---------- layout ----------
@@ -205,7 +236,9 @@ impl Herdr {
         v.pointer("/workspace/workspace_id")
             .and_then(Value::as_str)
             .map(str::to_string)
-            .ok_or_else(|| HerdrError::local("bad_response", "workspace create 응답에 id가 없습니다"))
+            .ok_or_else(|| {
+                HerdrError::local("bad_response", "workspace create 응답에 id가 없습니다")
+            })
     }
 
     /// A tab per job: label it with the job so herdr's tab strip doubles as the queue.
@@ -217,19 +250,35 @@ impl Herdr {
     pub async fn create_tab(&self, workspace: &str, label: &str, cwd: &str) -> HerdrResult<NewTab> {
         let v = self
             .call(&[
-                "tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label,
-                "--env", "CLAUDE_CODE_CHILD_SESSION=", "--no-focus",
+                "tab",
+                "create",
+                "--workspace",
+                workspace,
+                "--cwd",
+                cwd,
+                "--label",
+                label,
+                "--env",
+                "CLAUDE_CODE_CHILD_SESSION=",
+                "--no-focus",
             ])
             .await?;
         let tab_id = v
             .pointer("/tab/tab_id")
             .and_then(Value::as_str)
-            .ok_or_else(|| HerdrError::local("bad_response", "tab create 응답에 tab_id가 없습니다"))?;
+            .ok_or_else(|| {
+                HerdrError::local("bad_response", "tab create 응답에 tab_id가 없습니다")
+            })?;
         let pane_id = v
             .pointer("/root_pane/pane_id")
             .and_then(Value::as_str)
-            .ok_or_else(|| HerdrError::local("bad_response", "tab create 응답에 pane_id가 없습니다"))?;
-        Ok(NewTab { tab_id: tab_id.to_string(), pane_id: pane_id.to_string() })
+            .ok_or_else(|| {
+                HerdrError::local("bad_response", "tab create 응답에 pane_id가 없습니다")
+            })?;
+        Ok(NewTab {
+            tab_id: tab_id.to_string(),
+            pane_id: pane_id.to_string(),
+        })
     }
 
     pub async fn close_tab(&self, tab_id: &str) -> HerdrResult<Value> {
@@ -254,14 +303,24 @@ impl Herdr {
         extra: &[String],
     ) -> HerdrResult<Value> {
         let ms = timeout_ms.to_string();
-        let mut args: Vec<&str> =
-            vec!["agent", "start", name, "--kind", kind, "--pane", pane_id, "--timeout", &ms];
+        let mut args: Vec<&str> = vec![
+            "agent",
+            "start",
+            name,
+            "--kind",
+            kind,
+            "--pane",
+            pane_id,
+            "--timeout",
+            &ms,
+        ];
         if !extra.is_empty() {
             args.push("--");
             args.extend(extra.iter().map(String::as_str));
         }
         // agent start blocks until herdr sees the agent; give it the caller's budget.
-        self.call_with_timeout(&args, Duration::from_millis(timeout_ms + 15_000)).await
+        self.call_with_timeout(&args, Duration::from_millis(timeout_ms + 15_000))
+            .await
     }
 
     /// `target` is a live agent name or the pane id currently hosting it.
@@ -286,7 +345,10 @@ impl Herdr {
     /// herdr 가 보는 세계 전체. 실패는 오류가 아니라 `available: false` 다 —
     /// herdr 없이도 앱은 돌아가야 하고, 화면은 설치 안내로 바뀐다.
     pub async fn snapshot(&self) -> HerdrSnapshot {
-        let mut snap = HerdrSnapshot { session: self.cfg.session.clone(), ..Default::default() };
+        let mut snap = HerdrSnapshot {
+            session: self.cfg.session.clone(),
+            ..Default::default()
+        };
         match self.call(&["workspace", "list"]).await {
             Ok(v) => {
                 snap.available = true;
@@ -310,20 +372,39 @@ impl Herdr {
     /// 앱을 떠나지 않고 「승인 대기」 세션이 무엇을 묻는지 보기 위한 것이다.
     pub async fn agent_read(&self, target: &str, lines: u32) -> HerdrResult<String> {
         let n = lines.clamp(5, 200).to_string();
-        let args = ["agent", "read", target, "--source", "recent", "--lines", &n, "--format", "text"];
+        let args = [
+            "agent", "read", target, "--source", "recent", "--lines", &n, "--format", "text",
+        ];
         let mut cmd = spawn_command(&self.cfg.bin, &args);
         if !self.cfg.session.trim().is_empty() {
             cmd.env("HERDR_SESSION", self.cfg.session.trim());
         }
         cmd.stdin(std::process::Stdio::null());
         let out = match tokio::time::timeout(CALL_TIMEOUT, cmd.output()).await {
-            Err(_) => return Err(HerdrError::local("timeout", "herdr agent read 응답이 없습니다")),
-            Ok(Err(e)) => return Err(HerdrError::local("spawn_failed", format!("herdr 실행 실패: {e}"))),
+            Err(_) => {
+                return Err(HerdrError::local(
+                    "timeout",
+                    "herdr agent read 응답이 없습니다",
+                ))
+            }
+            Ok(Err(e)) => {
+                return Err(HerdrError::local(
+                    "spawn_failed",
+                    format!("herdr 실행 실패: {e}"),
+                ))
+            }
             Ok(Ok(o)) => o,
         };
         if !out.status.success() {
             let t = String::from_utf8_lossy(&out.stderr).trim().to_string();
-            return Err(HerdrError::local("read_failed", if t.is_empty() { "출력을 읽지 못했습니다".into() } else { t }));
+            return Err(HerdrError::local(
+                "read_failed",
+                if t.is_empty() {
+                    "출력을 읽지 못했습니다".into()
+                } else {
+                    t
+                },
+            ));
         }
         let text = String::from_utf8_lossy(&out.stdout).to_string();
         // 판(version)에 따라 JSON 으로 감싸 오기도 한다. 그때는 문자열 필드만 꺼낸다.
@@ -347,21 +428,38 @@ impl Herdr {
     }
 
     /// 사람이 직접 쓸 빈 탭. 잡 탭과 달리 에이전트를 자동으로 띄우지 않는다.
-    pub async fn open_shell_tab(&self, workspace: &str, label: &str, cwd: &str) -> HerdrResult<NewTab> {
+    pub async fn open_shell_tab(
+        &self,
+        workspace: &str,
+        label: &str,
+        cwd: &str,
+    ) -> HerdrResult<NewTab> {
         self.call(&[
-            "tab", "create", "--workspace", workspace, "--cwd", cwd, "--label", label,
+            "tab",
+            "create",
+            "--workspace",
+            workspace,
+            "--cwd",
+            cwd,
+            "--label",
+            label,
         ])
         .await
         .and_then(|v| {
             let tab_id = v
                 .pointer("/tab/tab_id")
                 .and_then(Value::as_str)
-                .ok_or_else(|| HerdrError::local("bad_response", "tab create 응답에 tab_id가 없습니다"))?;
+                .ok_or_else(|| {
+                    HerdrError::local("bad_response", "tab create 응답에 tab_id가 없습니다")
+                })?;
             let pane_id = v
                 .pointer("/root_pane/pane_id")
                 .and_then(Value::as_str)
                 .unwrap_or_default();
-            Ok(NewTab { tab_id: tab_id.to_string(), pane_id: pane_id.to_string() })
+            Ok(NewTab {
+                tab_id: tab_id.to_string(),
+                pane_id: pane_id.to_string(),
+            })
         })
     }
 
@@ -373,7 +471,15 @@ impl Herdr {
         }
         let _ = self
             .call_with_timeout(
-                &["notification", "show", title, "--body", body, "--sound", "request"],
+                &[
+                    "notification",
+                    "show",
+                    title,
+                    "--body",
+                    body,
+                    "--sound",
+                    "request",
+                ],
                 Duration::from_secs(5),
             )
             .await;
@@ -450,7 +556,11 @@ pub struct HerdrSnapshot {
 fn parse_list<T: serde::de::DeserializeOwned>(v: &Value, key: &str) -> Vec<T> {
     v.get(key)
         .and_then(Value::as_array)
-        .map(|a| a.iter().filter_map(|x| serde_json::from_value(x.clone()).ok()).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| serde_json::from_value(x.clone()).ok())
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -501,7 +611,10 @@ mod tests {
         assert!(a.blocked());
         assert!(!a.settled());
         assert_eq!(a.session_ref, Some(("path".into(), "/tmp/x.jsonl".into())));
-        assert!(!a.contradicts_session("x"), "path /tmp/x.jsonl contains the id");
+        assert!(
+            !a.contradicts_session("x"),
+            "path /tmp/x.jsonl contains the id"
+        );
         assert!(a.contradicts_session("other-session"));
     }
 

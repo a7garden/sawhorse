@@ -140,9 +140,11 @@ pub fn plugin_info() -> Result<PluginBundle, String> {
     let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
     let author = match v.get("author") {
         Some(serde_json::Value::String(a)) => a.clone(),
-        Some(o @ serde_json::Value::Object(_)) => {
-            o.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string()
-        }
+        Some(o @ serde_json::Value::Object(_)) => o
+            .get("name")
+            .and_then(|n| n.as_str())
+            .unwrap_or("")
+            .to_string(),
         _ => String::new(),
     };
     let keywords = v
@@ -191,7 +193,10 @@ pub fn plugin_name() -> Result<String, String> {
         .map_err(|e| format!("plugin.json 읽기 실패: {e}"))?;
     let v: serde_json::Value =
         serde_json::from_str(&raw).map_err(|e| format!("plugin.json 파싱 실패: {e}"))?;
-    Ok(v.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string())
+    Ok(v.get("name")
+        .and_then(|n| n.as_str())
+        .unwrap_or("")
+        .to_string())
 }
 
 #[cfg(test)]
@@ -200,8 +205,7 @@ mod tests {
     use std::fs;
 
     fn tempdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir()
-            .join(format!("swdash-plugin-{tag}-{}", uuid::Uuid::new_v4()));
+        let d = std::env::temp_dir().join(format!("swdash-plugin-{tag}-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&d).unwrap();
         d
     }

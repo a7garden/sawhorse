@@ -189,7 +189,9 @@ fn valid_id(id: &str) -> bool {
 
 pub fn validate_hhmm(s: &str) -> bool {
     let mut it = s.split(':');
-    let (Some(h), Some(m), None) = (it.next(), it.next(), it.next()) else { return false };
+    let (Some(h), Some(m), None) = (it.next(), it.next(), it.next()) else {
+        return false;
+    };
     matches!((h.parse::<u32>(), m.parse::<u32>()), (Ok(h), Ok(m)) if h < 24 && m < 60)
 }
 
@@ -197,7 +199,10 @@ impl PackManifest {
     /// 사람이 손으로 쓰는 파일이므로, 고칠 수 있는 것은 고치고 못 고치는 것만 거절한다.
     pub fn validate(&mut self) -> Result<(), String> {
         if !valid_id(&self.id) {
-            return Err(format!("팩 id 가 올바르지 않습니다 (소문자·숫자·하이픈): {:?}", self.id));
+            return Err(format!(
+                "팩 id 가 올바르지 않습니다 (소문자·숫자·하이픈): {:?}",
+                self.id
+            ));
         }
         if self.name.trim().is_empty() {
             self.name = self.id.clone();
@@ -326,11 +331,21 @@ fn read_manifest(path: &Path) -> Result<PackManifest, String> {
     Ok(m)
 }
 
-fn scan_dir(root: &Path, source: PackSource, skills_root: Option<&Path>) -> (Vec<Pack>, Vec<BrokenPack>) {
+fn scan_dir(
+    root: &Path,
+    source: PackSource,
+    skills_root: Option<&Path>,
+) -> (Vec<Pack>, Vec<BrokenPack>) {
     let mut ok = Vec::new();
     let mut broken = Vec::new();
-    let Ok(rd) = std::fs::read_dir(root) else { return (ok, broken) };
-    let mut dirs: Vec<PathBuf> = rd.flatten().map(|e| e.path()).filter(|p| p.is_dir()).collect();
+    let Ok(rd) = std::fs::read_dir(root) else {
+        return (ok, broken);
+    };
+    let mut dirs: Vec<PathBuf> = rd
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
     dirs.sort();
     for dir in dirs {
         let manifest_path = dir.join(MANIFEST);
@@ -347,9 +362,18 @@ fn scan_dir(root: &Path, source: PackSource, skills_root: Option<&Path>) -> (Vec
                     Some(r) if !own.is_dir() => r.to_path_buf(),
                     _ => own,
                 };
-                ok.push(Pack { manifest, dir, skills_dir, source, enabled: true });
+                ok.push(Pack {
+                    manifest,
+                    dir,
+                    skills_dir,
+                    source,
+                    enabled: true,
+                });
             }
-            Err(error) => broken.push(BrokenPack { dir: dir.display().to_string(), error }),
+            Err(error) => broken.push(BrokenPack {
+                dir: dir.display().to_string(),
+                error,
+            }),
         }
     }
     (ok, broken)
@@ -393,7 +417,11 @@ pub fn load_registry_from(
     let mut broken: Vec<BrokenPack> = Vec::new();
 
     if let Some(root) = builtin_root {
-        let (ok, bad) = scan_dir(&root.join("packs"), PackSource::Builtin, Some(&root.join("skills")));
+        let (ok, bad) = scan_dir(
+            &root.join("packs"),
+            PackSource::Builtin,
+            Some(&root.join("skills")),
+        );
         packs.extend(ok);
         broken.extend(bad);
     }
@@ -445,18 +473,31 @@ pub fn render_prompt(template: &str, params: &Map<String, Value>) -> String {
         };
         let cleaned: String = raw
             .chars()
-            .map(|c| if c == '\n' || c == '\r' || c == '`' { ' ' } else { c })
+            .map(|c| {
+                if c == '\n' || c == '\r' || c == '`' {
+                    ' '
+                } else {
+                    c
+                }
+            })
             .collect();
         out = out.replace(&format!("{{{{{k}}}}}"), cleaned.trim());
     }
     // 채워지지 않은 자리는 흔적을 남기지 않는다
     while let Some(start) = out.find("{{") {
-        let Some(rel) = out[start..].find("}}") else { break };
+        let Some(rel) = out[start..].find("}}") else {
+            break;
+        };
         out.replace_range(start..start + rel + 2, "");
     }
     // 빈 자리가 남긴 이중 공백만 줄 단위로 정리하고, 줄 구조는 그대로 둔다
     out.lines()
-        .map(|line| line.split(' ').filter(|s| !s.is_empty()).collect::<Vec<_>>().join(" "))
+        .map(|line| {
+            line.split(' ')
+                .filter(|s| !s.is_empty())
+                .collect::<Vec<_>>()
+                .join(" ")
+        })
         .collect::<Vec<_>>()
         .join("\n")
         .trim()
@@ -521,7 +562,9 @@ pub fn scheduled_entries(reg: &Registry, view: &ConfigView) -> Vec<ScheduledEntr
     let mut out = Vec::new();
     for pack in reg.enabled() {
         for action in &pack.manifest.actions {
-            let Some(sched) = &action.schedule else { continue };
+            let Some(sched) = &action.schedule else {
+                continue;
+            };
             let key = format!("{}.{}", pack.manifest.id, action.id);
             let over = view.schedule_override(&key, &action.id);
             out.push(ScheduledEntry {
@@ -529,7 +572,10 @@ pub fn scheduled_entries(reg: &Registry, view: &ConfigView) -> Vec<ScheduledEntr
                 pack_id: pack.manifest.id.clone(),
                 action_id: action.id.clone(),
                 kind: sched.kind.clone(),
-                time: over.as_ref().map(|o| o.time.clone()).unwrap_or_else(|| sched.time.clone()),
+                time: over
+                    .as_ref()
+                    .map(|o| o.time.clone())
+                    .unwrap_or_else(|| sched.time.clone()),
                 enabled: over.as_ref().map(|o| o.enabled).unwrap_or(sched.enabled),
                 key,
                 date: None,
@@ -581,7 +627,10 @@ pub fn registry_view(reg: &Registry, view: &ConfigView) -> PackRegistryView {
             enabled: p.enabled,
         })
         .collect();
-    PackRegistryView { packs, broken: reg.broken.clone() }
+    PackRegistryView {
+        packs,
+        broken: reg.broken.clone(),
+    }
 }
 
 /// 사이드바 한 줄.
@@ -631,22 +680,33 @@ mod tests {
     fn write_pack(root: &Path, id: &str, extra: &str) {
         let dir = root.join(id);
         fs::create_dir_all(&dir).unwrap();
-        let json = format!(
-            r#"{{ "id": "{id}", "name": "{id} 팩", "version": "1.0.0" {extra} }}"#
-        );
+        let json = format!(r#"{{ "id": "{id}", "name": "{id} 팩", "version": "1.0.0" {extra} }}"#);
         fs::write(dir.join(MANIFEST), json).unwrap();
     }
 
     #[test]
     fn manifest_rejects_bad_ids_and_types() {
-        let mut m = PackManifest { id: "Bad Id".into(), ..Default::default() };
+        let mut m = PackManifest {
+            id: "Bad Id".into(),
+            ..Default::default()
+        };
         assert!(m.validate().is_err());
 
-        let mut m = PackManifest { id: "ok".into(), ..Default::default() };
-        m.settings.push(SettingField { key: "a".into(), kind: "wat".into(), ..Default::default() });
+        let mut m = PackManifest {
+            id: "ok".into(),
+            ..Default::default()
+        };
+        m.settings.push(SettingField {
+            key: "a".into(),
+            kind: "wat".into(),
+            ..Default::default()
+        });
         assert!(m.validate().unwrap_err().contains("설정 타입"));
 
-        let mut m = PackManifest { id: "ok".into(), ..Default::default() };
+        let mut m = PackManifest {
+            id: "ok".into(),
+            ..Default::default()
+        };
         m.actions.push(PackAction {
             id: "x".into(),
             prompt: "hi".into(),
@@ -658,7 +718,10 @@ mod tests {
 
     #[test]
     fn manifest_fills_labels_and_catches_dangling_action_refs() {
-        let mut m = PackManifest { id: "ok".into(), ..Default::default() };
+        let mut m = PackManifest {
+            id: "ok".into(),
+            ..Default::default()
+        };
         m.actions.push(PackAction {
             id: "run".into(),
             prompt: "/x".into(),
@@ -681,12 +744,19 @@ mod tests {
 
     #[test]
     fn schedule_must_be_hhmm() {
-        let mut m = PackManifest { id: "ok".into(), ..Default::default() };
+        let mut m = PackManifest {
+            id: "ok".into(),
+            ..Default::default()
+        };
         m.actions.push(PackAction {
             id: "a".into(),
             prompt: "/x".into(),
             cwd: "workspace".into(),
-            schedule: Some(ActionSchedule { kind: "daily".into(), time: "9시".into(), enabled: true }),
+            schedule: Some(ActionSchedule {
+                kind: "daily".into(),
+                time: "9시".into(),
+                enabled: true,
+            }),
             ..Default::default()
         });
         assert!(m.validate().unwrap_err().contains("HH:MM"));
@@ -712,11 +782,18 @@ mod tests {
         assert_eq!(si.source, PackSource::User);
         assert_eq!(si.skills_dir, user.join("si").join("skills"));
         let other = reg.get("other").unwrap();
-        assert_eq!(other.skills_dir, builtin.join("skills"), "내장 팩은 플러그인 skills/ 를 본다");
+        assert_eq!(
+            other.skills_dir,
+            builtin.join("skills"),
+            "내장 팩은 플러그인 skills/ 를 본다"
+        );
         // 내장 팩이 자기 skills/ 를 들고 있으면 그쪽이 이긴다
         fs::create_dir_all(builtin.join("packs/other/skills")).unwrap();
         let reg2 = load_registry_from(Some(&builtin), &user, &[]);
-        assert_eq!(reg2.get("other").unwrap().skills_dir, builtin.join("packs/other/skills"));
+        assert_eq!(
+            reg2.get("other").unwrap().skills_dir,
+            builtin.join("packs/other/skills")
+        );
         assert_eq!(reg.broken.len(), 1);
         assert!(reg.broken[0].error.contains("파싱"));
 
@@ -737,7 +814,10 @@ mod tests {
         assert!(only_a.get("a").unwrap().enabled);
         assert!(!only_a.get("b").unwrap().enabled);
         assert_eq!(only_a.enabled().count(), 1);
-        assert!(only_a.action("b", "anything").is_none(), "꺼진 팩의 액션은 보이지 않는다");
+        assert!(
+            only_a.action("b", "anything").is_none(),
+            "꺼진 팩의 액션은 보이지 않는다"
+        );
 
         fs::remove_dir_all(&builtin).unwrap();
     }
@@ -763,20 +843,36 @@ mod tests {
 
     #[test]
     fn cwd_resolution_covers_four_paths() {
-        let mut view = crate::config::view(&serde_json::json!({
-            "vaultPath": "/vault",
-            "improve": { "defaultProject": "FDR",
-                         "projects": { "FDR": { "path": "/code/fdr" }, "NOPATH": { "path": "" } } }
-        }), true);
+        let mut view = crate::config::view(
+            &serde_json::json!({
+                "vaultPath": "/vault",
+                "improve": { "defaultProject": "FDR",
+                             "projects": { "FDR": { "path": "/code/fdr" }, "NOPATH": { "path": "" } } }
+            }),
+            true,
+        );
 
-        let ws = PackAction { cwd: "workspace".into(), ..Default::default() };
+        let ws = PackAction {
+            cwd: "workspace".into(),
+            ..Default::default()
+        };
         assert_eq!(resolve_cwd(&ws, &Map::new(), &view).unwrap(), "/vault");
 
-        let abs = PackAction { cwd: "path:/tmp/here".into(), ..Default::default() };
+        let abs = PackAction {
+            cwd: "path:/tmp/here".into(),
+            ..Default::default()
+        };
         assert_eq!(resolve_cwd(&abs, &Map::new(), &view).unwrap(), "/tmp/here");
 
-        let proj = PackAction { cwd: "project".into(), ..Default::default() };
-        assert_eq!(resolve_cwd(&proj, &Map::new(), &view).unwrap(), "/code/fdr", "기본 사업 폴백");
+        let proj = PackAction {
+            cwd: "project".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            resolve_cwd(&proj, &Map::new(), &view).unwrap(),
+            "/code/fdr",
+            "기본 사업 폴백"
+        );
 
         let mut params = Map::new();
         params.insert("project".into(), serde_json::json!("NOPATH"));
@@ -829,23 +925,44 @@ mod tests {
             component: "issues".into(),
         };
         let j = serde_json::to_value(&nav).unwrap();
-        assert_eq!(j["type"], "native", "NavEntry.kind 는 JSON 에서 type 이어야 한다");
+        assert_eq!(
+            j["type"], "native",
+            "NavEntry.kind 는 JSON 에서 type 이어야 한다"
+        );
         assert_eq!(j["packId"], "si");
         assert_eq!(j["viewId"], "issues");
 
-        let view = PackView { id: "v".into(), kind: "notes".into(), ..Default::default() };
+        let view = PackView {
+            id: "v".into(),
+            kind: "notes".into(),
+            ..Default::default()
+        };
         assert_eq!(serde_json::to_value(&view).unwrap()["type"], "notes");
-        let field = SettingField { key: "k".into(), kind: "path".into(), ..Default::default() };
+        let field = SettingField {
+            key: "k".into(),
+            kind: "path".into(),
+            ..Default::default()
+        };
         assert_eq!(serde_json::to_value(&field).unwrap()["type"], "path");
-        let param = ActionParam { key: "p".into(), kind: "list".into(), ..Default::default() };
+        let param = ActionParam {
+            key: "p".into(),
+            kind: "list".into(),
+            ..Default::default()
+        };
         assert_eq!(serde_json::to_value(&param).unwrap()["type"], "list");
-        let col = ViewColumn { field: "f".into(), kind: "badge".into(), ..Default::default() };
+        let col = ViewColumn {
+            field: "f".into(),
+            kind: "badge".into(),
+            ..Default::default()
+        };
         assert_eq!(serde_json::to_value(&col).unwrap()["type"], "badge");
 
         // 매니페스트는 `type` 으로 읽히고 예전 `kind` 도 받아 준다
-        let parsed: PackView = serde_json::from_str(r#"{"id":"a","type":"native","component":"x"}"#).unwrap();
+        let parsed: PackView =
+            serde_json::from_str(r#"{"id":"a","type":"native","component":"x"}"#).unwrap();
         assert_eq!(parsed.kind, "native");
-        let legacy: PackView = serde_json::from_str(r#"{"id":"a","kind":"native","component":"x"}"#).unwrap();
+        let legacy: PackView =
+            serde_json::from_str(r#"{"id":"a","kind":"native","component":"x"}"#).unwrap();
         assert_eq!(legacy.kind, "native");
     }
 
@@ -858,7 +975,11 @@ mod tests {
 
         let si = reg.get("si").expect("si 팩이 있어야 한다");
         assert!(si.manifest.skills.contains(&"issues".to_string()));
-        assert_eq!(si.skills_dir, root.join("skills"), "SI 팩은 플러그인 skills/ 를 쓴다");
+        assert_eq!(
+            si.skills_dir,
+            root.join("skills"),
+            "SI 팩은 플러그인 skills/ 를 쓴다"
+        );
         // 선언한 스킬이 실제로 존재해야 설치 버튼이 거짓말을 하지 않는다
         for name in &si.manifest.skills {
             assert!(
@@ -871,7 +992,11 @@ mod tests {
             assert!(si.dir.join(&seed.src).is_file(), "없는 원본: {}", seed.src);
         }
         assert!(si.manifest.views.iter().any(|v| v.kind == "native"));
-        assert!(si.manifest.views.iter().any(|v| v.kind == "notes" && !v.query.is_empty()));
+        assert!(si
+            .manifest
+            .views
+            .iter()
+            .any(|v| v.kind == "notes" && !v.query.is_empty()));
 
         let starter = reg.get("starter").expect("starter 팩이 있어야 한다");
         assert_eq!(
@@ -880,23 +1005,41 @@ mod tests {
             "자기 스킬을 든 팩은 자기 폴더를 쓴다"
         );
         for name in &starter.manifest.skills {
-            assert!(starter.skills_dir.join(name).join("SKILL.md").is_file(), "{name}");
+            assert!(
+                starter.skills_dir.join(name).join("SKILL.md").is_file(),
+                "{name}"
+            );
         }
         for seed in &starter.manifest.workspace.files {
-            assert!(starter.dir.join(&seed.src).is_file(), "없는 원본: {}", seed.src);
+            assert!(
+                starter.dir.join(&seed.src).is_file(),
+                "없는 원본: {}",
+                seed.src
+            );
         }
         assert!(
             starter.manifest.views.iter().all(|v| v.kind == "notes"),
             "starter 는 네이티브 화면 없이 선언만으로 서야 한다"
         );
-        assert!(!starter.manifest.settings.is_empty(), "설정 스키마 예제가 있어야 한다");
+        assert!(
+            !starter.manifest.settings.is_empty(),
+            "설정 스키마 예제가 있어야 한다"
+        );
     }
 
     #[test]
     fn nav_entries_only_from_enabled_packs() {
         let builtin = tempdir("nav");
-        write_pack(&builtin.join("packs"), "a", r#", "views": [{"id":"v1","label":"뷰1"}]"#);
-        write_pack(&builtin.join("packs"), "b", r#", "views": [{"id":"v2","label":"뷰2"}]"#);
+        write_pack(
+            &builtin.join("packs"),
+            "a",
+            r#", "views": [{"id":"v1","label":"뷰1"}]"#,
+        );
+        write_pack(
+            &builtin.join("packs"),
+            "b",
+            r#", "views": [{"id":"v2","label":"뷰2"}]"#,
+        );
         let reg = load_registry_from(Some(&builtin), Path::new("/nonexistent"), &["a".into()]);
         let nav = nav_entries(&reg);
         assert_eq!(nav.len(), 1);
@@ -905,4 +1048,3 @@ mod tests {
         fs::remove_dir_all(&builtin).unwrap();
     }
 }
-

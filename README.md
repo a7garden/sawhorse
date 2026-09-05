@@ -86,7 +86,11 @@ npm run tauri build   # 배포 번들
 | 작업 | 잡 큐·실시간 타임라인·리포트·로그·취소 | 호스트 |
 | 터미널 | herdr 워크스페이스/탭/에이전트, **승인 대기 세션**, 새 탭, 액션 실행 | 호스트 |
 | 확장 | 팩 켜기/끄기, 에이전트 설치, 팩 설정, 스킬 문서 | 호스트 |
-| 설정 | 작업공간·사업·실행 옵션·herdr·진단 | 호스트 |
+| 세션 | 협업 세션·에이전트 레인·후보 DAG·대표 체크아웃 상태 | 호스트 |
+| 검토 | 후보 승인 카드, 통합 진행·검증 로그, 수동 확인, revert | 호스트 |
+| 소스 | connector 연결(GitHub·RSS), 인바운드 승인, 원격 쓰기 승인 | 호스트 |
+| 읽을거리 | RSS/Atom 기사 목록, 읽음·보관 | 호스트 |
+| 설정 | 작업공간·사업·실행 옵션·herdr·협업 정책·진단 | 호스트 |
 | 이슈 · 할 일 · 마일스톤 · 개념 · 문서 · 볼트 | 노트 워크플로 | **SI 업무 확장** |
 | 기록 · 노트 | 개인 작업 기록 | **기본 작업 확장** |
 
@@ -309,6 +313,7 @@ npm run tauri build   # 배포 번들
 
 - [워크벤치 플랫폼 설계](docs/superpowers/specs/2026-09-05-workbench-platform-design.md) — 팩 아키텍처
 - [멀티에이전트 협업·확장 설계](docs/superpowers/specs/2026-09-05-multi-agent-collaboration-design.md) — 승인 병합·로컬 검증·GitHub/RSS 커넥터
+- [Connector SDK 계약](docs/connector-sdk.md) — 제3자 connector의 manifest·권한·intent 계약
 - [대시보드 설계](docs/superpowers/specs/2026-09-04-dashboard-design.md) — 잡 실행기·herdr
 - [이슈·마일스톤 설계](docs/issues-milestones-design.md)
 - [전체 설계 문서](docs/design.md)
