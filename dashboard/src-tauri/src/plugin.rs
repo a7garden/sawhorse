@@ -123,9 +123,11 @@ pub fn plugin_info() -> Result<PluginBundle, String> {
     let s = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").to_string();
     let author = match v.get("author") {
         Some(serde_json::Value::String(a)) => a.clone(),
-        Some(o @ serde_json::Value::Object(_)) => {
-            o.get("name").and_then(|n| n.as_str()).unwrap_or("").to_string()
-        }
+        Some(o @ serde_json::Value::Object(_)) => o
+            .get("name")
+            .and_then(|n| n.as_str())
+            .unwrap_or("")
+            .to_string(),
         _ => String::new(),
     };
     let keywords = v
@@ -161,14 +163,124 @@ pub fn read_skill(root: &Path, name: &str) -> Result<String, String> {
     std::fs::read_to_string(&p).map_err(|e| format!("SKILL.md 읽기 실패: {e}"))
 }
 
+// ---------- workbench skill installer ----------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SkillInstall {
+    pub target: String,
+    pub path: String,
+    pub written: bool,
+}
+
+/// 대상별 설치 위치. 홈 기준 고정 상대경로만 조립한다 — 외부 입력 경로 결합 없음.
+fn skill_dest(home: &Path, target: &str) -> Result<PathBuf, String> {
+    match target {
+        "claude" => Ok(home.join(".claude/skills/workbench/SKILL.md")),
+        "codex" => Ok(home.join(".codex/prompts/workbench.md")),
+        _ => Err(format!("알 수 없는 대상: {target} (claude|codex)")),
+    }
+}
+
+/// 존재 여부만 조회한다. 파일을 만들거나 수정하지 않는다.
+fn skill_entry(home: &Path, target: &str) -> Result<SkillInstall, String> {
+    let dest = skill_dest(home, target)?;
+    Ok(SkillInstall {
+        target: target.into(),
+        path: dest.display().to_string(),
+        written: dest.is_file(),
+    })
+}
+
+/// SKILL.md 앞의 YAML 프론트매터 블록을 떼어낸다.
+fn strip_frontmatter(text: &str) -> &str {
+    let rest = match text
+        .strip_prefix("---\r\n")
+        .or_else(|| text.strip_prefix("---\n"))
+    {
+        Some(r) => r,
+        None => return text,
+    };
+    match rest.find("\n---") {
+        Some(i) => rest[i + 4..].trim_start_matches(['\n', '\r']),
+        None => text,
+    }
+}
+/// write=true면 실제로 기록하고, write=false면 존재 여부만 조회한다(status 모드).
+fn install_skill_at(
+    home: &Path,
+    root: &Path,
+    target: &str,
+    write: bool,
+) -> Result<SkillInstall, String> {
+    if !write {
+        return skill_entry(home, target);
+    }
+    let dest = skill_dest(home, target)?;
+    let source = read_skill(root, "workbench")?;
+    let body = match target {
+        // Codex 프롬프트는 프론트매터 대신 트리거 안내 헤더로 시작한다.
+        "codex" => format!(
+            "# workbench — 워크벤치 작업 등록 (사용자가 워크벤치 작업을 만들자고 하면 이 절차를 따른다)\n\n{}",
+            strip_frontmatter(&source)
+        ),
+        _ => source,
+    };
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("디렉터리 생성 실패: {e}"))?;
+    }
+    std::fs::write(&dest, body).map_err(|e| format!("스킬 설치 실패: {e}"))?;
+    Ok(SkillInstall {
+        target: target.into(),
+        path: dest.display().to_string(),
+        written: true,
+    })
+}
+
+/// config.json(~/.claude/sawhorse/config.json)에서 홈을 유도한다.
+/// ancestors는 자기 자신을 포함하므로 파일=0, sawhorse=1, .claude=2, 홈=3.
+fn derived_home() -> Option<PathBuf> {
+    crate::config::config_path()
+        .ancestors()
+        .nth(3)
+        .map(Path::to_path_buf)
+}
+
+pub fn install_skill(target: &str) -> Result<SkillInstall, String> {
+    let root = resolve_root()?;
+    let home = derived_home().ok_or("홈 디렉터리를 찾지 못했다")?;
+    install_skill_at(&home, &root, target, true)
+}
+
+/// 홈 주입형 상태 조회 — 테스트가 실제 홈 오염 없이 검증할 수 있다.
+fn skill_status_at(home: &Path) -> Vec<SkillInstall> {
+    ["claude", "codex"]
+        .into_iter()
+        .map(|t| {
+            skill_entry(home, t).unwrap_or(SkillInstall {
+                target: t.into(),
+                path: String::new(),
+                written: false,
+            })
+        })
+        .collect()
+}
+
+/// 설정 카드용 상태 조회. 읽기 전용 — 그 어떤 파일도 쓰지 않는다.
+pub fn skill_status() -> Vec<SkillInstall> {
+    match derived_home() {
+        Some(home) => skill_status_at(&home),
+        None => vec![],
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::fs;
 
     fn tempdir(tag: &str) -> PathBuf {
-        let d = std::env::temp_dir()
-            .join(format!("swdash-plugin-{tag}-{}", uuid::Uuid::new_v4()));
+        let d = std::env::temp_dir().join(format!("swdash-plugin-{tag}-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&d).unwrap();
         d
     }
@@ -240,5 +352,75 @@ mod tests {
         assert_eq!(got[0].name, "aaa");
         assert_eq!(got[1].description, "last");
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn install_skill_writes_claude_and_codex_variants() {
+        let home = tempdir("home");
+        let repo = tempdir("repo");
+        fs::create_dir_all(repo.join("skills/workbench")).unwrap();
+        fs::write(
+            repo.join("skills/workbench/SKILL.md"),
+            "---\nname: workbench\ndescription: d\n---\n본문",
+        )
+        .unwrap();
+
+        let s = install_skill_at(&home, &repo, "claude", true).unwrap();
+        assert!(s.written);
+        assert!(home.join(".claude/skills/workbench/SKILL.md").is_file());
+
+        let c = install_skill_at(&home, &repo, "codex", true).unwrap();
+        assert!(c.written);
+        let codex = fs::read_to_string(home.join(".codex/prompts/workbench.md")).unwrap();
+        assert!(
+            !codex.starts_with("---"),
+            "codex본은 프론트매터로 시작하지 않는다"
+        );
+        assert!(
+            !codex.contains("description:"),
+            "codex본에서 프론트매터 필드가 제거된다"
+        );
+        assert!(codex.contains("본문"));
+
+        assert!(install_skill_at(&home, &repo, "unknown", true).is_err());
+        fs::remove_dir_all(&home).unwrap();
+        fs::remove_dir_all(&repo).unwrap();
+    }
+
+    #[test]
+    fn skill_status_at_reports_existence_without_writing() {
+        let home = tempdir("home");
+        let repo = tempdir("repo");
+        fs::create_dir_all(repo.join("skills/workbench")).unwrap();
+        fs::write(
+            repo.join("skills/workbench/SKILL.md"),
+            "---\nname: w\n---\n본문",
+        )
+        .unwrap();
+
+        let before = skill_status_at(&home);
+        assert_eq!(before.len(), 2);
+        assert!(
+            before.iter().all(|s| !s.written),
+            "아무것도 설치 전이면 전부 미설치"
+        );
+        assert!(
+            !home.join(".claude").exists() && !home.join(".codex").exists(),
+            "status 조회는 어떤 경로도 만들면 안 된다",
+        );
+
+        install_skill_at(&home, &repo, "claude", true).unwrap();
+        let after = skill_status_at(&home);
+        let claude = after.iter().find(|s| s.target == "claude").unwrap();
+        let codex = after.iter().find(|s| s.target == "codex").unwrap();
+        assert!(claude.written);
+        assert!(claude.path.ends_with(".claude/skills/workbench/SKILL.md"));
+        assert!(!codex.written);
+        assert!(
+            !home.join(".codex").exists(),
+            "status는 codex 경로를 만들면 안 된다"
+        );
+        fs::remove_dir_all(&home).unwrap();
+        fs::remove_dir_all(&repo).unwrap();
     }
 }

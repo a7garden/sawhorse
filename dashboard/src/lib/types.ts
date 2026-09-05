@@ -297,3 +297,9 @@ export interface PluginBundle {
   root: string;
   skills: SkillInfo[];
 }
+
+export interface SkillInstall {
+  target: string;
+  path: string;
+  written: boolean;
+}

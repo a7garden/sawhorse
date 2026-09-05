@@ -187,6 +187,8 @@ pub fn run() {
             commands::get_launch_at_login,
             commands::plugin_info,
             commands::read_skill,
+            commands::install_skill,
+            commands::skill_status,
             commands::open_external,
         ])
         .run(tauri::generate_context!())

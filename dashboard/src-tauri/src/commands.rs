@@ -420,6 +420,16 @@ pub fn read_skill(name: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn install_skill(target: String) -> Result<plugin::SkillInstall, String> {
+    plugin::install_skill(&target)
+}
+
+#[tauri::command]
+pub fn skill_status() -> Vec<plugin::SkillInstall> {
+    plugin::skill_status()
+}
+
+#[tauri::command]
 pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
     if !url.starts_with("https://") {

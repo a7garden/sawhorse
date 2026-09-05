@@ -10,6 +10,7 @@ import type {
   MissedEntry,
   NoteView,
   PluginBundle,
+  SkillInstall,
   TaskDef,
   TasksView,
   TodoSection,
@@ -75,6 +76,8 @@ export const api = {
 
   pluginInfo: (): Promise<PluginBundle> => invoke("plugin_info"),
   readSkill: (name: string): Promise<string> => invoke("read_skill", { name }),
+  installSkill: (target: string): Promise<SkillInstall> => invoke("install_skill", { target }),
+  skillStatus: (): Promise<SkillInstall[]> => invoke("skill_status"),
   openExternal: (url: string): Promise<void> => invoke("open_external", { url }),
 };
 
