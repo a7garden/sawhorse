@@ -5,6 +5,7 @@ mod jobs;
 mod plugin;
 mod scheduler;
 mod state;
+mod tasks;
 mod transcript;
 mod vault;
 mod watcher;
