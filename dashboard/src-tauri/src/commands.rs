@@ -335,6 +335,9 @@ pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
     tasks::validate_new(&def, &today)?;
     def.updated_at = tasks::now_iso();
+    if def.created_at.is_empty() {
+        def.created_at = tasks::now_iso();
+    }
     tasks::save_task(&root, &def)?;
     Ok(def)
 }
@@ -489,6 +492,49 @@ mod tests {
             let err = save_task(def).unwrap_err();
             assert!(err.contains("내장 작업"), "id {id}: got {err}");
         }
+    }
+
+    /// One-shot injection, same trick as jobs.rs tests: the override is
+    /// process-wide, so parallel tests share one root and isolate by unique ids.
+    fn tasks_root_for_test() -> std::path::PathBuf {
+        static ROOT: std::sync::LazyLock<std::path::PathBuf> = std::sync::LazyLock::new(|| {
+            let d = std::env::temp_dir().join(format!("swdash-cmds-{}", uuid::Uuid::new_v4()));
+            std::fs::create_dir_all(&d).unwrap();
+            crate::tasks::TASKS_ROOT_OVERRIDE.set(d.clone()).ok();
+            d
+        });
+        ROOT.clone()
+    }
+
+    #[test]
+    fn save_task_stamps_created_at_on_new_and_preserves_on_edit() {
+        let root = tasks_root_for_test();
+        // TasksPage sends createdAt:"" for a brand-new GUI task; the backend
+        // must fill it, or list_tasks sorting by created_at breaks.
+        let fresh = crate::tasks::TaskDef {
+            id: String::new(),
+            title: format!("생성 시각 확인 {}", uuid::Uuid::new_v4().simple()),
+            prompt: "p".into(),
+            created_at: String::new(),
+            updated_at: String::new(),
+            ..crate::tasks::TaskDef::default()
+        };
+        let saved = save_task(fresh).unwrap();
+        assert!(!saved.created_at.is_empty(), "신규 생성 시 created_at이 채워져야 한다");
+        assert_eq!(
+            crate::tasks::get_task(&root, &saved.id).unwrap().created_at,
+            saved.created_at
+        );
+
+        // Editing an existing task must keep its original created_at.
+        let mut edit = saved.clone();
+        edit.title = "이름만 바꾼 편집".into();
+        let edited = save_task(edit).unwrap();
+        assert_eq!(edited.created_at, saved.created_at, "편집 시 created_at 보존");
+        assert_eq!(
+            crate::tasks::get_task(&root, &edited.id).unwrap().created_at,
+            saved.created_at
+        );
     }
 }
 
