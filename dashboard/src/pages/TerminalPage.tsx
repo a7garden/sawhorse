@@ -2,7 +2,7 @@
 // 잡 실행기 안에만 있던 herdr 를 사람이 직접 보고 다룰 수 있게 한다: 어느 워크스페이스에
 // 무엇이 돌고 있는지, 무엇이 사람 응답을 기다리는지(blocked), 어디서 새 탭을 여는지.
 import { useCallback, useEffect, useState } from "react";
-import { ExternalLink, Play, Plus, RefreshCw, SquareX, TriangleAlert } from "lucide-react";
+import { ExternalLink, Eye, Play, Plus, RefreshCw, SquareX, TriangleAlert } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import type { HerdrSnapshot, PackInfo } from "@/lib/types";
@@ -33,6 +33,7 @@ export default function TerminalPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [target, setTarget] = useState("");
   const [action, setAction] = useState("");
+  const [preview, setPreview] = useState<{ paneId: string; title: string; body: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -92,6 +93,16 @@ export default function TerminalPage() {
 
   const blocked = snap?.agents.filter((a) => a.agentStatus === "blocked") ?? [];
 
+  /** 앱을 떠나지 않고 그 페인이 지금 무엇을 묻고 있는지 본다. */
+  async function peek(paneId: string, title: string) {
+    setPreview({ paneId, title, body: "출력을 읽는 중…" });
+    try {
+      setPreview({ paneId, title, body: await api.herdrReadPane(paneId, 60) });
+    } catch (e) {
+      setPreview({ paneId, title, body: `출력을 읽지 못했습니다: ${String(e)}` });
+    }
+  }
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader
@@ -148,6 +159,14 @@ export default function TerminalPage() {
                       <span className="min-w-0 flex-1 truncate" title={a.cwd}>
                         {a.terminalTitle || a.name || a.paneId}
                       </span>
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => void peek(a.paneId, a.terminalTitle || a.paneId)}
+                      >
+                        <Eye className="size-3" /> 내용
+                      </Button>
                       <Button size="xs" disabled={busy} onClick={() => void act(() => api.herdrFocusPane(a.paneId))}>
                         열기
                       </Button>
@@ -186,6 +205,32 @@ export default function TerminalPage() {
                 </p>
               </CardContent>
             </Card>
+
+            {preview && (
+              <Card>
+                <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
+                  <CardTitle className="min-w-0 truncate text-[13px]" title={preview.title}>
+                    {preview.title}
+                  </CardTitle>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button size="xs" variant="outline" disabled={busy} onClick={() => void peek(preview.paneId, preview.title)}>
+                      <RefreshCw className="size-3" /> 다시 읽기
+                    </Button>
+                    <Button size="xs" disabled={busy} onClick={() => void act(() => api.herdrFocusPane(preview.paneId))}>
+                      열기
+                    </Button>
+                    <Button size="xs" variant="ghost" onClick={() => setPreview(null)}>
+                      닫기
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-2.5 text-[11px] leading-snug">
+                    {preview.body}
+                  </pre>
+                </CardContent>
+              </Card>
+            )}
 
             {snap.workspaces.length === 0 && <Empty>워크스페이스가 없습니다. 「새 탭」으로 하나 만드세요.</Empty>}
 
@@ -240,20 +285,33 @@ export default function TerminalPage() {
                           {agents.map((a) => {
                             const as = statusBadge(a.agentStatus);
                             return (
-                              <button
+                              <div
                                 key={a.paneId}
-                                onClick={() => void act(() => api.herdrFocusPane(a.paneId))}
                                 className={cn(
-                                  "mt-1 flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11px] transition-colors hover:bg-accent",
+                                  "mt-1 flex items-center gap-2 rounded px-1.5 py-1 text-[11px]",
                                   a.agentStatus === "blocked" && "bg-warning/10",
+                                  preview?.paneId === a.paneId && "bg-secondary",
                                 )}
                               >
                                 <span className="shrink-0 font-mono text-muted-foreground">{a.agent || "shell"}</span>
-                                <span className="min-w-0 flex-1 truncate" title={a.cwd}>
+                                <button
+                                  onClick={() => void peek(a.paneId, a.terminalTitle || a.paneId)}
+                                  className="min-w-0 flex-1 truncate text-left hover:underline"
+                                  title={`${a.cwd}\n클릭하면 최근 출력을 봅니다`}
+                                >
                                   {a.terminalTitle || a.cwd || a.paneId}
-                                </span>
+                                </button>
                                 <Badge variant={as.variant}>{as.label}</Badge>
-                              </button>
+                                <Button
+                                  size="xs"
+                                  variant="ghost"
+                                  disabled={busy}
+                                  title="이 페인을 herdr 에서 앞으로"
+                                  onClick={() => void act(() => api.herdrFocusPane(a.paneId))}
+                                >
+                                  열기
+                                </Button>
+                              </div>
                             );
                           })}
                         </div>

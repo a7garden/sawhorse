@@ -1,6 +1,6 @@
 [package]
 name = "sawhorse-dashboard"
-version = "0.1.0"
+version = "0.2.0"
 description = "sawhorse 운영 대시보드"
 edition = "2021"
 

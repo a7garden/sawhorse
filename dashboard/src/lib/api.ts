@@ -119,6 +119,8 @@ export const api = {
   herdrFocusWorkspace: (id: string): Promise<void> => invoke("herdr_focus_workspace", { id }),
   herdrFocusPane: (id: string): Promise<void> => invoke("herdr_focus_pane", { id }),
   herdrCloseTab: (id: string): Promise<void> => invoke("herdr_close_tab", { id }),
+  herdrReadPane: (id: string, lines = 40): Promise<string> =>
+    invoke("herdr_read_pane", { id, lines }),
   herdrOpenTab: (cwd?: string, label?: string): Promise<{ tabId: string; paneId: string; workspaceId: string }> =>
     invoke("herdr_open_tab", { cwd: cwd ?? null, label: label ?? null }),
 };

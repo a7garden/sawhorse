@@ -198,6 +198,7 @@ pub fn run() {
             commands::herdr_focus_workspace,
             commands::herdr_focus_pane,
             commands::herdr_close_tab,
+            commands::herdr_read_pane,
             commands::herdr_open_tab,
         ])
         .run(tauri::generate_context!())

@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { getVersion } from "@tauri-apps/api/app";
 import {
   LayoutDashboard,
   SquareTerminal,
@@ -55,12 +56,15 @@ export default function App() {
   const nav = useApp((s) => s.nav);
   const missedCount = useApp((s) => s.missed.length);
   const brokenCount = useApp((s) => s.packs?.broken.length ?? 0);
+  const [version, setVersion] = useState("");
   const theme = useTheme((s) => s.theme);
   const resolved = useTheme((s) => s.resolved);
   const cycleTheme = useTheme((s) => s.cycle);
 
   useEffect(() => {
     void init();
+    // 사이드바 버전은 tauri.conf.json 이 정본이다 — 손으로 적으면 반드시 어긋난다
+    getVersion().then(setVersion).catch(() => setVersion(""));
   }, [init]);
 
   const body = (() => {
@@ -159,7 +163,7 @@ export default function App() {
           ))}
         </nav>
         <div className="mt-2 flex items-center justify-between px-2">
-          <div className="text-[10px] text-muted-foreground">v0.2.0</div>
+          <div className="text-[10px] text-muted-foreground">{version ? `v${version}` : ""}</div>
           <button
             onClick={cycleTheme}
             title={`테마: ${THEME_LABEL[theme]} (클릭하여 전환)`}

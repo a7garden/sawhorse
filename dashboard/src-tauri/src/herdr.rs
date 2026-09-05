@@ -306,6 +306,38 @@ impl Herdr {
         snap
     }
 
+    /// 페인의 최근 터미널 출력. `--format text` 는 JSON 이 아니라 raw 텍스트를 낸다 —
+    /// 앱을 떠나지 않고 「승인 대기」 세션이 무엇을 묻는지 보기 위한 것이다.
+    pub async fn agent_read(&self, target: &str, lines: u32) -> HerdrResult<String> {
+        let n = lines.clamp(5, 200).to_string();
+        let args = ["agent", "read", target, "--source", "recent", "--lines", &n, "--format", "text"];
+        let mut cmd = spawn_command(&self.cfg.bin, &args);
+        if !self.cfg.session.trim().is_empty() {
+            cmd.env("HERDR_SESSION", self.cfg.session.trim());
+        }
+        cmd.stdin(std::process::Stdio::null());
+        let out = match tokio::time::timeout(CALL_TIMEOUT, cmd.output()).await {
+            Err(_) => return Err(HerdrError::local("timeout", "herdr agent read 응답이 없습니다")),
+            Ok(Err(e)) => return Err(HerdrError::local("spawn_failed", format!("herdr 실행 실패: {e}"))),
+            Ok(Ok(o)) => o,
+        };
+        if !out.status.success() {
+            let t = String::from_utf8_lossy(&out.stderr).trim().to_string();
+            return Err(HerdrError::local("read_failed", if t.is_empty() { "출력을 읽지 못했습니다".into() } else { t }));
+        }
+        let text = String::from_utf8_lossy(&out.stdout).to_string();
+        // 판(version)에 따라 JSON 으로 감싸 오기도 한다. 그때는 문자열 필드만 꺼낸다.
+        if let Ok(v) = serde_json::from_str::<Value>(text.trim()) {
+            let node = v.get("result").unwrap_or(&v);
+            for key in ["text", "output", "content", "lines"] {
+                if let Some(s) = node.get(key).and_then(Value::as_str) {
+                    return Ok(s.to_string());
+                }
+            }
+        }
+        Ok(text)
+    }
+
     pub async fn focus_workspace(&self, id: &str) -> HerdrResult<Value> {
         self.call(&["workspace", "focus", id]).await
     }

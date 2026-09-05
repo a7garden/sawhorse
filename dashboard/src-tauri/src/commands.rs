@@ -480,6 +480,12 @@ pub async fn herdr_focus_pane(id: String) -> Result<(), String> {
     herdr().focus_pane(&id).await.map(|_| ()).map_err(|e| e.to_string())
 }
 
+/// 페인의 최근 출력. 앱을 떠나지 않고 승인 프롬프트 내용을 확인하기 위한 것이다.
+#[tauri::command]
+pub async fn herdr_read_pane(id: String, lines: Option<u32>) -> Result<String, String> {
+    herdr().agent_read(&id, lines.unwrap_or(40)).await.map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn herdr_close_tab(id: String) -> Result<(), String> {
     herdr().close_tab(&id).await.map(|_| ()).map_err(|e| e.to_string())
