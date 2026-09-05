@@ -108,7 +108,7 @@ export default function HomePage() {
 
   return (
     <div>
-      <PageHeader title="홈" desc="루틴과 개선 사이클, 실행 상태를 한눈에 봅니다." />
+      <PageHeader title="홈" desc="루틴과 이슈 워크플로, 실행 상태를 한눈에 봅니다." />
       <div className="space-y-4 p-4">
 
         {problems.length > 0 && (
@@ -319,9 +319,9 @@ export default function HomePage() {
                 )}
               </div>
               <div>
-                <div className="mb-1 text-muted-foreground">최근 변경 개선 노트</div>
+                <div className="mb-1 text-muted-foreground">최근 변경 이슈</div>
                 {improvements.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">개선 노트가 없습니다.</p>
+                  <p className="text-[11px] text-muted-foreground">이슈가 없습니다.</p>
                 ) : (
                   <ul className="space-y-0.5">
                     {improvements.slice(0, 3).map((n) => (
@@ -338,14 +338,14 @@ export default function HomePage() {
           </Card>
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-[13px]">개선 사이클</CardTitle>
+              <CardTitle className="text-[13px]">이슈 워크플로</CardTitle>
             </CardHeader>
             <CardContent className="grid grid-cols-3 gap-2">
               {(
                 [
                   ["제안", improvements.filter((n) => n.status === "제안").length],
                   ["승인대기", improvements.filter((n) => n.status === "승인대기").length],
-                  ["구현대기", improvements.filter((n) => n.status === "승인").length],
+                  ["실행대기", improvements.filter((n) => n.status === "승인").length],
                 ] as const
               ).map(([label, n]) => (
                 <button

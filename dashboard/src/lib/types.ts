@@ -13,12 +13,28 @@ export interface Schedules {
 
 export type PermissionMode = "default" | "acceptEdits" | "bypassPermissions";
 
+export type HerdrMode = "auto" | "herdr" | "headless";
+export type HerdrCleanup = "closeOnSuccess" | "keep" | "closeAlways";
+
+export interface HerdrCfg {
+  mode: HerdrMode;
+  bin: string;
+  session: string; // "" = herdr 기본 세션
+  workspaceLabel: string;
+  cleanup: HerdrCleanup;
+  maxParallel: number;
+  startTimeoutSec: number;
+  jobTimeoutMin: number; // 0 = 무제한
+  notify: boolean;
+}
+
 export interface DashboardCfg {
   schedules: Schedules;
   excelOutputDir: string;
   claudeBin: string;
   permissionMode: PermissionMode;
   launchAtLogin: boolean;
+  herdr: HerdrCfg;
 }
 
 export interface ProjectCfg {
@@ -44,23 +60,39 @@ export type ConfigPatch = Partial<DashboardCfg> & {
   projects?: ProjectCfg[];
 };
 
-export interface ImprovementNote {
+export interface IssueNote {
   project: string;
   path: string; // absolute
   id: string;
   title: string;
   url: string;
   category: string;
+  issueType: string;
+  executionType: string;
+  labels: string[];
+  assignees: string[];
+  milestone: string;
   priority: string;
   status: string;
+  state: "open" | "closed" | string;
+  approvalRequired: boolean;
   approve: boolean;
   approved: string;
   verified: string;
   dependsOn: string[];
   dependents: string[];
   commits: string[];
+  githubRepo: string;
+  githubNumber: string;
+  githubUrl: string;
+  githubState: string;
+  closed: string;
+  legacy: boolean;
   mtimeMs: number;
 }
+
+/** @deprecated IssueNote is the preferred domain name. */
+export type ImprovementNote = IssueNote;
 
 export interface NoteView {
   markdown: string;
@@ -137,6 +169,10 @@ export interface JobRequest {
   routine?: RoutineName;
 }
 
+export type JobRunner = "headless" | "herdr";
+/// herdr가 본 세션의 생명주기. blocked = 사람이 herdr에서 승인/입력해야 함.
+export type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
+
 export interface Job {
   id: string;
   kind: JobKind;
@@ -148,6 +184,12 @@ export interface Job {
   finishedAtMs?: number;
   exitCode?: number;
   error?: string;
+  runner: JobRunner;
+  agentStatus?: AgentStatus;
+  sessionId?: string;
+  herdrTabId?: string;
+  herdrPaneId?: string;
+  herdrAgent?: string;
 }
 
 export interface ProgressEntry {
@@ -159,11 +201,20 @@ export interface ProgressEntry {
   isError?: boolean;
 }
 
+export interface HerdrDiag {
+  mode: HerdrMode;
+  binOk: boolean;
+  version?: string;
+  serverOk: boolean;
+  effectiveRunner: JobRunner;
+}
+
 export interface Diagnostics {
   configExists: boolean;
   vaultPathOk: boolean;
   claudeOk: boolean;
   claudeVersion?: string;
+  herdr: HerdrDiag;
   projects: { name: string; pathOk: boolean; gitOk: boolean; branchOk: boolean | null }[];
 }
 

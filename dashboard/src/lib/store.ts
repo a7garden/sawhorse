@@ -4,7 +4,7 @@ import { api, EVENTS } from "./api";
 import type {
   ConfigView,
   Diagnostics,
-  ImprovementNote,
+  IssueNote,
   Job,
   MissedRoutine,
   ProgressEntry,
@@ -22,7 +22,7 @@ interface AppState {
 
   config: ConfigView | null;
   diag: Diagnostics | null;
-  improvements: ImprovementNote[];
+  improvements: IssueNote[];
   todos: TodoSections | null;
   jobs: Job[];
   progress: Record<string, ProgressEntry[]>;
@@ -110,11 +110,10 @@ export const useApp = create<AppState>((set, get) => ({
 
   refreshConfig: async () => set({ config: await api.getConfig() }),
   refreshImprovements: async () => {
-    const improvements = await api.listImprovements();
-    const project = get().config?.defaultProject;
+    const improvements = await api.listIssues();
     set({
       improvements,
-      inboxCount: await api.inboxCount(project || undefined).catch(() => 0),
+      inboxCount: await api.inboxCount().catch(() => 0),
     });
   },
   refreshTodos: async () => set({ todos: await api.listTodos() }),

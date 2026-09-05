@@ -1,4 +1,4 @@
-// Vault access: improvement-note frontmatter scan/approval, journal todos,
+// Vault access: issue-note frontmatter scan/approval, journal todos,
 // vault tree + note reading. Writes are limited to: approval 3-key update and
 // todo checkbox toggles/additions. Everything else is read-only.
 
@@ -109,7 +109,7 @@ fn mtime_ms(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-// ---------- improvement notes ----------
+// ---------- issue notes ----------
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -120,25 +120,40 @@ pub struct ImprovementNote {
     pub title: String,
     pub url: String,
     pub category: String,
+    pub issue_type: String,
+    pub execution_type: String,
+    pub labels: Vec<String>,
+    pub assignees: Vec<String>,
+    pub milestone: String,
     pub priority: String,
     pub status: String,
+    pub state: String,
+    pub approval_required: bool,
     pub approve: bool,
     pub approved: String,
     pub verified: String,
     pub depends_on: Vec<String>,
     pub dependents: Vec<String>,
     pub commits: Vec<String>,
+    pub github_repo: String,
+    pub github_number: String,
+    pub github_url: String,
+    pub github_state: String,
+    pub closed: String,
+    pub legacy: bool,
     pub mtime_ms: u64,
 }
 
-fn is_problem_note(file_name: &str) -> bool {
-    // 문제 노트만. MOC(개선.md), 인박스(*문제목록.md), 뷰(*.base)는 제외.
+fn is_issue_note(file_name: &str) -> bool {
+    // 이슈 노트만. MOC, 인박스, 뷰는 제외.
     file_name.ends_with(".md")
+        && file_name != "이슈.md"
         && file_name != "개선.md"
+        && !file_name.ends_with("이슈목록.md")
         && !file_name.ends_with("문제목록.md")
 }
 
-fn note_from_file(project: &str, path: &Path, map: &Mapping) -> ImprovementNote {
+fn note_from_file(project: &str, path: &Path, map: &Mapping, legacy: bool) -> ImprovementNote {
     let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("").to_string();
     let id = fm_str(map, "id");
     let title = match stem.strip_prefix(&format!("{id} ")) {
@@ -152,20 +167,71 @@ fn note_from_file(project: &str, path: &Path, map: &Mapping) -> ImprovementNote 
         title,
         url: fm_str(map, "url"),
         category: fm_str(map, "category"),
+        issue_type: {
+            let value = fm_str(map, "issue_type");
+            if value.is_empty() { fm_str(map, "category") } else { value }
+        },
+        execution_type: {
+            let value = fm_str(map, "execution_type");
+            if value.is_empty() {
+                if legacy { "코드".into() } else { "작업".into() }
+            } else { value }
+        },
+        labels: fm_list(map, "labels"),
+        assignees: fm_list(map, "assignees"),
+        milestone: fm_str(map, "milestone"),
         priority: fm_str(map, "priority"),
         status: fm_str(map, "status"),
+        state: {
+            let value = fm_str(map, "state");
+            if value.is_empty() {
+                match fm_str(map, "status").as_str() {
+                    "완료" | "취소" | "구현완료" | "반려" => "closed".into(),
+                    _ => "open".into(),
+                }
+            } else { value }
+        },
+        approval_required: map
+            .get(Yaml::from("approval_required"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true),
         approve: fm_bool(map, "approve"),
         approved: fm_str(map, "approved"),
         verified: fm_str(map, "verified"),
         depends_on: fm_list(map, "depends_on"),
         dependents: fm_list(map, "dependents"),
         commits: fm_list(map, "commits"),
+        github_repo: fm_str(map, "github_repo"),
+        github_number: fm_str(map, "github_number"),
+        github_url: fm_str(map, "github_url"),
+        github_state: fm_str(map, "github_state"),
+        closed: fm_str(map, "closed"),
+        legacy,
         mtime_ms: mtime_ms(path),
     }
 }
 
-/// Scan improvement notes (frontmatter only) under <vault>/사업/<사업명>/개선/.
-pub fn scan_improvements(vault: &Path, project_filter: Option<&str>, projects: &[String]) -> Vec<ImprovementNote> {
+/// Merge configured projects with every first-level 사업 directory in the vault.
+/// A project without a codebase config can still own and display generic issues.
+pub fn project_pairs(vault: &Path, configured: &[(String, String)]) -> Vec<(String, String)> {
+    let mut out = configured.to_vec();
+    let business = vault.join("사업");
+    if let Ok(entries) = std::fs::read_dir(business) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+            if path.is_dir() && !out.iter().any(|(known, _)| known == name) {
+                out.push((name.to_string(), String::new()));
+            }
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+/// Scan new issue notes and legacy improvement notes. Legacy notes are never
+/// rewritten here; the dashboard only marks them so users can migrate safely.
+pub fn scan_issues(vault: &Path, project_filter: Option<&str>, projects: &[String]) -> Vec<ImprovementNote> {
     let mut out = Vec::new();
     for project in projects {
         if let Some(f) = project_filter {
@@ -173,22 +239,34 @@ pub fn scan_improvements(vault: &Path, project_filter: Option<&str>, projects: &
                 continue;
             }
         }
-        let dir = vault.join("사업").join(project).join("개선");
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
-            if !is_problem_note(name) {
-                continue;
+        for (dir_name, note_type, legacy) in [("이슈", "이슈", false), ("개선", "개선", true)] {
+            let dir = vault.join("사업").join(project).join(dir_name);
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let Some(name) = path.file_name().and_then(|n| n.to_str()) else { continue };
+                if !is_issue_note(name) {
+                    continue;
+                }
+                let Ok(text) = std::fs::read_to_string(&path) else { continue };
+                let Some(split) = split_frontmatter(&text) else { continue };
+                let Ok(map) = parse_mapping(&split.yaml) else { continue };
+                let note_kind = fm_str(&map, "type");
+                // Some pre-template legacy notes have no type at all; retain
+                // the historical scanner's permissive behavior for them only.
+                if note_kind == note_type || (legacy && note_kind.is_empty()) {
+                    out.push(note_from_file(project, &path, &map, legacy));
+                }
             }
-            let Ok(text) = std::fs::read_to_string(&path) else { continue };
-            let Some(split) = split_frontmatter(&text) else { continue };
-            let Ok(map) = parse_mapping(&split.yaml) else { continue };
-            out.push(note_from_file(project, &path, &map));
         }
     }
     out.sort_by(|a, b| b.mtime_ms.cmp(&a.mtime_ms));
     out
+}
+
+/// Compatibility entry point retained for older dashboard clients.
+pub fn scan_improvements(vault: &Path, project_filter: Option<&str>, projects: &[String]) -> Vec<ImprovementNote> {
+    scan_issues(vault, project_filter, projects)
 }
 
 /// Human approval. Same write the vault checkbox performs: approve→true,
@@ -199,16 +277,17 @@ pub fn approve_note(path: &Path) -> Result<(), String> {
     let mut map = parse_mapping(&split.yaml)?;
 
     if fm_bool(&map, "approve") {
-        return Err("이미 승인된 문제입니다".into());
+        return Err("이미 승인된 이슈입니다".into());
     }
     let status = fm_str(&map, "status");
     if status != "승인대기" {
         return Err(format!("승인대기 상태가 아닙니다 (현재: {status})"));
     }
-    // 변경 대상 게이트: 설계 없이 체크만 켜진 건은 승인 무효 (improve 스킬 불변식 4번과 동일)
+    // 실행 대상 게이트: 설계 없이 체크만 켜진 건은 승인 무효.
+    // Legacy notes retain their historical heading for read-only compatibility.
     let body = &split.after_close;
-    if !body.contains("### 변경 대상") {
-        return Err("설계서에 '### 변경 대상' 절이 없어 승인할 수 없습니다".into());
+    if !body.contains("### 실행 대상") && !body.contains("### 변경 대상") {
+        return Err("설계서에 '### 실행 대상' 절이 없어 승인할 수 없습니다".into());
     }
 
     let today = chrono::Local::now().format("%Y-%m-%d").to_string();
@@ -238,33 +317,43 @@ pub fn read_note(path: &Path) -> Result<(Json, String), String> {
     Ok((Json::Object(obj), split.after_close))
 }
 
-/// Count unpromoted items in `<idPrefix> 문제목록.md` (## 신규 (미승격) section).
-pub fn inbox_count(vault: &Path, projects: &[(String, String)], filter: Option<&str>) -> u64 {
-    let mut total = 0;
+/// Resolve each project's inbox list files: 이슈/<idPrefix> 이슈목록.md (new) and
+/// 개선/<idPrefix> 문제목록.md (legacy). Projects with an empty id_prefix match
+/// any `*이슈목록.md`/`*문제목록.md`; missing folders yield no entries.
+fn problem_list_paths(vault: &Path, projects: &[(String, String)]) -> Vec<(String, String, PathBuf)> {
+    let mut out = Vec::new();
     for (name, id_prefix) in projects {
-        if let Some(f) = filter {
-            if f != name {
-                continue;
+        for (dir_name, suffix) in [("이슈", "이슈목록.md"), ("개선", "문제목록.md")] {
+            let dir = vault.join("사업").join(name).join(dir_name);
+            let Ok(entries) = std::fs::read_dir(&dir) else { continue };
+            for entry in entries.flatten() {
+                let path = entry.path();
+                let Some(fname) = path.file_name().and_then(|n| n.to_str()) else { continue };
+                let matches = if id_prefix.is_empty() {
+                    fname.ends_with(suffix)
+                } else {
+                    fname == &format!("{id_prefix} {suffix}")
+                };
+                if matches {
+                    out.push((name.clone(), id_prefix.clone(), path));
+                }
             }
-        }
-        let dir = vault.join("사업").join(name).join("개선");
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(fname) = path.file_name().and_then(|n| n.to_str()) else { continue };
-            let matches = if id_prefix.is_empty() {
-                fname.ends_with("문제목록.md")
-            } else {
-                fname == &format!("{id_prefix} 문제목록.md")
-            };
-            if !matches {
-                continue;
-            }
-            let Ok(text) = std::fs::read_to_string(&path) else { continue };
-            total += section_items(&text, "## 신규 (미승격)").len() as u64;
         }
     }
-    total
+    out
+}
+
+/// Count unpromoted items in the new issue inbox and the legacy problem inbox.
+pub fn inbox_count(vault: &Path, projects: &[(String, String)], filter: Option<&str>) -> u64 {
+    problem_list_paths(vault, projects)
+        .into_iter()
+        .filter(|(name, _, _)| filter.map(|f| f == name.as_str()).unwrap_or(true))
+        .map(|(_, _, path)| {
+            std::fs::read_to_string(&path)
+                .map(|text| section_items(&text, "## 신규 (미승격)").len() as u64)
+                .unwrap_or(0)
+        })
+        .sum()
 }
 
 fn section_items(text: &str, header: &str) -> Vec<String> {
@@ -295,32 +384,18 @@ pub struct UnpromotedItem {
     pub list_path: String,
 }
 
-/// List unpromoted items (`## 신규 (미승격)`) from each project's 문제목록.md.
+/// List unpromoted items (`## 신규 (미승격)`) from issue and legacy inboxes.
 pub fn list_unpromoted(vault: &Path, projects: &[(String, String)]) -> Vec<UnpromotedItem> {
     let mut out = Vec::new();
-    for (name, id_prefix) in projects {
-        let dir = vault.join("사업").join(name).join("개선");
-        let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            let Some(fname) = path.file_name().and_then(|n| n.to_str()) else { continue };
-            let matches = if id_prefix.is_empty() {
-                fname.ends_with("문제목록.md")
-            } else {
-                fname == &format!("{id_prefix} 문제목록.md")
-            };
-            if !matches {
-                continue;
-            }
-            let Ok(text) = std::fs::read_to_string(&path) else { continue };
-            for item in section_items(&text, "## 신규 (미승격)") {
-                out.push(UnpromotedItem {
-                    project: name.clone(),
-                    id_prefix: id_prefix.clone(),
-                    text: item,
-                    list_path: path.to_string_lossy().to_string(),
-                });
-            }
+    for (name, id_prefix, path) in problem_list_paths(vault, projects) {
+        let Ok(text) = std::fs::read_to_string(&path) else { continue };
+        for item in section_items(&text, "## 신규 (미승격)") {
+            out.push(UnpromotedItem {
+                project: name.clone(),
+                id_prefix: id_prefix.clone(),
+                text: item,
+                list_path: path.to_string_lossy().to_string(),
+            });
         }
     }
     out
@@ -351,15 +426,44 @@ pub struct VaultAudit {
     pub scanned_at_ms: u64,
 }
 
-/// skills/improve/SKILL.md frontmatter 어휘 (2026-09 기준)
-const STATUS_SET: [&str; 8] =
-    ["제안", "승인대기", "승인", "구현중", "부분구현", "구현완료", "보류", "반려"];
+/// Canonical issue vocabulary plus legacy improvement values.
+const STATUS_SET: [&str; 12] = [
+    "제안", "승인대기", "승인", "진행중", "부분완료", "완료", "보류", "취소",
+    "구현중", "부분구현", "구현완료", "반려",
+];
 
-pub fn audit_vault(vault: &Path, projects: &[String]) -> VaultAudit {
+fn is_closed_status(status: &str) -> bool {
+    matches!(status, "완료" | "취소" | "구현완료" | "반려")
+}
+
+fn milestone_ids(vault: &Path, project: &str) -> std::collections::HashSet<String> {
+    let mut ids = std::collections::HashSet::new();
+    let dir = vault.join("사업").join(project).join("마일스톤");
+    let Ok(entries) = std::fs::read_dir(dir) else { return ids };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let Ok(text) = std::fs::read_to_string(path) else { continue };
+        let Some(split) = split_frontmatter(&text) else { continue };
+        let Ok(map) = parse_mapping(&split.yaml) else { continue };
+        if fm_str(&map, "type") == "마일스톤" {
+            let id = fm_str(&map, "id");
+            if !id.is_empty() {
+                ids.insert(id);
+            }
+        }
+    }
+    ids
+}
+
+pub fn audit_vault(vault: &Path, projects: &[(String, String)]) -> VaultAudit {
     let mut issues = Vec::new();
 
-    // 개선 노트 규칙 (1: status 어휘, 2: 승인 3키, 3: dangling 의존성)
-    let notes = scan_improvements(vault, None, projects);
+    // 이슈 노트 규칙: status/state, 승인 기록, 의존성, 마일스톤 참조.
+    let names: Vec<String> = projects.iter().map(|(n, _)| n.clone()).collect();
+    let notes = scan_issues(vault, None, &names);
     let ids: std::collections::HashSet<&str> = notes.iter().map(|n| n.id.as_str()).collect();
     for n in &notes {
         if !STATUS_SET.contains(&n.status.as_str()) {
@@ -370,7 +474,7 @@ pub fn audit_vault(vault: &Path, projects: &[String]) -> VaultAudit {
             });
         }
         if n.approve {
-            if n.status != "승인" {
+            if !matches!(n.status.as_str(), "승인" | "진행중" | "부분완료" | "완료" | "구현중" | "부분구현" | "구현완료") {
                 issues.push(AuditIssue {
                     severity: "error".into(),
                     path: n.path.clone(),
@@ -382,6 +486,32 @@ pub fn audit_vault(vault: &Path, projects: &[String]) -> VaultAudit {
                     severity: "warn".into(),
                     path: n.path.clone(),
                     message: format!("{}: approved '{}' — YYYY-MM-DD 아님", n.id, n.approved),
+                });
+            }
+        }
+        if !n.legacy {
+            let expected_state = if is_closed_status(&n.status) { "closed" } else { "open" };
+            if n.state != expected_state {
+                issues.push(AuditIssue {
+                    severity: "error".into(),
+                    path: n.path.clone(),
+                    message: format!("{}: status '{}'이면 state는 '{}'이어야 함", n.id, n.status, expected_state),
+                });
+            }
+            if is_closed_status(&n.status)
+                && chrono::NaiveDate::parse_from_str(&n.closed, "%Y-%m-%d").is_err()
+            {
+                issues.push(AuditIssue {
+                    severity: "error".into(),
+                    path: n.path.clone(),
+                    message: format!("{}: closed '{}' — 완료/취소 이슈는 YYYY-MM-DD 종료일 필요", n.id, n.closed),
+                });
+            }
+            if !n.milestone.is_empty() && !milestone_ids(vault, &n.project).contains(&n.milestone) {
+                issues.push(AuditIssue {
+                    severity: "error".into(),
+                    path: n.path.clone(),
+                    message: format!("{}: milestone '{}' 문서 없음", n.id, n.milestone),
                 });
             }
         }
@@ -421,14 +551,28 @@ pub fn audit_vault(vault: &Path, projects: &[String]) -> VaultAudit {
         });
     }
 
-    // 구조 (5)
-    for project in projects {
-        let dir = vault.join("사업").join(project).join("개선");
-        if !dir.is_dir() {
+    // 구조 (5): 이슈/개선 폴더 + 사업별 인박스 목록 존재 여부
+    let lists = problem_list_paths(vault, projects);
+    for (project, id_prefix) in projects {
+        let dir = vault.join("사업").join(project).join("이슈");
+        let legacy_dir = vault.join("사업").join(project).join("개선");
+        if !dir.is_dir() && !legacy_dir.is_dir() {
             issues.push(AuditIssue {
                 severity: "info".into(),
                 path: dir.to_string_lossy().to_string(),
-                message: format!("'{project}' 개선 폴더 없음 (init-vault 기준 구조)"),
+                message: format!("'{project}' 이슈 폴더 없음 (init-vault 기준 구조)"),
+            });
+            continue;
+        }
+        if id_prefix.is_empty() {
+            continue; // 접두사 없는 사업은 목록 파일명을 특정할 수 없어 생략
+        }
+        let has_list = lists.iter().any(|(p, _, _)| p == project);
+        if !has_list {
+            issues.push(AuditIssue {
+                severity: "info".into(),
+                path: dir.join(format!("{id_prefix} 이슈목록.md")).to_string_lossy().to_string(),
+                message: format!("'{project}' {id_prefix} 이슈목록/문제목록 없음"),
             });
         }
     }
@@ -817,6 +961,26 @@ mod tests {
     }
 
     #[test]
+    fn scan_reads_new_issue_fields_and_marks_legacy_notes() {
+        let vault = fixture_vault("issue-scan");
+        let issues = vault.join("사업").join("FDR").join("이슈");
+        std::fs::create_dir_all(&issues).unwrap();
+        std::fs::write(
+            issues.join("FDR-003 GitHub 연동 설계.md"),
+            "---\ntype: 이슈\nid: FDR-003\nissue_type: 기능\nlabels: [연동, github]\nassignees: [won]\nmilestone: FDR-M1\nstatus: 제안\nstate: open\ngithub_repo: a7garden/si-workbench\ngithub_number: \"42\"\ngithub_url: https://github.com/a7garden/si-workbench/issues/42\n---\n\n## 배경 및 문제\n",
+        ).unwrap();
+
+        let notes = scan_issues(&vault, None, &["FDR".to_string()]);
+        let issue = notes.iter().find(|n| n.id == "FDR-003").unwrap();
+        assert_eq!(issue.issue_type, "기능");
+        assert_eq!(issue.labels, vec!["연동", "github"]);
+        assert_eq!(issue.milestone, "FDR-M1");
+        assert_eq!(issue.github_number, "42");
+        assert!(!issue.legacy);
+        assert!(notes.iter().find(|n| n.id == "FDR-001").unwrap().legacy);
+    }
+
+    #[test]
     fn approve_updates_three_keys_and_preserves_body() {
         let vault = fixture_vault("approve");
         let path = vault.join("사업").join("FDR").join("개선").join("FDR-001 검색 버튼 오류.md");
@@ -847,7 +1011,7 @@ mod tests {
         let path = improve.join("FDR-003 설계없음.md");
         std::fs::write(&path, "---\nid: FDR-003\nstatus: 승인대기\napprove: false\n---\n\n## 문제상황\n본문만 있다.\n").unwrap();
         let err = approve_note(&path).unwrap_err();
-        assert!(err.contains("변경 대상"), "unexpected: {err}");
+        assert!(err.contains("실행 대상"), "unexpected: {err}");
     }
 
     #[test]
@@ -888,7 +1052,7 @@ mod tests {
             let d = today - chrono::Duration::days(i);
             std::fs::write(vault.join("일지").join(format!("{d}.md")), "---\ntype: 일지\n---\n").unwrap();
         }
-        let audit = audit_vault(&vault, &["FDR".to_string()]);
+        let audit = audit_vault(&vault, &[("FDR".to_string(), "FDR".to_string())]);
         assert!(audit.issues.is_empty(), "unexpected: {:?}", audit.issues);
         assert!(audit.journal.today_exists);
     }
@@ -896,9 +1060,9 @@ mod tests {
     #[test]
     fn audit_flags_bad_status_and_approval_mismatch() {
         let vault = fixture_vault("audit-bad");
-        audit_write_note(&vault, "FDR-003 상태 오타.md", "id: FDR-003\nstatus: 완료\napprove: false\n");
+        audit_write_note(&vault, "FDR-003 상태 오타.md", "id: FDR-003\nstatus: 전송완료\napprove: false\n");
         audit_write_note(&vault, "FDR-004 승인 불일치.md", "id: FDR-004\nstatus: 승인대기\napprove: true\napproved: 9월1일\n");
-        let audit = audit_vault(&vault, &["FDR".to_string()]);
+        let audit = audit_vault(&vault, &[("FDR".to_string(), "FDR".to_string())]);
         let msgs: Vec<&str> = audit.issues.iter().map(|i| i.message.as_str()).collect();
         assert!(msgs.iter().any(|m| m.contains("FDR-003") && m.contains("허용 집합 밖")));
         assert!(msgs.iter().any(|m| m.contains("FDR-004") && m.contains("3키 불일치")));
@@ -909,8 +1073,47 @@ mod tests {
     fn audit_flags_dangling_dependency() {
         let vault = fixture_vault("audit-dep");
         audit_write_note(&vault, "FDR-005 유령 의존.md", "id: FDR-005\nstatus: 제안\napprove: false\ndepends_on: [FDR-999]\n");
-        let audit = audit_vault(&vault, &["FDR".to_string()]);
+        let audit = audit_vault(&vault, &[("FDR".to_string(), "FDR".to_string())]);
         assert!(audit.issues.iter().any(|i| i.message.contains("FDR-999")));
+    }
+
+    #[test]
+    fn audit_checks_new_issue_closing_and_milestone_integrity() {
+        let vault = fixture_vault("audit-new-issue");
+        let dir = vault.join("사업").join("FDR").join("이슈");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("FDR-101 일반 이슈.md"),
+            "---\ntype: 이슈\nid: FDR-101\nstatus: 완료\nstate: open\nclosed: \"\"\nmilestone: FDR-M404\napprove: true\napproved: 2026-09-05\n---\n\n## 설계\n\n### 실행 대상\n\n| 대상 | 실행 내용 |\n|---|---|\n",
+        )
+        .unwrap();
+        let audit = audit_vault(&vault, &[("FDR".to_string(), "FDR".to_string())]);
+        let messages: Vec<&str> = audit.issues.iter().map(|i| i.message.as_str()).collect();
+        assert!(messages.iter().any(|m| m.contains("state는 'closed'")));
+        assert!(messages.iter().any(|m| m.contains("종료일 필요")));
+        assert!(messages.iter().any(|m| m.contains("FDR-M404") && m.contains("문서 없음")));
+    }
+
+    #[test]
+    fn audit_flags_missing_inbox_list_but_skips_empty_prefix() {
+        let vault = fixture_vault("audit-list");
+        // FDR: 폴더 + FDR 문제목록 모두 있음 → 구조 이슈 없음
+        let no_list = vault.join("사업").join("ABC").join("개선");
+        std::fs::create_dir_all(&no_list).unwrap();
+        let no_prefix = vault.join("사업").join("XYZ").join("이슈");
+        std::fs::create_dir_all(&no_prefix).unwrap();
+        let audit = audit_vault(
+            &vault,
+            &[
+                ("FDR".to_string(), "FDR".to_string()),
+                ("ABC".to_string(), "ABC".to_string()),
+                ("XYZ".to_string(), String::new()),
+            ],
+        );
+        let msgs: Vec<&str> = audit.issues.iter().map(|i| i.message.as_str()).collect();
+        assert!(msgs.iter().any(|m| m.contains("ABC") && m.contains("문제목록")), "{msgs:?}");
+        assert!(!msgs.iter().any(|m| m.contains("XYZ") && m.contains("목록")), "{msgs:?}");
+        assert!(!msgs.iter().any(|m| m.contains("FDR") && m.contains("목록")), "{msgs:?}");
     }
 
     fn todo_fixture(tag: &str) -> PathBuf {

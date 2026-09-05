@@ -1,8 +1,10 @@
 mod commands;
 mod config;
+mod herdr;
 mod jobs;
 mod scheduler;
 mod state;
+mod transcript;
 mod vault;
 mod watcher;
 
@@ -26,6 +28,31 @@ fn show_main(app: &tauri::AppHandle) {
     }
 }
 
+// tauri dev runs the raw binary (no .app bundle), so macOS shows no Dock icon.
+// Set it at runtime from the packaged source icon; production bundles carry the
+// same artwork via icon.icns.
+#[cfg(target_os = "macos")]
+fn apply_dock_icon() {
+    use objc2::{AnyThread, MainThreadMarker};
+    use objc2_app_kit::{NSApplication, NSImage};
+    use objc2_foundation::NSData;
+
+    const ICON_PNG: &[u8] = include_bytes!("../icons/icon.png");
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    // SAFETY: static PNG bytes; main-thread AppKit call.
+    unsafe {
+        let data = NSData::dataWithBytes_length(ICON_PNG.as_ptr().cast(), ICON_PNG.len() as _);
+        if let Some(image) = NSImage::initWithData(NSImage::alloc(), &data) {
+            NSApplication::sharedApplication(mtm).setApplicationIconImage(Some(&image));
+        }
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn apply_dock_icon() {}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -34,9 +61,12 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            apply_dock_icon();
             let data_dir = app.path().app_data_dir()?;
             let state = Arc::new(state::AppState::new(data_dir));
-            state.mark_stale_interrupted();
+            // herdr sessions outlive the app, so these are candidates for resuming
+            // rather than corpses.
+            let resumable = state.mark_stale_interrupted();
 
             let handle = app.handle().clone();
             let emit_fn: jobs::EmitFn = Arc::new(move |event, payload| {
@@ -44,6 +74,10 @@ pub fn run() {
             });
             let mgr = jobs::JobManager::start(state.clone(), emit_fn.clone());
             scheduler::start_tick(mgr.clone(), state.clone(), emit_fn.clone());
+            {
+                let mgr = mgr.clone();
+                tauri::async_runtime::spawn(async move { mgr.reattach_herdr(resumable).await });
+            }
 
             // watch the vault for external changes (skip when not configured yet)
             {
@@ -100,8 +134,10 @@ pub fn run() {
             commands::save_config,
             commands::diagnostics,
             commands::list_improvements,
+            commands::list_issues,
             commands::read_note,
             commands::approve_note,
+            commands::approve_issue,
             commands::list_inbox_count,
             commands::list_unpromoted,
             commands::audit_vault,
@@ -113,6 +149,8 @@ pub fn run() {
             commands::read_vault_note,
             commands::enqueue_job,
             commands::cancel_job,
+            commands::focus_job,
+            commands::herdr_probe,
             commands::list_jobs,
             commands::job_log,
             commands::job_report,

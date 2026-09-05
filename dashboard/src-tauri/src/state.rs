@@ -19,6 +19,9 @@ pub struct PersistedState {
     /// last exported excel output path (used as --prev for the next export)
     #[serde(default)]
     pub excel_last_out: Option<String>,
+    /// herdr workspace the dashboard owns; re-created when it no longer exists
+    #[serde(default)]
+    pub herdr_workspace_id: Option<String>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -33,18 +36,25 @@ pub struct MissedEntry {
 
 pub struct AppState {
     pub data_dir: PathBuf,
+    /// where Claude Code keeps session transcripts; the herdr runner tails them
+    pub transcript_root: PathBuf,
     pub state: Mutex<PersistedState>,
     pub jobs: Mutex<Vec<Job>>,
 }
 
 impl AppState {
     pub fn new(data_dir: PathBuf) -> Self {
+        Self::new_with(data_dir, crate::transcript::projects_dir())
+    }
+
+    pub fn new_with(data_dir: PathBuf, transcript_root: PathBuf) -> Self {
         std::fs::create_dir_all(data_dir.join("logs")).ok();
         std::fs::create_dir_all(data_dir.join("reports")).ok();
         let state = Self::load_state(&data_dir);
         let jobs = Self::load_jobs(&data_dir);
         Self {
             data_dir,
+            transcript_root,
             state: Mutex::new(state),
             jobs: Mutex::new(jobs),
         }
@@ -76,14 +86,25 @@ impl AppState {
         data_dir.join("jobs.jsonl")
     }
 
+    /// jobs.jsonl is an append-only transition log: one line per `record_job`, so
+    /// a job appears once per state change. Collapse to the last record per id and
+    /// restore the in-memory invariant (most recent first, capped).
     fn load_jobs(data_dir: &PathBuf) -> Vec<Job> {
-        match std::fs::read_to_string(Self::jobs_path(data_dir)) {
-            Ok(s) => s
-                .lines()
-                .filter_map(|l| serde_json::from_str::<Job>(l).ok())
-                .collect(),
-            Err(_) => Vec::new(),
+        let Ok(text) = std::fs::read_to_string(Self::jobs_path(data_dir)) else {
+            return Vec::new();
+        };
+        let mut order: Vec<String> = Vec::new();
+        let mut latest: HashMap<String, Job> = HashMap::new();
+        for job in text.lines().filter_map(|l| serde_json::from_str::<Job>(l).ok()) {
+            if !latest.contains_key(&job.id) {
+                order.push(job.id.clone());
+            }
+            latest.insert(job.id.clone(), job);
         }
+        let mut jobs: Vec<Job> =
+            order.iter().rev().filter_map(|id| latest.remove(id)).collect();
+        jobs.truncate(200);
+        jobs
     }
 
     /// Persist one job record and update the in-memory list (most recent first, capped).
@@ -110,17 +131,30 @@ impl AppState {
         }
     }
 
-    /// Jobs still marked running after a restart are actually dead.
-    pub fn mark_stale_interrupted(&self) {
+    /// Jobs still marked running after a restart are actually dead — except herdr
+    /// jobs, whose panes outlive the dashboard. Those are returned untouched for
+    /// `JobManager::reattach_herdr` to either resume watching or lay to rest.
+    pub fn mark_stale_interrupted(&self) -> Vec<Job> {
         let mut jobs = self.jobs.lock();
+        let mut resumable = Vec::new();
         for j in jobs.iter_mut() {
-            if j.status == crate::jobs::JobStatus::Running
-                || j.status == crate::jobs::JobStatus::Queued
-            {
-                j.status = crate::jobs::JobStatus::Interrupted;
-                j.error = Some("앱 재시작으로 중단됨".into());
+            let stale = j.status == crate::jobs::JobStatus::Running
+                || j.status == crate::jobs::JobStatus::Queued;
+            if !stale {
+                continue;
             }
+            if j.status == crate::jobs::JobStatus::Running
+                && j.runner == crate::jobs::JobRunner::Herdr
+                && j.herdr_pane_id.is_some()
+                && j.session_id.is_some()
+            {
+                resumable.push(j.clone());
+                continue;
+            }
+            j.status = crate::jobs::JobStatus::Interrupted;
+            j.error = Some("앱 재시작으로 중단됨".into());
         }
+        resumable
     }
 
     pub fn log_path(&self, id: &str) -> PathBuf {

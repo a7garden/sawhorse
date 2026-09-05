@@ -53,8 +53,19 @@ pub fn list_improvements(project: Option<String>) -> Vec<vault::ImprovementNote>
     if view.vault_path.is_empty() {
         return vec![];
     }
-    let names: Vec<String> = view.projects.iter().map(|p| p.name.clone()).collect();
+    let configured: Vec<(String, String)> =
+        view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    let names: Vec<String> = vault::project_pairs(vault_path, &configured)
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect();
     vault::scan_improvements(vault_path, project.as_deref(), &names)
+}
+
+/// Preferred issue-oriented command. `list_improvements` stays for older UI clients.
+#[tauri::command]
+pub fn list_issues(project: Option<String>) -> Vec<vault::ImprovementNote> {
+    list_improvements(project)
 }
 
 #[tauri::command]
@@ -69,6 +80,11 @@ pub fn approve_note(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn approve_issue(path: String) -> Result<(), String> {
+    approve_note(path)
+}
+
+#[tauri::command]
 pub fn list_obsidian_vaults() -> Vec<vault::VaultCandidate> {
     vault::detect_obsidian_vaults()
 }
@@ -78,8 +94,9 @@ pub fn list_inbox_count(project: Option<String>) -> u64 {
     if view.vault_path.is_empty() {
         return 0;
     }
-    let pairs: Vec<(String, String)> =
+    let configured: Vec<(String, String)> =
         view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    let pairs = vault::project_pairs(Path::new(&view.vault_path), &configured);
     vault::inbox_count(Path::new(&view.vault_path), &pairs, project.as_deref())
 }
 
@@ -89,8 +106,9 @@ pub fn list_unpromoted() -> Vec<vault::UnpromotedItem> {
     if view.vault_path.is_empty() {
         return vec![];
     }
-    let pairs: Vec<(String, String)> =
+    let configured: Vec<(String, String)> =
         view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    let pairs = vault::project_pairs(Path::new(&view.vault_path), &configured);
     vault::list_unpromoted(Path::new(&view.vault_path), &pairs)
 }
 
@@ -104,8 +122,10 @@ pub fn audit_vault() -> vault::VaultAudit {
             scanned_at_ms: 0,
         };
     }
-    let projects: Vec<String> = view.projects.iter().map(|p| p.name.clone()).collect();
-    vault::audit_vault(Path::new(&view.vault_path), &projects)
+    let configured: Vec<(String, String)> =
+        view.projects.iter().map(|p| (p.name.clone(), p.id_prefix.clone())).collect();
+    let pairs = vault::project_pairs(Path::new(&view.vault_path), &configured);
+    vault::audit_vault(Path::new(&view.vault_path), &pairs)
 }
 
 #[tauri::command]
@@ -162,6 +182,20 @@ pub fn enqueue_job(req: JobRequest, mgr: State<'_, Arc<JobManager>>) -> Result<J
 #[tauri::command]
 pub async fn cancel_job(id: String, mgr: State<'_, Arc<JobManager>>) -> Result<(), String> {
     mgr.cancel(&id).await
+}
+
+/// Bring a herdr-run job's pane to the front (errors for headless jobs).
+#[tauri::command]
+pub async fn focus_job(id: String, mgr: State<'_, Arc<JobManager>>) -> Result<(), String> {
+    mgr.focus(&id).await
+}
+
+/// Cheap runner check for the settings screen — `diagnostics` also shells out per
+/// project, which is too slow to re-run while editing herdr options.
+#[tauri::command]
+pub async fn herdr_probe() -> config::HerdrDiag {
+    let view = config::load_view();
+    config::herdr_diagnostics(&view.dashboard.herdr).await
 }
 
 #[tauri::command]

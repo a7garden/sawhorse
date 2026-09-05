@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { CircleCheck, CircleX, Play, RefreshCw, Square, Terminal, TriangleAlert, Wrench } from "lucide-react";
+import {
+  CircleCheck,
+  CircleX,
+  ExternalLink,
+  Play,
+  RefreshCw,
+  Square,
+  Terminal,
+  TriangleAlert,
+  Wrench,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import type { Job, ProgressEntry } from "@/lib/types";
@@ -18,6 +28,7 @@ import {
 import {
   Empty,
   JOB_KIND_KO,
+  JOB_RUNNER_KO,
   JOB_STATUS_KO,
   MarkdownView,
   PageHeader,
@@ -26,6 +37,8 @@ import {
   fmtClock,
   fmtDur,
   jobBadgeVariant,
+  jobStatusLabel,
+  jobStatusVariant,
   useTicker,
 } from "./common";
 
@@ -46,6 +59,7 @@ export default function JobsPage() {
   const [logView, setLogView] = useState<{ label: string; lines: string[] } | null>(null);
   const [reportView, setReportView] = useState<{ label: string; md: string | null } | null>(null);
   const [cancelling, setCancelling] = useState(false);
+  const [focusError, setFocusError] = useState<string | null>(null);
 
   const active = jobs
     .filter((j) => j.status === "queued" || j.status === "running")
@@ -70,6 +84,16 @@ export default function JobsPage() {
       await refreshJobs();
     } finally {
       setCancelling(false);
+    }
+  }
+
+  // herdr jobs run in a real pane — hand the user the session instead of a summary.
+  async function focus(j: Job) {
+    setFocusError(null);
+    try {
+      await api.focusJob(j.id);
+    } catch (e) {
+      setFocusError(String(e));
     }
   }
 
@@ -105,6 +129,11 @@ export default function JobsPage() {
               <Badge variant="secondary">{active.length}</Badge>
             </CardHeader>
             <CardContent className="space-y-2">
+              {focusError && (
+                <div className="rounded-md border border-destructive/40 px-2 py-1 text-[11px] text-destructive">
+                  herdr 세션을 열지 못했습니다: {focusError}
+                </div>
+              )}
               {active.length === 0 ? (
                 <Empty>대기 중인 작업이 없습니다.</Empty>
               ) : (
@@ -116,7 +145,7 @@ export default function JobsPage() {
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <Badge variant={jobBadgeVariant(j.status)}>{JOB_STATUS_KO[j.status]}</Badge>
+                      <Badge variant={jobStatusVariant(j)}>{jobStatusLabel(j)}</Badge>
                       <button
                         className="min-w-0 flex-1 truncate text-left text-xs font-medium hover:underline"
                         onClick={() => setSelectedId(j.id)}
@@ -127,6 +156,11 @@ export default function JobsPage() {
                       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
                         {fmtDur(Date.now() - (j.startedAtMs ?? j.createdAtMs))}
                       </span>
+                      {j.runner === "herdr" && (
+                        <Button size="xs" variant="outline" onClick={() => void focus(j)}>
+                          <ExternalLink /> herdr
+                        </Button>
+                      )}
                       {j.status === "running" && (
                         <Button
                           size="xs"
@@ -138,6 +172,11 @@ export default function JobsPage() {
                         </Button>
                       )}
                     </div>
+                    {j.agentStatus === "blocked" && (
+                      <div className={`mt-1 text-[11px] ${WARN_TEXT}`}>
+                        herdr 세션이 승인·입력을 기다립니다. 「herdr」로 열어 응답하면 이어서 진행합니다.
+                      </div>
+                    )}
                     {j.project && (
                       <div className="mt-1 text-[11px] text-muted-foreground">{j.project}</div>
                     )}
@@ -150,7 +189,12 @@ export default function JobsPage() {
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
               <CardTitle className="text-[13px]">라이브 타임라인</CardTitle>
-              {current && <Badge variant="outline">{JOB_KIND_KO[current.kind]}</Badge>}
+              {current && (
+                <div className="flex gap-1">
+                  <Badge variant="outline">{JOB_KIND_KO[current.kind]}</Badge>
+                  <Badge variant="secondary">{JOB_RUNNER_KO[current.runner]}</Badge>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {!current ? (
@@ -194,6 +238,7 @@ export default function JobsPage() {
                     <TableHead className="w-20">종류</TableHead>
                     <TableHead>라벨</TableHead>
                     <TableHead className="w-28">프로젝트</TableHead>
+                    <TableHead className="w-24">실행</TableHead>
                     <TableHead className="w-24">상태</TableHead>
                     <TableHead className="w-24">종료 시각</TableHead>
                     <TableHead className="w-24">소요</TableHead>
@@ -219,6 +264,9 @@ export default function JobsPage() {
                       <TableCell className="truncate text-xs text-muted-foreground">
                         {j.project ?? "-"}
                       </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {JOB_RUNNER_KO[j.runner] ?? JOB_RUNNER_KO.headless}
+                      </TableCell>
                       <TableCell>
                         <Badge variant={jobBadgeVariant(j.status)}>{JOB_STATUS_KO[j.status]}</Badge>
                       </TableCell>
@@ -238,6 +286,11 @@ export default function JobsPage() {
                           <Button size="xs" variant="ghost" onClick={() => void openReport(j)}>
                             리포트
                           </Button>
+                          {j.runner === "herdr" && j.herdrTabId && (
+                            <Button size="xs" variant="ghost" onClick={() => void focus(j)}>
+                              herdr
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

@@ -56,7 +56,18 @@ src-tauri/src/
     "excelOutputDir": "...",
     "claudeBin": "claude",
     "permissionMode": "bypassPermissions",  // default | acceptEdits | bypassPermissions
-    "launchAtLogin": false
+    "launchAtLogin": false,
+    "herdr": {                              // 잡을 herdr 세션으로 돌릴 때
+      "mode": "auto",                       // auto | herdr | headless
+      "bin": "herdr",
+      "session": "",                        // 이름 있는 herdr 세션, ""=기본
+      "workspaceLabel": "si-workbench",
+      "cleanup": "closeOnSuccess",          // closeOnSuccess | keep | closeAlways
+      "maxParallel": 1,
+      "startTimeoutSec": 60,
+      "jobTimeoutMin": 120,                 // 0 = 무제한
+      "notify": true
+    }
   }
 }
 ```
@@ -77,15 +88,56 @@ PreToolUse 훅(block-push — 비대화형 세션에서 ask는 거부로 귀결�
 - 프롬프트: `/si-workbench:improve 설계 [IDs]`, `/si-workbench:improve 구현 [IDs]`,
   `/si-workbench:<routine>`, `/si-workbench:improve-excel --out "<excelOutputDir>/개선수정사항-체크리스트.xlsx" --prev "<직전 OUT>"`.
   `--prev` 경로는 state.json에 마지막 OUT을 기록해 이어받는다.
-- 실행: `claude -p "<prompt>" --output-format stream-json --verbose --permission-mode <mode>`,
-  cwd = 프로젝트 path(설계·구현) 또는 vaultPath(루틴·엑셀). Windows는 `cmd /c claude …`.
-- 큐: 전역 FIFO, 동시 실행 1개. 히스토리는 app-data/jobs.jsonl에 추가 기록(재시작 후에도 열람).
-- 진행: stdout 줄 단위 JSON 파싱 → `job-progress` 이벤트.
-  `{type:"assistant"}`의 text/tool_use를 타임라인 항목으로, `{type:"result"}`를 종결로.
-  모르는 형식은 무시하되 원문 줄은 항상 logs/<id>.jsonl에 적는다.
+- cwd = 프로젝트 path(설계·구현) 또는 vaultPath(루틴·엑셀).
+- 큐: 전역 FIFO 입장. 히스토리는 app-data/jobs.jsonl에 추가 기록(재시작 후에도 열람).
+  같은 id의 마지막 줄만 살려 읽는다(전이 로그이므로 줄이 여러 개 쌓인다).
 - 마지막 assistant 텍스트 = 리포트 → reports/<id>.md 저장, UI 뷰어로 열람.
-- 취소: 프로세스 트리 kill(unix: process group, windows: taskkill /T) → Cancelled.
+- 원문 줄은 항상 logs/<id>.jsonl에 적는다(실행기 무관).
+
+### 실행기 1: 백그라운드(headless)
+
+- `claude -p "<prompt>" --output-format stream-json --verbose --permission-mode <mode>`.
+  Windows는 `cmd /c claude …`.
+- 동시 실행 1개(다른 잡과 슬롯을 나눠 쓰지 않는다).
+- 진행: stdout 줄 단위 JSON 파싱 → `job-progress`. `{type:"assistant"}`의 text/tool_use를
+  타임라인 항목으로, `{type:"result"}`를 종결로. 모르는 형식은 무시.
+- 취소: 자식 프로세스 kill → Cancelled.
 - 앱 종료로 잡이 죽으면 재시작 시 Interrupted 표시(improve는 건별 저장이라 중단 내성 있음).
+
+### 실행기 2: herdr (기본, 사용 가능할 때)
+
+목적: 잡을 **보이고 이어받을 수 있는** 세션으로 만든다. 승인 프롬프트에 사람이 답할 수 있고,
+대시보드를 재시작해도 세션이 죽지 않는다.
+
+- 레이아웃: `workspaceLabel` 워크스페이스 1개 + **잡마다 탭 1개**
+  (`tab create --workspace … --cwd <job.cwd> --label <job.label> --no-focus`).
+  워크스페이스 id는 state.json에 기억하고, 없으면 같은 라벨의 기존 워크스페이스를 먼저 찾아
+  붙는다(재설치 때 같은 라벨이 쌓이지 않게).
+- 기동: `agent start sw-<8hex> --kind claude --pane <root_pane> --timeout <startTimeoutSec>
+  -- --session-id <uuid> --permission-mode <mode> "<prompt>"`.
+  프롬프트를 `agent prompt`로 타이핑하지 않는 이유: 잡 프롬프트 대부분이 슬래시 커맨드라
+  입력창 자동완성이 제출 Enter를 가로챌 수 있다. `--` 뒤 인자는 argv로 전달되어 셸 인용도
+  필요 없다. `agent start` 실패는 치명적이지 않다 — 페인에 에이전트가 실제로 있으면 진행한다.
+- 진행: 세션 UUID를 대시보드가 만들어 넘기므로 트랜스크립트 경로가 정해진다
+  (`<claude config dir>/projects/*/<uuid>.jsonl`, uuid로 탐색). 그 파일을 tail 하고
+  `{type:"assistant"}`를 백그라운드와 **같은 매핑 함수**로 변환한다(thinking은 건너뜀).
+  트랜스크립트에는 `result` 레코드가 없으므로 종결 항목은 마지막 assistant 텍스트로 합성한다.
+- 완료 판정: 1초 주기 `agent get` 폴링. 세션이 실제로 뭔가 했다는 근거(트랜스크립트 항목
+  **또는** `working`/`blocked` 상태 관측)를 보기 전에는 완료로 보지 않고(기동 유예
+  `startTimeoutSec`), `idle`/`done`이 3틱 연속 유지되면 성공.
+  **트랜스크립트는 타임라인용이지 생사 판정용이 아니다.** Claude Code는 환경에
+  `CLAUDE_CODE_CHILD_SESSION`이 있으면 기록을 아예 남기지 않는데(예: herdr 서버를 Claude Code
+  세션 안에서 띄운 경우) 잡 자체는 정상 실행된다. 그래서 탭 생성 시
+  `--env CLAUDE_CODE_CHILD_SESSION=`로 지우고, 그래도 기록이 없으면 잡은 성공 처리하되
+  타임라인이 빈 이유를 결과 항목과 로그에 남긴다.
+- 승인 대기: `blocked`은 새 JobStatus가 아니라 `Job.agentStatus`. 잡은 계속 Running이고
+  herdr 알림을 띄운 뒤 사람이 답할 때까지 기다린다. `jobTimeoutMin` 초과 시 실패.
+- 취소: `agent send-keys esc` → `ctrl+c`.
+- 정리: `cleanup` 정책(기본 성공 시 탭 닫기, 실패·취소는 남겨 증거 보존).
+- 재시작 복구: herdr 세션은 앱보다 오래 산다. 실행 중이던 herdr 잡은 `agent get`으로 확인해
+  살아 있으면 감시를 재개하고, 없으면 Interrupted. herdr의 claude 통합이 설치돼 있으면
+  `agent_session`으로 세션 동일성까지 확인한다.
+- 실행기 선택: `mode: auto`면 herdr 서버 도달 가능 여부로 정하고, 폴백 사유를 잡 로그에 남긴다.
 
 ## 볼트 접근 규칙
 
@@ -127,9 +179,12 @@ commands: `get_config`, `save_config(patch)`, `diagnostics()`,
 `list_improvements(project?)`, `read_note(path)`, `approve_note(path)`,
 `list_inbox_count(project)`, `list_todos()`, `toggle_todo(section, index, checked)`,
 `add_todo(section, text)`, `list_vault_tree()`, `read_vault_note(rel)`,
-`enqueue_job(req)`, `cancel_job(id)`, `list_jobs()`, `job_log(id)`, `job_report(id)`,
-`run_routine_now(name)`, `list_missed()`, `dismiss_missed(key, run: bool)`,
-`set_launch_at_login(enabled)`.
+`enqueue_job(req)`, `cancel_job(id)`, `focus_job(id)`, `list_jobs()`, `job_log(id)`,
+`job_report(id)`, `herdr_probe()`, `run_routine_now(name)`, `list_missed()`,
+`dismiss_missed(key, run: bool)`, `set_launch_at_login(enabled)`.
+`focus_job`은 herdr로 실행한 잡의 페인을 앞으로 가져온다(에이전트 → 실패 시 탭 순).
+`Job`은 `runner`(headless|herdr), `agentStatus`, `sessionId`, `herdrTabId/PaneId/Agent`를
+함께 싣는다 — 모두 `#[serde(default)]`라 예전 히스토리도 그대로 읽힌다.
 events: `job-progress {job_id, entry}`, `job-finished {job}`, `vault-changed {areas}`,
 `schedule-missed {missed}`.
 
@@ -144,9 +199,12 @@ claude CLI 부재 → 진단 카드(버전 확인 실패 표시). vault 무효 �
 
 Rust 단위: config 병합(모르는 키·키 순서 보존), frontmatter 승인 쓰기(바이트 보존·
 사전조건·멱등), 할 일 파싱/토글/추가, 스케줄러 판정(정상/놓침/이미실행),
-stream-json 라인 파서(샘플 고정 라인). 통합: fake-claude 스크립트로 잡 러너
-end-to-end(이벤트 순서·취소·실패). 프론트엔드: tsc+vite 빌드 통과.
-수동: tauri dev로 홈·개선·설정 시나리오 확인.
+stream-json·트랜스크립트 라인 파서(샘플 고정 라인), Tailer 부분 줄 버퍼링,
+herdr agent 이름 규칙. 통합: fake-claude 스크립트로 백그라운드 러너 end-to-end
+(이벤트 순서·취소·실패), fake-herdr 스크립트로 herdr 러너 end-to-end
+(트랜스크립트 스트리밍·리포트·탭 정리·승인 대기 전이·auto 폴백·기동 실패).
+프론트엔드: tsc+vite 빌드 통과. 수동: tauri dev로 홈·개선·설정 시나리오와
+herdr 실행(승인 대기 응답, 앱 재시작 후 감시 재개) 확인.
 
 ## 비목표 (v1)
 

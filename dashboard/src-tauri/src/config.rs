@@ -55,6 +55,69 @@ impl Default for Schedules {
     }
 }
 
+/// Where dashboard jobs actually run. `auto` prefers herdr and silently falls
+/// back to the headless `claude -p` runner when herdr is unusable.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct HerdrCfg {
+    /// "auto" | "herdr" | "headless"
+    pub mode: String,
+    pub bin: String,
+    /// named herdr session; empty = default session
+    pub session: String,
+    pub workspace_label: String,
+    /// "closeOnSuccess" | "keep" | "closeAlways"
+    pub cleanup: String,
+    /// concurrent jobs in herdr mode (headless is always 1)
+    pub max_parallel: u32,
+    pub start_timeout_sec: u32,
+    /// 0 = wait forever
+    pub job_timeout_min: u32,
+    /// herdr toast when a job needs approval or finishes
+    pub notify: bool,
+}
+
+impl Default for HerdrCfg {
+    fn default() -> Self {
+        Self {
+            mode: "auto".into(),
+            bin: "herdr".into(),
+            session: String::new(),
+            workspace_label: "si-workbench".into(),
+            cleanup: "closeOnSuccess".into(),
+            max_parallel: 1,
+            start_timeout_sec: 60,
+            job_timeout_min: 120,
+            notify: true,
+        }
+    }
+}
+
+pub const HERDR_MODES: [&str; 3] = ["auto", "herdr", "headless"];
+pub const HERDR_CLEANUPS: [&str; 3] = ["closeOnSuccess", "keep", "closeAlways"];
+
+impl HerdrCfg {
+    /// Config values arrive from a hand-editable file; clamp instead of failing.
+    pub fn sanitized(&self) -> Self {
+        let mut c = self.clone();
+        if !HERDR_MODES.contains(&c.mode.as_str()) {
+            c.mode = "auto".into();
+        }
+        if !HERDR_CLEANUPS.contains(&c.cleanup.as_str()) {
+            c.cleanup = "closeOnSuccess".into();
+        }
+        if c.bin.trim().is_empty() {
+            c.bin = "herdr".into();
+        }
+        if c.workspace_label.trim().is_empty() {
+            c.workspace_label = "si-workbench".into();
+        }
+        c.max_parallel = c.max_parallel.clamp(1, 8);
+        c.start_timeout_sec = c.start_timeout_sec.clamp(10, 600);
+        c
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct DashboardCfg {
@@ -63,6 +126,7 @@ pub struct DashboardCfg {
     pub claude_bin: String,
     pub permission_mode: String,
     pub launch_at_login: bool,
+    pub herdr: HerdrCfg,
 }
 
 impl Default for DashboardCfg {
@@ -73,6 +137,7 @@ impl Default for DashboardCfg {
             claude_bin: "claude".into(),
             permission_mode: "bypassPermissions".into(),
             launch_at_login: false,
+            herdr: HerdrCfg::default(),
         }
     }
 }
@@ -151,6 +216,48 @@ fn validate_hhmm(s: &str) -> Result<(), String> {
     let m: u32 = parts[1].parse().map_err(|_| format!("잘못된 분: {s}"))?;
     if h > 23 || m > 59 {
         return Err(format!("범위를 벗어난 시각: {s}"));
+    }
+    Ok(())
+}
+
+fn validate_herdr_key(key: &str, v: &Value) -> Result<(), String> {
+    match key {
+        "mode" => {
+            let m = v.as_str().ok_or_else(|| "herdr.mode는 문자열이어야 합니다".to_string())?;
+            if !HERDR_MODES.contains(&m) {
+                return Err(format!("알 수 없는 herdr 실행 모드: {m}"));
+            }
+        }
+        "cleanup" => {
+            let c = v.as_str().ok_or_else(|| "herdr.cleanup은 문자열이어야 합니다".to_string())?;
+            if !HERDR_CLEANUPS.contains(&c) {
+                return Err(format!("알 수 없는 herdr 정리 정책: {c}"));
+            }
+        }
+        "bin" | "session" | "workspaceLabel" => {
+            if !v.is_string() {
+                return Err(format!("herdr.{key}는 문자열이어야 합니다"));
+            }
+        }
+        "maxParallel" => match v.as_u64() {
+            Some(n) if (1..=8).contains(&n) => {}
+            _ => return Err("herdr.maxParallel은 1~8 사이의 정수여야 합니다".into()),
+        },
+        "startTimeoutSec" => match v.as_u64() {
+            Some(n) if (10..=600).contains(&n) => {}
+            _ => return Err("herdr.startTimeoutSec은 10~600 사이여야 합니다".into()),
+        },
+        "jobTimeoutMin" => {
+            if v.as_u64().is_none() {
+                return Err("herdr.jobTimeoutMin은 정수여야 합니다 (0 = 무제한)".into());
+            }
+        }
+        "notify" => {
+            if !v.is_boolean() {
+                return Err("herdr.notify는 참/거짓이어야 합니다".into());
+            }
+        }
+        _ => {} // unknown herdr keys pass through untouched
     }
     Ok(())
 }
@@ -241,6 +348,18 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
                     }
                     target.insert(k.clone(), v.clone());
                 }
+                "herdr" => {
+                    let hv = v.as_object().ok_or_else(|| "herdr는 객체여야 합니다".to_string())?;
+                    let ht = target
+                        .entry("herdr")
+                        .or_insert_with(|| Value::Object(Map::new()))
+                        .as_object_mut()
+                        .ok_or_else(|| "herdr 블록이 객체가 아닙니다".to_string())?;
+                    for (hk, hvv) in hv {
+                        validate_herdr_key(hk, hvv)?;
+                        ht.insert(hk.clone(), hvv.clone());
+                    }
+                }
                 _ => {} // launchAtLogin and unknown keys are ignored here
             }
         }
@@ -286,7 +405,20 @@ pub struct Diagnostics {
     pub vault_path_ok: bool,
     pub claude_ok: bool,
     pub claude_version: Option<String>,
+    pub herdr: HerdrDiag,
     pub projects: Vec<ProjectDiag>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct HerdrDiag {
+    /// configured mode, echoed so the UI can explain the effective runner
+    pub mode: String,
+    pub bin_ok: bool,
+    pub version: Option<String>,
+    pub server_ok: bool,
+    /// what the next job would actually use: "herdr" | "headless"
+    pub effective_runner: String,
 }
 
 fn build_command(bin: &str, args: &[&str]) -> std::process::Command {
@@ -324,9 +456,36 @@ async fn probe(bin: &str, args: &[&str], cwd: Option<&Path>) -> Option<String> {
     }
 }
 
+/// What the next job would actually run on, without launching anything.
+pub async fn herdr_diagnostics(cfg: &HerdrCfg) -> HerdrDiag {
+    let cfg = cfg.sanitized();
+    let h = crate::herdr::Herdr::new(&cfg);
+    let (version, server_ok) = if cfg.mode == "headless" {
+        (None, false)
+    } else {
+        let v = h.version().await;
+        let up = v.is_some() && h.reachable().await;
+        (v, up)
+    };
+    let effective = match cfg.mode.as_str() {
+        "headless" => "headless",
+        "herdr" => "herdr",
+        _ if server_ok => "herdr",
+        _ => "headless",
+    };
+    HerdrDiag {
+        mode: cfg.mode.clone(),
+        bin_ok: version.is_some(),
+        version,
+        server_ok,
+        effective_runner: effective.into(),
+    }
+}
+
 pub async fn run_diagnostics(view: &ConfigView) -> Diagnostics {
     let vault_ok = !view.vault_path.is_empty() && Path::new(&view.vault_path).is_dir();
     let claude = probe(&view.dashboard.claude_bin, &["--version"], None).await;
+    let herdr = herdr_diagnostics(&view.dashboard.herdr).await;
     let mut projects = Vec::new();
     for p in &view.projects {
         let path = Path::new(&p.path);
@@ -346,6 +505,7 @@ pub async fn run_diagnostics(view: &ConfigView) -> Diagnostics {
         vault_path_ok: vault_ok,
         claude_ok: claude.is_some(),
         claude_version: claude,
+        herdr,
         projects,
     }
 }

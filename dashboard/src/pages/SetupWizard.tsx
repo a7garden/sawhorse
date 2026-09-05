@@ -120,7 +120,7 @@ export default function SetupWizard() {
           {step === 0 && (
             <div className="space-y-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                Obsidian 볼트 경로를 지정합니다. 업무일지·개선 노트·위키가 이 볼트에 저장됩니다.
+                Obsidian 볼트 경로를 지정합니다. 업무일지·이슈·마일스톤·위키가 이 볼트에 저장됩니다.
                 Obsidian에서 쓰던 볼트가 있으면 그 경로를 그대로 쓰면 됩니다.
               </p>
               <div>
@@ -163,9 +163,9 @@ export default function SetupWizard() {
           {step === 1 && (
             <div className="space-y-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                개선 사이클(/si-workbench:improve)로 코드를 고칠 사업이 있으면 등록하세요.
-                없으면 건너뛰고 나중에 설정에서 추가해도 됩니다. 작업 브랜치는 남의 변경이 섞이지
-                않은 지점에서 미리 만들어 둔 개선 전용 브랜치입니다.
+                코드형 이슈를 실행할 사업이 있으면 등록하세요. 문서·조사·협의 이슈는 이 설정 없이도
+                볼트에서 관리할 수 있습니다. 작업 브랜치는 남의 변경이 섞이지 않은 지점에서 미리 만들어 둔
+                코드 이슈 전용 브랜치입니다.
               </p>
               {projects.map((p, i) => (
                 <div key={i} className="space-y-1.5 rounded-lg border p-3">

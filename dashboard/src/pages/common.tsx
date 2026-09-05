@@ -5,7 +5,7 @@ import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
 import { preprocessObsidianMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
-import type { Job, JobStatus, ProgressEntry } from "@/lib/types";
+import type { AgentStatus, Job, JobRunner, JobStatus, ProgressEntry } from "@/lib/types";
 
 // ---------- text / time formatting ----------
 
@@ -56,6 +56,42 @@ export const JOB_KIND_KO: Record<Job["kind"], string> = {
   setup: "setup",
 };
 
+export const JOB_RUNNER_KO: Record<JobRunner, string> = {
+  headless: "백그라운드",
+  herdr: "herdr",
+};
+
+// A running herdr job says more than "실행중": the pane may be waiting on a human.
+export const AGENT_STATUS_KO: Record<AgentStatus, string> = {
+  idle: "입력 대기",
+  working: "작업 중",
+  blocked: "승인 대기",
+  done: "정리 중",
+  unknown: "상태 불명",
+};
+
+export function agentBadgeVariant(s: AgentStatus): BadgeVariant {
+  switch (s) {
+    case "blocked":
+      return "warning";
+    case "working":
+      return "default";
+    default:
+      return "outline";
+  }
+}
+
+/// 실행중 herdr 잡은 에이전트 상태를 우선 보여준다 (승인 대기가 가장 중요한 정보).
+export function jobStatusLabel(j: Job): string {
+  if (j.status === "running" && j.agentStatus) return AGENT_STATUS_KO[j.agentStatus];
+  return JOB_STATUS_KO[j.status];
+}
+
+export function jobStatusVariant(j: Job): BadgeVariant {
+  if (j.status === "running" && j.agentStatus) return agentBadgeVariant(j.agentStatus);
+  return jobBadgeVariant(j.status);
+}
+
 export function jobBadgeVariant(s: JobStatus): BadgeVariant {
   switch (s) {
     case "queued":
@@ -76,10 +112,15 @@ export const NOTE_STATUSES = [
   "제안",
   "승인대기",
   "승인",
+  "진행중",
+  "부분완료",
+  "완료",
+  "보류",
+  "취소",
+  // Existing improvement notes are shown without migration.
   "구현중",
   "부분구현",
   "구현완료",
-  "보류",
   "반려",
 ] as const;
 
@@ -91,13 +132,17 @@ export function statusBadgeVariant(status: string): BadgeVariant {
       return "warning";
     case "승인":
       return "success";
+    case "진행중":
+    case "부분완료":
     case "구현중":
     case "부분구현":
       return "default";
+    case "완료":
     case "구현완료":
       return "success";
     case "보류":
       return "secondary";
+    case "취소":
     case "반려":
       return "destructive";
     default:
