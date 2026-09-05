@@ -77,7 +77,7 @@ fn audit_flags_dangling_dependency() {
 }
 ```
 
-- [ ] **Step 2: 테스트 실패 확인** — `cargo test -p si-workbench-dashboard audit_` → 컴파일 에러(함수 없음).
+- [ ] **Step 2: 테스트 실패 확인** — `cargo test -p sawhorse-dashboard audit_` → 컴파일 에러(함수 없음).
 
 - [ ] **Step 3: 구현** — `vault.rs`에 추가 (`// ---------- vault audit ----------` 섹션):
 
@@ -200,7 +200,7 @@ pub fn audit_vault(vault: &Path, projects: &[String]) -> VaultAudit {
 }
 ```
 
-- [ ] **Step 4: 테스트 통과** — `cargo test -p si-workbench-dashboard audit_` → 3 passed.
+- [ ] **Step 4: 테스트 통과** — `cargo test -p sawhorse-dashboard audit_` → 3 passed.
 
 - [ ] **Step 5: command 노출** — `commands.rs` (`list_inbox_count` 뒤):
 
@@ -256,7 +256,7 @@ fn list_unpromoted_reads_new_section() {
 }
 ```
 
-- [ ] **Step 2: 실패 확인** — `cargo test -p si-workbench-dashboard list_unpromoted` → 컴파일 에러.
+- [ ] **Step 2: 실패 확인** — `cargo test -p sawhorse-dashboard list_unpromoted` → 컴파일 에러.
 
 - [ ] **Step 3: 구현 + 리팩터** — `count_section_items`를 `section_items`로 교체 (클린 커트오버 — `count_section_items` 삭제):
 
@@ -322,7 +322,7 @@ pub fn list_unpromoted(vault: &Path, projects: &[(String, String)]) -> Vec<Unpro
 
 `inbox_count` 마지막 줄은 `total += section_items(&text, "## 신규 (미승격)").len() as u64;`로 교체.
 
-- [ ] **Step 4: 통과 확인** — `cargo test -p si-workbench-dashboard` (inbox_count 기존 테스트 포함 전부 green).
+- [ ] **Step 4: 통과 확인** — `cargo test -p sawhorse-dashboard` (inbox_count 기존 테스트 포함 전부 green).
 
 - [ ] **Step 5: command 노출** — `commands.rs`:
 
@@ -391,7 +391,7 @@ async fn build_promote_job_targets_vault() {
 
 주의: rig/opts 헬퍼의 실제 시그니처는 `jobs.rs` `mod tests`의 기존 테스트(rig("nobin"), opts(bin, &dir))와 동일하게 맞춘다. `opts.vault_path` 필드명이 다르면 기존 테스트의 fixture 작성 방식을 따른다.
 
-- [ ] **Step 2: 실패 확인** — `cargo test -p si-workbench-dashboard build_promote` → `알 수 없는 작업 종류: promote` 에러로 FAIL.
+- [ ] **Step 2: 실패 확인** — `cargo test -p sawhorse-dashboard build_promote` → `알 수 없는 작업 종류: promote` 에러로 FAIL.
 
 - [ ] **Step 3: 구현** — `build_job` match의 `"setup"` arm 뒤(`jobs.rs:331`), `other =>` 앞:
 
@@ -414,7 +414,7 @@ async fn build_promote_job_targets_vault() {
         }
 ```
 
-- [ ] **Step 4: 통과** — `cargo test -p si-workbench-dashboard` 전체 green (기존 28건 + 신규).
+- [ ] **Step 4: 통과** — `cargo test -p sawhorse-dashboard` 전체 green (기존 28건 + 신규).
 
 - [ ] **Step 5: 커밋**
 

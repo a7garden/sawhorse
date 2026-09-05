@@ -297,7 +297,7 @@ export function drawingXml(images) {
  * 워크북 조립.
  * sheets: [{ name, xml, drawing?: { xml, media: [{name, data}] } }]
  */
-export function buildWorkbook({ sheets, title = '', creator = 'si-workbench' }) {
+export function buildWorkbook({ sheets, title = '', creator = 'sawhorse' }) {
   const entries = [];
   const now = new Date().toISOString().replace(/\.\d+Z$/, 'Z');
 
@@ -368,7 +368,7 @@ export function buildWorkbook({ sheets, title = '', creator = 'si-workbench' }) 
   });
   entries.push({
     name: 'docProps/app.xml',
-    data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>si-workbench</Application></Properties>`,
+    data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>sawhorse</Application></Properties>`,
   });
 
   return zip(entries);

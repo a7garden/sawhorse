@@ -14,8 +14,8 @@ description: Use when the user wants to analyze a codebase and document it featu
 - 빌드·테스트·포맷터·코드 생성 등 파일 쓰기를 유발하는 명령도 코드베이스에서 실행하지 않는다.
 - 원격 변경 금지: `git push`, `svn commit/ci`, `git svn dcommit`, `hg push`를 절대 실행하지 않는다.
 - 쓰기 대상은 vault(`${user_config.vault_path}`)뿐이다.
-- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
-- 위키 규범은 si-workbench:wiki를 준수한다: 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 `템플릿/개념.md`로 먼저 생성한다(죽은 링크 금지).
+- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
+- 위키 규범은 sawhorse:wiki를 준수한다: 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 `템플릿/개념.md`로 먼저 생성한다(죽은 링크 금지).
 - 시각화 우선: 텍스트 나열보다 다이어그램이 명확한 곳은 반드시 다이어그램으로 쓴다. 기능분석 문서에서 실제 파일 경로는 frontmatter `sources`에만 적는다(경로 변경에 본문이 썩지 않는 구조).
 - frontmatter는 design.md 스키마의 키와 순서 그대로만. 임의 필드 생성 금지. 키는 영어, 값은 한국어.
 
@@ -30,7 +30,7 @@ description: Use when the user wants to analyze a codebase and document it featu
 ## 절차
 
 1. **사업 허브 확인**
-   - `${user_config.vault_path}/사업/<사업명>/<사업명>.md`가 있는지 본다. 없으면 `/si-workbench:project-doc`으로 먼저 등록하라고 안내하고 중단한다.
+   - `${user_config.vault_path}/사업/<사업명>/<사업명>.md`가 있는지 본다. 없으면 `/sawhorse:project-doc`으로 먼저 등록하라고 안내하고 중단한다.
    - 허브의 `codebase`, `vcs` 필드를 참조한다. `vcs`는 참고용이며 탐색 방식은 동일하다(경로만 본다).
    - `${user_config.vault_path}/사업/<사업명>/분석/`과 `${user_config.vault_path}/첨부/스크린샷/`, `${user_config.vault_path}/첨부/다이어그램/` 폴더를 준비한다(이미 있으면 유지).
 
@@ -77,7 +77,7 @@ description: Use when the user wants to analyze a codebase and document it featu
 7. **결과 보고**
    - 기능 트리 전체(문서화된 것/후속 패스 후보 구분).
    - 생성/갱신한 파일 목록, 스크린샷 여부.
-   - 후속 패스 후보 기능과 `/si-workbench:codebase-docs` 재실행 안내.
+   - 후속 패스 후보 기능과 `/sawhorse:codebase-docs` 재실행 안내.
 
 ## 금지사항
 

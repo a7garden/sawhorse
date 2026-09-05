@@ -1,11 +1,11 @@
 ---
 name: vault-tidy
-description: Use when reorganizing or normalizing an Obsidian vault into the si-workbench structure — "볼트 정리해줘", "볼트 검사해줘", "볼트 마이그레이션", "기존 노트 재구성해줘", "문서 다듬어줘", "노트 파편 합쳐줘", "빈 노트 정리", "루트에 파일 쌓였어" — and for incremental re-runs after the first full pass.
+description: Use when reorganizing or normalizing an Obsidian vault into the sawhorse structure — "볼트 정리해줘", "볼트 검사해줘", "볼트 마이그레이션", "기존 노트 재구성해줘", "문서 다듬어줘", "노트 파편 합쳐줘", "빈 노트 정리", "루트에 파일 쌓였어" — and for incremental re-runs after the first full pass.
 ---
 
 # vault-tidy — 볼트 재구성/다듬기
 
-기존 문서 전체를 훑어 si-workbench 표준 구조(`일지/`, `사업/<사업명>/`, `개념/`, `첨부/`, `템플릿/`)로 재구성하고, **매 실행 볼트를 올바른 상태로 되돌려 놓는다.**
+기존 문서 전체를 훑어 sawhorse 표준 구조(`일지/`, `사업/<사업명>/`, `개념/`, `첨부/`, `템플릿/`)로 재구성하고, **매 실행 볼트를 올바른 상태로 되돌려 놓는다.**
 
 두 가지 책임이 있다:
 
@@ -21,12 +21,12 @@ description: Use when reorganizing or normalizing an Obsidian vault into the si-
 - **삭제·병합·본문 보강·파일명 변경은 계획 승인 후에만** 실행한다. 승인 없는 파괴적 변경 금지.
 - 반대로 [NORMALIZE]에 열거된 조치(폴더 배치, 설정 교정, 빈 키 추가, 명백한 링크 오타)는 내용을 바꾸지 않고 되돌릴 수 있으므로 승인 없이 매번 수행한다. 이 목록은 스킬이 임의로 늘리지 않는다.
 - frontmatter는 템플릿 스키마만 사용한다. 임의 필드 금지. 키는 영어, 값은 한국어.
-- 위키 규범은 si-workbench:wiki를 준수한다.
-- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
+- 위키 규범은 sawhorse:wiki를 준수한다.
+- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
 
 ## 0. git 기반 마련
 
-1. `<vault>/.git`이 없으면 `git init`한다. repo 로컬 범위로 `user.name`/`user.email`이 비어 있으면 `si-workbench` / `si-workbench@local`로 설정한다.
+1. `<vault>/.git`이 없으면 `git init`한다. repo 로컬 범위로 `user.name`/`user.email`이 비어 있으면 `sawhorse` / `sawhorse@local`로 설정한다.
 2. 전체를 스테이징해 초기 커밋: `vault-tidy: 원본 백업 (마이그레이션 전 상태)`.
 3. `.gitignore` 작성(없으면): `.obsidian/workspace.json`, `.obsidian/workspace-mobile.json`, `.trash/`
 4. 이미 git이 있으면: 미커밋 변경 목록을 보고하고, 사용자 동의를 얻어 커밋하거나 그대로 둔다(어느 쪽도 자동으로 덮지 않는다).
@@ -67,16 +67,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scrip
    - **기존 값은 절대 바꾸지 않는다.** 값 채우기는 보강이며 승인 대상이다.
    - 템플릿에 없는 키가 있으면 지우지 말고 보고한다(사용자가 의도적으로 넣었을 수 있다).
    - `type: 대시보드`(볼트 루트 `대시보드.md`)와 `.base` 파일은 템플릿 대조 대상이 아니다. 존재 여부만 5번에서 확인한다.
-5. **인덱스 자산 확인** — `대시보드.md`(볼트 루트), `개념/개념.base`, `사업/사업.base`, `사업/이슈.base`, `사업/마일스톤.base`, `일지/일지.base`가 있는지 확인한다. 없으면 `/si-workbench:init-vault` 실행을 안내한다(여기서 만들지 않는다). 있으면 각 `.base`의 YAML이 파싱되는지, 참조하는 프로퍼티가 실제 노트에 존재하는지 확인하고 어긋난 것을 보고한다. 또한 `type`으로 거르는 `.base`가 `템플릿/` 폴더를 제외하고 있는지 확인한다 — 빠져 있으면 `not: [file.inFolder("템플릿")]`을 최상위 `filters`에 추가한다(템플릿 노트가 목록에 섞이는 것을 막는 안전 조치이므로 승인 없이 고친다). 이미 `file.inFolder(...)`로 범위를 좁힌 `.base`(이슈의 사업 범위)는 템플릿이 섞일 수 없으므로 그대로 둔다.
-   이슈 폴더(`사업/<사업명>/이슈/`)에는 사업 범위 `.base`(`<idPrefix> 이슈.base`)가 하나 있어야 한다. 스크립트가 `[이슈base]`로 없는 것을 알려주면 **여기서 만들지 말고** `/si-workbench:issues` 실행을 안내한다.
+5. **인덱스 자산 확인** — `대시보드.md`(볼트 루트), `개념/개념.base`, `사업/사업.base`, `사업/이슈.base`, `사업/마일스톤.base`, `일지/일지.base`가 있는지 확인한다. 없으면 `/sawhorse:init-vault` 실행을 안내한다(여기서 만들지 않는다). 있으면 각 `.base`의 YAML이 파싱되는지, 참조하는 프로퍼티가 실제 노트에 존재하는지 확인하고 어긋난 것을 보고한다. 또한 `type`으로 거르는 `.base`가 `템플릿/` 폴더를 제외하고 있는지 확인한다 — 빠져 있으면 `not: [file.inFolder("템플릿")]`을 최상위 `filters`에 추가한다(템플릿 노트가 목록에 섞이는 것을 막는 안전 조치이므로 승인 없이 고친다). 이미 `file.inFolder(...)`로 범위를 좁힌 `.base`(이슈의 사업 범위)는 템플릿이 섞일 수 없으므로 그대로 둔다.
+   이슈 폴더(`사업/<사업명>/이슈/`)에는 사업 범위 `.base`(`<idPrefix> 이슈.base`)가 하나 있어야 한다. 스크립트가 `[이슈base]`로 없는 것을 알려주면 **여기서 만들지 말고** `/sawhorse:issues` 실행을 안내한다.
    이슈 폴더는 **평면**이다. 화면 구분은 노트의 `url` 프로퍼티가 한다. 레거시 `개선/`은 읽기 전용으로 보존하며 자동 이관하지 않는다.
-6. **개념 수집 승격** — 노트 어디에든 있는 `## 개념 수집` 섹션에서 아직 `[[링크]]`가 붙지 않은 줄을 찾는다. si-workbench:wiki 의 "수집 메모 승격" 절차로 개념 노트를 만들고 원본 줄의 용어만 링크로 감싼다. 문맥 문장은 그대로 둔다. 뜻을 확정하지 못한 것은 `status: 확인필요`로 남기고 보고에 모은다.
+6. **개념 수집 승격** — 노트 어디에든 있는 `## 개념 수집` 섹션에서 아직 `[[링크]]`가 붙지 않은 줄을 찾는다. sawhorse:wiki 의 "수집 메모 승격" 절차로 개념 노트를 만들고 원본 줄의 용어만 링크로 감싼다. 문맥 문장은 그대로 둔다. 뜻을 확정하지 못한 것은 `status: 확인필요`로 남기고 보고에 모은다.
 7. **파일명과 겹치는 H1 제거** — Obsidian은 에디터 최상단에 파일명을 인라인 제목으로 이미 보여주므로, 본문 첫 줄의 `# 파일명`은 제목이 화면에 두 번 나오게 한다(위키 규범 제7조). 파일명과 **같은** H1만 지운다. `내부망_외부망_Apache_구조.md` → `# 내부망/외부망 Apache 통신 구조`처럼 파일명이 담지 못한 정보가 들어 있는 H1은 그대로 둔다. 템플릿(`템플릿/`)은 이미 H1이 없어야 하며, 남아 있으면 템플릿에서도 지운다.
 8. **죽은 링크 스캔** — 전체 md의 `[[...]]` 대상이 노트나 alias로 존재하는지 확인한다. 대소문자·공백만 다른 명백한 오타는 고치고, 대상이 아예 없는 링크는 개념 노트 생성 대상으로 보고한다(자동 생성은 위키 규범 절차를 따른다).
 9. **파생 표 탐지** — 스크립트의 `[파생표]`는 이슈 MOC·이슈목록이 이슈 노트 프로퍼티를 마크다운 표로 베껴 둔 것이다. 상태가 두 곳에 있으면 **반드시 어긋나므로**(위키 규범 제6조) `.base` 뷰 임베드로 바꿔야 한다.
    - 본문을 다시 쓰는 일이라 [NORMALIZE] 자동 조치가 아니다. 3번 「계획 수립 → 승인」에 올려 승인받은 뒤 바꾼다.
    - 바꿀 때 **프로퍼티에서 나오지 않는 열은 살린다** — 목업 파일 링크, 파일 겹침 판정, 구현 순서 제약, 확인 결과 서술. 이것들은 표에서 떼어 별도 절로 옮긴다. 상태·커밋·승인 열만 버린다.
-   - 필요한 `.base`가 없으면 `/si-workbench:issues`가 만들게 한다.
+   - 필요한 `.base`가 없으면 `/sawhorse:issues`가 만들게 한다.
 
 10. **보고** — 위 1~9에서 실제로 한 일과 못 한 일(충돌·판단 보류)을 표로 남긴다. 아무것도 할 게 없었으면 "정규화: 이상 없음"이라고 명시한다.
 

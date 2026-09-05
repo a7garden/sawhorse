@@ -95,6 +95,6 @@ description: Use when the user wants to register, plan, approve, execute, verify
 
 ## 호환과 역할 분리
 
-- `/si-workbench:improve`는 **코드형 레거시 이슈의 호환 별칭**이다. 새 이슈를 만들거나 관리할 때는 이 스킬을 정본으로 사용한다.
+- `/sawhorse:improve`는 **코드형 레거시 이슈의 호환 별칭**이다. 새 이슈를 만들거나 관리할 때는 이 스킬을 정본으로 사용한다.
 - `daily-log`, `codebase-docs`, 회의 기록 등에서 생긴 후속 작업은 이슈를 바로 확정하지 않고 이슈목록의 후보로 모은다. `등록`/`분류`에서 중복·범위·실행 유형을 판단한다.
 - `improve-excel`은 이슈의 보고용 내보내기일 뿐, 이슈 상태의 정본이 아니다.

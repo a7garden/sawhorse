@@ -3,7 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export type Theme = "light" | "dark" | "system";
 
-const STORAGE_KEY = "si-workbench.theme";
+const STORAGE_KEY = "sawhorse.theme";
 
 function loadStored(): Theme {
   try {

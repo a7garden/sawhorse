@@ -95,7 +95,7 @@ export default function SetupWizard() {
       <div className="relative z-10 flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border bg-card shadow-lg">
         <div className="border-b px-5 py-3">
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <Sparkles className="size-4" /> si-workbench 시작 마법사
+            <Sparkles className="size-4" /> sawhorse 시작 마법사
           </div>
           <div className="mt-2 flex items-center gap-1.5">
             {STEPS.map((label, i) => (

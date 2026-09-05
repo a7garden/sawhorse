@@ -165,5 +165,5 @@ pub fn run() {
             commands::open_external,
         ])
         .run(tauri::generate_context!())
-        .expect("si-workbench 대시보드 실행 실패");
+        .expect("sawhorse 대시보드 실행 실패");
 }

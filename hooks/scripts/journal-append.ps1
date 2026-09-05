@@ -1,10 +1,10 @@
-﻿# si-workbench SessionEnd hook: append one JSONL line to the daily work journal.
+﻿# sawhorse SessionEnd hook: append one JSONL line to the daily work journal.
 $ErrorActionPreference = 'SilentlyContinue'
 $raw = [Console]::In.ReadToEnd()
 if (-not $raw) { exit 0 }
 $e = $raw | ConvertFrom-Json
 if (-not $e.session_id) { exit 0 }
-$dir = Join-Path $env:USERPROFILE '.claude\si-workbench\journal'
+$dir = Join-Path $env:USERPROFILE '.claude\sawhorse\journal'
 New-Item -ItemType Directory -Force -Path $dir | Out-Null
 $rec = [ordered]@{
   ts              = (Get-Date).ToString('o')
@@ -22,7 +22,7 @@ for ($attempt = 0; $attempt -lt 5; $attempt++) {
     break
   } catch {
     if ($attempt -eq 4) {
-      $errFile = Join-Path $env:TEMP 'si-workbench-journal.err'
+      $errFile = Join-Path $env:TEMP 'sawhorse-journal.err'
       $msg = '{0} journal write failed after 5 attempts: {1}' -f (Get-Date).ToString('o'), $_.Exception.Message
       try { [System.IO.File]::AppendAllText($errFile, $msg + [Environment]::NewLine, (New-Object System.Text.UTF8Encoding($false))) } catch { }
     } else {

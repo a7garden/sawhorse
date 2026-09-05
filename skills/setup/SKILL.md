@@ -1,6 +1,6 @@
 ---
 name: setup
-description: Use when setting up or troubleshooting si-workbench — "si-workbench 설정", "setup", "초기 설정", "vault 경로 바꿔줘", "환경 진단", "플러그인 동작 확인" — or right after install, before init-vault.
+description: Use when setting up or troubleshooting sawhorse — "sawhorse 설정", "setup", "초기 설정", "vault 경로 바꿔줘", "환경 진단", "플러그인 동작 확인" — or right after install, before init-vault.
 ---
 
 # setup — 설정 및 환경 진단
@@ -11,12 +11,12 @@ description: Use when setting up or troubleshooting si-workbench — "si-workben
 
 - 진단은 읽기 전용 확인(`--version`, 파일 존재 확인)만 한다. 도구 설치를 임의로 진행하지 않는다 — 방법만 안내한다.
 - 원격 저장소 변경(`git push`, `svn commit`) 금지. 이 스킬이 네트워크로 무언가를 전송하는 일도 없다.
-- 파일 쓰기는 2곳뿐이다: `%USERPROFILE%\.claude\si-workbench\config.json`, 그리고 사용자가 동의한 경우뿐.
+- 파일 쓰기는 2곳뿐이다: `%USERPROFILE%\.claude\sawhorse\config.json`, 그리고 사용자가 동의한 경우뿐.
 
 ## 1. vault 경로
 
 1. `${user_config.vault_path}` 값을 이 본문에서 읽는다. 값이 있고 그 디렉토리가 실존하면 ✓ 통과.
-2. 비어있거나 실존하지 않으면 `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath`를 확인한다. 값이 있고 실존하면 ✓. (이 파일은 userConfig 다음 우선순위다.)
+2. 비어있거나 실존하지 않으면 `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath`를 확인한다. 값이 있고 실존하면 ✓. (이 파일은 userConfig 다음 우선순위다.)
 3. 둘 다 없으면 사용자에게 Obsidian vault 절대경로를 묻고, 답을 받아 config.json을 작성/갱신한다:
 
    ```json
@@ -24,11 +24,11 @@ description: Use when setting up or troubleshooting si-workbench — "si-workben
    ```
 
    - 기존 파일이 있으면 `vaultPath` 키만 갱신한다.
-   - 영구 설정의 우선 방법은 `/plugin`에서 si-workbench의 `vault_path` 옵션을 편집하는 것임을 안내한다.
+   - 영구 설정의 우선 방법은 `/plugin`에서 sawhorse의 `vault_path` 옵션을 편집하는 것임을 안내한다.
 
 ## 2. 코드 실행 대상 프로젝트 (선택)
 
-`/si-workbench:issues`에서 **코드형 이슈를 실행**할 때만 필요하다. 문서·조사·협의·결정 이슈는 볼트만 있으면 관리할 수 있다. 현재 호환 설정 키는 `improve.projects.<사업명>`이므로 그대로 사용한다. 블록이 없으면 **"코드 실행 이슈를 쓰실 거면 프로젝트 경로를 등록할 수 있습니다"** 라고 한 줄 안내만 하고, 사용자가 원할 때만 아래를 수집한다. 경로는 PC마다 다르므로 반드시 물어보고 추정해서 쓰지 않는다.
+`/sawhorse:issues`에서 **코드형 이슈를 실행**할 때만 필요하다. 문서·조사·협의·결정 이슈는 볼트만 있으면 관리할 수 있다. 현재 호환 설정 키는 `improve.projects.<사업명>`이므로 그대로 사용한다. 블록이 없으면 **"코드 실행 이슈를 쓰실 거면 프로젝트 경로를 등록할 수 있습니다"** 라고 한 줄 안내만 하고, 사용자가 원할 때만 아래를 수집한다. 경로는 PC마다 다르므로 반드시 물어보고 추정해서 쓰지 않는다.
 
 | 항목 | 뜻 | 기본값 |
 |---|---|---|
@@ -71,14 +71,14 @@ description: Use when setting up or troubleshooting si-workbench — "si-workben
 | 항목 | 확인 방법 | ✗일 때 조치 안내 |
 |---|---|---|
 | vault 디렉토리 | 1단계에서 확인 | 경로 재질문 |
-| Obsidian 템플릿 설정 | `<vault>/.obsidian/templates.json` 존재 | `/si-workbench:init-vault` 실행 제안 |
-| 이슈 승인 체크박스 | `<vault>/.obsidian/types.json` 의 `types.approve` 가 `checkbox` | 없으면 승인 표시가 체크박스가 아니라 텍스트로 보인다. `/si-workbench:init-vault` 실행 제안 |
+| Obsidian 템플릿 설정 | `<vault>/.obsidian/templates.json` 존재 | `/sawhorse:init-vault` 실행 제안 |
+| 이슈 승인 체크박스 | `<vault>/.obsidian/types.json` 의 `types.approve` 가 `checkbox` | 없으면 승인 표시가 체크박스가 아니라 텍스트로 보인다. `/sawhorse:init-vault` 실행 제안 |
 | pandoc | `pandoc --version` | docx 파싱은 Word 자동화로 폴백됨. 설치 권장: https://pandoc.org/installing |
 | Node.js (v18+) | `node --version` | Playwright 스크린샷만 제한, 나머지 기능 정상 |
 | Playwright MCP | 세션의 `/mcp` 화면에서 playwright 상태 확인 | 미연결이면 README '자주 묻는 질문'의 Windows npx 우회법 안내 |
-| 저널 훅 | `%USERPROFILE%\.claude\si-workbench\journal\` 확인 | 신규 설치면 세션 1회 종료 후 생성됨. 지금 비어 있어도 정상 |
+| 저널 훅 | `%USERPROFILE%\.claude\sawhorse\journal\` 확인 | 신규 설치면 세션 1회 종료 후 생성됨. 지금 비어 있어도 정상 |
 
 ## 4. 마무리
 
 - 진단 표와 수행한 설정 변경을 요약 보고한다.
-- vault 구조(`템플릿/`, `일지/`, `사업/`, `개념/`, `첨부/`)가 없으면 `/si-workbench:init-vault` 실행을 제안한다.
+- vault 구조(`템플릿/`, `일지/`, `사업/`, `개념/`, `첨부/`)가 없으면 `/sawhorse:init-vault` 실행을 제안한다.

@@ -4,7 +4,7 @@
 //   node improve-xlsx.mjs --out <파일.xlsx> [옵션]
 //
 // 옵션
-//   --vault <경로>     생략하면 ~/.claude/si-workbench/config.json 의 vaultPath
+//   --vault <경로>     생략하면 ~/.claude/sawhorse/config.json 의 vaultPath
 //   --project <이름>   사업 폴더명. 생략하면 config 의 improve.defaultProject, 그것도 없으면 사업/ 아래 전부
 //   --out <경로>       만들 xlsx (필수)
 //   --prev <경로>      기존 체크리스트 xlsx. 손으로 채운 열(요구자·담당자 등)을 문제 ID 로 이어받는다
@@ -30,10 +30,10 @@ const opt = (name, def = null) => {
 };
 const flag = (name) => argv.includes('--' + name);
 
-// 볼트 경로와 기본 사업은 si-workbench 설정에서 가져온다. 인자를 주면 인자가 이긴다.
+// 볼트 경로와 기본 사업은 sawhorse 설정에서 가져온다. 인자를 주면 인자가 이긴다.
 function loadConfig() {
   const home = process.env.USERPROFILE || process.env.HOME || '';
-  try { return JSON.parse(fs.readFileSync(path.join(home, '.claude', 'si-workbench', 'config.json'), 'utf8')); }
+  try { return JSON.parse(fs.readFileSync(path.join(home, '.claude', 'sawhorse', 'config.json'), 'utf8')); }
   catch { return {}; }
 }
 const CONFIG = loadConfig();
@@ -54,7 +54,7 @@ if (!OUT) {
   process.exit(1);
 }
 if (!VAULT) {
-  console.error('볼트 경로를 찾지 못했습니다. --vault 로 주거나 /si-workbench:setup 을 먼저 실행하세요.');
+  console.error('볼트 경로를 찾지 못했습니다. --vault 로 주거나 /sawhorse:setup 을 먼저 실행하세요.');
   process.exit(1);
 }
 

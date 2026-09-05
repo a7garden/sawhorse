@@ -1,6 +1,6 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <!--
-    si-workbench dashboard icon source.
+    sawhorse dashboard icon source.
     Identity: dark slate workbench, white "w" (workbench), blue bar (CLI prompt cursor).
     Optical bounds: glyph block spans x 217..831, y 334..690 (optically centered on 512,512).
     Regenerate platform assets: npx tauri icon src-tauri/icons/icon.svg (run from dashboard/)

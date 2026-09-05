@@ -6,15 +6,15 @@ description: Use when the user wants to register a new business project in the v
 # 사업 등록 (project-doc)
 
 제안서·사업 문서를 vault로 가져와 `사업/<사업명>/` 폴더, 사업 허브(MOC), 제안 요약, 개념 노트를 만든다.
-실제 코드베이스 기능 분석은 `/si-workbench:codebase-docs`가 담당한다. 이 스킬은 등록까지만 한다.
+실제 코드베이스 기능 분석은 `/sawhorse:codebase-docs`가 담당한다. 이 스킬은 등록까지만 한다.
 
 ## 안전 규칙 (최우선)
 
 - 원격 변경 주의: `git push`, `svn commit/ci`, `git svn dcommit`, `hg push`는 불필요하면 실행하지 않는다. 훅이 실행 전 사용자 확인을 요구하며, 스킬 자체도 승인받은 목적 없이는 시도하지 않는다.
 - 코드베이스 경로가 주어지면 읽기 전용으로만 다룬다. 어떤 파일도 수정/삭제하지 않는다.
 - 쓰기 대상은 vault(`${user_config.vault_path}`)뿐이다.
-- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
-- 위키 규범은 si-workbench:wiki를 준수한다: 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 `템플릿/개념.md`로 먼저 생성한다(죽은 링크 금지).
+- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
+- 위키 규범은 sawhorse:wiki를 준수한다: 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 `템플릿/개념.md`로 먼저 생성한다(죽은 링크 금지).
 - frontmatter는 design.md 스키마의 키와 순서 그대로만 사용한다. 임의 필드 생성 금지. 키는 영어, 값은 한국어.
 - vault 밖 원문 문서를 통째로 복사하지 않는다. 요약 + 출처 표기만 남긴다.
 
@@ -99,7 +99,7 @@ description: Use when the user wants to register a new business project in the v
 7. **결과 보고**
    - 생성/갱신한 파일 목록.
    - 빈 값으로 남긴 frontmatter 필드(예: `client`, `period`)와 사용자 확인 질문.
-   - 다음 단계 안내: `/si-workbench:issues 등록 <사업명>` 및 (코드베이스가 있으면) `/si-workbench:codebase-docs <사업명> <코드베이스 경로>`.
+   - 다음 단계 안내: `/sawhorse:issues 등록 <사업명>` 및 (코드베이스가 있으면) `/sawhorse:codebase-docs <사업명> <코드베이스 경로>`.
 
 ## 금지사항
 

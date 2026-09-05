@@ -551,7 +551,7 @@ git commit -m "feat: plugin info page (metadata, github links, skill docs)"
 
 - [ ] **Step 1: 전체 Rust 테스트** — `cd dashboard/src-tauri && cargo test` 전부 PASS
 - [ ] **Step 2: 프론트 빌드** — `cd dashboard && npm run build` 통과
-- [ ] **Step 3: 부팅 스모크** — 실행 중 인스턴스 있으면 `pgrep -fl si-workbench`로 확인하고 스킵(사용자 앱 방해 금지), 없으면:
+- [ ] **Step 3: 부팅 스모크** — 실행 중 인스턴스 있으면 `pgrep -fl sawhorse`로 확인하고 스킵(사용자 앱 방해 금지), 없으면:
 
 ```bash
 cd dashboard/src-tauri && cargo build && BIN=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].targets[] | select(.kind[0]=="bin") | .name') && (./target/debug/$BIN &) && sleep 6 && pgrep -fl "$BIN"

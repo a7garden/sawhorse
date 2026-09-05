@@ -1,25 +1,25 @@
 ---
 name: init-vault
-description: Use when the user wants to prepare the Obsidian vault for si-workbench — "vault 초기화해줘", "처음 세팅해줘", "vault 새로 만들어줘", "si-workbench 초기 설정해줘", "템플릿 세팅해줘" — or when another si-workbench skill cannot proceed because the vault folders or 템플릿 templates are missing.
+description: Use when the user wants to prepare the Obsidian vault for sawhorse — "vault 초기화해줘", "처음 세팅해줘", "vault 새로 만들어줘", "sawhorse 초기 설정해줘", "템플릿 세팅해줘" — or when another sawhorse skill cannot proceed because the vault folders or 템플릿 templates are missing.
 ---
 
 # vault 초기화
 
-si-workbench가 쓸 Obsidian vault의 폴더 구조를 만들고, 노트 템플릿·Bases 인덱스·대시보드를 배치하고, Obsidian 쪽 설정(첨부 폴더·홈페이지)을 보정한다.
+sawhorse가 쓸 Obsidian vault의 폴더 구조를 만들고, 노트 템플릿·Bases 인덱스·대시보드를 배치하고, Obsidian 쪽 설정(첨부 폴더·홈페이지)을 보정한다.
 재실행 멱등: 기존 파일과 설정은 절대 덮어쓰지 않으므로 여러 번 실행해도 안전하며, 항상 같은 상태로 수렴한다.
 
 ## 공통 정책
 
 - 코드베이스는 읽기 전용으로만 다룬다. 어떤 파일도 수정/삭제하지 않는다.
 - 원격 변경 금지: `git push`, `svn commit/ci`, `git svn dcommit`, `hg push`는 실행하지 않는다.
-- 이 스킬은 노트를 작성하지 않는다. 이후 모든 노트 작성은 si-workbench:wiki 규범을 준수한다.
+- 이 스킬은 노트를 작성하지 않는다. 이후 모든 노트 작성은 sawhorse:wiki 규범을 준수한다.
 - 클라우드 동기화·원격 저장소 설정은 하지 않는다. vault의 로컬 git 버저닝은 vault-tidy가 담당한다.
 
 ## 절차
 
 1. vault 경로 확인
    - `${user_config.vault_path}` 값을 읽는다.
-   - 값이 비어있거나 실존하지 않으면 `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath`를 확인한다. 있으면 그 경로를 쓴다.
+   - 값이 비어있거나 실존하지 않으면 `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath`를 확인한다. 있으면 그 경로를 쓴다.
    - 둘 다 없으면 임의로 추정하지 말고 사용자에게 vault 절대경로를 문의한다. 답을 받으면 그 경로로 진행하고, 사용자 동의를 얻어 config.json에 저장한다(다음 실행부터 자동 적용). 이하 절차의 `${user_config.vault_path}`는 여기서 확정한 경로로 읽는다.
 2. 폴더 생성 (이미 있으면 건너뛰고 목록에 기록)
    - `${user_config.vault_path}/템플릿/`
@@ -47,7 +47,7 @@ si-workbench가 쓸 Obsidian vault의 폴더 구조를 만들고, 노트 템플�
    - `${CLAUDE_PLUGIN_ROOT}/assets/대시보드.md` → `${user_config.vault_path}/대시보드.md`
    - 같은 이름의 파일이 이미 있으면 덮어쓰지 않고 skip 목록에 기록한다.
    - Bases는 Obsidian 1.9+ 코어 플러그인이다. `.obsidian/core-plugins.json`의 `"bases"`가 `false`면 활성화를 안내한다(설정 파일을 직접 고치지 않는다).
-   - 이슈 워크플로의 **사업 범위 `.base`**(`assets/bases/이슈-사업.base`)는 여기서 배치하지 않는다. 사업명을 알아야 필터를 채울 수 있으므로 `/si-workbench:issues` 또는 `/si-workbench:project-doc`가 만든다. 화면 범위 base 는 존재하지 않는다 — 화면은 `url` 프로퍼티이고 `화면별` 뷰가 묶는다. 기존 `개선.base`는 호환을 위해 그대로 둔다.
+   - 이슈 워크플로의 **사업 범위 `.base`**(`assets/bases/이슈-사업.base`)는 여기서 배치하지 않는다. 사업명을 알아야 필터를 채울 수 있으므로 `/sawhorse:issues` 또는 `/sawhorse:project-doc`가 만든다. 화면 범위 base 는 존재하지 않는다 — 화면은 `url` 프로퍼티이고 `화면별` 뷰가 묶는다. 기존 `개선.base`는 호환을 위해 그대로 둔다.
 6. Obsidian 설정 보정: `${user_config.vault_path}/.obsidian/app.json`
    - 파일이 없으면 `{"attachmentFolderPath":"첨부/스크린샷"}`으로 만든다.
    - 있으면 `attachmentFolderPath` 키만 본다. 없거나 값이 비어 있거나 `/` 또는 `.`(볼트 루트)이면 `첨부/스크린샷`으로 채운다. 다른 폴더가 지정돼 있으면 사용자의 선택이므로 그대로 두고 보고만 한다.

@@ -41,7 +41,7 @@ Tauri SPA에는 SSR이 없어 이점이 없고, 의존성 추가 대비 ~40줄�
 ### 3. 테마 상태 — `dashboard/src/lib/theme.ts` (신설)
 
 - `type Theme = "light" | "dark" | "system"`. zustand 미니 스토어.
-- localStorage 키 `si-workbench.theme`. 파싱 실패/모르는 값 → `system` 폴백.
+- localStorage 키 `sawhorse.theme`. 파싱 실패/모르는 값 → `system` 폴백.
 - `resolve(theme)`: `system`이면 `matchMedia("(prefers-color-scheme: dark)")` 결과.
 - `system` 상태에서 media query change 리스너로 OS 전환 실시간 반영.
 - 적용: `<html>`에 `.dark` 클래스 토글 + `color-scheme` + Tauri

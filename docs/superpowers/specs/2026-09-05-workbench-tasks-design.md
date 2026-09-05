@@ -31,7 +31,7 @@
 ## 저장소 레이아웃
 
 ```
-~/.claude/si-workbench/
+~/.claude/sawhorse/
   config.json                # 기존 정본. 루틴 스케줄(schedules.*)도 여기 그대로
   tasks/                     # 신규. 대시보드 소유. 플러그인은 미지 파일로 무시
     t-20260905-a1b2.json     # 작업 정의 1개 = 파일 1개 (동시 작성 충돌 없는 단위)
@@ -61,7 +61,7 @@
 
 - `schedule`: `{ kind: "daily"|"weekdays"|"once", time: "HH:MM", date }`.
   `once`만 `date`(YYYY-MM-DD) 필수. `null`이면 수동 작업 — "지금 실행"만.
-- `skill`: builtin 전용(`si-workbench:morning` 등). 프롬프트 대신 스킬 호출.
+- `skill`: builtin 전용(`sawhorse:morning` 등). 프롬프트 대신 스킬 호출.
 - `project`: improve 사업 키(옵션). 잡 cwd 결정에 사용.
 - `source`: 에이전트 요청으로 태어났음을 추적. GUI 생성은 `{kind:"gui"}`.
 
@@ -122,7 +122,7 @@
 플러그인 스킬 `skills/workbench/SKILL.md` 신설(12→13번째, 설계 문서 스킬 표
 갱신). 배포 경로 2개, 본문은 단일 정본:
 
-- **Claude Code**: 플러그인에 탑재 → `/si-workbench:workbench` + description
+- **Claude Code**: 플러그인에 탑재 → `/sawhorse:workbench` + description
   트리거("워크벤치에 작업 만들어줘", "매일 X 돌려줘", "작업 등록"). 설치 불필요.
 - **기타 에이전트**: 대시보드 설정 페이지 "워크벤치 스킬 설치" →
   `~/.claude/skills/workbench/`(Claude 개인 스킬), `~/.codex/prompts/workbench.md`
@@ -132,11 +132,11 @@
 
 스킬 계약:
 
-1. 경로 결정: `~/.claude/si-workbench/` 존재 확인(기존 루틴 스킬의 결정 규칙과
+1. 경로 결정: `~/.claude/sawhorse/` 존재 확인(기존 루틴 스킬의 결정 규칙과
    동일 계층: `${user_config.vault_path}` 아님 — 스토어 루트는 고정 경로).
 2. 대화에서 제목·내용·주기 파악 → **자기완결 [UNATTENDED] 프롬프트를 직접
    작성**. 대화 맥락 의존 금지. 기존 스킬로 커버되면 prompt는
-   `/si-workbench:<skill>` 실행 지시.
+   `/sawhorse:<skill>` 실행 지시.
 3. 중복 확인: `tasks/*.json` **읽기만**.
 4. `tasks/inbox/req-<ISO시각>-<난수>.json` 작성(Write 도구, 파일명 유일).
 5. 확인: rejected에 내 요청이 있으면 사유 읽고 재제출. 없으면 "승인대기 큐에

@@ -17,7 +17,7 @@ si-workbench 플러그인의 운영 대시보드(Tauri 2 데스크톱 앱). 볼�
 
 ## 설정 정본
 
-`~/.claude/si-workbench/config.json` — 플러그인(setup·issues 스킬, improve-xlsx.mjs)과
+`~/.claude/sawhorse/config.json` — 플러그인(setup·issues 스킬, improve-xlsx.mjs)과
 같은 파일을 쓴다. 앱 전용 키는 `dashboard` 블록에 들어가고 플러그인은 모르는 키를
 무시한다. 앱은 알려진 키만 병합하고 나머지(키 순서 포함)를 보존한다.
 

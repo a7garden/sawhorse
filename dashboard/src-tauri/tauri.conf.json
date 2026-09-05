@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "si-workbench 대시보드",
+  "productName": "sawhorse 대시보드",
   "version": "0.1.0",
-  "identifier": "com.si-workbench.dashboard",
+  "identifier": "com.a7garden.sawhorse",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -11,7 +11,7 @@
   "app": {
     "windows": [
       {
-        "title": "si-workbench 대시보드",
+        "title": "sawhorse 대시보드",
         "width": 1180,
         "height": 780,
         "minWidth": 960,

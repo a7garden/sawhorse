@@ -1,4 +1,4 @@
-﻿# si-workbench PreToolUse hook: force confirmation for remote-mutating VCS commands (company policy).
+﻿# sawhorse PreToolUse hook: force confirmation for remote-mutating VCS commands (company policy).
 $ErrorActionPreference = 'SilentlyContinue'
 $raw = [Console]::In.ReadToEnd()
 if (-not $raw) { exit 0 }
@@ -16,7 +16,7 @@ if ($needConfirm) {
     hookSpecificOutput = @{
       hookEventName          = 'PreToolUse'
       permissionDecision     = 'ask'
-      permissionDecisionReason = 'si-workbench 회사 정책 확인: 원격 저장소 변경(git push / svn commit)입니다. 회사 규정상 허용되는 경우에만 실행을 승인하세요.'
+      permissionDecisionReason = 'sawhorse 회사 정책 확인: 원격 저장소 변경(git push / svn commit)입니다. 회사 규정상 허용되는 경우에만 실행을 승인하세요.'
     }
   } | ConvertTo-Json -Depth 5
 }

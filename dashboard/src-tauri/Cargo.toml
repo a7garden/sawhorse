@@ -1,11 +1,11 @@
 [package]
-name = "si-workbench-dashboard"
+name = "sawhorse-dashboard"
 version = "0.1.0"
-description = "si-workbench 운영 대시보드"
+description = "sawhorse 운영 대시보드"
 edition = "2021"
 
 [lib]
-name = "si_workbench_dashboard_lib"
+name = "sawhorse_dashboard_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

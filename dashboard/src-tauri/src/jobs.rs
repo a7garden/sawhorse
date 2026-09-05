@@ -345,7 +345,7 @@ fn build_job(
             let verb = if req.kind == "design" { "설계" } else { "실행" };
             Ok(Job {
                 label: format!("{verb} {} ({project_name})", id_label(&req.kind, &req.ids)),
-                prompt: format!("/si-workbench:issues {verb}{}", list_suffix(&req.ids)),
+                prompt: format!("/sawhorse:issues {verb}{}", list_suffix(&req.ids)),
                 cwd,
                 ..base
             })
@@ -365,7 +365,7 @@ fn build_job(
             };
             Ok(Job {
                 label: label.into(),
-                prompt: format!("/si-workbench:{routine}"),
+                prompt: format!("/sawhorse:{routine}"),
                 cwd: opts.vault_path.clone(),
                 ..base
             })
@@ -378,7 +378,7 @@ fn build_job(
                 return Err("엑셀 저장 경로가 설정되지 않았습니다 (설정에서 지정하세요)".into());
             }
             let out = Path::new(&view.dashboard.excel_output_dir).join(EXCEL_FILENAME);
-            let mut prompt = format!("/si-workbench:improve-excel --out \"{}\"", out.display());
+            let mut prompt = format!("/sawhorse:improve-excel --out \"{}\"", out.display());
             let prev = {
                 let st = state.state.lock();
                 st.excel_last_out.clone()
@@ -402,7 +402,7 @@ fn build_job(
             }
             Ok(Job {
                 label: "볼트 초기화 (init-vault)".into(),
-                prompt: "/si-workbench:init-vault".into(),
+                prompt: "/sawhorse:init-vault".into(),
                 cwd: opts.vault_path.clone(),
                 ..base
             })
@@ -413,7 +413,7 @@ fn build_job(
             }
             Ok(Job {
                 label: "환경 진단 (setup)".into(),
-                prompt: "/si-workbench:setup".into(),
+                prompt: "/sawhorse:setup".into(),
                 cwd: opts.vault_path.clone(),
                 ..base
             })
@@ -1193,7 +1193,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             routine: Some("morning".into()),
         };
         let job = rig.mgr.enqueue_with(req, opts(bin, &rig.dir), &rig.view).unwrap();
-        assert_eq!(job.prompt, "/si-workbench:morning");
+        assert_eq!(job.prompt, "/sawhorse:morning");
         let done = wait_finished(&rig.state, &job.id, 300).await.expect("job did not finish");
         assert_eq!(done.status, JobStatus::Success, "error: {:?}", done.error);
         assert_eq!(done.exit_code, Some(0));
@@ -1329,7 +1329,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             &opts, &view, &state,
         )
         .unwrap();
-        assert_eq!(j.prompt, "/si-workbench:issues 설계 FDR-001 FDR-002");
+        assert_eq!(j.prompt, "/sawhorse:issues 설계 FDR-001 FDR-002");
         assert_eq!(j.cwd, "/w");
         assert_eq!(j.label, "설계 FDR-001 외 1건 (FDR)");
         let j2 = build_job(
@@ -1337,7 +1337,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             &opts, &view, &state,
         )
         .unwrap();
-        assert_eq!(j2.prompt, "/si-workbench:issues 실행");
+        assert_eq!(j2.prompt, "/sawhorse:issues 실행");
         assert_eq!(j2.label, "실행 승인된 전체 (FDR)");
         let generic = build_job(
             JobRequest { kind: "design".into(), project: Some("없는사업".into()), ids: None, routine: None },

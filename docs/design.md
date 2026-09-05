@@ -1,4 +1,4 @@
-# si-workbench 설계 문서
+# sawhorse 설계 문서
 
 > **이슈 모델 우선(2026-09-05).** 작업 추적의 정식 모델은 `docs/issues-milestones-design.md`의 이슈·마일스톤이다. 이 문서에 남아 있는 `개선`·`문제` 구조와 스키마는 기존 볼트의 호환 규격이며, 새 노트를 만들 때는 이슈 모델을 따른다.
 
@@ -15,7 +15,7 @@ SI 업무용 Claude Code 플러그인. Obsidian vault를 개인 지식베이스(
 ## 저장소 구조 (repo = 마켓플레이스 + 플러그인)
 
 ```
-si-workbench/
+sawhorse/
   .claude-plugin/plugin.json        # name, version, userConfig(vault_path)
   .claude-plugin/marketplace.json   # 단일 플러그인, source: "./"
   skills/                           # 12개 스킬 (아래)
@@ -128,7 +128,7 @@ si-workbench/
 - 설정: `config.json` 의 `improve.projects.<사업명>` (`path`, `workBranch`, `portableBase`, `idPrefix`, `verify`). `workBranch` 는 남의 변경이 섞이지 않은 지점에서 분기해 두고, 승인 후 이식은 `git rebase --onto <portableBase> <분기점>` 으로 한다 — SHA 가 바뀌므로 문제 노트 `commits` 갱신 필요. PC마다 다르므로 setup 이 대화로 수집한다.
 - 원격 금지는 다른 스킬과 동일하고, 여기에 **SVN 상태 변경 명령 전면 금지**(읽기 전용 조회만)가 추가된다.
 
-## 위키 규범 (모든 스킬이 준수 — `si-workbench:wiki` 스킬이 규범 본문)
+## 위키 규범 (모든 스킬이 준수 — `sawhorse:wiki` 스킬이 규범 본문)
 
 1. 문서에 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 템플릿으로 생성 후 링크 (죽은 링크 금지).
 2. 개념 노트: 2-3문장 정의 + `sources` 출처 + `related`. 다른 노트와 본문 중복 금지 — 링크로 연결.
@@ -140,28 +140,28 @@ si-workbench/
 
 ```
 세션 종료 → SessionEnd 훅(자동)
-  → %USERPROFILE%\.claude\si-workbench\journal\YYYY-MM-DD.jsonl
+  → %USERPROFILE%\.claude\sawhorse\journal\YYYY-MM-DD.jsonl
     한 줄: {"ts","session_id","cwd","transcript_path","reason"}
 
-/si-workbench:daily-log  → 오늘 저널 → transcript 샘플링 → 상세 업무기록
+/sawhorse:daily-log  → 오늘 저널 → transcript 샘플링 → 상세 업무기록
   → 일지/오늘.md 의 `## 업무기록` 자동 영역만 교체 (재실행 멱등, 노트 없으면 생성)
   → 자동 영역 밖 수기 기록은 [PRESERVE] 계약으로 재가공 (삭제 금지)
-/si-workbench:daily-report → 동일 분석 → 보고 형식 코드블록 1개 출력
-/si-workbench:evening → 오늘 할 일 체크 확정(증거 기반) → daily-log 절차 → daily-report → 내일 할 일 이월
+/sawhorse:daily-report → 동일 분석 → 보고 형식 코드블록 1개 출력
+/sawhorse:evening → 오늘 할 일 체크 확정(증거 기반) → daily-log 절차 → daily-report → 내일 할 일 이월
 ```
 
 - transcript 샘플링: user 발화 + summary 항목 중심. JSONL 통독 금지.
 - 같은 session_id가 여러 줄이면 마지막 것만 유효.
 - `$ARGUMENTS`로 구두 업무(회의 등) 추가 입력 가능.
-- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath` → 사용자 문의. `/si-workbench:setup`이 이 설정을 관리한다.
+- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자 문의. `/sawhorse:setup`이 이 설정을 관리한다.
 
 [PRESERVE] 사용자 문장 보존 계약 — 일지 노트를 쓰는 모든 스킬(daily-log, evening)이 지킨다.
 
-- `## 업무기록`은 `<!-- si-workbench:auto:start -->`~`<!-- si-workbench:auto:end -->` 사이(자동 영역)와 그 밖(수기 기록)으로 나뉜다. 교체 가능한 것은 자동 영역뿐이다.
+- `## 업무기록`은 `<!-- sawhorse:auto:start -->`~`<!-- sawhorse:auto:end -->` 사이(자동 영역)와 그 밖(수기 기록)으로 나뉜다. 교체 가능한 것은 자동 영역뿐이다.
 - 마커가 없는 노트(구버전·수기 작성)는 섹션 전체를 수기 기록으로 간주하고 마커를 새로 만든다. 마이그레이션 시점에 손으로 쓴 글이 사라지지 않는다.
 - 수기 기록은 삭제하지 않고 재가공한다: 한 일 → 자동 영역 통합, 할 일 → `## 내일 할 일`, 개념·구조 설명 → 개념 노트 + `[[링크]]`, 사업/개선 상세 → 해당 노트 + 링크, 그 외 메모 → `## 비고`, 애매하면 원문 그대로 보존.
 - `## 비고`·`## 내일 할 일`은 덧붙이기만 한다(기존 줄 삭제·수정 금지).
-- 노트 수정 전 원본을 `%USERPROFILE%\.claude\si-workbench\backup\일지-<날짜>-<시각>.md`로 복사한다. 백업에 실패하면 노트를 수정하지 않는다.
+- 노트 수정 전 원본을 `%USERPROFILE%\.claude\sawhorse\backup\일지-<날짜>-<시각>.md`로 복사한다. 백업에 실패하면 노트를 수정하지 않는다.
 - 재가공 결과는 `원문 → 옮긴 위치` 표로 보고한다.
 
 
@@ -190,7 +190,7 @@ si-workbench/
 - ps1은 UTF-8 **with BOM**으로 저장 (Windows PowerShell 5.1 한글 파싱).
 - 훅 스크립트 경로는 `${CLAUDE_PLUGIN_ROOT}` 변수 사용.
 
-## 스킬 (12개, 네임스페이스 `/si-workbench:*`)
+## 스킬 (12개, 네임스페이스 `/sawhorse:*`)
 
 ### 일과 루틴 (무인 실행)
 
@@ -218,7 +218,7 @@ si-workbench/
 | `vault-tidy` | ①상시 정규화(매 실행·무승인): 루트 첨부 회수, `attachmentFolderPath` 교정, frontmatter 스키마 정합, 인덱스 자산 확인, 죽은 링크. ②재구성(승인 게이트): 이동·병합·보강·삭제. 로컬 git 증분 (remote 금지) |
 | `improve` | 개선 사이클: 스캔 → 설계(단건·일괄, 정지) → **볼트에서 승인 체크** → 구현(단건·일괄) → 경로 한정 커밋 1개/건 + 커밋 ID·의존성·배치 결과 보고 |
 
-공통: vault 경로는 `${user_config.vault_path}` 주입, 비었으면 `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath` 폴백(setup이 관리). docx 우선순위 pandoc → Word COM.
+공통: vault 경로는 `${user_config.vault_path}` 주입, 비었으면 `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` 폴백(setup이 관리). docx 우선순위 pandoc → Word COM.
 
 ## 보안/정책
 - 원격 전송/push 로직 없음. vault의 git은 로컬 버저닝 전용 — vault-tidy가 초기화·커밋을 관리하고 remote는 금지.

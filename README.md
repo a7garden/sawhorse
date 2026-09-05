@@ -1,16 +1,16 @@
-# si-workbench
+# sawhorse
 
-SI 업무를 위한 Claude Code 플러그인. Obsidian vault를 개인 지식베이스(위키)로 사용해
+Claude Code 플러그인. Obsidian vault를 개인 지식베이스(위키)로 사용해
 업무일지, 업무 보고, 사업 문서화, 코드베이스 분석을 자동화합니다.
 
 ## 기능
 
-- **일과 루틴** — `/si-workbench:morning`(출근 브리핑 + 어제 할 일 자동 이월), `/si-workbench:lunch`(오전 결산), `/si-workbench:evening`(일지 + 보고서 + 내일 할 일 한 번에). 실행만 걸어두고 자리를 비워도 됩니다 — 중간에 질문하지 않고 끝까지 실행한 뒤 보고서를 남깁니다.
-- **업무일지** — 세션 종료 때마다 작업 원본이 자동 적립되고, `/si-workbench:daily-log` 한 번으로 오늘 한 일을 일지 노트에 정리합니다.
-- **업무 보고** — `/si-workbench:daily-report`가 그날 작업을 보고 형식 코드블록으로 만들어 줍니다. 복사해서 그대로 붙여넣을 수 있습니다.
+- **일과 루틴** — `/sawhorse:morning`(출근 브리핑 + 어제 할 일 자동 이월), `/sawhorse:lunch`(오전 결산), `/sawhorse:evening`(일지 + 보고서 + 내일 할 일 한 번에). 실행만 걸어두고 자리를 비워도 됩니다 — 중간에 질문하지 않고 끝까지 실행한 뒤 보고서를 남깁니다.
+- **업무일지** — 세션 종료 때마다 작업 원본이 자동 적립되고, `/sawhorse:daily-log` 한 번으로 오늘 한 일을 일지 노트에 정리합니다.
+- **업무 보고** — `/sawhorse:daily-report`가 그날 작업을 보고 형식 코드블록으로 만들어 줍니다. 복사해서 그대로 붙여넣을 수 있습니다.
 - **위키** — 문서에 나온 개념을 `[[개념]]` 링크로 연결하고, 없는 개념 노트는 규격 템플릿으로 생성합니다.
 - **사업 문서화** — 제안서(docx)와 코드베이스 경로를 주면 사업 허브 문서, 요약, 기능별 분석 문서(mermaid 다이어그램 포함)를 만듭니다.
-- **이슈·마일스톤 워크플로** — 버그·기능·작업·질문을 이슈로 기록하고, 납기·릴리스·검수 목표를 마일스톤으로 묶습니다. `/si-workbench:improve`는 호환 명령으로 남아 있으며, **볼트에서 직접 읽고 승인 체크한 이슈만** 되돌릴 수 있는 커밋으로 적용합니다. GitHub 이슈 필드를 지원하지만 원격 동기화는 자동으로 하지 않습니다.
+- **이슈·마일스톤 워크플로** — 버그·기능·작업·질문을 이슈로 기록하고, 납기·릴리스·검수 목표를 마일스톤으로 묶습니다. `/sawhorse:improve`는 호환 명령으로 남아 있으며, **볼트에서 직접 읽고 승인 체크한 이슈만** 되돌릴 수 있는 커밋으로 적용합니다. GitHub 이슈 필드를 지원하지만 원격 동기화는 자동으로 하지 않습니다.
 - **스크린샷 분석** — Playwright MCP로 웹 UI를 헤드리스 캡처해 분석 문서에 첨부합니다.
 - **안전장치** — `git push` / `svn commit` 등 원격 저장소 변경은 훅이 감지해 실행 전 항상 확인을 요청합니다.
 
@@ -29,8 +29,8 @@ SI 업무를 위한 Claude Code 플러그인. Obsidian vault를 개인 지식베
 Claude Code를 열고:
 
 ```
-/plugin marketplace add a7garden/si-workbench
-/plugin install si-workbench@si-workbench
+/plugin marketplace add a7garden/sawhorse
+/plugin install sawhorse@sawhorse
 ```
 
 설치 중 **Obsidian vault 절대 경로**를 묻습니다 (예: `C:\Users\me\Documents\WorkVault`).
@@ -41,12 +41,12 @@ Claude Code를 열고:
 ## 첫 실행
 
 ```
-/si-workbench:setup
-/si-workbench:init-vault
+/sawhorse:setup
+/sawhorse:init-vault
 ```
 
-`setup`이 vault 경로와 실행 환경(Node·pandoc·훅·MCP)을 점검하고 설정합니다. 설정은 `%USERPROFILE%\.claude\si-workbench\config.json`에 저장되며(설치 시 입력한 `/plugin` 설정이 우선), 나중에 언제든 다시 실행해 진단할 수 있습니다.
-이미 작성해둔 문서가 있는 vault라면 init-vault 뒤에 `/si-workbench:vault-tidy`를 실행하세요. 기존 문서를 표준 구조로 옮기고, 제목만 있는 빈 노트·부실한 노트·파편화된 노트를 정리합니다 (재구성 전 원본을 git으로 박제해서 언제든 되돌릴 수 있습니다).
+`setup`이 vault 경로와 실행 환경(Node·pandoc·훅·MCP)을 점검하고 설정합니다. 설정은 `%USERPROFILE%\.claude\sawhorse\config.json`에 저장되며(설치 시 입력한 `/plugin` 설정이 우선), 나중에 언제든 다시 실행해 진단할 수 있습니다.
+이미 작성해둔 문서가 있는 vault라면 init-vault 뒤에 `/sawhorse:vault-tidy`를 실행하세요. 기존 문서를 표준 구조로 옮기고, 제목만 있는 빈 노트·부실한 노트·파편화된 노트를 정리합니다 (재구성 전 원본을 git으로 박제해서 언제든 되돌릴 수 있습니다).
 
 vault에 다음 구조를 만들고 노트 템플릿 5종을 복사합니다 (기존 파일은 건드리지 않습니다):
 
@@ -71,37 +71,37 @@ Obsidian 설정에서 코어 플러그인 **Templates**와 **Bases**를 활성�
 
 | 명령 | 하는 일 |
 |---|---|
-| `/si-workbench:morning` | 오늘 일지 노트 준비 + 어제 `내일 할 일` 자동 이월 + 어제 요약 브리핑 + 볼트 빠른 정리 |
-| `/si-workbench:lunch` | 오전 결산: 오늘 할 일 vs 오전 세션 대조 + 볼트 진단 (읽기 전용) |
-| `/si-workbench:evening` | 오늘 할 일 체크 정리 → 일지 `업무기록` 작성 → 보고서 출력 → `내일 할 일` 정리 → 볼트 정리 |
+| `/sawhorse:morning` | 오늘 일지 노트 준비 + 어제 `내일 할 일` 자동 이월 + 어제 요약 브리핑 + 볼트 빠른 정리 |
+| `/sawhorse:lunch` | 오전 결산: 오늘 할 일 vs 오전 세션 대조 + 볼트 진단 (읽기 전용) |
+| `/sawhorse:evening` | 오늘 할 일 체크 정리 → 일지 `업무기록` 작성 → 보고서 출력 → `내일 할 일` 정리 → 볼트 정리 |
 
 ### 도구
 
 | 명령 | 하는 일 |
 |---|---|
-| `/si-workbench:setup` | 설정·환경 진단 (vault 경로, Node/pandoc, 훅, MCP) |
-| `/si-workbench:init-vault` | vault 초기 구조 + 템플릿·Bases·대시보드 세팅 (재실행 안전) |
-| `/si-workbench:daily-log` | 오늘 세션 분석 → 일지 노트 `## 업무기록` 섹션 갱신 |
-| `/si-workbench:daily-report` | 업무 보고 형식 코드블록 생성 (복붙용) |
-| `/si-workbench:project-doc` | 제안서 + 코드베이스로 사업 문서 등록 |
-| `/si-workbench:codebase-docs` | 코드베이스 기능별 문서화 (mermaid + 스크린샷) |
-| `/si-workbench:wiki` | 개념 노트 생성/정리 (모든 스킬이 따르는 규범) |
-| `/si-workbench:vault-tidy` | 볼트 상시 정규화(루트에 쌓인 이미지 회수·스키마 정합·죽은 링크) + 표준 구조 재구성·파편 병합 (로컬 git) |
-| `/si-workbench:issues` | 이슈·마일스톤: 등록·설계·승인·실행·검증·마일스톤 계획. GitHub 연결 필드는 기록만 하며 원격 변경은 하지 않음 |
-| `/si-workbench:improve` | 호환 명령: 기존 코드 개선 노트를 읽는 이전 진입점 |
-| `/si-workbench:improve-excel` | 개선 노트 → 발주처 보고용 체크리스트 엑셀 (근거 이미지 포함, 수기 열 이어받기) |
+| `/sawhorse:setup` | 설정·환경 진단 (vault 경로, Node/pandoc, 훅, MCP) |
+| `/sawhorse:init-vault` | vault 초기 구조 + 템플릿·Bases·대시보드 세팅 (재실행 안전) |
+| `/sawhorse:daily-log` | 오늘 세션 분석 → 일지 노트 `## 업무기록` 섹션 갱신 |
+| `/sawhorse:daily-report` | 업무 보고 형식 코드블록 생성 (복붙용) |
+| `/sawhorse:project-doc` | 제안서 + 코드베이스로 사업 문서 등록 |
+| `/sawhorse:codebase-docs` | 코드베이스 기능별 문서화 (mermaid + 스크린샷) |
+| `/sawhorse:wiki` | 개념 노트 생성/정리 (모든 스킬이 따르는 규범) |
+| `/sawhorse:vault-tidy` | 볼트 상시 정규화(루트에 쌓인 이미지 회수·스키마 정합·죽은 링크) + 표준 구조 재구성·파편 병합 (로컬 git) |
+| `/sawhorse:issues` | 이슈·마일스톤: 등록·설계·승인·실행·검증·마일스톤 계획. GitHub 연결 필드는 기록만 하며 원격 변경은 하지 않음 |
+| `/sawhorse:improve` | 호환 명령: 기존 코드 개선 노트를 읽는 이전 진입점 |
+| `/sawhorse:improve-excel` | 개선 노트 → 발주처 보고용 체크리스트 엑셀 (근거 이미지 포함, 수기 열 이어받기) |
 
 ### 이슈·마일스톤 워크플로
 
 새 이슈는 `사업/<사업명>/이슈/<ID접두어> 이슈목록.md`에 적거나 `템플릿/이슈.md`로 만들고, 마일스톤은 `사업/<사업명>/마일스톤/`에 `템플릿/마일스톤.md`로 만듭니다. 자세한 필드, GitHub 대응, 기존 개선 노트 이관 정책은 [이슈·마일스톤 설계](docs/issues-milestones-design.md)를 참고하세요. 기존 `개선/` 폴더는 자동 변경하지 않고 계속 읽습니다.
 
-모든 이슈는 하나의 Markdown 노트에 **배경 → 근거 → 설계 → 사람 승인 → 실행 → 검증 → 결과**를 남깁니다. 이 패턴은 코드·문서·조사·협의·결정 작업에 동일하게 적용됩니다. 새 이슈는 `/si-workbench:issues 설계 <ID>`로 설계하고, 볼트에서 승인한 뒤 `/si-workbench:issues 실행 <ID>`으로 실행합니다. 코드 이슈는 파일 범위·검증·이슈별 커밋·되돌리기를, 비코드 이슈는 산출물·근거·회의록·결정 기록을 같은 이슈에 남깁니다.
+모든 이슈는 하나의 Markdown 노트에 **배경 → 근거 → 설계 → 사람 승인 → 실행 → 검증 → 결과**를 남깁니다. 이 패턴은 코드·문서·조사·협의·결정 작업에 동일하게 적용됩니다. 새 이슈는 `/sawhorse:issues 설계 <ID>`로 설계하고, 볼트에서 승인한 뒤 `/sawhorse:issues 실행 <ID>`으로 실행합니다. 코드 이슈는 파일 범위·검증·이슈별 커밋·되돌리기를, 비코드 이슈는 산출물·근거·회의록·결정 기록을 같은 이슈에 남깁니다.
 
 #### 레거시 코드 개선 흐름
 
 아래 내용은 기존 `개선/` 노트를 유지보수해야 할 때만 참고합니다. 새 작업에는 사용하지 않습니다.
 
-발견한 문제를 `사업/<사업명>/개선/<ID접두어> 문제목록.md` 에 편하게 적어두고 `/si-workbench:improve` 를 실행하면:
+발견한 문제를 `사업/<사업명>/개선/<ID접두어> 문제목록.md` 에 편하게 적어두고 `/sawhorse:improve` 를 실행하면:
 
 1. 상태별 현황(제안 / 승인대기 / 승인 / 구현완료)을 보여주고 **다음에 무엇을 할지 물어봅니다.**
 2. `improve 설계` 로 **미착수 문제를 한 번에 설계**합니다. 문제마다 코드를 읽기 전용으로 조사해 설계 문서(방안 비교 → 채택안 → 변경 대상 → 검증 방법)를 쓰고, 화면이 바뀌는 문제는 **HTML 목업**을 만들어 캡처를 넣습니다 — 글만 읽고 UI를 승인하지 않아도 됩니다. 다 끝나면 변경 대상이 겹치는 문제쌍과 모순되는 설계를 교차 검토해 알려줍니다.
@@ -114,10 +114,10 @@ Obsidian 설정에서 코어 플러그인 **Templates**와 **Bases**를 활성�
 개선 전용 브랜치 하나에서만 작업합니다 — 브랜치를 문제마다 나누지 않으므로 IDE·톰캣이 흔들리지 않고, 되돌리기 단위는 브랜치가 아니라 커밋입니다.
 
 `svn` 은 조회 명령만 씁니다 — `commit`·`update`·`revert` 등 작업복사본 상태를 바꾸는 명령은 어떤 경우에도 실행하지 않습니다.
-대상 프로젝트 경로와 개선 작업 브랜치는 PC마다 다르므로 `/si-workbench:setup` 에서 등록합니다 (`improve.projects`).
+대상 프로젝트 경로와 개선 작업 브랜치는 PC마다 다르므로 `/sawhorse:setup` 에서 등록합니다 (`improve.projects`).
 
 일지·보고는 `$ARGUMENTS`로 회의 등 구두 업무를 덧붙일 수 있습니다:
-`/si-workbench:daily-report 오후에 A사 요구사항 미티 1시간`
+`/sawhorse:daily-report 오후에 A사 요구사항 미티 1시간`
 
 ### 보고 형식 예시
 
@@ -132,16 +132,16 @@ Obsidian 설정에서 코어 플러그인 **Templates**와 **Bases**를 활성�
 
 ## 훅
 
-- **SessionEnd** — 세션이 끝날 때마다 `%USERPROFILE%\.claude\si-workbench\journal\YYYY-MM-DD.jsonl`에 기록 한 줄을 추가합니다. 일지/보고 스킬이 이 저널을 읽습니다.
+- **SessionEnd** — 세션이 끝날 때마다 `%USERPROFILE%\.claude\sawhorse\journal\YYYY-MM-DD.jsonl`에 기록 한 줄을 추가합니다. 일지/보고 스킬이 이 저널을 읽습니다.
 - **PreToolUse** — `git push`, `git send-pack`, `svn commit/ci/import`, `git svn dcommit`, `hg push`를 감지하면 실행 전 확인 프롬프트를 항상 표시합니다. 승인하면 실행되고, 로컬 `git commit`은 확인 없이 실행됩니다.
 
 ## 자주 묻는 질문
 
 **Playwright MCP 로드 에러가 나요.** Node.js가 없을 때 나는 메시지로, 나머지 기능에는 영향이 없습니다. 스크린샷이 필요하면 Node.js 18+를 설치하세요. Node가 있는데도 Windows 네이티브에서 로드가 실패하면, 설치된 플러그인의 `.mcp.json`에서 playwright 항목을 `"command": "cmd", "args": ["/c", "npx", "--yes", "@playwright/mcp@0.0.80"]`로 바꾸면 해결되는 경우가 있습니다.
 
-**일지를 하루에 여러 번 돌리면?** `## 업무기록` 안의 자동 영역(`si-workbench:auto:start`~`end` 마커 사이)만 다시 쓰입니다(멱등). `## 오늘 할 일`·`## 비고`·`## 내일 할 일`은 자동 갱신 대상이 아닙니다.
+**일지를 하루에 여러 번 돌리면?** `## 업무기록` 안의 자동 영역(`sawhorse:auto:start`~`end` 마커 사이)만 다시 쓰입니다(멱등). `## 오늘 할 일`·`## 비고`·`## 내일 할 일`은 자동 갱신 대상이 아닙니다.
 
-**업무기록에 직접 손으로 적어도 되나요?** 됩니다. 자동 영역 마커 밖에 적힌 글은 지워지지 않습니다. 스킬이 그 내용을 읽고 성격에 따라 재가공합니다 — 오늘 한 일은 업무기록 본문에 녹이고, "~할 것"은 `## 내일 할 일`로, 개념·시스템 구조 설명은 개념 노트로 옮겨 `[[링크]]`만 남기고, 나머지 메모는 `## 비고`로 옮깁니다. 분류가 애매하면 옮기지 않고 원문 그대로 둡니다. 무엇을 어디로 옮겼는지는 실행 후 보고에 표로 나옵니다. 노트 수정 전 원본은 `%USERPROFILE%\.claude\si-workbench\backup\`에 복사됩니다.
+**업무기록에 직접 손으로 적어도 되나요?** 됩니다. 자동 영역 마커 밖에 적힌 글은 지워지지 않습니다. 스킬이 그 내용을 읽고 성격에 따라 재가공합니다 — 오늘 한 일은 업무기록 본문에 녹이고, "~할 것"은 `## 내일 할 일`로, 개념·시스템 구조 설명은 개념 노트로 옮겨 `[[링크]]`만 남기고, 나머지 메모는 `## 비고`로 옮깁니다. 분류가 애매하면 옮기지 않고 원문 그대로 둡니다. 무엇을 어디로 옮겼는지는 실행 후 보고에 표로 나옵니다. 노트 수정 전 원본은 `%USERPROFILE%\.claude\sawhorse\backup\`에 복사됩니다.
 
 **morning이 어제 할 일을 마음대로 옮겨주나요?** 네 — `오늘 할 일`이 템플릿 초기 상태일 때만 자동으로 이월합니다. 미리 뭔가 적어 둔 날은 절대 건드리지 않고 어제 목록을 브리핑에만 표시합니다. 모든 루틴 스킬은 중간에 질문하지 않고, 판단 근거를 마지막 보고에 남깁니다.
 

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add light/dark/system theme switching to the si-workbench dashboard (Tauri v2 + React 18 + Tailwind v4).
+**Goal:** Add light/dark/system theme switching to the sawhorse dashboard (Tauri v2 + React 18 + Tailwind v4).
 
 **Architecture:** shadcn-standard CSS variable dual-scheme — `@theme inline` maps utilities to vars, `:root`/`.dark` define palettes. A zustand mini-store (`lib/theme.ts`) owns state, persists to localStorage, applies `.dark` on `<html>`, and syncs the native Tauri window theme. An inline boot script prevents first-frame flash.
 
@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Theme modes exactly `"light" | "dark" | "system"`; default and any invalid fallback = `"system"`.
-- localStorage key: `si-workbench.theme` (verbatim).
+- localStorage key: `sawhorse.theme` (verbatim).
 - No new npm dependencies.
 - All colors via design tokens; zero hardcoded `oklch(...)`/hex in components after this plan.
 - Frontend has no test runner — verification is `npm run build` + boot smoke + visual screenshots.
@@ -223,7 +223,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 export type Theme = "light" | "dark" | "system";
 
-const STORAGE_KEY = "si-workbench.theme";
+const STORAGE_KEY = "sawhorse.theme";
 
 function loadStored(): Theme {
   try {
@@ -306,7 +306,7 @@ Inside `<head>`, before the closing `</head>`:
 <script>
   (function () {
     try {
-      var t = localStorage.getItem("si-workbench.theme");
+      var t = localStorage.getItem("sawhorse.theme");
       var dark =
         t === "dark" ||
         (t !== "light" &&

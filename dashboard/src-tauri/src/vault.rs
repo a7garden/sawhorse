@@ -776,8 +776,8 @@ tags: []
 
 ## 업무기록
 
-<!-- si-workbench:auto:start -->
-<!-- si-workbench:auto:end -->
+<!-- sawhorse:auto:start -->
+<!-- sawhorse:auto:end -->
 
 ## 개념 수집
 
@@ -967,7 +967,7 @@ mod tests {
         std::fs::create_dir_all(&issues).unwrap();
         std::fs::write(
             issues.join("FDR-003 GitHub 연동 설계.md"),
-            "---\ntype: 이슈\nid: FDR-003\nissue_type: 기능\nlabels: [연동, github]\nassignees: [won]\nmilestone: FDR-M1\nstatus: 제안\nstate: open\ngithub_repo: a7garden/si-workbench\ngithub_number: \"42\"\ngithub_url: https://github.com/a7garden/si-workbench/issues/42\n---\n\n## 배경 및 문제\n",
+            "---\ntype: 이슈\nid: FDR-003\nissue_type: 기능\nlabels: [연동, github]\nassignees: [won]\nmilestone: FDR-M1\nstatus: 제안\nstate: open\ngithub_repo: a7garden/sawhorse\ngithub_number: \"42\"\ngithub_url: https://github.com/a7garden/sawhorse/issues/42\n---\n\n## 배경 및 문제\n",
         ).unwrap();
 
         let notes = scan_issues(&vault, None, &["FDR".to_string()]);
@@ -1185,7 +1185,7 @@ mod tests {
         assert_eq!(t.today.len(), 2, "skeleton placeholder + new item");
         assert_eq!(t.today[1].text, "첫 항목");
         let text = std::fs::read_to_string(journal_path(&fresh)).unwrap();
-        assert!(text.contains("si-workbench:auto:start"), "skeleton must keep auto markers");
+        assert!(text.contains("sawhorse:auto:start"), "skeleton must keep auto markers");
     }
 
     #[test]

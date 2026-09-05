@@ -18,7 +18,7 @@ node ${CLAUDE_PLUGIN_ROOT}/skills/improve-excel/scripts/improve-xlsx.mjs \
   --prev "<직전에 보고한 xlsx>"
 ```
 
-볼트 경로와 기본 사업은 `~/.claude/si-workbench/config.json` 에서 자동으로 읽는다. 다른 사업이면 `--project` 로 바꾼다.
+볼트 경로와 기본 사업은 `~/.claude/sawhorse/config.json` 에서 자동으로 읽는다. 다른 사업이면 `--project` 로 바꾼다.
 
 `--prev` 는 **두 번째 회차부터 반드시 붙인다.** 빠뜨리면 지난 회차에 손으로 채운 담당자·요구자가 날아간다.
 스크립트는 몇 칸을 이어받았고 어떤 칸이 비었는지 보고한다. **그 보고를 사용자에게 그대로 전한다.**

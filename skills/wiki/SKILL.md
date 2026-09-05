@@ -1,19 +1,19 @@
 ---
 name: wiki
-description: Use when the user asks to organize a concept into the Obsidian wiki or create a concept note — "개념 정리해줘", "위키에 추가해줘", "개념 노트 만들어줘", "이 개념 위키에 등록해줘", "OO 용어 정리해줘" — or when another si-workbench skill needs this 규범 본문 while writing vault notes.
+description: Use when the user asks to organize a concept into the Obsidian wiki or create a concept note — "개념 정리해줘", "위키에 추가해줘", "개념 노트 만들어줘", "이 개념 위키에 등록해줘", "OO 용어 정리해줘" — or when another sawhorse skill needs this 규범 본문 while writing vault notes.
 ---
 
 # 위키 규범 (개념 노트)
 
-이 스킬은 si-workbench 위키 규범의 단일 진실원천(single source of truth)이다.
-다른 모든 si-workbench 스킬(daily-log, daily-report, project-doc, codebase-docs)은
+이 스킬은 sawhorse 위키 규범의 단일 진실원천(single source of truth)이다.
+다른 모든 sawhorse 스킬(daily-log, daily-report, project-doc, codebase-docs)은
 vault에 노트를 쓸 때 이 규범을 준수함을 각자 본문에 명시한다.
 
 ## 공통 정책
 
 - 코드베이스는 읽기 전용으로만 다룬다. 어떤 파일도 수정/삭제하지 않는다.
 - 원격 변경 금지: `git push`, `svn commit/ci`, `git svn dcommit`, `hg push`는 실행하지 않는다. 로컬 작업만 한다.
-- vault 루트 경로 결정 순서: 1) `${user_config.vault_path}` (비어있지 않으면 최우선) 2) `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath` 3) 둘 다 없으면 `/si-workbench:setup` 실행을 안내하거나 사용자에게 절대경로를 묻는다. 개념 노트 위치: `<vault>/개념/<개념명>.md`.
+- vault 루트 경로 결정 순서: 1) `${user_config.vault_path}` (비어있지 않으면 최우선) 2) `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` 3) 둘 다 없으면 `/sawhorse:setup` 실행을 안내하거나 사용자에게 절대경로를 묻는다. 개념 노트 위치: `<vault>/개념/<개념명>.md`.
 
 ## 규범 7조
 
@@ -155,7 +155,7 @@ Obsidian은 에디터 최상단에 파일명을 인라인 제목으로 이미 �
 2. 노트가 있으면 새로 만들지 않는다. 정의나 출처가 부족하면 기존 노트의 기존 필드 안에서만 보완한다.
 3. 노트가 없으면 템플릿 복제: `${user_config.vault_path}/템플릿/개념.md` → `${user_config.vault_path}/개념/<개념명>.md`.
    - vault에 템플릿이 없으면 `${CLAUDE_PLUGIN_ROOT}/templates/개념.md`를 사용한다.
-   - 그것도 없으면 `/si-workbench:init-vault` 실행을 안내하고 이 절차를 중단한다.
+   - 그것도 없으면 `/sawhorse:init-vault` 실행을 안내하고 이 절차를 중단한다.
 4. 내용 기재:
    - `## 정의`에 2-3문장 정의를 쓴다. 한 줄로 끝나는 용어여도 노트로 만든다(제6조).
    - `sources`에 실제 출처를 남긴다. 제안서 문서명, 코드 경로, 회의 노트 링크 등 확인 가능한 근거만.

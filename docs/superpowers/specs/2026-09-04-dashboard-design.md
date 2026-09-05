@@ -1,18 +1,18 @@
-# si-workbench 운영 대시보드 설계 (Tauri 데스크톱 앱)
+# sawhorse 운영 대시보드 설계 (Tauri 데스크톱 앱)
 
 날짜: 2026-09-04. 상태: 승인됨(사용자 위임 — "알아서 끝내둬").
 
 ## 목적
 
-si-workbench 플러그인의 운반반(ops) 데스크톱 앱. 볼트를 열지 않고도
+sawhorse 플러그인의 운반반(ops) 데스크톱 앱. 볼트를 열지 않고도
 설정 편집 → 개선 사이클 실행/감독 → 루틴 예약 → 할 일·문서 열람을 한다.
 플러그인 코드·볼트 규약은 변경하지 않는다.
 
 ## 결정된 사항 (사용자 확인)
 
-1. 설정 정본: 기존 `~/.claude/si-workbench/config.json`(JSON) 유지. 앱은 폼 UI로 편집,
+1. 설정 정본: 기존 `~/.claude/sawhorse/config.json`(JSON) 유지. 앱은 폼 UI로 편집,
    앱 전용 키는 같은 파일의 `dashboard` 블록에 둔다(플러그인은 모르는 키 무시).
-2. 위치: `si-workbench/dashboard/` 하위 폴더(같은 저장소).
+2. 위치: `sawhorse/dashboard/` 하위 폴더(같은 저장소).
 3. 승인: 대시보드에서도 승인 허용. 볼트 체크와 동일한 쓰기(approve/approved/status).
 4. 스케줄 놓침: 자동 보상 실행 금지. 앱 내 알림 카드 → 사용자가 확인해야 실행.
 
@@ -61,7 +61,7 @@ src-tauri/src/
       "mode": "auto",                       // auto | herdr | headless
       "bin": "herdr",
       "session": "",                        // 이름 있는 herdr 세션, ""=기본
-      "workspaceLabel": "si-workbench",
+      "workspaceLabel": "sawhorse",
       "cleanup": "closeOnSuccess",          // closeOnSuccess | keep | closeAlways
       "maxParallel": 1,
       "startTimeoutSec": 60,
@@ -85,8 +85,8 @@ PreToolUse 훅(block-push — 비대화형 세션에서 ask는 거부로 귀결�
 종류: `design`(improve 설계), `implement`(improve 구현), `routine`(morning/lunch/evening),
 `excel`(improve-excel). 요청: { kind, project?, ids?, routine? }.
 
-- 프롬프트: `/si-workbench:improve 설계 [IDs]`, `/si-workbench:improve 구현 [IDs]`,
-  `/si-workbench:<routine>`, `/si-workbench:improve-excel --out "<excelOutputDir>/개선수정사항-체크리스트.xlsx" --prev "<직전 OUT>"`.
+- 프롬프트: `/sawhorse:improve 설계 [IDs]`, `/sawhorse:improve 구현 [IDs]`,
+  `/sawhorse:<routine>`, `/sawhorse:improve-excel --out "<excelOutputDir>/개선수정사항-체크리스트.xlsx" --prev "<직전 OUT>"`.
   `--prev` 경로는 state.json에 마지막 OUT을 기록해 이어받는다.
 - cwd = 프로젝트 path(설계·구현) 또는 vaultPath(루틴·엑셀).
 - 큐: 전역 FIFO 입장. 히스토리는 app-data/jobs.jsonl에 추가 기록(재시작 후에도 열람).

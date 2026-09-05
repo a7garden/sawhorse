@@ -1,4 +1,4 @@
-# si-workbench 운영 대시보드 구현 계획
+# sawhorse 운영 대시보드 구현 계획
 
 > **For agentic workers:** 이 계획은 단일 세션에서 인라인 실행한다(superpowers:executing-plans 방식).
 > 스펙: `docs/superpowers/specs/2026-09-04-dashboard-design.md`
@@ -12,7 +12,7 @@
 ## Global Constraints
 
 - 플러그인 기존 파일(skills/, hooks/, scripts/, README.md) 변경 금지. 새 코드는 `dashboard/` 아래에만.
-- 설정 정본은 `~/.claude/si-workbench/config.json`. 앱 키는 `dashboard` 블록. 모르는 키 보존 필수.
+- 설정 정본은 `~/.claude/sawhorse/config.json`. 앱 키는 `dashboard` 블록. 모르는 키 보존 필수.
 - 볼트 쓰기는 승인 3키 갱신과 할 일 체크 토글/추가뿐. 그 외 볼트 변경 없음.
 - 원격 저장소 작업(push) 코드 없음. svn 상태 변경 없음.
 - UI 문구 한국어. 코드/커밋 영어.

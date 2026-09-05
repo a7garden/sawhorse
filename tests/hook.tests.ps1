@@ -1,4 +1,4 @@
-# si-workbench hook tests. Run: pwsh -NoProfile -File tests/hook.tests.ps1  (or powershell.exe)
+# sawhorse hook tests. Run: pwsh -NoProfile -File tests/hook.tests.ps1  (or powershell.exe)
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -69,7 +69,7 @@ try {
     $in | & $exe -NoProfile -ExecutionPolicy Bypass -File $journal
     if ($LASTEXITCODE -ne 0) { $fail++; Write-Host "FAIL: journal hook exited $LASTEXITCODE" }
   }
-  $jdir = Join-Path $tmp '.claude\si-workbench\journal'
+  $jdir = Join-Path $tmp '.claude\sawhorse\journal'
   $jfiles = @(Get-ChildItem -Path $jdir -Filter '*.jsonl' -File -ErrorAction SilentlyContinue)
   if ($jfiles.Count -ne 1) {
     $fail++

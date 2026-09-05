@@ -15,15 +15,15 @@ description: Use when the user starts the workday — "출근", "아침", "morni
 
 - 코드베이스는 읽기 전용으로만 다룬다. 어떤 저장소의 파일도 수정/삭제하지 않는다.
 - 원격 저장소 변경 금지: `git push`, `svn commit`/`svn ci`, `git svn dcommit`, `hg push`는 실행하지 않는다.
-- 위키 규범은 si-workbench:wiki를 준수한다.
+- 위키 규범은 sawhorse:wiki를 준수한다.
 - 프로퍼티 키는 영어, 값은 한국어. 스킬이 임의 필드를 만들지 않는다.
-- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\si-workbench\config.json`의 `vaultPath` → 사용자 문의. 무인 실행이므로 어디서도 경로를 못 찾으면 질문하지 말고 실패 사유를 보고하고 종료한다.
+- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자 문의. 무인 실행이므로 어디서도 경로를 못 찾으면 질문하지 말고 실패 사유를 보고하고 종료한다.
 
 ## 절차
 
 1. **오늘 일지 노트 확보** — `${vault}/일지/YYYY-MM-DD.md`(로컬 날짜). 노트가 없으면 템플릿(`템플릿/일지.md`) 내용으로 생성한다. `{{date}}`는 오늘 날짜로 치환한다.
 2. **어제 노트 찾기** — `일지/` 폴더에서 파일명이 `YYYY-MM-DD.md` 패턴이면서 날짜가 오늘 이전인 것 중 가장 최신 파일. 패턴이 아닌 파일명은 대상에서 제외한다. 없으면 3-4단계를 건너뛰고 보고에 "이전 일지 없음"을 적는다.
-3. **어제 요약** — 어제 노트의 `## 업무기록`을 3줄 이내로 요약한다. 업무기록이 비어 있으면 어제 날짜 저널(`%USERPROFILE%\.claude\si-workbench\journal\<어제>.jsonl`)로 대체한다: session_id dedup(같은 id는 마지막 라인만 유효) 후 각 transcript에 [SAMPLING] 규칙을 적용해 요약한다. 둘 다 없으면 "어제 기록 없음".
+3. **어제 요약** — 어제 노트의 `## 업무기록`을 3줄 이내로 요약한다. 업무기록이 비어 있으면 어제 날짜 저널(`%USERPROFILE%\.claude\sawhorse\journal\<어제>.jsonl`)로 대체한다: session_id dedup(같은 id는 마지막 라인만 유효) 후 각 transcript에 [SAMPLING] 규칙을 적용해 요약한다. 둘 다 없으면 "어제 기록 없음".
 
 [SAMPLING] transcript JSONL 샘플링 규칙: (1) 전체 통독 금지. (2) 먼저 라인 수 파악. (3) `"type":"summary"` 라인과 user 발화(`message.role == "user"`이고 content가 문자열이거나 content[].type=="text")를 추출. (4) 마지막 assistant 텍스트 1-2개만 추가. (5) tool_result 본문은 읽지 않는다. 파일이 크면 앞부분 user 발화와 뒷부분 마무리를 우선.
 
@@ -44,13 +44,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scrip
 
 스크립트는 판단하지 않는다. 아래는 출력 목록을 받아 **스킬이** 처리한다:
 
-- `[수집]` — 사용자가 `## 개념 수집` 섹션에 문맥과 함께 적어둔 용어다. si-workbench:wiki 의 "수집 메모 승격" 절차로 개념 노트를 만들고, **원본 줄의 용어만 `[[링크]]`로 감싼다**(문맥 문장은 그대로 둔다). 문맥 없이 일반 상식으로 정의를 쓰지 않는다 — 동음이의어가 섞여 있다.
+- `[수집]` — 사용자가 `## 개념 수집` 섹션에 문맥과 함께 적어둔 용어다. sawhorse:wiki 의 "수집 메모 승격" 절차로 개념 노트를 만들고, **원본 줄의 용어만 `[[링크]]`로 감싼다**(문맥 문장은 그대로 둔다). 문맥 없이 일반 상식으로 정의를 쓰지 않는다 — 동음이의어가 섞여 있다.
 - `[미분류]` 루트 노트 — 성격을 보고 올바른 폴더로 옮긴다. 용어를 모아둔 메모면 같은 승격 절차를 쓴다. 판단이 서지 않으면 옮기지 말고 보고한다. 원본 노트는 사용자가 지우라고 하기 전까지 삭제하지 않는다.
 - `[스키마]` frontmatter 없음/키 누락 — 누락 키를 **빈 값으로만** 추가하고 순서를 템플릿에 맞춘다. 값은 채우지 않는다(값 채우기는 vault-tidy 승인 대상).
 - `[죽은링크]` — 대소문자·공백만 다른 명백한 오타는 고치고, 대상 자체가 없으면 개념 노트 생성 대상으로 보고한다.
 - `[제목중복]` — 파일명과 같은 H1 이다. `quick`/`fix` 가 이미 지웠으므로 보고만 확인한다. `scan` 이 잡아낸 것은 다음 `quick`/`fix` 가 처리한다. 스킬이 직접 손댈 일은 없다.
 - `[고아첨부]` — **삭제하지 않는다.** 목록만 보고한다.
-- `[이슈base]` — 이슈 폴더에 사업 범위 `.base`가 없다. 여기서 만들지 말고 `/si-workbench:issues` 실행을 안내한다.
+- `[이슈base]` — 이슈 폴더에 사업 범위 `.base`가 없다. 여기서 만들지 말고 `/sawhorse:issues` 실행을 안내한다.
 - `[파생표]` — 이슈 문서가 이슈 프로퍼티를 마크다운 표로 베껴 두고 있다. **반드시 어긋나므로** `.base` 뷰 임베드로 바꿔야 한다.
 - `[충돌]` `[경고]` — 그대로 보고한다.
 

@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  si-workbench 볼트 위생 점검. morning/lunch/evening 이 모드별로 호출한다.
+  sawhorse 볼트 위생 점검. morning/lunch/evening 이 모드별로 호출한다.
 .DESCRIPTION
   quick : 즉시형. 표준 폴더 밖 첨부 회수, attachmentFolderPath 교정, .base 템플릿 제외 보정,
           인덱스 자산 존재 확인. 되돌릴 수 있는 기계적 조치만 수행한다. (morning)
@@ -133,7 +133,7 @@ if ($Mode -eq 'quick' -or $Mode -eq 'fix') {
   # 4) 인덱스 자산 존재 확인 (없으면 안내만 — 여기서 만들지 않는다)
   $missingAssets = @($IndexAssets | Where-Object { -not (Test-Path -LiteralPath (Join-Path $V $_)) })
   if ($missingAssets.Count -gt 0) {
-    Write-Output "[자산] 없음: $($missingAssets -join ', ') — /si-workbench:init-vault 필요"
+    Write-Output "[자산] 없음: $($missingAssets -join ', ') — /sawhorse:init-vault 필요"
   } else {
     Write-Output "[자산] 대시보드·base 5종 모두 있음"
   }
@@ -170,7 +170,7 @@ if ($Mode -eq 'quick' -or $Mode -eq 'fix') {
       if ($hasNote.Count -eq 0) { continue }
       if (@(Get-ChildItem -LiteralPath $d.FullName -File -Filter *.base).Count -eq 0) {
         $kind = if ($d.Name -eq '이슈') { '이슈' } else { '개선(레거시)' }
-        Write-Output "[이슈base] $(Get-Rel $d.FullName) — $kind 사업 범위 base 없음 (/si-workbench:issues 가 만든다)"
+        Write-Output "[이슈base] $(Get-Rel $d.FullName) — $kind 사업 범위 base 없음 (/sawhorse:issues 가 만든다)"
       }
       # 이슈 폴더는 평면이다 — 화면·마일스톤은 프로퍼티가 나눈다. 하위 폴더는 보고만 한다.
       foreach ($sd in @(Get-ChildItem -LiteralPath $d.FullName -Directory)) {

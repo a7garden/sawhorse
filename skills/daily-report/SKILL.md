@@ -5,17 +5,17 @@ description: Use when the user asks for a daily work report to send — "업무 
 
 # daily-report — 업무 보고 작성
 
-오늘의 세션 저널을 분석해 보고 형식 요약을 fenced 코드블록 하나로 출력한다. 일지 노트는 수정하지 않는다(노트 작성은 `/si-workbench:daily-log`). 호출: `/si-workbench:daily-report [$ARGUMENTS]`. `$ARGUMENTS`에는 세션에 남지 않은 구두 업무(회의 등)를 적는다.
+오늘의 세션 저널을 분석해 보고 형식 요약을 fenced 코드블록 하나로 출력한다. 일지 노트는 수정하지 않는다(노트 작성은 `/sawhorse:daily-log`). 호출: `/sawhorse:daily-report [$ARGUMENTS]`. `$ARGUMENTS`에는 세션에 남지 않은 구두 업무(회의 등)를 적는다.
 
 ## 공통 원칙
 
 - 코드베이스는 읽기 전용으로만 다룬다. 어떤 저장소의 파일도 수정/삭제하지 않는다.
 - 원격 저장소 변경 주의: `git push`, `svn commit`/`svn ci`, `git svn dcommit`, `hg push`는 불필요하면 실행하지 않는다. 로컬 `git commit`은 자유이며, 훅(block-push.ps1)이 원격 변경은 실행 전 사용자 확인을 요구한다.
-- 위키 규범은 si-workbench:wiki를 준수한다. 이 스킬은 vault에 아무것도 쓰지 않으며, 출력물은 메신저·메일 등 위키 밖으로 복사하는 용도이므로 `[[위키링크]]` 표기를 쓰지 않고 일반 문구로 쓴다.
+- 위키 규범은 sawhorse:wiki를 준수한다. 이 스킬은 vault에 아무것도 쓰지 않으며, 출력물은 메신저·메일 등 위키 밖으로 복사하는 용도이므로 `[[위키링크]]` 표기를 쓰지 않고 일반 문구로 쓴다.
 
 ## 분석 절차 (daily-log와 공통)
 
-1. **저널 로드** — `%USERPROFILE%\.claude\si-workbench\journal\<오늘>.jsonl`을 읽는다. `<오늘>`은 로컬 날짜 `YYYY-MM-DD`. 라인 스키마: `{"ts","session_id","cwd","transcript_path","reason"}`.
+1. **저널 로드** — `%USERPROFILE%\.claude\sawhorse\journal\<오늘>.jsonl`을 읽는다. `<오늘>`은 로컬 날짜 `YYYY-MM-DD`. 라인 스키마: `{"ts","session_id","cwd","transcript_path","reason"}`.
 2. **session_id dedup** — 같은 session_id가 여러 줄이면 마지막 것만 유효로 삼는다.
 3. **transcript 샘플링** — 유효 라인의 `transcript_path`마다 다음 규칙을 그대로 적용한다:
 

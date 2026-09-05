@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 
 pub fn config_path() -> PathBuf {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.join(".claude").join("si-workbench").join("config.json")
+    home.join(".claude").join("sawhorse").join("config.json")
 }
 
 fn load_raw_at(path: &Path) -> Value {
@@ -83,7 +83,7 @@ impl Default for HerdrCfg {
             mode: "auto".into(),
             bin: "herdr".into(),
             session: String::new(),
-            workspace_label: "si-workbench".into(),
+            workspace_label: "sawhorse".into(),
             cleanup: "closeOnSuccess".into(),
             max_parallel: 1,
             start_timeout_sec: 60,
@@ -110,7 +110,7 @@ impl HerdrCfg {
             c.bin = "herdr".into();
         }
         if c.workspace_label.trim().is_empty() {
-            c.workspace_label = "si-workbench".into();
+            c.workspace_label = "sawhorse".into();
         }
         c.max_parallel = c.max_parallel.clamp(1, 8);
         c.start_timeout_sec = c.start_timeout_sec.clamp(10, 600);

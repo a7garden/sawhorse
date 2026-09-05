@@ -227,7 +227,7 @@ UI 목업(현행 1-M)은 그대로 유지한다. 일괄에서는 목업이 더 �
 ```markdown
 ## 승인 대기 설계
 
-> [!question] 설계서를 열어 읽고 `승인` 열을 체크하면, 다음 `/si-workbench:improve 구현` 에서 반영된다.
+> [!question] 설계서를 열어 읽고 `승인` 열을 체크하면, 다음 `/sawhorse:improve 구현` 에서 반영된다.
 > 체크는 사람만 한다 — 스킬은 이 값을 켜지 않는다.
 
 ![[개선.base#승인대기]]
@@ -259,7 +259,7 @@ UI 목업(현행 1-M)은 그대로 유지한다. 일괄에서는 목업이 더 �
 | `문제목록 - fdrList.do.md` | 인덱스 표 상태 갱신 |
 | `.obsidian/types.json` | `"approve": "checkbox"` |
 
-플러그인 (`~/.claude/plugins/marketplaces/si-workbench`):
+플러그인 (`~/.claude/plugins/marketplaces/sawhorse`):
 
 `skills/improve/`(전면 개편 + 파일 분리) · `skills/init-vault/SKILL.md`(types.json 단계) ·
 `docs/design.md`(스키마·사이클 절) · `assets/bases/개선.base` · `assets/대시보드.md` ·
