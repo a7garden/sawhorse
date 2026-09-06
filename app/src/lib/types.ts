@@ -492,6 +492,8 @@ export interface NavEntry {
   icon: string;
   type: ViewKind;
   component: string;
+  /** 사이드바 섹션 태그: work | execution | vault | reading | automation (빈 값 = 기타) */
+  group: string;
 }
 
 // ---------- 노트 질의 ----------

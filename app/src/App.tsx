@@ -7,7 +7,6 @@ import {
   BookOpen,
   FolderGit2,
   Workflow,
-  Hammer,
   ClipboardCheck,
   LayoutDashboard,
   Network,
@@ -27,6 +26,7 @@ import { useApp, parseViewPage, viewPageId, type PageId } from "@/lib/store";
 import { icon as packIcon, type IconComponent } from "@/lib/icons";
 import { useTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import appIcon from "../src-tauri/icons/icon.svg";
 import WorkbenchPage from "@/features/workbench/WorkbenchPage";
 import { isWorkbenchPreview } from "@/features/workbench/api";
 import HomePage from "@/pages/HomePage";
@@ -50,25 +50,38 @@ import OnboardingPage from "@/pages/OnboardingPage";
 
 import SetupWizard from "@/pages/SetupWizard";
 
-/** 호스트가 항상 들고 있는 화면. 팩 화면은 이 위·아래 사이에 들어간다. */
-const TOP_NAV: { id: PageId; label: string; icon: IconComponent }[] = [
-  { id: "overview", label: "작업대", icon: LayoutDashboard },
-  { id: "board", label: "백로그", icon: KanbanSquare },
-  { id: "calendar", label: "캘린더", icon: CalendarDays },
-  { id: "harness", label: "에이전트 하네스", icon: Workflow },
-  { id: "projects", label: "프로젝트", icon: FolderGit2 },
-  { id: "workflows", label: "워크플로", icon: Workflow },
-  { id: "schemas", label: "스키마", icon: Braces },
-  { id: "onboarding", label: "프로젝트 가져오기", icon: FolderInput },
-  { id: "knowledge", label: "기록과 지식", icon: BookOpen },
-  { id: "home", label: "루틴", icon: CalendarClock },
-  { id: "jobs", label: "실행 큐", icon: SquareTerminal },
-  { id: "sessions", label: "세션", icon: Network },
-  { id: "review", label: "검토", icon: ClipboardCheck },
-  { id: "sources", label: "소스", icon: Rss },
-  { id: "reading", label: "읽을거리", icon: Newspaper },
-  { id: "tasks", label: "예약", icon: CalendarClock },
-  { id: "terminal", label: "터미널", icon: Terminal },
+/** 사이드바 섹션 — 호스트가 섹션 목록·순서를 소유하고, 팩 뷰는 group 태그로 섹션을 고른다. */
+const SECTIONS: { id: string; label: string }[] = [
+  { id: "work", label: "작업" },
+  { id: "execution", label: "실행" },
+  { id: "vault", label: "볼트" },
+  { id: "reading", label: "정보" },
+  { id: "automation", label: "자동화" },
+];
+
+const TOP_NAV: { id: PageId; label: string; icon: IconComponent; group: string }[] = [
+  // 작업 — 매일 하는 일
+  { id: "overview", label: "작업대", icon: LayoutDashboard, group: "work" },
+  { id: "board", label: "백로그", icon: KanbanSquare, group: "work" },
+  { id: "calendar", label: "캘린더", icon: CalendarDays, group: "work" },
+  { id: "projects", label: "프로젝트", icon: FolderGit2, group: "work" },
+  // 실행 — 일을 돌리는 장치
+  { id: "workflows", label: "워크플로", icon: Workflow, group: "execution" },
+  { id: "harness", label: "에이전트 하네스", icon: Workflow, group: "execution" },
+  { id: "review", label: "검토", icon: ClipboardCheck, group: "execution" },
+  { id: "jobs", label: "실행 큐", icon: SquareTerminal, group: "execution" },
+  { id: "sessions", label: "세션", icon: Network, group: "execution" },
+  { id: "terminal", label: "터미널", icon: Terminal, group: "execution" },
+  // 볼트 — 내용과 그 구조
+  { id: "knowledge", label: "기록과 지식", icon: BookOpen, group: "vault" },
+  { id: "schemas", label: "스키마", icon: Braces, group: "vault" },
+  { id: "onboarding", label: "프로젝트 가져오기", icon: FolderInput, group: "vault" },
+  // 정보 — 받아서 읽는 것
+  { id: "sources", label: "소스", icon: Rss, group: "reading" },
+  { id: "reading", label: "읽을거리", icon: Newspaper, group: "reading" },
+  // 자동화 — 시간이 일을 시키는 것
+  { id: "home", label: "루틴", icon: CalendarClock, group: "automation" },
+  { id: "tasks", label: "예약", icon: CalendarClock, group: "automation" },
 ];
 
 const BOTTOM_NAV: { id: PageId; label: string; icon: IconComponent }[] = [
@@ -202,48 +215,65 @@ export default function App() {
     <div className="flex h-screen w-screen overflow-hidden">
       <aside className="app-sidebar flex w-[208px] shrink-0 flex-col border-r bg-sidebar px-3 py-5">
         <div className="mb-6 flex items-center gap-2.5 px-2">
-          <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Hammer className="size-4" />
-          </div>
-          <div>
-            <div className="text-[16px] font-bold tracking-tight leading-tight">
-              sawhorse
-            </div>
-            <div className="mt-0.5 text-[10px] tracking-wider text-muted-foreground">
-              의도에서 실행까지
-            </div>
+          <img src={appIcon} alt="" className="size-8 shrink-0" />
+          <div className="text-[16px] font-bold tracking-tight leading-tight">
+            sawhorse
           </div>
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-          <div className="mb-2 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground">
-            WORKSPACE
-          </div>
-          {TOP_NAV.map((n, index) => (
-            <Fragment key={n.id}>
-              {index === 6 && (
-                <div className="mb-1 mt-4 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground">
-                  자동화와 통합
+          {SECTIONS.map(({ id, label }, index) => {
+            const core = TOP_NAV.filter((n) => n.group === id);
+            const packViews = nav.filter((n) => n.group === id);
+            if (core.length === 0 && packViews.length === 0) return null;
+            return (
+              <Fragment key={id}>
+                <div
+                  className={
+                    index === 0
+                      ? "mb-2 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground"
+                      : "mb-1 mt-4 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground"
+                  }
+                >
+                  {label}
                 </div>
-              )}
-              <NavButton
-                key={n.id}
-                id={n.id}
-                label={n.label}
-                Icon={n.icon}
-                badge={n.id === "home" ? missedCount : undefined}
-              />
-            </Fragment>
-          ))}
+                {core.map((n) => (
+                  <NavButton
+                    key={n.id}
+                    id={n.id}
+                    label={n.label}
+                    Icon={n.icon}
+                    badge={n.id === "home" ? missedCount : undefined}
+                  />
+                ))}
+                {packViews.map((n) => (
+                  <NavButton
+                    key={`${n.packId}:${n.viewId}`}
+                    id={viewPageId(n.packId, n.viewId)}
+                    label={n.label}
+                    Icon={packIcon(n.icon)}
+                  />
+                ))}
+              </Fragment>
+            );
+          })}
 
-          {nav.length > 0 && <div className="my-1.5 h-px bg-border" />}
-          {nav.map((n) => (
-            <NavButton
-              key={`${n.packId}:${n.viewId}`}
-              id={viewPageId(n.packId, n.viewId)}
-              label={n.label}
-              Icon={packIcon(n.icon)}
-            />
-          ))}
+          {nav.some((n) => !SECTIONS.some((s) => s.id === n.group)) && (
+            <Fragment>
+              <div className="mb-1 mt-4 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground">
+                기타
+              </div>
+              {nav
+                .filter((n) => !SECTIONS.some((s) => s.id === n.group))
+                .map((n) => (
+                  <NavButton
+                    key={`${n.packId}:${n.viewId}`}
+                    id={viewPageId(n.packId, n.viewId)}
+                    label={n.label}
+                    Icon={packIcon(n.icon)}
+                  />
+                ))}
+            </Fragment>
+          )}
 
           <div className="my-1.5 h-px bg-border" />
           {BOTTOM_NAV.map((n) => (

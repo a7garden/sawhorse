@@ -60,17 +60,18 @@ export default function TerminalPage() {
       .filter((p) => p.path.length > 0)
       .map((p) => ({ value: p.path, label: `${p.name} (${p.path})` })),
   ];
-
-  async function act(fn: () => Promise<unknown>, note?: string) {
-    setBusy(true);
-    setMsg(null);
-    try {
-      await fn();
-      if (note) setMsg(note);
-      await load();
-    } catch (e) {
-      setMsg(String(e));
-    } finally {
+/** 작은 호흡 점. working/blocked 만 호흡한다. */
+function StatusDot({ tone, pulse }: { tone: string; pulse?: boolean }) {
+  const t: Tone = toneOf(tone);
+  if (pulse && (t === "working" || t === "blocked")) {
+    return (
+      <span className="term-dot-pulse" data-tone={t} aria-hidden>
+        <span className="term-dot" data-tone={t} />
+      </span>
+    );
+  }
+  return <span className="term-dot" data-tone={t} aria-hidden />;
+}
       setBusy(false);
     }
   }

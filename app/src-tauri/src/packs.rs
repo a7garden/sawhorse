@@ -97,6 +97,9 @@ pub const VIEW_KINDS: [&str; 10] = [
     "graph",
     "metrics",
 ];
+/// 사이드바 섹션 태그. 호스트가 섹션 목록과 순서를 소유하고, 팩 뷰는 이 중 하나를 고른다.
+/// 빈 값이면 사이드바 맨 아래 「기타」 섹션으로 밀린다.
+pub const VIEW_GROUPS: [&str; 5] = ["work", "execution", "vault", "reading", "automation"];
 pub const SCHEDULE_KINDS: [&str; 2] = ["daily", "weekdays"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -165,6 +168,9 @@ pub struct PackView {
     pub kind: String,
     /// kind=native 일 때 앱이 이미 들고 있는 화면 이름 (issues/todos/docs/vault)
     pub component: String,
+    /// 사이드바 섹션 태그 — VIEW_GROUPS 중 하나. 빈 값은 「기타」.
+    #[serde(default)]
+    pub group: String,
     pub query: NoteQuery,
     pub columns: Vec<ViewColumn>,
     pub group_by: String,
@@ -275,6 +281,9 @@ impl PackManifest {
             seen_views.push(v.id.clone());
             if !VIEW_KINDS.contains(&v.kind.as_str()) {
                 return Err(format!("알 수 없는 뷰 종류: {}", v.kind));
+            }
+            if !v.group.is_empty() && !VIEW_GROUPS.contains(&v.group.as_str()) {
+                return Err(format!("알 수 없는 뷰 그룹: {}", v.group));
             }
             if v.kind == "native" && v.component.trim().is_empty() {
                 return Err(format!("네이티브 뷰 {} 에 component 가 없습니다", v.id));
@@ -658,6 +667,8 @@ pub struct NavEntry {
     #[serde(rename = "type")]
     pub kind: String,
     pub component: String,
+    /// 사이드바 섹션 태그 (VIEW_GROUPS). 빈 값이면 프론트가 「기타」로 분류한다.
+    pub group: String,
 }
 
 pub fn nav_entries(reg: &Registry) -> Vec<NavEntry> {
@@ -672,6 +683,7 @@ pub fn nav_entries(reg: &Registry) -> Vec<NavEntry> {
                 icon: v.icon.clone(),
                 kind: v.kind.clone(),
                 component: v.component.clone(),
+                group: v.group.clone(),
             });
         }
     }
@@ -954,6 +966,7 @@ mod tests {
             icon: "list-checks".into(),
             kind: "native".into(),
             component: "issues".into(),
+            group: "work".into(),
         };
         let j = serde_json::to_value(&nav).unwrap();
         assert_eq!(
@@ -962,6 +975,7 @@ mod tests {
         );
         assert_eq!(j["packId"], "si");
         assert_eq!(j["viewId"], "issues");
+        assert_eq!(j["group"], "work", "NavEntry.group 는 사이드바 섹션 태그다");
 
         let view = PackView {
             id: "v".into(),
@@ -1064,7 +1078,7 @@ mod tests {
         write_pack(
             &builtin.join("packs"),
             "a",
-            r#", "views": [{"id":"v1","label":"뷰1"}]"#,
+            r#", "views": [{"id":"v1","label":"뷰1","group":"work"}]"#,
         );
         write_pack(
             &builtin.join("packs"),
@@ -1076,6 +1090,25 @@ mod tests {
         assert_eq!(nav.len(), 1);
         assert_eq!(nav[0].view_id, "v1");
         assert_eq!(nav[0].kind, "notes", "뷰 종류 기본값");
+        assert_eq!(nav[0].group, "work", "뷰 그룹이 사이드바 태그로 흘러간다");
         fs::remove_dir_all(&builtin).unwrap();
+    }
+
+    #[test]
+    fn view_group_must_be_known() {
+        let mut m = PackManifest {
+            id: "ok".into(),
+            ..Default::default()
+        };
+        m.views.push(PackView {
+            id: "v".into(),
+            group: "nope".into(),
+            ..Default::default()
+        });
+        assert!(m.validate().unwrap_err().contains("그룹"));
+        m.views[0].group = "vault".into();
+        assert!(m.validate().is_ok(), "빈 그룹과 나열된 그룹은 허용된다");
+        m.views[0].group = String::new();
+        assert!(m.validate().is_ok());
     }
 }
