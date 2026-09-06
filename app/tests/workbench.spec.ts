@@ -25,7 +25,7 @@ test("project and task creation persist and work can move across the board", asy
   await expect(
     page.locator(".wb-project-card").filter({ hasText: "검증 프로젝트" }),
   ).toBeVisible();
-  await nav(page, "백로그");
+  await nav(page, "작업");
   await page.getByRole("button", { name: "새 작업", exact: true }).click();
   await page
     .getByLabel("작업 이름", { exact: true })
@@ -51,7 +51,7 @@ test("project and task creation persist and work can move across the board", asy
     target.locator(".wb-board-card").filter({ hasText: "브라우저 흐름 검증" }),
   ).toBeVisible();
   await page.reload();
-  await nav(page, "백로그");
+  await nav(page, "작업");
   await expect(
     page
       .locator(".wb-board-column")
@@ -238,14 +238,14 @@ test("forward stage transitions require and retain a review decision", async ({
 test("project and stage filters combine and search opens an artifact", async ({
   page,
 }) => {
-  await nav(page, "백로그");
+  await nav(page, "작업");
   await page.getByLabel("프로젝트 필터").selectOption("herdr");
   await page.getByLabel("단계 필터").selectOption("build");
   await expect(page.locator(".wb-board-card")).toHaveCount(1);
   await expect(page.locator(".wb-board-card")).toContainText(
     "Herdr 실행과 기록 연결",
   );
-  await nav(page, "기록과 지식");
+  await page.getByRole("button", { name: /전체 검색/ }).click();
   await page.getByPlaceholder("문서와 작업을 검색하세요").fill("원하는 결과");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await page.locator(".wb-search-hit").first().click();
@@ -261,9 +261,7 @@ test("a project switches to TDD without changing existing SDD work", async ({
     .filter({ hasText: "Sawhorse" })
     .getByRole("button", { name: "프로젝트 편집" })
     .click();
-  await page
-    .getByLabel("프로젝트 워크플로우")
-    .selectOption("tdd-cycle@1.0.0");
+  await page.getByLabel("프로젝트 워크플로우").selectOption("tdd-cycle@1.0.0");
   await page
     .locator("form")
     .getByRole("button", { name: "저장", exact: true })
@@ -272,7 +270,7 @@ test("a project switches to TDD without changing existing SDD work", async ({
     page.locator(".wb-project-card").filter({ hasText: "Sawhorse" }),
   ).toContainText("TDD 사이클");
 
-  await nav(page, "백로그");
+  await nav(page, "작업");
   await page.getByRole("button", { name: "새 작업", exact: true }).click();
   await page.getByLabel("작업 이름").fill("TDD로 만든 새 작업");
   await page.getByLabel("프로젝트", { exact: true }).selectOption("sawhorse");
@@ -297,9 +295,12 @@ test("schema studio exposes the guarded desktop migration workflow", async ({
   page,
 }) => {
   await page.goto("/?preview=1");
-  await page.getByRole("button", { name: "스키마" }).click();
+  await nav(page, "설정");
+  await page
+    .getByRole("button", { name: "볼트 문서 구조", exact: true })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "스키마 작업대" }),
+    page.getByRole("heading", { name: "볼트 문서 구조" }),
   ).toBeVisible();
   await expect(page.getByLabel("스키마 ID")).toHaveValue("team-vault");
   await page.getByRole("button", { name: "고급 JSON" }).click();
@@ -312,13 +313,27 @@ test("schema studio exposes the guarded desktop migration workflow", async ({
   ).toBeVisible();
 });
 
-test("workflow studio and resumable project ingestion are reachable", async ({ page }) => {
-  await nav(page, "워크플로");
-  await expect(page.getByRole("heading", { name: "워크플로 스튜디오" })).toBeVisible();
-  await expect(page.getByText("산출물 계약")).toBeVisible();
+test("workflow studio and resumable project ingestion are reachable", async ({
+  page,
+}) => {
+  await nav(page, "확장 관리");
+  await page.getByRole("button", { name: "워크플로", exact: false }).click();
+  await page
+    .getByRole("button", { name: "새 워크플로", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "워크플로 스튜디오" }),
+  ).toBeVisible();
+  await expect(page.getByText("작성할 문서")).toBeVisible();
   await expect(page.getByRole("button", { name: "가상 실행" })).toBeVisible();
 
-  await nav(page, "프로젝트 가져오기");
-  await expect(page.getByRole("heading", { name: "프로젝트 가져오기" })).toBeVisible();
+  await nav(page, "프로젝트");
+  await page
+    .getByRole("button", { name: "자료로 문서 만들기", exact: true })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: /문서 만들기/ }),
+  ).toBeVisible();
   await expect(page.getByLabel("입력 경로")).toBeVisible();
 });

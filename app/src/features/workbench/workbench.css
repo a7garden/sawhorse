@@ -8,7 +8,7 @@
   --wb-warm: #f7f5ef;
   max-width: 1440px;
   margin: 0 auto;
-  padding: 46px 54px 72px;
+  padding: 24px 28px 48px;
   color: var(--wb-ink);
 }
 .dark .wb-page {
@@ -26,15 +26,15 @@
 .wb-header {
   display: flex;
   justify-content: space-between;
-  gap: 28px;
-  align-items: flex-end;
-  margin-bottom: 34px;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
 }
 .wb-header h1 {
-  font-size: 30px;
-  letter-spacing: -0.055em;
+  font-size: 20px;
+  letter-spacing: -0.025em;
   line-height: 1.15;
-  margin: 4px 0 8px;
+  margin: 0;
   font-weight: 720;
 }
 .wb-header p:not(.wb-eyebrow) {
@@ -345,7 +345,9 @@
   background: var(--wb-warm);
   text-align: left;
   cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    background 120ms ease;
 }
 .wb-stage-tile:hover {
   border-color: var(--wb-teal);
@@ -639,7 +641,7 @@
 }
 .wb-calendar-event.is-due {
   background: var(--wb-teal-soft);
-  color: #12665d;
+  color: var(--wb-teal);
 }
 .wb-day small {
   font-size: 9px;
@@ -1334,7 +1336,7 @@
     margin-bottom: 25px;
   }
   .wb-header h1 {
-    font-size: 25px;
+    font-size: 20px;
   }
   .wb-metric-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1742,4 +1744,42 @@ bind every visible surface to the workbench palette. */
   display: flex;
   justify-content: space-between;
   margin-top: 14px;
+}
+
+.dark .wb-calendar-event {
+  background: #304540;
+  color: #d0e5de;
+}
+.dark .wb-calendar-event.is-review {
+  background: #493b22;
+  color: #f4d998;
+}
+.dark .wb-calendar-event.is-release {
+  background: #303857;
+  color: #ccd3ff;
+}
+.dark .wb-calendar-event.is-meeting {
+  background: #463149;
+  color: #eed0f2;
+}
+.dark .wb-calendar-event.is-due {
+  background: var(--wb-teal-soft);
+  color: #9bded0;
+}
+.wb-calendar-event {
+  font-size: 11px;
+  padding: 4px 6px;
+}
+.wb-calendar-event:hover {
+  filter: brightness(1.12);
+}
+.wb-project-card footer > div {
+  flex-wrap: wrap;
+}
+.wb-field input[type="checkbox"] {
+  min-height: 0;
+  padding: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
 }
