@@ -170,6 +170,7 @@
       "id": "issues",
       "label": "이슈",
       "icon": "list-checks",
+      "group": "work",
       "type": "native",
       "component": "issues"
     },
@@ -177,6 +178,7 @@
       "id": "todos",
       "label": "할 일",
       "icon": "square-check-big",
+      "group": "work",
       "type": "native",
       "component": "todos"
     },
@@ -184,6 +186,7 @@
       "id": "milestones",
       "label": "마일스톤",
       "icon": "flag",
+      "group": "work",
       "type": "notes",
       "query": {
         "folders": ["사업/*/마일스톤"],
@@ -206,6 +209,7 @@
       "id": "concepts",
       "label": "개념",
       "icon": "book-marked",
+      "group": "vault",
       "type": "notes",
       "query": {
         "folders": ["개념"],
@@ -227,6 +231,7 @@
       "id": "docs",
       "label": "문서",
       "icon": "file-text",
+      "group": "vault",
       "type": "native",
       "component": "docs"
     },
@@ -234,6 +239,7 @@
       "id": "vault",
       "label": "볼트",
       "icon": "folder-search",
+      "group": "vault",
       "type": "native",
       "component": "vault"
     }
