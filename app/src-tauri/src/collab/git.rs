@@ -483,7 +483,8 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("sawhorse-git-{}-{tag}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.clone();
-        run(&path, &["init", "-q"]);
+        // 러너·머신마다 git 의 기본 브랜치가 다르므로(main/master) 테스트는 고정한다.
+        run(&path, &["init", "-q", "-b", "main"]);
         run(&path, &["config", "user.email", "t@example.com"]);
         run(&path, &["config", "user.name", "t"]);
         (TempRepo(dir), path)
