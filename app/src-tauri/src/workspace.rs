@@ -134,14 +134,17 @@ pub fn provision(vault: &Path, packs: &[&Pack]) -> Result<ProvisionReport, Strin
 /// 실제로 쓰기 전에 무엇이 생길지 보여준다 (마법사 미리보기).
 pub fn plan(vault: &Path, packs: &[&Pack]) -> Vec<String> {
     let mut out = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for p in packs {
         for f in &p.manifest.workspace.folders {
-            if safe_join(vault, f).is_some_and(|t| !t.is_dir()) {
-                out.push(format!("{f}/"));
+            let display = format!("{f}/");
+            if safe_join(vault, f).is_some_and(|t| !t.is_dir()) && seen.insert(display.clone()) {
+                out.push(display);
             }
         }
         for s in &p.manifest.workspace.files {
-            if safe_join(vault, &s.dest).is_some_and(|t| !t.exists()) {
+            if safe_join(vault, &s.dest).is_some_and(|t| !t.exists()) && seen.insert(s.dest.clone())
+            {
                 out.push(s.dest.clone());
             }
         }
@@ -290,8 +293,8 @@ mod tests {
         assert!(vault.join("사업/이슈.base").is_file());
         assert!(vault.join("대시보드.md").is_file());
         // starter 팩
-        assert!(vault.join("기록").is_dir());
-        assert!(vault.join("템플릿/기록.md").is_file());
+        assert!(vault.join("문서").is_dir());
+        assert!(vault.join("템플릿/문서.md").is_file());
 
         // 선언형 뷰가 갓 만든 작업공간에서 오류 없이 빈 결과를 낸다
         for pack in &enabled {
