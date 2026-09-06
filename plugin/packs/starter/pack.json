@@ -1,0 +1,122 @@
+{
+  "id": "starter",
+  "name": "기본 작업",
+  "version": "1.0.0",
+  "author": "sawhorse",
+  "icon": "notebook-pen",
+  "description": "업종·조직 어휘가 하나도 없는 최소 팩. 매일 기록 한 장, 빠른 캡처, 주간 회고 — 이 세 가지만 한다. 팩을 직접 만들려면 이 폴더를 복사해 시작하는 것이 가장 빠르다. 설정은 config.json 의 packs.settings.starter 에 저장된다.",
+
+  "skills": ["capture", "weekly-review"],
+
+  "workspace": {
+    "folders": ["기록", "노트", "보관"],
+    "files": [
+      { "src": "templates/기록.md", "dest": "템플릿/기록.md" },
+      { "src": "templates/노트.md", "dest": "템플릿/노트.md" }
+    ]
+  },
+
+  "settings": [
+    {
+      "key": "ownerName",
+      "type": "text",
+      "label": "이름",
+      "description": "회고·요약 문서에 적을 이름. 비워두면 이름 없이 씁니다.",
+      "placeholder": "예: 김워크"
+    },
+    {
+      "key": "reviewDay",
+      "type": "select",
+      "label": "회고 기준 요일",
+      "description": "주간 회고가 한 주의 끝으로 볼 요일",
+      "options": [
+        { "value": "금", "label": "금요일" },
+        { "value": "토", "label": "토요일" },
+        { "value": "일", "label": "일요일" }
+      ]
+    },
+    {
+      "key": "archiveAfterDays",
+      "type": "number",
+      "label": "보관 기준 일수",
+      "description": "이 일수보다 오래된 기록을 회고 때 '보관/' 이동 후보로 제안합니다 (0 = 제안 안 함)"
+    },
+    {
+      "key": "useWikiLinks",
+      "type": "bool",
+      "label": "노트를 위키링크로 연결",
+      "description": "켜면 기록에서 언급한 주제를 [[노트 이름]] 으로 잇고, 없는 노트는 만듭니다"
+    }
+  ],
+
+  "actions": [
+    {
+      "id": "today",
+      "label": "오늘 기록 준비",
+      "description": "오늘 날짜 기록 노트를 만들고 어제 미완료 항목을 이월한다",
+      "prompt": "/{{ns}}:capture --today",
+      "cwd": "workspace",
+      "featured": true,
+      "schedule": { "kind": "weekdays", "time": "09:00" }
+    },
+    {
+      "id": "capture",
+      "label": "빠른 기록",
+      "description": "한 줄을 오늘 기록에 적는다. 성격에 따라 할 일 / 한 일 / 메모로 나눠 넣는다",
+      "prompt": "/{{ns}}:capture {{text}}",
+      "cwd": "workspace",
+      "featured": true,
+      "params": [{ "key": "text", "type": "text", "label": "적을 내용", "required": true }]
+    },
+    {
+      "id": "review",
+      "label": "주간 회고",
+      "description": "이번 주 기록을 모아 회고 노트를 쓰고 다음 주 할 일을 남긴다",
+      "prompt": "/{{ns}}:weekly-review {{week}}",
+      "cwd": "workspace",
+      "featured": true,
+      "params": [{ "key": "week", "type": "text", "label": "기준 날짜 (선택, 비우면 이번 주)" }]
+    }
+  ],
+
+  "views": [
+    {
+      "id": "logs",
+      "label": "기록",
+      "icon": "calendar-days",
+      "type": "notes",
+      "query": {
+        "folders": ["기록"],
+        "exclude": ["*.base"],
+        "sort": { "field": "", "source": "title", "desc": true },
+        "limit": 120
+      },
+      "columns": [
+        { "field": "", "source": "title", "label": "날짜", "width": 120 },
+        { "field": "mood", "label": "컨디션", "type": "badge", "width": 90 },
+        { "field": "tags", "label": "태그", "type": "list" },
+        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
+      ],
+      "empty": "아직 기록이 없습니다. '오늘 기록 준비' 를 실행하면 첫 장이 생깁니다."
+    },
+    {
+      "id": "notes",
+      "label": "노트",
+      "icon": "sticky-note",
+      "type": "notes",
+      "query": {
+        "folders": ["노트"],
+        "exclude": ["*.base"],
+        "sort": { "field": "", "source": "title", "desc": false }
+      },
+      "columns": [
+        { "field": "", "source": "title", "label": "제목" },
+        { "field": "topic", "label": "주제", "type": "badge", "width": 120 },
+        { "field": "tags", "label": "태그", "type": "list" },
+        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
+      ],
+      "groupBy": "topic",
+      "empty": "노트가 없습니다. 기록에서 반복되는 주제를 노트로 빼면 여기 모입니다."
+    }
+  ]
+}

@@ -1,9 +1,9 @@
 # sawhorse 설계 문서
 
-> **이슈 모델 우선(2026-09-05).** 작업 추적의 정식 모델은 `docs/issues-milestones-design.md`의 이슈·마일스톤이다. 이 문서에 남아 있는 `개선`·`문제` 구조와 스키마는 기존 볼트의 호환 규격이며, 새 노트를 만들 때는 이슈 모델을 따른다.
+> **이슈 모델 우선(2026-09-05).** 작업 추적의 정식 모델은 `plugin/packs/si/skills/issues/references/issues-milestones-design.md`의 이슈·마일스톤이다. 이 문서에 남아 있는 `개선`·`문제` 구조와 스키마는 기존 볼트의 호환 규격이며, 새 노트를 만들 때는 이슈 모델을 따른다.
 
-> **호스트 우선(2026-09-05).** 제품은 데스크톱 앱(`dashboard/`)이고, SI 업무 방식은
-> 그 위에 얹히는 **확장 하나**(`packs/si/`)다. 이 문서는 그 확장의 내용 —  볼트 구조,
+> **호스트 우선(2026-09-05).** 제품은 데스크톱 앱(`app/`)이고, SI 업무 방식은
+> 그 위에 얹히는 **확장 하나**(`plugin/packs/si/`)다. 이 문서는 그 확장의 내용 — 볼트 구조,
 > 프로퍼티 스키마, 이슈 사이클, 스킬 규범 —  을 다룬다. 앱과 확장의 관계는
 > [워크벤치 플랫폼 설계](superpowers/specs/2026-09-05-workbench-platform-design.md)에 있다.
 
@@ -12,10 +12,10 @@ Obsidian vault를 개인 지식베이스(위키)로 쓰고, 업무일지·업무
 
 ## 대상 환경
 
-- 앱: macOS / Windows 10+ / Linux (Tauri 2). 훅 스크립트는 Windows PowerShell 5.1+ 용
+- 앱: macOS / Windows 10+ / Linux (Tauri 2). 훅·스크립트는 Node 기반 크로스플랫폼
 - 에이전트: Claude Code CLI (v2.1.x 이상 권장), 선택적으로 Codex
 - 실행 기반: herdr (선택 — 없으면 백그라운드 실행기로 폴백)
-- 권장: Node.js 18+ (Playwright MCP 스크린샷), pandoc (docx 파싱)
+- 권장: pandoc (docx 파싱)
 
 ## 저장소 구조 (앱 + 확장 + 플러그인 배포면)
 
@@ -25,23 +25,26 @@ Obsidian vault를 개인 지식베이스(위키)로 쓰고, 업무일지·업무
 
 ```
 sawhorse/
-  dashboard/                        # 데스크톱 앱(Tauri 2) = 호스트. 이것이 제품
-  packs/si/pack.json                # 확장: SI 업무 (+ templates/ assets/)
-  packs/starter/                    # 확장: 기본 작업 (+ skills/ templates/) — 팩 저작 예제
-  skills/                           # 14개 스킬. Claude Code 플러그인 규약상 루트에 있어야 한다
-  hooks/hooks.json                  # SessionEnd, PreToolUse (+ scripts/*.ps1)
-  scripts/vault-hygiene.ps1         # 볼트 위생 (SI 스킬들이 부른다)
-  .claude-plugin/plugin.json        # name, version, userConfig(vault_path)
-  .claude-plugin/marketplace.json   # 단일 플러그인, source: "./"
-  .mcp.json                         # Playwright MCP
+  .claude-plugin/marketplace.json   # 단일 플러그인, source: "./plugin"
+  plugin/                           # 콘텐츠 계층 = 배포 단위
+    .claude-plugin/plugin.json      # name, version, skills 배열
+    packs/si/                       # 확장: SI 업무 (pack.json + skills/ + templates/ + assets/)
+    packs/starter/                  # 확장: 기본 작업 — 팩 저작 예제
+    skills/workbench/               # 앱 고유 스킬
+    hooks/hooks.json                # SessionEnd, PreToolUse (Node)
+    scripts/vault-hygiene.mjs       # 볼트 위생 (SI 스킬들이 부른다)
+    .mcp.json                       # Playwright MCP
+  app/                              # 데스크톱 앱(Tauri 2) = 호스트. 이것이 제품
   README.md, LICENSE(MIT), docs/design.md
 ```
 
-- **내장 팩의 스킬은 루트 `skills/` 를 이름으로 참조한다** — 플러그인 규약이 거기를
-  요구하므로 물리 이동 없이 참조만 한다. 자기 `skills/` 를 든 팩(starter)은 그쪽이 이긴다.
-- 사용자 팩은 `~/.claude/sawhorse/packs/<id>/`. 같은 id 면 사용자 팩이 내장 팩을 덮어쓴다.
-- 번들 앱은 `.claude-plugin`·`packs`·`skills` 를 Tauri 리소스로 싣고, 실행 시 리소스
-  디렉터리를 플러그인 루트로 등록한다.
+- **모든 팩이 자기 `skills/` 를 소유하고**, `plugin.json` 의 `skills` 배열이
+  `./skills`(앱 고유)와 팩별 `./packs/<id>/skills` 를 선언한다. 루트 폴백은 없다.
+- 앱은 번들 `plugin/` 을 `~/.claude/skills/sawhorse/` 로 materialize 해
+  skills-dir 플러그인으로 만들고, 마켓플레이스 설치가 감지되면 사본을 쓰지 않는다.
+  사용자 팩은 `~/.claude/skills/sawhorse-<id>/` 로 따로 펼쳐진다.
+- 번들 앱은 `plugin/` 을 Tauri 리소스로 싣고, 실행 시 리소스의 `plugin` 을
+  플러그인 루트로 등록한다.
 
 ## Vault 구조
 

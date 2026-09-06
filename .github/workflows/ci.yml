@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  plugin:
+    name: plugin validate + hook tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+      - name: Validate plugin manifest
+        run: claude plugin validate ./plugin
+      - name: Hook tests (node:test)
+        run: node --test plugin/hooks/hooks.test.mjs
+  version:
+    name: version consistency
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cargo.toml == plugin.json == app/package.json
+        run: |
+          CARGO_V=$(grep -m1 '^version' app/src-tauri/Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          PLUGIN_V=$(node -p "require('./plugin/.claude-plugin/plugin.json').version")
+          APP_V=$(node -p "require('./app/package.json').version")
+          echo "cargo=$CARGO_V plugin=$PLUGIN_V app=$APP_V"
+          test -n "$CARGO_V"
+          test "$CARGO_V" = "$PLUGIN_V"
+          test "$CARGO_V" = "$APP_V"
+      - name: Tag matches version (tag pushes only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG_V="${GITHUB_REF_NAME#v}"
+          CARGO_V=$(grep -m1 '^version' app/src-tauri/Cargo.toml | sed 's/.*"\(.*\)".*/\1/')
+          test "$TAG_V" = "$CARGO_V" || { echo "tag v$TAG_V != crate $CARGO_V"; exit 1; }
+
+  app:
+    name: app (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Install Linux system deps (Tauri)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libudev-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - run: npm ci
+      - name: Frontend build (tsc + vite)
+        run: npm run build
+      - name: cargo test
+        working-directory: app/src-tauri
+        run: cargo test

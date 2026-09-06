@@ -14,10 +14,31 @@
       herdr 세션 / 백그라운드  →  Claude Code · Codex
 ```
 
+저장소는 두 계층이다 — **`plugin/` 이 곧 제품 콘텐츠**고, `app/` 은 그것을 소비하는
+Tauri 호스트다.
+
+```
+sawhorse/
+  .claude-plugin/marketplace.json    # source: "./plugin"
+  plugin/                            # ← 콘텐츠 계층 = 배포 단위
+    .claude-plugin/plugin.json       #   skills: 팩별 skills/ 선언
+    hooks/hooks.json                 #   Node 훅 (크로스플랫폼)
+    hooks/journal-append.mjs
+    hooks/block-push.mjs
+    scripts/vault-hygiene.mjs
+    .mcp.json
+    skills/workbench/                # 앱 고유 스킬
+    packs/
+      si/      { pack.json, skills/, templates/, assets/ }
+      starter/ { pack.json, skills/, templates/ }
+  app/                               # Tauri 호스트
+  docs/
+```
+
 ## 시작하기 — 앱을 먼저 설치한다
 
 ```bash
-cd dashboard
+cd app
 npm install
 npm run tauri dev     # 개발 실행
 npm run tauri build   # 배포 번들
@@ -33,7 +54,7 @@ npm run tauri build   # 배포 번들
 | 3 에이전트 | 이 PC의 터미널 에이전트 감지 → 그중 **기본 에이전트 선택** |
 | 4 작업공간 | 노트가 쌓일 폴더 지정 (Obsidian 볼트 기록을 자동으로 찾아 준다. 없는 폴더면 만든다) |
 | 5 확장 | 쓸 확장 선택 → **앱이 폴더·템플릿·인덱스를 직접 만든다** (에이전트 불필요) |
-| 6 스킬 | **앱이 확장의 스킬을 에이전트에 설치한다** |
+| 6 스킬 | **앱이 번들 플러그인을 에이전트에 넣는다** (Claude Code: skills-dir materialize, Codex: 프롬프트 변환) |
 | 7 완료 | 정한 내용 요약 + 선택적으로 `init-vault`(Obsidian 설정 맞추기)·`setup`(환경 진단) 실행 |
 
 6단계가 예전의 "플러그인 설치"다. 이제 앱 안에서 일어난다. 2·3단계의 같은 목록은
@@ -66,17 +87,22 @@ npm run tauri build   # 배포 번들
 
 `id` 가 카탈로그와 같으면 새 줄을 만들지 않고 실행 파일 경로만 바로잡는다.
 
-### Claude Code 플러그인으로 쓰고 싶다면
+### 콘텐츠 계층 하나, 전달 경로 셋
 
-같은 내용물이 Claude Code 플러그인으로도 배포된다. 앱 없이 스킬만 쓰려면:
+스킬·훅·템플릿 전부는 `plugin/` 디렉터리 하나가 곧 제품 콘텐츠다. 같은 내용이
+세 경로로 전달되고, 셋 다 같은 네임스페이스 `/sawhorse:*` 와 같은
+`${CLAUDE_PLUGIN_ROOT}` 를 가진다.
 
-```
-/plugin marketplace add a7garden/sawhorse
-/plugin install sawhorse@sawhorse
-```
+| 경로 | 방법 | 결과 |
+|---|---|---|
+| **앱** | 번들된 `plugin/` 을 `~/.claude/skills/sawhorse/` 로 materialize | `sawhorse@skills-dir` — 설치 단계 없이 자동 적재 |
+| **마켓플레이스** | `/plugin marketplace add a7garden/sawhorse` → `/plugin install sawhorse@sawhorse` | `sawhorse@sawhorse` |
+| **개발** | `claude --plugin-dir ./plugin` | 로컬 우선 |
 
-둘 다 설치해도 되지만, 같은 슬래시 커맨드가 두 벌 뜬다 — 확장 화면이 이 상태를 감지해
-알려준다.
+앱과 마켓플레이스를 둘 다 쓰면 앱이 설치를 감지하고 **사본을 만들지 않는다** —
+같은 명령이 두 벌 뜨는 일이 없다. Codex 는 플러그인 개념이 없어서 예외다: 앱이
+스킬마다 프롬프트 파일로 변환해 넣고(스크립트 참조는 materialize 된 절대경로로
+치환), 훅에 의존하는 기능(저널 기반 일지)은 Codex 에서 제한된다.
 
 ## 화면
 
@@ -126,7 +152,7 @@ npm run tauri build   # 배포 번들
   "workspace": { "folders": ["기록"], "files": [{ "src": "templates/기록.md", "dest": "템플릿/기록.md" }] },
   "settings": [{ "key": "ownerName", "type": "text", "label": "이름" }],
   "actions": [
-    { "id": "today", "label": "오늘 기록", "prompt": "/capture --today",
+    { "id": "today", "label": "오늘 기록", "prompt": "/{{ns}}:capture --today",
       "cwd": "workspace", "schedule": { "kind": "weekdays", "time": "09:00" } }
   ],
   "views": [
@@ -144,9 +170,15 @@ npm run tauri build   # 배포 번들
 
 표현력의 상한은 의도한 것이다. 확장이 못 하는 일은 스킬(에이전트 본문)이 한다.
 
-**만들려면**: `packs/starter/` 를 `~/.claude/sawhorse/packs/<내-팩>/` 으로 복사하고
+**만들려면**: `plugin/packs/starter/` 를 `~/.claude/sawhorse/packs/<내-팩>/` 으로 복사하고
 `id` 를 바꾼 뒤 확장 화면에서 새로고침. 같은 `id` 의 사용자 팩은 내장 팩을 덮어쓴다
 (내장 확장을 내 방식대로 고치는 경로다).
+
+팩 프롬프트의 네임스페이스는 직접 쓰지 않는다 — `/{{ns}}:capture` 처럼 예약 변수
+`{{ns}}` 를 쓰면 팩을 복사해 `id` 만 바꿔도 그대로 동작한다. 사용자 팩의 `{{ns}}` 는
+`sawhorse-<id>` 다: 앱이 사용자 팩을 별도 skills-dir 플러그인
+`~/.claude/skills/sawhorse-<id>/` 로 펼치기 때문에 **한 폴더 = 한 팩 = 한 플러그인**이고,
+내장 콘텐츠가 재설치돼도 사용자 팩은 휩쓸리지 않는다.
 
 동봉 확장:
 
@@ -263,6 +295,8 @@ npm run tauri build   # 배포 번들
 
 ## 훅
 
+훅은 Node 기반(`plugin/hooks/*.mjs`)이라 macOS·Windows·Linux 에서 똑같이 돈다.
+
 - **SessionEnd** — 세션 종료마다 `~/.claude/sawhorse/journal/YYYY-MM-DD.jsonl` 에 한 줄.
   일지/보고 스킬이 이 저널을 읽는다.
 - **PreToolUse** — `git push`, `svn commit/ci/import`, `git svn dcommit`, `hg push` 를
@@ -272,8 +306,9 @@ npm run tauri build   # 배포 번들
 
 | 항목 | 필수 | 비고 |
 |---|---|---|
-| macOS / Windows 10+ / Linux | 필수 | 앱은 Tauri 2. 훅 스크립트는 PowerShell용(Windows) |
-| Rust 도구체인 + Node 18+ | 앱 빌드에 필요 | 배포 번들을 쓰면 불필요 |
+| macOS / Windows 10+ / Linux | 필수 | 앱은 Tauri 2. 훅·엑셀 스크립트는 Node 기반 크로스플랫폼 |
+| Node 18+ | 훅·스크린샷·엑셀에 필요 | 앱 빌드에도 필요 |
+| Rust 도구체인 | 앱 빌드에 필요 | 배포 번들을 쓰면 불필요 |
 | Claude Code CLI | 권장 | 액션 실행에 필요. 없어도 앱은 뜬다 |
 | Git | 권장 | 코드 이슈 실행과 진단이 저장소 상태를 읽는다 |
 | herdr | 선택 | 잡을 사람이 볼 수 있는 터미널에서 돌리려면 |
@@ -302,7 +337,6 @@ npm run tauri build   # 배포 번들
 
 **morning 이 어제 할 일을 마음대로 옮기나요?** `오늘 할 일` 이 템플릿 초기 상태일 때만
 이월합니다. 미리 적어 둔 날은 건드리지 않고 브리핑에만 표시합니다.
-
 **push 마다 확인창이 떠요.** 회사 정책 반영입니다 — 원격 저장소 변경은 항상 1회 확인됩니다.
 개인 저장소에 자주 push 한다면 `/hooks` 에서 이 훅만 끄세요.
 
@@ -315,7 +349,7 @@ npm run tauri build   # 배포 번들
 - [멀티에이전트 협업·확장 설계](docs/superpowers/specs/2026-09-05-multi-agent-collaboration-design.md) — 승인 병합·로컬 검증·GitHub/RSS 커넥터
 - [Connector SDK 계약](docs/connector-sdk.md) — 제3자 connector의 manifest·권한·intent 계약
 - [대시보드 설계](docs/superpowers/specs/2026-09-04-dashboard-design.md) — 잡 실행기·herdr
-- [이슈·마일스톤 설계](docs/issues-milestones-design.md)
+- [이슈·마일스톤 설계](plugin/packs/si/skills/issues/references/issues-milestones-design.md)
 - [전체 설계 문서](docs/design.md)
 
 ## 라이선스
