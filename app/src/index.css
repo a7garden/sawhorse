@@ -138,3 +138,131 @@
   background: transparent;
 }
 
+
+/* Terminal — agent status indicators. The dot itself is colored by `data-tone`;
+ * a wrapper `.term-dot-pulse` adds a soft halo we animate so the inner dot stays steady. */
+.term-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.term-dot[data-tone="working"] { background: var(--primary); }
+.term-dot[data-tone="blocked"] { background: var(--warning); }
+.term-dot[data-tone="idle"] { background: var(--muted-foreground); opacity: 0.55; }
+.term-dot[data-tone="done"] { background: var(--success); }
+.term-dot[data-tone="focused"] {
+  background: var(--brand);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand) 30%, transparent);
+}
+.term-dot-pulse {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+}
+.term-dot-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  opacity: 0.55;
+  animation: term-dot-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+}
+.term-dot-pulse[data-tone="working"]::after { background: var(--primary); }
+.term-dot-pulse[data-tone="blocked"]::after { background: var(--warning); }
+@keyframes term-dot-pulse {
+  0% { transform: scale(0.8); opacity: 0.55; }
+  70% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* Terminal — slim left rail stripe on tab/agent rows gives a quiet visual spine. */
+.term-rail {
+  width: 3px;
+  border-radius: 999px;
+  background: var(--border);
+  align-self: stretch;
+}
+.term-rail[data-tone="working"] { background: var(--primary); }
+.term-rail[data-tone="blocked"] { background: var(--warning); }
+.term-rail[data-tone="focused"] { background: var(--brand); }
+
+/* Terminal — small numeric pill with colored bar (counts by status). */
+.term-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.term-counter-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+.term-counter-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+}
+.term-counter-label {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1;
+}
+
+/* Terminal — agent row hover reveals secondary actions without shifting layout. */
+.term-row-actions {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.term-row:hover .term-row-actions,
+.term-row:focus-within .term-row-actions {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .term-row-actions { opacity: 1; transition: none; }
+  .term-dot-pulse::after { animation: none; }
+}
+
+/* Slim scrollbar inside preview blocks so they don't compete with content. */
+.term-pre::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.term-pre::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+
+/* Terminal — agent kind chips (claude / codex / shell). The chip itself is a
+ * quiet badge so the status dot stays the loud element. */
+.term-kind-claude {
+  background: color-mix(in oklch, var(--brand) 14%, transparent);
+  color: var(--brand);
+  border: 1px solid color-mix(in oklch, var(--brand) 28%, transparent);
+}
+.term-kind-codex {
+  background: color-mix(in oklch, var(--success) 14%, transparent);
+  color: var(--success);
+  border: 1px solid color-mix(in oklch, var(--success) 30%, transparent);
+}
+.term-kind-shell {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+}
