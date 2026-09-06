@@ -142,7 +142,13 @@ export interface VaultNode {
 }
 
 export type RoutineName = "morning" | "lunch" | "evening";
-export type JobStatus = "queued" | "running" | "success" | "failed" | "cancelled" | "interrupted";
+export type JobStatus =
+  | "queued"
+  | "running"
+  | "success"
+  | "failed"
+  | "cancelled"
+  | "interrupted";
 
 export interface VaultCandidate {
   path: string;
@@ -241,7 +247,12 @@ export interface Diagnostics {
   claudeOk: boolean;
   claudeVersion?: string;
   herdr: HerdrDiag;
-  projects: { name: string; pathOk: boolean; gitOk: boolean; branchOk: boolean | null }[];
+  projects: {
+    name: string;
+    pathOk: boolean;
+    gitOk: boolean;
+    branchOk: boolean | null;
+  }[];
 }
 
 export interface MissedRoutine {
@@ -284,7 +295,13 @@ export interface PluginBundle {
 
 // ---------- 확장(pack) ----------
 
-export type SettingFieldType = "text" | "path" | "number" | "bool" | "select" | "table";
+export type SettingFieldType =
+  | "text"
+  | "path"
+  | "number"
+  | "bool"
+  | "select"
+  | "table";
 export type ScheduleKind = "daily" | "weekdays" | "once";
 export type ViewKind =
   | "notes"
@@ -461,7 +478,13 @@ export interface IngestionJob {
   key: string;
   projectId: string;
   outputPrefix: string;
-  status: "paused" | "running" | "waiting-review" | "applied" | "cancelled" | "failed";
+  status:
+    | "paused"
+    | "running"
+    | "waiting-review"
+    | "applied"
+    | "cancelled"
+    | "failed";
   stage: string;
   processedFiles: number;
   totalFiles: number;
@@ -649,9 +672,17 @@ export interface HerdrSnapshot {
 
 // ---------- 호스트 내장 작업 (에이전트가 승인 큐로 만드는 예약) ----------
 
-export interface TaskSchedule { kind: ScheduleKind; time: string; date?: string | null }
+export interface TaskSchedule {
+  kind: ScheduleKind;
+  time: string;
+  date?: string | null;
+}
 
-export interface TaskSource { kind: string; agent?: string | null; request?: string | null }
+export interface TaskSource {
+  kind: string;
+  agent?: string | null;
+  request?: string | null;
+}
 
 export interface TaskDef {
   id: string;
@@ -667,7 +698,10 @@ export interface TaskDef {
   updatedAt: string;
 }
 
-export interface TaskRow { def: TaskDef; lastRun: string | null }
+export interface TaskRow {
+  def: TaskDef;
+  lastRun: string | null;
+}
 
 export interface PendingTaskRequest {
   id: string;
@@ -679,7 +713,10 @@ export interface PendingTaskRequest {
   duplicateOf: string | null;
 }
 
-export interface RejectedRequest { id: string; error: string }
+export interface RejectedRequest {
+  id: string;
+  error: string;
+}
 
 export interface TasksView {
   builtin: TaskRow[];
@@ -689,7 +726,11 @@ export interface TasksView {
 }
 // ---------- 협업(멀티에이전트 통합 레인) ----------
 
-export type CollabSessionStatus = "active" | "paused" | "readyToFinalize" | "finalized";
+export type CollabSessionStatus =
+  | "active"
+  | "paused"
+  | "readyToFinalize"
+  | "finalized";
 export type CollabSessionMode = "direct" | "isolated";
 export type CollabDriver = "claude" | "codex";
 
@@ -906,7 +947,9 @@ export interface CollabVerifyCheckHttp {
   url: string;
 }
 
-export type CollabVerifyCheck = CollabVerifyCheckCommand | CollabVerifyCheckHttp;
+export type CollabVerifyCheck =
+  | CollabVerifyCheckCommand
+  | CollabVerifyCheckHttp;
 
 export interface CollabVerifyProfile {
   checks: CollabVerifyCheck[];
@@ -981,6 +1024,7 @@ export interface ExtensionManifest {
 }
 
 export interface ExtensionBundle {
+  enabled?: boolean;
   manifest: ExtensionManifest;
   source: ExtensionSourceKind;
   dir: string;
@@ -1109,4 +1153,15 @@ export interface RemoteOperation {
 
 export interface RemoteOperationsView {
   operations: RemoteOperation[];
+}
+
+export interface GitHubRepository {
+  id: string;
+  name: string;
+  fullName: string;
+  description: string | null;
+  private: boolean;
+  archived: boolean;
+  language: string | null;
+  updatedAt: string;
 }
