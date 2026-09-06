@@ -5,7 +5,13 @@ import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
 import { preprocessObsidianMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
-import type { AgentStatus, Job, JobRunner, JobStatus, ProgressEntry } from "@/lib/types";
+import type {
+  AgentStatus,
+  Job,
+  JobRunner,
+  JobStatus,
+  ProgressEntry,
+} from "@/lib/types";
 
 // ---------- text / time formatting ----------
 
@@ -91,12 +97,14 @@ export function agentBadgeVariant(s: AgentStatus): BadgeVariant {
 
 /// 실행중 herdr 잡은 에이전트 상태를 우선 보여준다 (승인 대기가 가장 중요한 정보).
 export function jobStatusLabel(j: Job): string {
-  if (j.status === "running" && j.agentStatus) return AGENT_STATUS_KO[j.agentStatus];
+  if (j.status === "running" && j.agentStatus)
+    return AGENT_STATUS_KO[j.agentStatus];
   return JOB_STATUS_KO[j.status];
 }
 
 export function jobStatusVariant(j: Job): BadgeVariant {
-  if (j.status === "running" && j.agentStatus) return agentBadgeVariant(j.agentStatus);
+  if (j.status === "running" && j.agentStatus)
+    return agentBadgeVariant(j.agentStatus);
   return jobBadgeVariant(j.status);
 }
 
@@ -177,7 +185,8 @@ export function PriorityBadge({ p }: { p: string }) {
 // ---------- progress entries ----------
 
 export function entryText(e: ProgressEntry): string {
-  if (e.kind === "result") return e.summary ?? e.text ?? (e.isError ? "비정상 종료" : "완료");
+  if (e.kind === "result")
+    return e.summary ?? e.text ?? (e.isError ? "비정상 종료" : "완료");
   return e.text ?? e.summary ?? (e.tool ? `도구: ${e.tool}` : e.kind);
 }
 
@@ -185,27 +194,37 @@ export function entryText(e: ProgressEntry): string {
 
 export function PageHeader({
   title,
-  desc,
   children,
 }: {
   title: string;
-  desc?: string;
   children?: ReactNode;
 }) {
   return (
     <div className="sticky top-0 z-20 flex min-h-[58px] flex-wrap items-center gap-2 border-b bg-background/90 px-4 py-3 backdrop-blur-xl lg:px-5">
       <div className="mr-auto">
-        <h1 className="text-[15px] font-bold leading-tight tracking-tight">{title}</h1>
-        {desc && <p className="mt-0.5 text-xs text-muted-foreground">{desc}</p>}
+        <h1 className="text-[15px] font-bold leading-tight tracking-tight">
+          {title}
+        </h1>
       </div>
       {children}
     </div>
   );
 }
 
-export function Empty({ children, className }: { children: ReactNode; className?: string }) {
+export function Empty({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className={cn("py-8 text-center text-xs text-muted-foreground", className)}>
+    <div
+      className={cn(
+        "py-8 text-center text-xs text-muted-foreground",
+        className,
+      )}
+    >
       {children}
     </div>
   );
@@ -243,12 +262,24 @@ const MD_CLASSES = [
   "[&_a]:text-primary [&_a]:underline",
 ].join(" ");
 
-export function MarkdownView({ src, className }: { src: string; className?: string }) {
+export function MarkdownView({
+  src,
+  className,
+}: {
+  src: string;
+  className?: string;
+}) {
   return (
     <div
-      className={cn("text-[13px] leading-relaxed [&>*:first-child]:mt-0", MD_CLASSES, className)}
+      className={cn(
+        "text-[13px] leading-relaxed [&>*:first-child]:mt-0",
+        MD_CLASSES,
+        className,
+      )}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{preprocessObsidianMd(src)}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+        {preprocessObsidianMd(src)}
+      </ReactMarkdown>
     </div>
   );
 }

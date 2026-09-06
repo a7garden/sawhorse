@@ -2,6 +2,8 @@
 
 React + TypeScript + Tauri 2. SDD 코어는 앱에 내장되며 기존 팩과 협업 기능도 유지한다.
 
+작업대 위젯·작업과 예약·확장·전체 검색의 역할과 데이터 호환성은 [작업 중심 앱 구조](../docs/architecture/product-organization.md)를 참고한다.
+
 ```bash
 npm ci
 npm run tauri dev
@@ -38,5 +40,21 @@ npm run tauri build
 실행·가져오기 상태는 `.sawhorse/runtime.sqlite`, package 선택은 `.sawhorse/extensions.lock.json`이 정본이다.
 사용자 환경 설정은 기존 `~/.claude/sawhorse/config.json`을 사용한다.
 테스트는 임시 폴더와 명시적 브라우저 체험을 사용하며 실제 사용자 볼트를 변경하지 않는다.
+
+## GitHub OAuth 설정
+
+GitHub 확장의 계정 연결은 OAuth Device Flow를 사용한다. GitHub에서 OAuth App을 등록하고
+`Enable Device Flow`를 켠 뒤, 공개 Client ID를 빌드 또는 실행 환경에 지정한다. Client Secret은
+사용하지 않는다.
+
+```bash
+SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID npm run tauri dev
+SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID npm run tauri build
+```
+
+Client ID는 빌드 시 앱에 포함되므로 배포 빌드는 반드시 이 값을 지정해야 한다. 비공개 저장소
+탐색·가져오기를 위해 `read:user repo` 범위를 요청하며, 실제 확장 동작은 호스트 브로커가 허용한
+읽기 요청과 Git clone으로 제한한다. 기존 버전에서 저장한 PAT는 연결 해제 전까지 읽을 수 있지만,
+새 로그인 화면에서는 PAT 입력을 제공하지 않는다.
 
 [전체 설계](../docs/architecture/sdd-workbench.md) · [API 계약](../docs/architecture/sdd-contract.md)

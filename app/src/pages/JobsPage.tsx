@@ -115,7 +115,7 @@ export default function JobsPage() {
 
   return (
     <div>
-      <PageHeader title="작업" desc="큐와 실행 상태를 감시하고 로그·리포트를 확인합니다.">
+      <PageHeader title="실행 기록">
         <Button size="sm" variant="outline" onClick={() => void refreshJobs()}>
           <RefreshCw /> 새로고침
         </Button>

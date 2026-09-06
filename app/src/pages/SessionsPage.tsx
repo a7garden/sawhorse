@@ -216,7 +216,7 @@ export default function SessionsPage() {
 
   return (
     <div>
-      <PageHeader title="세션" desc="에이전트 레인을 병렬로 돌리고 변경 후보를 모읍니다.">
+      <PageHeader title="세션">
         <Button size="sm" disabled={(projects?.registered.length ?? 0) === 0} onClick={() => setCreateOpen(true)}>
           <Plus /> 세션 만들기
         </Button>

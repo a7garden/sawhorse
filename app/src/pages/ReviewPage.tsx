@@ -211,7 +211,7 @@ export default function ReviewPage() {
 
   return (
     <div>
-      <PageHeader title="변경 검토" desc="에이전트가 제출한 변경 후보를 승인하고 통합을 추적합니다.">
+      <PageHeader title="변경 검토">
         <Button
           size="sm"
           variant="outline"

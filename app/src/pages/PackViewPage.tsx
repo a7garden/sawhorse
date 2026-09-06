@@ -186,7 +186,7 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
       const note = await api.readNote(row.path);
       setBody(note.markdown);
     } catch (e) {
-      setBody(`> 노트를 읽지 못했습니다: ${String(e)}`);
+      setBody(`> 문서를 읽지 못했습니다: ${String(e)}`);
     }
   }
 
@@ -217,7 +217,7 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title={view.label} desc={`${pack.name} 확장 · ${rows.length}건`}>
+      <PageHeader title={view.label}>
         {extensionPackageId && <Select aria-label="확장 프로젝트" className="h-8 w-40" value={projectId ?? ""} onChange={(event) => setProjectId(event.target.value || null)}><option value="">프로젝트 선택</option>{extensionProjects.map((id) => <option key={id} value={id}>{id}</option>)}</Select>}
         {actions.map((a) => (
           <Button key={a.id} size="sm" variant="outline" disabled={Boolean(extensionPackageId && !projectId)} title={a.description} onClick={() => void run(a, null)}>
@@ -272,7 +272,7 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
           {err && <Empty>{err}</Empty>}
           {!err && visible.length === 0 && (
             <Empty className="px-8">
-              {rows.length === 0 ? view.empty || "표시할 노트가 없습니다." : "검색 결과가 없습니다."}
+              {rows.length === 0 ? view.empty || "표시할 문서가 없습니다." : "검색 결과가 없습니다."}
             </Empty>
           )}
           {visible.length > 0 && <DeclarativeRows kind={view.type} rows={visible} columns={columns} groupBy={view.groupBy} selected={sel} onOpen={(row) => void openRow(row)} />}
@@ -306,7 +306,7 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
                   ))}
                 </dl>
               )}
-              {body == null ? <Empty>노트를 읽는 중…</Empty> : <MarkdownView src={body} />}
+              {body == null ? <Empty>문서를 읽는 중…</Empty> : <MarkdownView src={body} />}
             </div>
           </aside>
         )}

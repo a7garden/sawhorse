@@ -109,7 +109,7 @@ export default function HomePage() {
 
   return (
     <div>
-      <PageHeader title="홈" desc="루틴과 이슈 워크플로, 실행 상태를 한눈에 봅니다." />
+      <PageHeader title="홈" />
       <div className="space-y-4 p-4">
 
         {problems.length > 0 && (
@@ -305,12 +305,12 @@ export default function HomePage() {
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
               <CardTitle className="text-[13px]">볼트 현황</CardTitle>
-              <Button size="xs" variant="ghost" onClick={() => setPage("vault")}>
-                볼트 관리 <ArrowRight />
+              <Button size="xs" variant="ghost" onClick={() => setPage("docs")}>
+                문서 보기 <ArrowRight />
               </Button>
             </CardHeader>
             <CardContent className="space-y-2 text-xs">
-              <button onClick={() => setPage("vault")} className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-accent">
+              <button onClick={() => setPage("docs")} className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-accent">
                 <span className="text-muted-foreground">미승격 항목</span>
                 <span className="text-lg font-bold tabular-nums">{inboxCount}</span>
               </button>

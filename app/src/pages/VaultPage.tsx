@@ -81,7 +81,7 @@ export default function VaultPage() {
 
   return (
     <div>
-      <PageHeader title="볼트" desc="볼트 구조를 검사하고 인박스(미승격) 항목을 정리합니다.">
+      <PageHeader title="볼트">
         <Button size="sm" variant="outline" disabled={scanning} onClick={() => void scan()}>
           <RefreshCw /> 다시 검사
         </Button>
@@ -165,13 +165,13 @@ export default function VaultPage() {
 
         <Card className="self-start">
           <CardHeader className="pb-1">
-            <CardTitle className="text-[13px]">{view ? view.title : "노트 미리보기"}</CardTitle>
+            <CardTitle className="text-[13px]">{view ? view.title : "문서 미리보기"}</CardTitle>
           </CardHeader>
           <CardContent>
             {view ? (
               <MarkdownView src={view.md} className="selectable" />
             ) : (
-              <Empty>검사 결과나 목록에서 노트를 열어보세요.</Empty>
+              <Empty>검사 결과나 목록에서 문서를 열어보세요.</Empty>
             )}
           </CardContent>
         </Card>

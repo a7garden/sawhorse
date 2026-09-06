@@ -131,7 +131,7 @@ export default function DocsPage() {
     <div className="flex h-full">
       <aside className="flex w-60 shrink-0 flex-col border-r">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-xs font-semibold">볼트 문서</span>
+          <span className="text-xs font-semibold">문서</span>
           <Button size="xs" variant="ghost" onClick={() => void refreshTree()} aria-label="트리 새로고침">
             <RefreshCw />
           </Button>

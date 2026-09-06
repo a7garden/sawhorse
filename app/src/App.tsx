@@ -1,26 +1,20 @@
 import { Fragment, useEffect, useState } from "react";
 import { getVersion } from "@tauri-apps/api/app";
 import {
-  CalendarClock,
   CalendarDays,
   KanbanSquare,
-  BookOpen,
   FolderGit2,
-  Workflow,
-  ClipboardCheck,
   LayoutDashboard,
-  Network,
   Newspaper,
-  Rss,
-  SquareTerminal,
   Terminal,
   Settings,
   Monitor,
   Moon,
   Sun,
   Puzzle,
-  Braces,
-  FolderInput,
+  CircleDot,
+  FileText,
+  Github,
 } from "lucide-react";
 import { useApp, parseViewPage, viewPageId, type PageId } from "@/lib/store";
 import { icon as packIcon, type IconComponent } from "@/lib/icons";
@@ -29,7 +23,8 @@ import { cn } from "@/lib/utils";
 import appIcon from "../src-tauri/icons/icon.svg";
 import WorkbenchPage from "@/features/workbench/WorkbenchPage";
 import { isWorkbenchPreview } from "@/features/workbench/api";
-import HomePage from "@/pages/HomePage";
+import { AppToolbar } from "@/components/AppToolbar";
+import { useCoreExtensions } from "@/lib/core-extensions";
 import ImprovePage from "@/pages/ImprovePage";
 import JobsPage from "@/pages/JobsPage";
 import TasksPage from "@/pages/TasksPage";
@@ -40,7 +35,6 @@ import SessionsPage from "@/pages/SessionsPage";
 import ReviewPage from "@/pages/ReviewPage";
 import SourcesPage from "@/pages/SourcesPage";
 import ReadingPage from "@/pages/ReadingPage";
-import VaultPage from "@/pages/VaultPage";
 import PacksPage from "@/pages/PacksPage";
 import PackViewPage from "@/pages/PackViewPage";
 import TerminalPage from "@/pages/TerminalPage";
@@ -48,44 +42,56 @@ import SchemaStudioPage from "@/features/schema-studio/SchemaStudioPage";
 import WorkflowStudioPage from "@/features/workflow-studio/WorkflowStudioPage";
 import OnboardingPage from "@/pages/OnboardingPage";
 
+import GitHubExtensionPage from "@/pages/GitHubExtensionPage";
+import { DetailNavigation } from "@/components/DetailNavigation";
 import SetupWizard from "@/pages/SetupWizard";
 
 /** 사이드바 섹션 — 호스트가 섹션 목록·순서를 소유하고, 팩 뷰는 group 태그로 섹션을 고른다. */
-const SECTIONS: { id: string; label: string }[] = [
-  { id: "work", label: "작업" },
-  { id: "execution", label: "실행" },
-  { id: "vault", label: "볼트" },
-  { id: "reading", label: "정보" },
-  { id: "automation", label: "자동화" },
+const SECTIONS = [
+  { id: "work", label: "작업공간" },
+  { id: "vault", label: "문서" },
+  { id: "reading", label: "확장 기능" },
 ];
-
-const TOP_NAV: { id: PageId; label: string; icon: IconComponent; group: string }[] = [
-  // 작업 — 매일 하는 일
+const TOP_NAV: {
+  id: PageId;
+  label: string;
+  icon: IconComponent;
+  group: string;
+}[] = [
   { id: "overview", label: "작업대", icon: LayoutDashboard, group: "work" },
-  { id: "board", label: "백로그", icon: KanbanSquare, group: "work" },
+  { id: "board", label: "작업", icon: KanbanSquare, group: "work" },
   { id: "calendar", label: "캘린더", icon: CalendarDays, group: "work" },
   { id: "projects", label: "프로젝트", icon: FolderGit2, group: "work" },
-  // 실행 — 일을 돌리는 장치
-  { id: "workflows", label: "워크플로", icon: Workflow, group: "execution" },
-  { id: "harness", label: "에이전트 하네스", icon: Workflow, group: "execution" },
-  { id: "review", label: "검토", icon: ClipboardCheck, group: "execution" },
-  { id: "jobs", label: "실행 큐", icon: SquareTerminal, group: "execution" },
-  { id: "sessions", label: "세션", icon: Network, group: "execution" },
-  { id: "terminal", label: "터미널", icon: Terminal, group: "execution" },
-  // 볼트 — 내용과 그 구조
-  { id: "knowledge", label: "기록과 지식", icon: BookOpen, group: "vault" },
-  { id: "schemas", label: "스키마", icon: Braces, group: "vault" },
-  { id: "onboarding", label: "프로젝트 가져오기", icon: FolderInput, group: "vault" },
-  // 정보 — 받아서 읽는 것
-  { id: "sources", label: "소스", icon: Rss, group: "reading" },
+  { id: "issues", label: "이슈", icon: CircleDot, group: "work" },
+  { id: "terminal", label: "실행", icon: Terminal, group: "work" },
+  { id: "docs", label: "문서", icon: FileText, group: "vault" },
   { id: "reading", label: "읽을거리", icon: Newspaper, group: "reading" },
-  // 자동화 — 시간이 일을 시키는 것
-  { id: "home", label: "루틴", icon: CalendarClock, group: "automation" },
-  { id: "tasks", label: "예약", icon: CalendarClock, group: "automation" },
+  { id: "github", label: "GitHub", icon: Github, group: "reading" },
+  { id: "packs", label: "확장 관리", icon: Puzzle, group: "reading" },
+];
+const PAGE_GROUPS = [
+  {
+    root: "board",
+    tabs: [
+      { id: "board", label: "작업 보드" },
+      { id: "todos", label: "오늘 할 일" },
+      { id: "task-library", label: "실행할 작업" },
+      { id: "tasks", label: "예약과 반복" },
+    ],
+  },
+  {
+    root: "terminal",
+    tabs: [
+      { id: "terminal", label: "에이전트 터미널" },
+      { id: "harness", label: "작업 실행" },
+      { id: "sessions", label: "협업 세션" },
+      { id: "jobs", label: "실행 기록" },
+      { id: "review", label: "검토" },
+    ],
+  },
 ];
 
 const BOTTOM_NAV: { id: PageId; label: string; icon: IconComponent }[] = [
-  { id: "packs", label: "확장", icon: Puzzle },
   { id: "settings", label: "설정", icon: Settings },
 ];
 
@@ -94,7 +100,6 @@ const NATIVE: Record<string, () => JSX.Element> = {
   issues: ImprovePage,
   todos: TodosPage,
   docs: DocsPage,
-  vault: VaultPage,
 };
 
 const THEME_LABEL: Record<Theme, string> = {
@@ -108,7 +113,9 @@ export default function App() {
   const setPage = useApp((s) => s.setPage);
   const init = useApp((s) => s.init);
   const nav = useApp((s) => s.nav);
-  const missedCount = useApp((s) => s.missed.length);
+  const coreExtensions = useCoreExtensions();
+  const groups = PAGE_GROUPS;
+  const group = groups.find((g) => g.tabs.some((t) => t.id === page));
   const brokenCount = useApp((s) => s.packs?.broken.length ?? 0);
   const [version, setVersion] = useState("");
   const theme = useTheme((s) => s.theme);
@@ -132,6 +139,12 @@ export default function App() {
       case "knowledge":
       case "projects":
         return <WorkbenchPage key={page} view={page} />;
+      case "github":
+        return <GitHubExtensionPage />;
+      case "docs":
+        return <DocsPage />;
+      case "todos":
+        return <TodosPage />;
       case "schemas":
         return <SchemaStudioPage />;
       case "workflows":
@@ -139,7 +152,8 @@ export default function App() {
       case "onboarding":
         return <OnboardingPage />;
       case "home":
-        return <HomePage />;
+      case "task-library":
+        return <TasksPage mode="library" />;
       case "jobs":
         return <JobsPage />;
       case "terminal":
@@ -148,26 +162,31 @@ export default function App() {
         return <SessionsPage />;
       case "review":
         return <ReviewPage />;
+      case "issues":
+        return <ImprovePage />;
       case "sources":
-        return <SourcesPage />;
+        return <SourcesPage scope="rss" />;
       case "reading":
         return <ReadingPage />;
       case "packs":
         return <PacksPage />;
       case "tasks":
-        return <TasksPage />;
+        return <TasksPage mode="schedules" />;
       case "settings":
         return <SettingsPage />;
     }
     const parsed = parseViewPage(page);
-    if (!parsed) return <HomePage />;
+    if (!parsed) return <WorkbenchPage view="overview" />;
     const entry = nav.find(
       (n) => n.packId === parsed.packId && n.viewId === parsed.viewId,
     );
-    if (!entry) return <HomePage />;
+    if (!entry) return <WorkbenchPage view="overview" />;
+    // 볼트 문서 뷰는 모두 하나의 문서 탐색기 안에서 전환한다. 팩이 기여한
+    // 일지·개념·점검을 각각 독립 페이지처럼 보이게 하지 않는다.
+    if (entry.group === "vault") return <DocsPage />;
     if (entry.type === "native") {
       const Native = NATIVE[entry.component];
-      return Native ? <Native /> : <HomePage />;
+      return Native ? <Native /> : <WorkbenchPage view="overview" />;
     }
     return <PackViewPage packId={entry.packId} viewId={entry.viewId} />;
   })();
@@ -183,6 +202,25 @@ export default function App() {
     Icon: IconComponent;
     badge?: number;
   }) {
+    const parsedPage = parseViewPage(page);
+    const activePackView = parsedPage
+      ? nav.find(
+          (entry) =>
+            entry.packId === parsedPage.packId &&
+            entry.viewId === parsedPage.viewId,
+        )
+      : null;
+    const active =
+      page === id ||
+      group?.root === id ||
+      (id === "docs" && activePackView?.group === "vault") ||
+      (
+        {
+          workflows: "packs",
+          schemas: "settings",
+          onboarding: "projects",
+        } as Record<string, string>
+      )[page] === id;
     return (
       <button
         onClick={() => {
@@ -195,7 +233,7 @@ export default function App() {
         }}
         className={cn(
           "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
-          page === id
+          active
             ? "bg-secondary text-secondary-foreground"
             : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
         )}
@@ -222,8 +260,18 @@ export default function App() {
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
           {SECTIONS.map(({ id, label }, index) => {
-            const core = TOP_NAV.filter((n) => n.group === id);
-            const packViews = nav.filter((n) => n.group === id);
+            const core = TOP_NAV.filter(
+              (n) =>
+                n.group === id &&
+                (n.id !== "reading" || coreExtensions.feeds) &&
+                (n.id !== "github" || coreExtensions.githubInstalled),
+            );
+            const packViews = nav.filter(
+              (n) =>
+                n.group === id &&
+                n.group !== "vault" &&
+                !["issues", "todos", "docs"].includes(n.component),
+            );
             if (core.length === 0 && packViews.length === 0) return null;
             return (
               <Fragment key={id}>
@@ -242,7 +290,6 @@ export default function App() {
                     id={n.id}
                     label={n.label}
                     Icon={n.icon}
-                    badge={n.id === "home" ? missedCount : undefined}
                   />
                 ))}
                 {packViews.map((n) => (
@@ -257,13 +304,21 @@ export default function App() {
             );
           })}
 
-          {nav.some((n) => !SECTIONS.some((s) => s.id === n.group)) && (
+          {nav.some(
+            (n) =>
+              !["issues", "todos", "docs"].includes(n.component) &&
+              !SECTIONS.some((s) => s.id === n.group),
+          ) && (
             <Fragment>
               <div className="mb-1 mt-4 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground">
                 기타
               </div>
               {nav
-                .filter((n) => !SECTIONS.some((s) => s.id === n.group))
+                .filter(
+                  (n) =>
+                    !["issues", "todos", "docs"].includes(n.component) &&
+                    !SECTIONS.some((s) => s.id === n.group),
+                )
                 .map((n) => (
                   <NavButton
                     key={`${n.packId}:${n.viewId}`}
@@ -306,14 +361,47 @@ export default function App() {
           </button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 overflow-y-auto bg-[var(--workspace)]">
-        {isWorkbenchPreview && (
-          <div className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-xs text-amber-900">
-            브라우저 체험 · 예제 데이터는 이 브라우저에만 저장됩니다. 실제
-            에이전트와 파일은 데스크톱 앱에서 연결됩니다.
+      <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--workspace)]">
+        <AppToolbar />
+        <DetailNavigation />
+        {group && (
+          <div
+            className="flex shrink-0 flex-wrap gap-1 border-b bg-background px-5 py-2"
+            aria-label="화면 선택"
+          >
+            {group.tabs.map((tab) => (
+              <button
+                key={tab.id}
+                aria-current={page === tab.id ? "page" : undefined}
+                className={cn(
+                  "rounded-md px-3 py-2 text-xs",
+                  page === tab.id
+                    ? "bg-secondary font-semibold"
+                    : "text-muted-foreground hover:bg-accent",
+                )}
+                onClick={() => {
+                  if (
+                    window.dispatchEvent(
+                      new Event("sawhorse:navigate", { cancelable: true }),
+                    )
+                  )
+                    setPage(tab.id);
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
         )}
-        {body}
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          {isWorkbenchPreview && (
+            <div className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-xs text-amber-900">
+              브라우저 체험 · 예제 데이터는 이 브라우저에만 저장됩니다. 실제
+              에이전트와 파일은 데스크톱 앱에서 연결됩니다.
+            </div>
+          )}
+          {body}
+        </div>
       </main>
       <SetupWizard />
     </div>
