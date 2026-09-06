@@ -1,20 +1,26 @@
 mod agents;
+mod changes;
 mod collab;
 mod commands;
 mod config;
 mod detect;
 mod extensions;
 mod herdr;
+mod ingestion;
 mod jobs;
 mod notes;
 mod packs;
 mod plugin;
 mod scheduler;
+mod schemas;
+mod sdlc;
+mod sdlc_harness;
 mod state;
 mod tasks;
 mod transcript;
 mod vault;
 mod watcher;
+mod workflow;
 mod workspace;
 
 use parking_lot::Mutex;
@@ -162,6 +168,21 @@ pub fn run() {
                 }
             }
 
+            // Durable SDD runs and bounded child requests share the desktop lifetime.
+            tauri::async_runtime::spawn(async {
+                let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
+                interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+                loop {
+                    interval.tick().await;
+                    if let Err(error) = sdlc_harness::tick().await {
+                        // An unconfigured vault is normal during first-run setup.
+                        if !config::load_view().vault_path.is_empty() {
+                            eprintln!("SDD harness: {error}");
+                        }
+                    }
+                }
+            });
+
             app.manage(state);
             app.manage(mgr);
 
@@ -205,6 +226,65 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            changes::changeset_preview,
+            changes::changeset_apply,
+            changes::changeset_rollback,
+            changes::changeset_get,
+            ingestion::ingestion_start,
+            ingestion::ingestion_list,
+            ingestion::ingestion_get,
+            ingestion::ingestion_resume,
+            ingestion::ingestion_pause,
+            ingestion::ingestion_cancel,
+            ingestion::ingestion_apply,
+            workflow::workflow_catalog,
+            workflow::workflow_validate,
+            workflow::workflow_simulate,
+            workflow::workflow_activate,
+            workflow::workflow_draft_list,
+            workflow::workflow_draft_save,
+            workflow::workflow_draft_delete,
+            workflow::workflow_publish,
+            workflow::workflow_export,
+            workflow::workflow_import,
+            workflow::ledger::workflow_instance_start,
+            workflow::ledger::workflow_instance_get,
+            workflow::ledger::workflow_instance_list,
+            workflow::ledger::workflow_instance_command,
+            workflow::ledger::workflow_instance_mark_stale,
+            workflow::ledger::workflow_instance_cancel,
+            workflow::ledger::workflow_instance_events,
+            schemas::schema_validate,
+            schemas::schema_catalog,
+            schemas::schema_draft_list,
+            schemas::schema_draft_save,
+            schemas::schema_publish,
+            schemas::schema_activate,
+            schemas::schema_active,
+            schemas::schema_scan,
+            schemas::schema_plan,
+            schemas::schema_changeset_preview,
+            sdlc::sdd_snapshot,
+            sdlc::workflow_snapshot,
+            sdlc::workflow_command,
+            sdlc::artifact_read,
+            sdlc::artifact_write,
+            sdlc::sdd_initialize,
+            sdlc::sdd_save_project,
+            sdlc::sdd_save_work,
+            sdlc::sdd_transition,
+            sdlc::sdd_read_document,
+            sdlc::sdd_write_document,
+            sdlc::sdd_save_event,
+            sdlc::sdd_delete_event,
+            sdlc::sdd_search,
+            sdlc_harness::sdd_launch,
+            sdlc_harness::sdd_runs,
+            sdlc_harness::sdd_refresh_run,
+            sdlc_harness::sdd_stop_run,
+            sdlc_harness::sdd_run_output,
+            sdlc_harness::sdd_continue_run,
+            sdlc_harness::sdd_run_key,
             commands::get_config,
             commands::save_config,
             commands::diagnostics,
@@ -253,6 +333,13 @@ pub fn run() {
             commands::collab_inbox_tick,
             // 확장·소스(connector)
             commands::extensions_list,
+            extensions::package::extension_package_install,
+            extensions::package::extension_package_list,
+            extensions::package::extension_package_resolve,
+            extensions::package::extension_package_activate,
+            extensions::package::extension_package_lock,
+            extensions::package::extension_package_export,
+            extensions::package::extension_package_authorize,
             commands::sources_upsert_instance,
             commands::sources_list_instances,
             commands::sources_refresh,

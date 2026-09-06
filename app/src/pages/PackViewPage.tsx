@@ -7,7 +7,9 @@ import { useApp } from "@/lib/store";
 import type { NoteRow, PackAction, PackView, QueryResult, ViewColumn } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { Empty, MarkdownView, PageHeader, fmtDate, statusBadgeVariant } from "./common";
@@ -53,6 +55,40 @@ function Cell({ row, col }: { row: NoteRow; col: ViewColumn }) {
   return <span className={cn(!text && "text-muted-foreground")}>{text || "-"}</span>;
 }
 
+function DeclarativeRows({
+  kind,
+  rows,
+  columns,
+  groupBy,
+  selected,
+  onOpen,
+}: {
+  kind: PackView["type"];
+  rows: NoteRow[];
+  columns: ViewColumn[];
+  groupBy: string;
+  selected: NoteRow | null;
+  onOpen: (row: NoteRow) => void;
+}) {
+  if (kind === "board") {
+    const groups = new Map<string, NoteRow[]>();
+    for (const row of rows) {
+      const key = asList(row.fields[groupBy]).join(", ") || "미분류";
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    }
+    return <div className="flex min-w-max gap-3 p-4">{[...groups].map(([name, items]) => <section key={name} className="w-64 rounded-lg bg-muted/60 p-3"><h3 className="mb-2 text-xs font-semibold">{name} · {items.length}</h3>{items.map((row) => <button key={row.path} className="mb-2 w-full rounded-md border bg-background p-3 text-left text-xs hover:border-primary" onClick={() => onOpen(row)}><strong className="block">{row.title}</strong>{columns.slice(1, 3).map((column, index) => <span key={index} className="mt-1 block text-muted-foreground">{column.label}: {cellText(row, column) || "-"}</span>)}</button>)}</section>)}</div>;
+  }
+  if (kind === "metrics") {
+    const grouped = new Map<string, number>();
+    for (const row of rows) { const value = groupBy ? asList(row.fields[groupBy]).join(", ") || "미분류" : "전체"; grouped.set(value, (grouped.get(value) ?? 0) + 1); }
+    return <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">{[...grouped].map(([label, value]) => <Card key={label}><CardContent className="p-5"><strong className="block text-3xl">{value}</strong><span className="text-xs text-muted-foreground">{label}</span></CardContent></Card>)}</div>;
+  }
+  if (["document", "form", "timeline", "graph"].includes(kind)) {
+    return <div className="space-y-2 p-4">{rows.map((row, index) => <button key={row.path} className={cn("grid w-full gap-2 rounded-md border p-3 text-left hover:bg-accent", kind === "timeline" && "grid-cols-[80px_1fr]", selected?.path === row.path && "border-primary")} onClick={() => onOpen(row)}>{kind === "timeline" && <time className="text-[10px] text-muted-foreground">{fmtDate(row.mtimeMs)}</time>}<span><strong className="block text-sm">{row.title}</strong><span className="text-xs text-muted-foreground">{kind === "graph" ? `${index > 0 ? "↳" : "●"} ${columns.map((column) => cellText(row, column)).filter(Boolean).join(" · ")}` : row.rel}</span></span></button>)}</div>;
+  }
+  return <Table><TableHeader><TableRow>{columns.map((column, index) => <TableHead key={`${column.field}-${column.source}-${index}`} style={column.width ? { width: column.width } : undefined}>{column.label}</TableHead>)}</TableRow></TableHeader><TableBody>{rows.map((row) => <TableRow key={row.path} onClick={() => onOpen(row)} className={cn("cursor-pointer", selected?.path === row.path && "bg-secondary")}>{columns.map((column, index) => <TableCell key={`${column.field}-${column.source}-${index}`}><Cell row={row} col={column} /></TableCell>)}</TableRow>)}</TableBody></Table>;
+}
+
 export default function PackViewPage({ packId, viewId }: { packId: string; viewId: string }) {
   const packs = useApp((s) => s.packs);
   const refreshJobs = useApp((s) => s.refreshJobs);
@@ -73,19 +109,46 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
   const [sel, setSel] = useState<NoteRow | null>(null);
   const [body, setBody] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [extensionProjects, setExtensionProjects] = useState<string[]>([]);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const extensionPackageId = packId.startsWith("x-") ? packId.slice(2) : null;
+
+  useEffect(() => {
+    if (!extensionPackageId) {
+      setExtensionProjects([]);
+      setProjectId(null);
+      return;
+    }
+    let alive = true;
+    void api.extensionLock().then((lock) => {
+      if (!alive) return;
+      const projects = Object.entries(lock.projects)
+        .filter(([, packages]) => packages.some((item) => item.id === extensionPackageId))
+        .map(([id]) => id)
+        .sort();
+      setExtensionProjects(projects);
+      setProjectId((current) => current && projects.includes(current) ? current : (projects[0] ?? null));
+    }).catch((error) => alive && setErr(String(error)));
+    return () => { alive = false; };
+  }, [extensionPackageId]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setErr(null);
+    if (extensionPackageId && !projectId) {
+      setResult(null);
+      setLoading(false);
+      return;
+    }
     try {
-      setResult(await api.queryPackView(packId, viewId));
+      setResult(await api.queryPackView(packId, viewId, projectId));
     } catch (e) {
       setErr(String(e));
       setResult(null);
     } finally {
       setLoading(false);
     }
-  }, [packId, viewId]);
+  }, [extensionPackageId, packId, projectId, viewId]);
 
   useEffect(() => {
     setSel(null);
@@ -132,10 +195,10 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
     const params: Record<string, unknown> = {};
     const id = row ? asList(row.fields.id)[0] : undefined;
     if (id) params.ids = [id];
-    const project = row ? asList(row.fields.project)[0] : undefined;
+    const project = row ? asList(row.fields.projectId ?? row.fields.project)[0] : undefined;
     if (project) params.project = project;
     try {
-      await api.runPackAction(packId, action.id, params);
+      await api.runPackAction(packId, action.id, params, projectId);
       await refreshJobs();
       setPage("jobs");
     } catch (e) {
@@ -155,8 +218,9 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
   return (
     <div className="flex h-full flex-col">
       <PageHeader title={view.label} desc={`${pack.name} 확장 · ${rows.length}건`}>
+        {extensionPackageId && <Select aria-label="확장 프로젝트" className="h-8 w-40" value={projectId ?? ""} onChange={(event) => setProjectId(event.target.value || null)}><option value="">프로젝트 선택</option>{extensionProjects.map((id) => <option key={id} value={id}>{id}</option>)}</Select>}
         {actions.map((a) => (
-          <Button key={a.id} size="sm" variant="outline" title={a.description} onClick={() => void run(a, null)}>
+          <Button key={a.id} size="sm" variant="outline" disabled={Boolean(extensionPackageId && !projectId)} title={a.description} onClick={() => void run(a, null)}>
             <Play /> {a.label}
           </Button>
         ))}
@@ -164,6 +228,8 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
           <RefreshCw className={cn("size-3", loading && "animate-spin")} /> 새로고침
         </Button>
       </PageHeader>
+
+      {extensionPackageId && extensionProjects.length === 0 && <div className="border-b bg-warning/10 px-4 py-2 text-xs">이 확장을 활성화하고 권한을 승인한 프로젝트가 없습니다.</div>}
 
       <div className="flex flex-wrap items-center gap-2 border-b px-4 py-2">
         <div className="relative">
@@ -209,34 +275,7 @@ export default function PackViewPage({ packId, viewId }: { packId: string; viewI
               {rows.length === 0 ? view.empty || "표시할 노트가 없습니다." : "검색 결과가 없습니다."}
             </Empty>
           )}
-          {visible.length > 0 && (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {columns.map((c, i) => (
-                    <TableHead key={`${c.field}-${c.source}-${i}`} style={c.width ? { width: c.width } : undefined}>
-                      {c.label}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((r) => (
-                  <TableRow
-                    key={r.path}
-                    onClick={() => void openRow(r)}
-                    className={cn("cursor-pointer", sel?.path === r.path && "bg-secondary")}
-                  >
-                    {columns.map((c, i) => (
-                      <TableCell key={`${c.field}-${c.source}-${i}`}>
-                        <Cell row={r} col={c} />
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
+          {visible.length > 0 && <DeclarativeRows kind={view.type} rows={visible} columns={columns} groupBy={view.groupBy} selected={sel} onOpen={(row) => void openRow(row)} />}
         </div>
 
         {sel && (

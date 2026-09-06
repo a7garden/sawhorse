@@ -1,89 +1,42 @@
-# sawhorse 워크벤치 (Tauri 2 데스크톱 앱)
+# Sawhorse 데스크톱
 
-제품 본체이자 호스트. 작업공간을 만들고, 확장을 관리하고, 에이전트에 스킬을 설치하고,
-잡을 herdr 세션 또는 백그라운드에서 돌린다.
-
-## 역할
-
-| 화면 | 하는 일 | 출처 |
-|---|---|---|
-| 홈 | 예약 카드(놓친 예약 알림 — 자동 보상 실행 없음), 오늘 할 일, 실행 중 잡, 진단 배너 | 호스트 |
-| 작업 | 실행 큐(herdr 세션 또는 백그라운드), 실시간 타임라인, 승인 대기 표시, 리포트·로그, 취소 | 호스트 |
-| 터미널 | herdr 워크스페이스·탭·에이전트 트리, 승인 대기 세션, 새 탭, 액션 실행 | 호스트 |
-| 확장 | 팩 켜기/끄기, 에이전트 설치 상태와 설치/제거, 팩 설정 폼, SKILL.md 뷰어, 작업공간 반영 | 호스트 |
-| 설정 | config.json 폼 편집(작업공간·사업·예약·실행 옵션·herdr), 진단, 로그인 시 자동 시작 | 호스트 |
-| 이슈·할 일·문서·볼트 | 노트 워크플로 (네이티브 화면) | SI 확장 |
-| 마일스톤·개념 / 기록·노트 | 선언형 뷰 (`PackViewPage` 하나가 렌더) | SI / starter 확장 |
-
-사이드바는 고정 목록이 아니라 **레지스트리에서 만들어진다**: 코어 3 → 팩 기여 → 코어 2.
-팩을 끄면 그 화면이 사라진다.
-
-## 설정 정본
-
-`~/.claude/sawhorse/config.json` — 플러그인(setup·issues 스킬, improve-xlsx.mjs)과
-같은 파일. 앱 전용 키는 `dashboard`·`packs` 블록에 들어가고 플러그인은 모르는 키를
-무시한다. 앱은 알려진 키만 병합하고 나머지(키 순서 포함)를 보존한다.
-
-## 실행 방법
+React + TypeScript + Tauri 2. SDD 코어는 앱에 내장되며 기존 팩과 협업 기능도 유지한다.
 
 ```bash
-npm install
-npm run dev          # 프론트만 (Tauri 커맨드는 없음 — 타입/레이아웃 확인용)
-npm run build        # tsc --noEmit + vite build
-npm run tauri dev    # 앱 실행
-npm run tauri build  # 배포 번들
+npm ci
+npm run tauri dev
+npm run build
+npx playwright install chromium
+npm run test:e2e
+(cd src-tauri && cargo test --lib)
+npm run tauri build
 ```
 
-```bash
-cd src-tauri && cargo test    # 86 테스트
-```
+프론트엔드만 실행할 때 `npm run dev` 후 `?preview=1`로 브라우저 체험을 연다.
+체험 데이터는 브라우저의 localStorage에만 저장된다. 데스크톱 오류를 예제로 숨기지 않는다.
 
-요구사항: Rust 도구체인, Node 18+. 액션을 실제로 돌리려면 Claude Code CLI 가 필요하고,
-herdr 실행을 쓰려면 [herdr](https://herdr.dev) 서버가 떠 있어야 한다(없으면 백그라운드 폴백).
+| 위치 | 역할 |
+|---|---|
+| src/features/workbench | 작업대·산출물 편집·동적 workflow UI·runtime ledger·SDD 호환 IPC |
+| src/features/workflow-studio | 노드/산출물/하위 workflow 편집·검증·시뮬레이션·발행 |
+| src/features/schema-studio | 문서 타입/필드/경로/템플릿 편집과 migration preview/apply |
+| src/pages/OnboardingPage.tsx | snapshot 기반 프로젝트 가져오기·재개·근거·충돌 검토 |
+| src-tauri/src/sdlc.rs | Markdown 스키마·CRUD·검토 결정·의존성·문서 충돌·검색 |
+| src-tauri/src/sdlc_harness.rs | Herdr 실행·복구·출력 기록·제어·하위 실행 요청 |
+| src-tauri/src/workflow | 정의·검증·중첩 실행 엔진·SQLite instance/node/event 장부 |
+| src-tauri/src/schemas | schema draft/publish/activate와 필드·경로·링크 migration |
+| src-tauri/src/changes | hash/CAS 기반 preview·journal·apply·rollback·recovery |
+| src-tauri/src/extensions/package.rs | package v2 설치·resolve·lock·권한·portable export |
+| src-tauri/src/ingestion.rs | 입력 snapshot·evidence·checkpoint·문서 초안·merge base |
+| src-tauri/src/herdr.rs | Herdr CLI 어댑터 |
+| src-tauri/src/collab | 기존 협업 세션·검토·통합 |
+| src-tauri/src/packs.rs | 선택적 워크플로 팩 |
+| ../plugin/skills/sdd | 하네스 에이전트의 산출물 규약 |
+| tests | 브라우저 사용자 흐름 검증 |
 
-## 구조
+코어 스키마의 정본은 vault의 `.sawhorse/schema.json`, 발행 schema/workflow JSON과 Markdown이다.
+실행·가져오기 상태는 `.sawhorse/runtime.sqlite`, package 선택은 `.sawhorse/extensions.lock.json`이 정본이다.
+사용자 환경 설정은 기존 `~/.claude/sawhorse/config.json`을 사용한다.
+테스트는 임시 폴더와 명시적 브라우저 체험을 사용하며 실제 사용자 볼트를 변경하지 않는다.
 
-```
-src/          React
-  App.tsx       레지스트리 기반 사이드바 + 라우팅
-  pages/        HomePage JobsPage TerminalPage PacksPage PackViewPage SettingsPage
-                ImprovePage TodosPage DocsPage VaultPage SetupWizard
-  lib/          api(커맨드 계약) store(zustand) types icons theme markdown
-src-tauri/    Rust
-  packs        확장 레지스트리 — 매니페스트·활성·액션·뷰·예약 엔트리
-  notes        선언형 노트 질의 엔진 (뷰의 데이터 소스)
-  agents       에이전트 감지 + 스킬 설치/제거 (주종 역전의 실체)
-  workspace    작업공간 프로비저닝 (에이전트 없이)
-  config       config.json 로드/저장 (모르는 키 보존)
-  vault        이슈 노트·할 일·트리·승인 쓰기 (SI 네이티브 화면용)
-  jobs herdr transcript scheduler watcher state commands plugin
-```
-
-## 설계 결정 (요약)
-
-- **호스트는 도메인을 모른다.** `notes.rs` 는 `status`·`사업` 같은 필드의 뜻을 모르고
-  프론트매터를 그대로 싣는다. 라벨·순서·묶는 기준은 팩 매니페스트가 정한다.
-- **팩은 선언만 한다.** 코드를 들고 오면 앱 버전마다 깨지고 신뢰 경계가 생긴다.
-  표현력의 상한(`views[].type: notes` 하나)은 의도한 것이고, 못 하는 일은 스킬이 한다.
-- **기존 파일은 덮지 않는다.** 프로비저닝도, 스킬 설치도. 내용이 다르면 `수정됨` 으로
-  표시하고 남긴다 — 해시 장부를 두면 사용자가 고친 파일을 조용히 덮어쓴다.
-- 백엔드가 모든 도메인 로직 소유(Rust), 웹뷰는 뷰만. command + event 로 통신.
-- 잡 실행기는 둘이고 타임라인 모양은 같다.
-  - **herdr** (기본, 가능할 때): 잡마다 워크스페이스에 탭을 만들고 대화형 `claude` 를
-    돌린다. 세션 UUID 를 앱이 만들어 `--session-id` 로 넘기므로 트랜스크립트를 tail 해
-    진행을 읽는다. 프롬프트는 입력창에 타이핑하지 않고 argv 로 넘긴다.
-    성패는 herdr 에이전트 상태로 판정한다 — 트랜스크립트는 타임라인용이다.
-  - **백그라운드**: `claude -p … --output-format stream-json`.
-  - 잡은 FIFO 입장. 백그라운드는 1개 직렬, herdr 는 `maxParallel`(기본 1)까지.
-- 승인 대기(`blocked`)는 새 잡 상태가 아니라 `Job.agentStatus` 다. 잡은 여전히 실행 중이고,
-  사람이 herdr 에서 답하면 그대로 이어진다. 터미널 화면이 이걸 맨 위에 모아 보여준다.
-- 승인 게이트: 대시보드 체크도 "사람이 직접 누름"으로 취급하며, 볼트 체크와 동일한
-  frontmatter 쓰기(approve/approved/status)를 한다.
-- 예약 놓침은 자동 보상 실행하지 않고 홈 알림 카드로 확인 후 실행. `decide()` 는 순수
-  함수로 고정되어 있고, 예약 엔트리 목록만 팩에서 만들어 넣는다.
-- 창을 닫아도 트레이로 상주(예약 유지). 종료는 트레이 메뉴에서.
-- `permissionMode` 기본값 `bypassPermissions` — 무인 루틴에 필요. 안전망은 스킬 자체 규칙
-  (승인 게이트·범위 게이트·SVN/원격 금지·경로 한정 커밋)과 block-push 훅이다.
-
-설계 문서: [워크벤치 플랫폼](../docs/superpowers/specs/2026-09-05-workbench-platform-design.md) ·
-[대시보드](../docs/superpowers/specs/2026-09-04-dashboard-design.md)
+[전체 설계](../docs/architecture/sdd-workbench.md) · [API 계약](../docs/architecture/sdd-contract.md)

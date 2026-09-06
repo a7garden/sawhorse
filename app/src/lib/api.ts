@@ -45,6 +45,9 @@ import type {
   InboundListView,
   RemoteOperationsView,
   SourcesInstancesView,
+  InstalledExtensionPackage,
+  ExtensionLock,
+  IngestionJob,
 } from "./types";
 
 export const api = {
@@ -105,18 +108,54 @@ export const api = {
 
   // 확장(pack)
   listPacks: (): Promise<PackRegistryView> => invoke("list_packs"),
+  listExtensionPackages: (): Promise<InstalledExtensionPackage[]> =>
+    invoke("extension_package_list"),
+  resolveExtensionPackage: (packageId: string, version: string): Promise<InstalledExtensionPackage[]> =>
+    invoke("extension_package_resolve", { packageId, version }),
+  installExtensionPackage: (input: {
+    kind: "local-directory" | "local-file" | "git" | "https";
+    location: string;
+    commit?: string | null;
+    subdir?: string | null;
+  }): Promise<InstalledExtensionPackage> => invoke("extension_package_install", { input }),
+  extensionLock: (): Promise<ExtensionLock> => invoke("extension_package_lock"),
+  exportExtensionPackage: (
+    packageId: string,
+    version: string,
+    digest: string,
+  ): Promise<import("./types").PortableExtensionPackage> =>
+    invoke("extension_package_export", { packageId, version, digest }),
+  activateExtensionPackage: (input: {
+    projectId: string;
+    packageId: string;
+    version: string;
+    grants: Record<string, string[]>;
+  }): Promise<ExtensionLock> => invoke("extension_package_activate", { input }),
+  ingestionStart: (input: {
+    projectId: string;
+    sources: Array<{ path: string; label: string }>;
+    outputPrefix: string;
+    autoApply: boolean;
+  }): Promise<IngestionJob> => invoke("ingestion_start", { input }),
+  ingestionList: (): Promise<IngestionJob[]> => invoke("ingestion_list"),
+  ingestionResume: (id: string, maxFiles = 200): Promise<IngestionJob> =>
+    invoke("ingestion_resume", { id, maxFiles }),
+  ingestionPause: (id: string): Promise<IngestionJob> => invoke("ingestion_pause", { id }),
+  ingestionCancel: (id: string): Promise<IngestionJob> => invoke("ingestion_cancel", { id }),
+  ingestionApply: (id: string): Promise<IngestionJob> => invoke("ingestion_apply", { id }),
   listNav: (): Promise<NavEntry[]> => invoke("list_nav"),
   setPackEnabled: (id: string, on: boolean): Promise<ConfigView> =>
     invoke("set_pack_enabled", { id, on }),
   savePackSettings: (packId: string, values: Record<string, unknown>): Promise<ConfigView> =>
     invoke("save_pack_settings", { packId, values }),
-  queryPackView: (packId: string, viewId: string): Promise<QueryResult> =>
-    invoke("query_pack_view", { packId, viewId }),
+  queryPackView: (packId: string, viewId: string, projectId?: string | null): Promise<QueryResult> =>
+    invoke("query_pack_view", { packId, viewId, projectId: projectId ?? null }),
   runPackAction: (
     packId: string,
     actionId: string,
     params: Record<string, unknown> = {},
-  ): Promise<Job> => invoke("run_pack_action", { packId, actionId, params }),
+    projectId?: string | null,
+  ): Promise<Job> => invoke("run_pack_action", { packId, actionId, params, projectId: projectId ?? null }),
   readPackSkill: (packId: string, name: string): Promise<string> =>
     invoke("read_pack_skill", { packId, name }),
 

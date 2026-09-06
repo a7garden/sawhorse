@@ -6,9 +6,11 @@ import {
   Download,
   FolderOpen,
   HardDriveDownload,
+  PencilRuler,
   Play,
   RefreshCw,
   Trash2,
+  Workflow,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
@@ -17,6 +19,8 @@ import type {
   InstallReport,
   PackAgentStatus,
   PackInfo,
+  InstalledExtensionPackage,
+  ExtensionLock,
   SettingField,
   SkillState,
   SkillStatus,
@@ -29,6 +33,38 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Empty, MarkdownView, PageHeader } from "./common";
+import { workflowApi } from "@/features/workbench/api";
+import type { WorkflowDefinition } from "@/features/workbench/types";
+
+type CatalogCategory = "all" | "feature" | "workflow";
+
+const CATALOG_TABS: { id: CatalogCategory; label: string }[] = [
+  { id: "all", label: "전체" },
+  { id: "feature", label: "기능" },
+  { id: "workflow", label: "워크플로우" },
+];
+
+function WorkflowCard({ wf, onOpenStudio }: { wf: WorkflowDefinition; onOpenStudio: () => void }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Workflow className="size-4 shrink-0 text-muted-foreground" /> {wf.label}
+          <Badge variant="outline" className="ml-auto">v{wf.version}</Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {wf.description && <p className="line-clamp-2 text-xs text-muted-foreground">{wf.description}</p>}
+        <p className="text-[11px] text-muted-foreground">
+          단계 {wf.nodes.length} · 전이 {wf.edges.length} · 앱에서 발행
+        </p>
+        <Button size="xs" variant="outline" onClick={onOpenStudio}>
+          <PencilRuler className="size-3" /> 스튜디오에서 열기
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 const SKILL_STATE_KO: Record<SkillState, string> = {
   installed: "설치됨",
@@ -70,13 +106,96 @@ export default function PacksPage() {
   const [busy, setBusy] = useState(false);
   const [skillDoc, setSkillDoc] = useState<{ name: string; body: string } | null>(null);
   const [draft, setDraft] = useState<Record<string, unknown> | null>(null);
+  const [installed, setInstalled] = useState<InstalledExtensionPackage[]>([]);
+  const [extensionLock, setExtensionLock] = useState<ExtensionLock | null>(null);
+  const [sourceKind, setSourceKind] = useState<"local-directory" | "local-file" | "git" | "https">("local-directory");
+  const [sourceLocation, setSourceLocation] = useState("");
+  const [sourceCommit, setSourceCommit] = useState("");
+  const [extensionProject, setExtensionProject] = useState("default");
+  const [category, setCategory] = useState<CatalogCategory>("all");
+  const [selWfId, setSelWfId] = useState<string | null>(null);
+  const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
 
   const list = packs?.packs ?? [];
+  const selWf = workflows.find((w) => w.id === selWfId) ?? null;
   const sel = list.find((p) => p.id === selId) ?? list[0] ?? null;
 
   useEffect(() => {
     void refreshAgents();
+    void Promise.all([api.listExtensionPackages(), api.extensionLock()])
+      .then(([packages, lock]) => { setInstalled(packages); setExtensionLock(lock); })
+      .catch(() => undefined);
   }, [refreshAgents]);
+
+  useEffect(() => {
+    let alive = true;
+    workflowApi
+      .catalog()
+      .then((rows) => { if (alive) setWorkflows(rows); })
+      .catch(() => { if (alive) setWorkflows([]); });
+    return () => { alive = false; };
+  }, []);
+
+  async function refreshExtensionPackages() {
+    const [packages, lock] = await Promise.all([api.listExtensionPackages(), api.extensionLock()]);
+    setInstalled(packages);
+    setExtensionLock(lock);
+  }
+
+  async function installExtensionPackage() {
+    if (!sourceLocation.trim()) return;
+    setBusy(true); setMsg(null);
+    try {
+      const installedPackage = await api.installExtensionPackage({
+        kind: sourceKind,
+        location: sourceLocation.trim(),
+        commit: sourceKind === "git" ? sourceCommit.trim() : null,
+      });
+      await refreshExtensionPackages();
+      setMsg(`${installedPackage.manifest.name} ${installedPackage.manifest.version}을 검증해 설치했습니다.`);
+    } catch (error) { setMsg(String(error)); } finally { setBusy(false); }
+  }
+
+  async function activateExtensionPackage(extension: InstalledExtensionPackage) {
+    setBusy(true); setMsg(null);
+    try {
+      const closure = await api.resolveExtensionPackage(
+        extension.manifest.id,
+        extension.manifest.version,
+      );
+      const grants = Object.fromEntries(
+        closure.map((item) => [item.manifest.id, item.manifest.permissions]),
+      );
+      const lock = await api.activateExtensionPackage({
+        projectId: extensionProject,
+        packageId: extension.manifest.id,
+        version: extension.manifest.version,
+        grants,
+      });
+      setExtensionLock(lock);
+      await refreshPacks();
+      setMsg(`${extension.manifest.name}을 ${extensionProject} 프로젝트에 정확한 digest로 고정했습니다.`);
+    } catch (error) { setMsg(String(error)); } finally { setBusy(false); }
+  }
+
+  async function exportExtensionPackage(extension: InstalledExtensionPackage) {
+    setBusy(true); setMsg(null);
+    try {
+      const portable = await api.exportExtensionPackage(
+        extension.manifest.id,
+        extension.manifest.version,
+        extension.digest,
+      );
+      const blob = new Blob([JSON.stringify(portable, null, 2)], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `${extension.manifest.id}-${extension.manifest.version}.sawhorse-package.json`;
+      anchor.click();
+      URL.revokeObjectURL(href);
+      setMsg(`${extension.manifest.name}의 검증 가능한 portable package를 내보냈습니다.`);
+    } catch (error) { setMsg(String(error)); } finally { setBusy(false); }
+  }
 
   const loadStatus = useCallback(async (id: string) => {
     try {
@@ -170,7 +289,7 @@ export default function PacksPage() {
     setBusy(true);
     setMsg(null);
     try {
-      await api.runPackAction(pack.id, actionId, {});
+      await api.runPackAction(pack.id, actionId, {}, pack.id.startsWith("x-") ? extensionProject : null);
       await refreshJobs();
       setPage("jobs");
     } catch (e) {
@@ -194,7 +313,7 @@ export default function PacksPage() {
     <div className="flex h-full flex-col">
       <PageHeader
         title="확장"
-        desc="이 앱이 할 줄 아는 일은 전부 확장이 정합니다. 켜고 끄면 화면과 예약이 함께 따라옵니다."
+        desc="이 앱이 할 수 있는 일과 일하는 방식을 여기서 얻습니다. 기능은 화면·액션·스킬을, 워크플로우는 작업의 흐름을 앱에 넣습니다."
       >
         <Button size="sm" variant="outline" disabled={busy} onClick={() => void provision()}>
           <HardDriveDownload /> 작업공간에 반영
@@ -203,6 +322,22 @@ export default function PacksPage() {
           <RefreshCw className="size-3" /> 새로고침
         </Button>
       </PageHeader>
+
+      <div className="flex gap-1 border-b px-4 py-2">
+        {CATALOG_TABS.map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setCategory(t.id)}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent",
+              category === t.id && "bg-secondary",
+            )}
+          >
+            {t.label}
+            {t.id === "workflow" && workflows.length > 0 ? ` ${workflows.length}` : ""}
+          </button>
+        ))}
+      </div>
 
       {msg && <div className="border-b bg-muted px-4 py-1.5 text-xs">{msg}</div>}
 
@@ -221,6 +356,46 @@ export default function PacksPage() {
         </div>
       )}
 
+      <div className="border-b p-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">통합 확장 패키지</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-2 md:grid-cols-[150px_1fr_220px_auto]">
+              <Select value={sourceKind} onChange={(event) => setSourceKind(event.target.value as typeof sourceKind)}>
+                <option value="local-directory">로컬 폴더</option><option value="local-file">패키지 파일</option><option value="git">Git commit</option><option value="https">HTTPS</option>
+              </Select>
+              <Input value={sourceLocation} onChange={(event) => setSourceLocation(event.target.value)} placeholder="폴더, 파일, Git 또는 HTTPS 주소" />
+              {sourceKind === "git" ? <Input value={sourceCommit} onChange={(event) => setSourceCommit(event.target.value)} placeholder="40자리 commit" /> : <span />}
+              <Button disabled={busy || !sourceLocation.trim()} onClick={() => void installExtensionPackage()}><HardDriveDownload /> 검증·설치</Button>
+            </div>
+            <div className="flex items-center gap-2"><span className="text-xs text-muted-foreground">적용 프로젝트</span><Input className="h-8 w-44" value={extensionProject} onChange={(event) => setExtensionProject(event.target.value)} /></div>
+            {installed.length === 0 ? <p className="text-xs text-muted-foreground">설치한 v2 패키지가 없습니다.</p> : <div className="grid gap-2 lg:grid-cols-2">{installed.map((item) => {
+              const locked = extensionLock?.projects[extensionProject]?.some((entry) => entry.id === item.manifest.id && entry.digest === item.digest);
+              return <div key={`${item.manifest.id}-${item.digest}`} className="rounded-md border p-3 text-xs"><div className="flex items-center gap-2"><strong>{item.manifest.name}</strong><Badge variant="outline">{item.manifest.version}</Badge>{locked && <Badge variant="success">고정됨</Badge>}<Button className="ml-auto" size="xs" variant="ghost" disabled={busy} onClick={() => void exportExtensionPackage(item)}><Download className="size-3" /> 내보내기</Button><Button size="xs" disabled={busy || locked} title={`요청 권한: ${item.manifest.permissions.join(", ") || "없음"}`} onClick={() => void activateExtensionPackage(item)}>권한 승인 및 적용</Button></div><p className="mt-1 font-mono text-[10px] text-muted-foreground">sha256:{item.digest.slice(0, 16)}… · {item.source}</p>{item.manifest.permissions.length > 0 && <p className="mt-1">권한: {item.manifest.permissions.join(", ")}</p>}</div>;
+            })}</div>}
+          </CardContent>
+        </Card>
+      </div>
+
+      {category === "workflow" && (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {workflows.length === 0 && (
+            <Empty className="pt-16">
+              발행된 워크플로우가 없습니다. 워크플로 스튜디오에서 만들거나 확장 패키지로 가져올 수 있습니다.
+            </Empty>
+          )}
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {workflows.map((wf) => (
+              <WorkflowCard
+                key={`${wf.id}@${wf.version}`}
+                wf={wf}
+                onOpenStudio={() => setPage("workflows")}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {category !== "workflow" && (
       <div className="flex min-h-0 flex-1">
         <div className="w-56 shrink-0 overflow-y-auto border-r p-2">
           {list.length === 0 && <Empty>설치된 확장이 없습니다.</Empty>}
@@ -229,7 +404,7 @@ export default function PacksPage() {
             return (
               <button
                 key={p.id}
-                onClick={() => setSelId(p.id)}
+                onClick={() => { setSelId(p.id); setSelWfId(null); }}
                 className={cn(
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent",
                   sel?.id === p.id && "bg-secondary",
@@ -243,11 +418,37 @@ export default function PacksPage() {
                   <span className="block truncate text-[10px] text-muted-foreground">
                     v{p.version} · {p.source === "builtin" ? "내장" : "사용자"}
                   </span>
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    화면 {p.views.length} · 액션 {p.actions.length} · 스킬 {p.skills.length}
+                  </span>
                 </span>
                 {!p.enabled && <Badge variant="outline">꺼짐</Badge>}
               </button>
             );
           })}
+          {category === "all" && workflows.length > 0 && (
+            <div className="mt-3 border-t pt-2">
+              <div className="px-2 pb-1 text-[10px] font-semibold text-muted-foreground">워크플로우</div>
+              {workflows.map((wf) => (
+                <button
+                  key={wf.id}
+                  onClick={() => setSelWfId(wf.id)}
+                  className={cn(
+                    "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent",
+                    selWfId === wf.id && "bg-secondary",
+                  )}
+                >
+                  <Workflow className="size-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] font-medium">{wf.label}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      v{wf.version} · 단계 {wf.nodes.length}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
           {agents.length > 0 && (
             <div className="mt-3 border-t pt-2">
               <div className="px-2 pb-1 text-[10px] font-semibold text-muted-foreground">에이전트</div>
@@ -263,8 +464,13 @@ export default function PacksPage() {
         </div>
 
         <div className="min-w-0 flex-1 overflow-y-auto p-4">
-          {!sel && <Empty>왼쪽에서 확장을 선택하세요.</Empty>}
-          {sel && (
+          {selWf && (
+            <div className="mx-auto max-w-xl">
+              <WorkflowCard wf={selWf} onOpenStudio={() => setPage("workflows")} />
+            </div>
+          )}
+          {!selWf && !sel && <Empty>왼쪽에서 확장을 선택하세요.</Empty>}
+          {!selWf && sel && (
             <div className="space-y-3">
               <Card>
                 <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">
@@ -463,6 +669,7 @@ export default function PacksPage() {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

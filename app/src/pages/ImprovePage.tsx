@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileSpreadsheet, Hammer, Inbox, PencilRuler } from "lucide-react";
+import { Hammer, Inbox, PencilRuler } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import { extractSection } from "@/lib/markdown";
@@ -27,7 +27,7 @@ import {
   WARN_TEXT,
 } from "./common";
 
-type RunKind = "design" | "implement" | "excel";
+type RunKind = "design" | "implement";
 
 export default function ImprovePage() {
   const config = useApp((s) => s.config);
@@ -112,7 +112,7 @@ export default function ImprovePage() {
   }
 
   async function run(kind: RunKind) {
-    if (kind !== "excel" && selectedProjects.length !== 1) {
+    if (selectedProjects.length !== 1) {
       setMsg("설계·실행할 이슈는 한 사업에서만 선택하세요.");
       return;
     }
@@ -121,16 +121,14 @@ export default function ImprovePage() {
     try {
       await api.enqueueJob({
         kind,
-        project: kind === "excel" ? undefined : selectedProject,
-        ids: kind === "excel" ? undefined : selNotes.map((n) => n.id),
+        project: selectedProject,
+        ids: selNotes.map((n) => n.id),
       });
       await refreshJobs();
       setMsg(
         kind === "design"
           ? "설계 작업을 큐에 등록했습니다."
-          : kind === "implement"
-            ? "실행 작업을 큐에 등록했습니다."
-            : "엑셀 작업을 큐에 등록했습니다.",
+          : "실행 작업을 큐에 등록했습니다.",
       );
       setSelected(new Set());
     } catch (e) {
@@ -192,15 +190,6 @@ export default function ImprovePage() {
           }
         >
           <Hammer /> 실행
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy !== null}
-          onClick={() => void run("excel")}
-          title="이슈 기반 엑셀 보고서를 생성합니다."
-        >
-          <FileSpreadsheet /> 엑셀
         </Button>
       </PageHeader>
 

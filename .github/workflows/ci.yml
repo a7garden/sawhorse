@@ -20,6 +20,8 @@ jobs:
         run: claude plugin validate ./plugin
       - name: Hook tests (node:test)
         run: node --test plugin/hooks/hooks.test.mjs
+      - name: Validate bundled extension packages
+        run: node plugin/extension-packages/validate.mjs
   version:
     name: version consistency
     runs-on: ubuntu-latest
@@ -70,6 +72,12 @@ jobs:
       - run: npm ci
       - name: Frontend build (tsc + vite)
         run: npm run build
+      - name: Install browser for workbench checks
+        if: runner.os == 'Linux'
+        run: npx playwright install --with-deps chromium
+      - name: Workbench browser flows
+        if: runner.os == 'Linux'
+        run: npx playwright test
       - name: cargo test
         working-directory: app/src-tauri
         run: cargo test

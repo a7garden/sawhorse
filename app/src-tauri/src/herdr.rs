@@ -113,14 +113,18 @@ fn spawn_command(bin: &str, args: &[&str]) -> tokio::process::Command {
         c = tokio::process::Command::new(bin);
     }
     c.args(args);
+    c.kill_on_drop(true);
     c
 }
 
 impl Herdr {
     pub fn new(cfg: &HerdrCfg) -> Self {
-        Self {
-            cfg: cfg.sanitized(),
+        let mut cfg = cfg.sanitized();
+        // Desktop launches often have a shorter PATH than interactive shells.
+        if let Some(path) = crate::detect::resolve_bin(&cfg.bin) {
+            cfg.bin = path.to_string_lossy().into_owned();
         }
+        Self { cfg }
     }
 
     pub fn cfg(&self) -> &HerdrCfg {

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "sawhorse 대시보드",
+  "productName": "Sawhorse 작업대",
   "identifier": "com.a7garden.sawhorse",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -11,9 +11,9 @@
   "app": {
     "windows": [
       {
-        "title": "sawhorse 대시보드",
-        "width": 1180,
-        "height": 780,
+        "title": "Sawhorse 작업대",
+        "width": 1440,
+        "height": 900,
         "minWidth": 960,
         "minHeight": 620
       }

@@ -85,7 +85,18 @@ pub struct SettingField {
 
 pub const SETTING_TYPES: [&str; 6] = ["text", "path", "number", "bool", "select", "table"];
 pub const PARAM_TYPES: [&str; 4] = ["text", "list", "select", "project"];
-pub const VIEW_KINDS: [&str; 2] = ["notes", "native"];
+pub const VIEW_KINDS: [&str; 10] = [
+    "notes",
+    "native",
+    "table",
+    "board",
+    "form",
+    "document",
+    "timeline",
+    "review-queue",
+    "graph",
+    "metrics",
+];
 pub const SCHEDULE_KINDS: [&str; 2] = ["daily", "weekdays"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -794,7 +805,11 @@ mod tests {
             "sawhorse",
             "내장 팩의 네임스페이스는 sawhorse"
         );
-        assert_eq!(namespace(&si), "sawhorse-si", "사용자 팩은 자기 네임스페이스");
+        assert_eq!(
+            namespace(&si),
+            "sawhorse-si",
+            "사용자 팩은 자기 네임스페이스"
+        );
         assert_eq!(reg.broken.len(), 1);
         assert!(reg.broken[0].error.contains("파싱"));
 

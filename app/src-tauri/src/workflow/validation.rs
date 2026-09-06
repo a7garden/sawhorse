@@ -1,0 +1,615 @@
+use std::collections::{HashMap, HashSet, VecDeque};
+
+use super::model::*;
+
+const ALLOWED_ROLES: [&str; 5] = ["research", "planner", "implementer", "verifier", "reviewer"];
+
+fn valid_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+}
+
+fn valid_version(value: &str) -> bool {
+    let core = value.split_once('-').map(|part| part.0).unwrap_or(value);
+    let pieces: Vec<_> = core.split('.').collect();
+    pieces.len() == 3
+        && pieces
+            .iter()
+            .all(|piece| !piece.is_empty() && piece.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+fn issue(
+    issues: &mut Vec<ValidationIssue>,
+    severity: IssueSeverity,
+    code: &str,
+    path: impl Into<String>,
+    message: impl Into<String>,
+) {
+    issues.push(ValidationIssue {
+        severity,
+        code: code.into(),
+        path: path.into(),
+        message: message.into(),
+    });
+}
+
+fn validate_artifact_path(path: &str) -> Result<(), &'static str> {
+    if path.is_empty() || path.starts_with('/') || path.starts_with('\\') {
+        return Err("artifact path는 볼트 상대경로여야 합니다");
+    }
+    if path.contains("..")
+        || path
+            .split(['/', '\\'])
+            .any(|part| part.is_empty() || part == ".")
+    {
+        return Err("artifact path에 빈 경로, . 또는 ..를 사용할 수 없습니다");
+    }
+    let mut without_allowed = path.replace("{workId}", "work");
+    without_allowed = without_allowed.replace("{projectId}", "project");
+    if without_allowed.contains('{') || without_allowed.contains('}') {
+        return Err("지원하지 않는 artifact path placeholder입니다");
+    }
+    let first = without_allowed
+        .split(['/', '\\'])
+        .next()
+        .unwrap_or_default();
+    if first == ".sawhorse" {
+        return Err("내부 .sawhorse 영역에는 artifact를 둘 수 없습니다");
+    }
+    Ok(())
+}
+
+pub fn validate(definition: &WorkflowDefinition) -> ValidationReport {
+    let mut issues = Vec::new();
+    if definition.definition_version != DEFINITION_VERSION {
+        issue(
+            &mut issues,
+            IssueSeverity::Error,
+            "definition-version",
+            "definitionVersion",
+            format!(
+                "지원하지 않는 definitionVersion입니다: {}",
+                definition.definition_version
+            ),
+        );
+    }
+    if !valid_id(&definition.id) {
+        issue(
+            &mut issues,
+            IssueSeverity::Error,
+            "invalid-id",
+            "id",
+            "workflow id는 영문, 숫자, -, _, .만 사용할 수 있습니다",
+        );
+    }
+    if definition.label.trim().is_empty() {
+        issue(
+            &mut issues,
+            IssueSeverity::Error,
+            "missing-label",
+            "label",
+            "표시 이름이 필요합니다",
+        );
+    }
+    if !valid_version(&definition.version) {
+        issue(
+            &mut issues,
+            IssueSeverity::Error,
+            "invalid-version",
+            "version",
+            "workflow version은 x.y.z 형식이어야 합니다",
+        );
+    }
+
+    let mut artifact_roles = HashSet::new();
+    let mut artifact_paths = HashSet::new();
+    for (index, artifact) in definition.artifacts.iter().enumerate() {
+        let path = format!("artifacts[{index}]");
+        if !valid_id(&artifact.role) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "invalid-artifact-role",
+                format!("{path}.role"),
+                "artifact role이 유효하지 않습니다",
+            );
+        } else if !artifact_roles.insert(artifact.role.as_str()) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "duplicate-artifact-role",
+                format!("{path}.role"),
+                format!("중복 artifact role입니다: {}", artifact.role),
+            );
+        }
+        if artifact.label.trim().is_empty() {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "missing-artifact-label",
+                format!("{path}.label"),
+                "artifact 표시 이름이 필요합니다",
+            );
+        }
+        if let Err(message) = validate_artifact_path(&artifact.path) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "invalid-artifact-path",
+                format!("{path}.path"),
+                message,
+            );
+        } else if !artifact_paths.insert(artifact.path.as_str()) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "duplicate-artifact-path",
+                format!("{path}.path"),
+                "두 artifact가 같은 경로를 사용할 수 없습니다",
+            );
+        }
+        if artifact.template.len() > 1024 * 1024 {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "template-too-large",
+                format!("{path}.template"),
+                "artifact template은 1 MiB를 넘을 수 없습니다",
+            );
+        }
+    }
+
+    let mut node_ids = HashSet::new();
+    for (index, node) in definition.nodes.iter().enumerate() {
+        let path = format!("nodes[{index}]");
+        if !valid_id(&node.id) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "invalid-node-id",
+                format!("{path}.id"),
+                "node id가 유효하지 않습니다",
+            );
+        } else if !node_ids.insert(node.id.as_str()) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "duplicate-node-id",
+                format!("{path}.id"),
+                format!("중복 node id입니다: {}", node.id),
+            );
+        }
+        if node.label.trim().is_empty() {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "missing-node-label",
+                format!("{path}.label"),
+                "node 표시 이름이 필요합니다",
+            );
+        }
+        for (field, roles) in [("inputs", &node.inputs), ("outputs", &node.outputs)] {
+            for role in roles {
+                if !artifact_roles.contains(role.as_str()) {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "unknown-artifact-role",
+                        format!("{path}.{field}"),
+                        format!("정의되지 않은 artifact role입니다: {role}"),
+                    );
+                }
+            }
+        }
+        for role in &node.allowed_roles {
+            if !ALLOWED_ROLES.contains(&role.as_str()) {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "unknown-agent-role",
+                    format!("{path}.allowedRoles"),
+                    format!("지원하지 않는 agent role입니다: {role}"),
+                );
+            }
+        }
+        match node.kind {
+            NodeKind::Artifact if node.artifact_role.is_none() => issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "missing-artifact-role",
+                format!("{path}.artifactRole"),
+                "artifact node에는 artifactRole이 필요합니다",
+            ),
+            NodeKind::Agent | NodeKind::Check if node.action_ref.is_none() => issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "missing-action-ref",
+                format!("{path}.actionRef"),
+                "agent/check node에는 등록된 actionRef가 필요합니다",
+            ),
+            NodeKind::Human if node.decision.is_none() => issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "missing-decision",
+                format!("{path}.decision"),
+                "human node에는 decision 계약이 필요합니다",
+            ),
+            NodeKind::Subworkflow if node.workflow_ref.is_none() => issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "missing-workflow-ref",
+                format!("{path}.workflowRef"),
+                "subworkflow node에는 정확한 workflowRef 버전이 필요합니다",
+            ),
+            _ => {}
+        }
+        if let Some(role) = &node.artifact_role {
+            if !artifact_roles.contains(role.as_str()) {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "unknown-artifact-role",
+                    format!("{path}.artifactRole"),
+                    format!("정의되지 않은 artifact role입니다: {role}"),
+                );
+            }
+        }
+        if let Some(reference) = &node.workflow_ref {
+            if !valid_id(&reference.id) || !valid_version(&reference.version) {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "invalid-workflow-ref",
+                    format!("{path}.workflowRef"),
+                    "subworkflow는 정확한 id와 x.y.z version을 가져야 합니다",
+                );
+            }
+            if reference.id == definition.id && reference.version == definition.version {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "recursive-workflow",
+                    format!("{path}.workflowRef"),
+                    "workflow는 자신을 하위 흐름으로 참조할 수 없습니다",
+                );
+            }
+        }
+    }
+
+    if !node_ids.contains(definition.entry.as_str()) {
+        issue(
+            &mut issues,
+            IssueSeverity::Error,
+            "unknown-entry",
+            "entry",
+            "entry가 정의된 node를 가리키지 않습니다",
+        );
+    }
+
+    let mut loop_ids = HashSet::new();
+    for (index, loop_definition) in definition.loops.iter().enumerate() {
+        if !valid_id(&loop_definition.id) || !loop_ids.insert(loop_definition.id.as_str()) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "invalid-loop",
+                format!("loops[{index}].id"),
+                "loop id가 유효하고 중복되지 않아야 합니다",
+            );
+        }
+        if !(1..=10_000).contains(&loop_definition.max_iterations) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "invalid-loop-limit",
+                format!("loops[{index}].maxIterations"),
+                "maxIterations는 1~10000이어야 합니다",
+            );
+        }
+    }
+
+    let mut adjacency: HashMap<&str, Vec<(&str, Option<&str>)>> = HashMap::new();
+    let mut edge_keys = HashSet::new();
+    let mut referenced_loops = HashSet::new();
+    for (index, edge) in definition.edges.iter().enumerate() {
+        let path = format!("edges[{index}]");
+        if !node_ids.contains(edge.from.as_str()) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "unknown-edge-node",
+                format!("{path}.from"),
+                format!("정의되지 않은 시작 node입니다: {}", edge.from),
+            );
+        }
+        if !node_ids.contains(edge.to.as_str()) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "unknown-edge-node",
+                format!("{path}.to"),
+                format!("정의되지 않은 대상 node입니다: {}", edge.to),
+            );
+        }
+        if !valid_id(&edge.on) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "invalid-event",
+                format!("{path}.on"),
+                "edge event가 유효하지 않습니다",
+            );
+        }
+        if !edge_keys.insert((&edge.from, &edge.to, &edge.on)) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "duplicate-edge",
+                path.clone(),
+                "같은 from/to/event edge가 중복되었습니다",
+            );
+        }
+        if let Some(reference) = &edge.loop_ref {
+            referenced_loops.insert(reference.as_str());
+            if !loop_ids.contains(reference.as_str()) {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "unknown-loop-ref",
+                    format!("{path}.loopRef"),
+                    format!("정의되지 않은 loopRef입니다: {reference}"),
+                );
+            }
+        }
+        if let Some(condition) = &edge.condition {
+            if !valid_id(&condition.field) {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "invalid-condition-field",
+                    format!("{path}.condition.field"),
+                    "condition field는 안전한 fact key여야 합니다",
+                );
+            }
+            if matches!(
+                condition.operator,
+                ConditionOperator::Equals | ConditionOperator::NotEquals
+            ) && condition.value.is_none()
+            {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "missing-condition-value",
+                    format!("{path}.condition.value"),
+                    "equals/not-equals 조건에는 value가 필요합니다",
+                );
+            }
+        }
+        adjacency
+            .entry(edge.from.as_str())
+            .or_default()
+            .push((edge.to.as_str(), edge.loop_ref.as_deref()));
+    }
+
+    for loop_id in loop_ids.difference(&referenced_loops) {
+        issue(
+            &mut issues,
+            IssueSeverity::Warning,
+            "unused-loop",
+            "loops",
+            format!("사용되지 않는 loop입니다: {loop_id}"),
+        );
+    }
+
+    // Ambiguous unconditional branches would make the host choose arbitrary behavior.
+    let mut branch_groups: HashMap<(&str, &str), Vec<&WorkflowEdge>> = HashMap::new();
+    for edge in &definition.edges {
+        branch_groups
+            .entry((edge.from.as_str(), edge.on.as_str()))
+            .or_default()
+            .push(edge);
+    }
+    for ((from, event), edges) in branch_groups {
+        if edges.len() > 1 && edges.iter().any(|edge| edge.condition.is_none()) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "ambiguous-branch",
+                "edges",
+                format!("{from}의 {event} 분기는 모두 명시적 condition이 필요합니다"),
+            );
+        }
+    }
+
+    // Reachability is independent from whether a cycle is an explicit bounded loop.
+    let mut reachable = HashSet::new();
+    let mut queue = VecDeque::from([definition.entry.as_str()]);
+    while let Some(node) = queue.pop_front() {
+        if !reachable.insert(node) {
+            continue;
+        }
+        for (next, _) in adjacency.get(node).into_iter().flatten() {
+            queue.push_back(next);
+        }
+    }
+    for (index, node) in definition.nodes.iter().enumerate() {
+        if !reachable.contains(node.id.as_str()) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "unreachable-node",
+                format!("nodes[{index}]"),
+                format!("entry에서 도달할 수 없는 node입니다: {}", node.id),
+            );
+        }
+        let outgoing = adjacency.get(node.id.as_str()).map(Vec::len).unwrap_or(0);
+        if matches!(node.kind, NodeKind::End) && outgoing > 0 {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "end-has-edge",
+                format!("nodes[{index}]"),
+                "end node에는 나가는 edge가 없어야 합니다",
+            );
+        } else if !matches!(node.kind, NodeKind::End) && outgoing == 0 {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "dead-end-node",
+                format!("nodes[{index}]"),
+                "end가 아닌 node에는 나가는 edge가 필요합니다",
+            );
+        }
+    }
+    if !definition
+        .nodes
+        .iter()
+        .any(|node| matches!(node.kind, NodeKind::End) && reachable.contains(node.id.as_str()))
+    {
+        // Long-running workflows may intentionally end at an artifact node, but report it.
+        issue(
+            &mut issues,
+            IssueSeverity::Warning,
+            "no-end-node",
+            "nodes",
+            "도달 가능한 end node가 없습니다. 마지막 node는 계속 대기 상태로 남습니다",
+        );
+    }
+
+    // Every graph back-edge must be explicitly tied to a bounded loop.
+    fn visit<'a>(
+        node: &'a str,
+        adjacency: &HashMap<&'a str, Vec<(&'a str, Option<&'a str>)>>,
+        visiting: &mut HashSet<&'a str>,
+        visited: &mut HashSet<&'a str>,
+        missing: &mut Vec<(String, String)>,
+    ) {
+        if !visiting.insert(node) {
+            return;
+        }
+        for (next, loop_ref) in adjacency.get(node).into_iter().flatten() {
+            if visiting.contains(next) && loop_ref.is_none() {
+                missing.push((node.into(), (*next).into()));
+            }
+            if !visited.contains(next) {
+                visit(next, adjacency, visiting, visited, missing);
+            }
+        }
+        visiting.remove(node);
+        visited.insert(node);
+    }
+    let mut missing = Vec::new();
+    visit(
+        definition.entry.as_str(),
+        &adjacency,
+        &mut HashSet::new(),
+        &mut HashSet::new(),
+        &mut missing,
+    );
+    for (from, to) in missing {
+        issue(
+            &mut issues,
+            IssueSeverity::Error,
+            "unbounded-cycle",
+            "edges",
+            format!("{from} → {to} 순환에는 bounded loopRef가 필요합니다"),
+        );
+    }
+
+    ValidationReport {
+        valid: !issues
+            .iter()
+            .any(|candidate| candidate.severity == IssueSeverity::Error),
+        issues,
+    }
+}
+
+pub fn validate_registry(definitions: &[WorkflowDefinition]) -> Vec<ValidationIssue> {
+    let available: HashSet<_> = definitions
+        .iter()
+        .map(|definition| (definition.id.as_str(), definition.version.as_str()))
+        .collect();
+    let mut issues = Vec::new();
+    for definition in definitions {
+        for (index, node) in definition.nodes.iter().enumerate() {
+            if let Some(reference) = &node.workflow_ref {
+                if !available.contains(&(reference.id.as_str(), reference.version.as_str())) {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "missing-subworkflow",
+                        format!("{}@{}.nodes[{index}]", definition.id, definition.version),
+                        format!(
+                            "고정한 하위 workflow를 찾을 수 없습니다: {}@{}",
+                            reference.id, reference.version
+                        ),
+                    );
+                }
+            }
+        }
+    }
+    issues
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::workflow::builtins;
+
+    #[test]
+    fn bundled_definitions_validate_as_a_registry() {
+        let definitions = builtins::all();
+        for definition in &definitions {
+            let report = validate(definition);
+            assert!(report.valid, "{}: {:?}", definition.id, report.issues);
+        }
+        assert!(validate_registry(&definitions).is_empty());
+    }
+
+    #[test]
+    fn arbitrary_condition_code_and_unbounded_cycles_are_rejected() {
+        let mut definition = builtins::tdd();
+        definition.edges[0].condition = Some(ConditionExpression {
+            field: "process.exit()".into(),
+            operator: ConditionOperator::Truthy,
+            value: None,
+        });
+        definition.edges.push(edge_without_loop("done", "red"));
+        let report = validate(&definition);
+        assert!(!report.valid);
+        assert!(report
+            .issues
+            .iter()
+            .any(|entry| entry.code == "invalid-condition-field"));
+        assert!(report
+            .issues
+            .iter()
+            .any(|entry| entry.code == "end-has-edge"));
+    }
+
+    fn edge_without_loop(from: &str, to: &str) -> WorkflowEdge {
+        WorkflowEdge {
+            from: from.into(),
+            to: to.into(),
+            on: "again".into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn paths_cannot_escape_or_write_internal_metadata() {
+        for path in [
+            "../secret",
+            ".sawhorse/runtime.sqlite",
+            "/tmp/out",
+            "work/{other}/x",
+        ] {
+            let mut definition = builtins::sdd();
+            definition.artifacts[0].path = path.into();
+            assert!(!validate(&definition).valid, "{path}");
+        }
+    }
+}

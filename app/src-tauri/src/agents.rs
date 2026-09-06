@@ -174,7 +174,9 @@ pub fn skill_status_in(base: &Path, pack: &Pack, agent: &str, name: &str) -> Ski
     };
     let expected = expected_content(base, pack, agent, name, &src);
     let target = match agent {
-        CODEX => agent_home_in(base, CODEX).join("prompts").join(format!("{name}.md")),
+        CODEX => agent_home_in(base, CODEX)
+            .join("prompts")
+            .join(format!("{name}.md")),
         _ => claude_skill_target_in(base, pack, name),
     };
     let state = match std::fs::read_to_string(&target) {
@@ -223,7 +225,11 @@ pub struct InstallReport {
 
 /// `src` 트리를 `dest` 로 통째로 펼친다. 바이트가 같은 파일은 건드리지 않고(멱등),
 /// `force` 가 아니면 내용이 다른 파일(사용자 수정본)은 남긴다.
-fn materialize_tree(src_root: &Path, dest_root: &Path, force: bool) -> Result<InstallReport, String> {
+fn materialize_tree(
+    src_root: &Path,
+    dest_root: &Path,
+    force: bool,
+) -> Result<InstallReport, String> {
     let mut report = InstallReport::default();
     copy_rec(src_root, src_root, dest_root, force, &mut report)?;
     Ok(report)
@@ -256,16 +262,18 @@ fn copy_rec(
             copy_rec(root, &from, dest_root, force, report)?;
             continue;
         }
-        let bytes = std::fs::read(&from).map_err(|e| format!("{} 읽기 실패: {e}", rel.display()))?;
+        let bytes =
+            std::fs::read(&from).map_err(|e| format!("{} 읽기 실패: {e}", rel.display()))?;
         if let Ok(found) = std::fs::read(&to) {
             if found == bytes {
                 report.skipped.push(format!("{}: 이미 최신", rel.display()));
                 continue;
             }
             if !force {
-                report
-                    .skipped
-                    .push(format!("{}: 수정된 파일이 있어 건드리지 않음", rel.display()));
+                report.skipped.push(format!(
+                    "{}: 수정된 파일이 있어 건드리지 않음",
+                    rel.display()
+                ));
                 continue;
             }
         }
@@ -275,7 +283,9 @@ fn copy_rec(
         }
         match std::fs::write(&to, &bytes) {
             Ok(()) => report.installed.push(rel.display().to_string()),
-            Err(e) => report.failed.push(format!("{}: 쓰기 실패 ({e})", rel.display())),
+            Err(e) => report
+                .failed
+                .push(format!("{}: 쓰기 실패 ({e})", rel.display())),
         }
     }
     Ok(())
@@ -291,7 +301,10 @@ fn write_user_plugin_manifest(dest_root: &Path, id: &str) -> Result<bool, String
         "description": format!("sawhorse 사용자 팩 `{id}`"),
         "skills": ["./skills"],
     });
-    let text = format!("{}\n", serde_json::to_string_pretty(&body).map_err(|e| e.to_string())?);
+    let text = format!(
+        "{}\n",
+        serde_json::to_string_pretty(&body).map_err(|e| e.to_string())?
+    );
     let path = dir.join("plugin.json");
     let unchanged = match std::fs::read_to_string(&path) {
         Ok(s) => s.replace("\r\n", "\n") == text,
@@ -300,7 +313,8 @@ fn write_user_plugin_manifest(dest_root: &Path, id: &str) -> Result<bool, String
     if unchanged {
         return Ok(false);
     }
-    crate::config::write_atomic(&path, text.as_bytes()).map_err(|e| format!("plugin.json 쓰기 실패: {e}"))?;
+    crate::config::write_atomic(&path, text.as_bytes())
+        .map_err(|e| format!("plugin.json 쓰기 실패: {e}"))?;
     Ok(true)
 }
 
@@ -330,12 +344,16 @@ pub fn install_pack_skills_in(
             let src = match std::fs::read_to_string(source_path(pack, name)) {
                 Ok(s) => s,
                 Err(_) => {
-                    report.failed.push(format!("{name}: 팩에 SKILL.md 가 없습니다"));
+                    report
+                        .failed
+                        .push(format!("{name}: 팩에 SKILL.md 가 없습니다"));
                     continue;
                 }
             };
             let expected = expected_content(base, pack, agent, name, &src);
-            let target = agent_home_in(base, CODEX).join("prompts").join(format!("{name}.md"));
+            let target = agent_home_in(base, CODEX)
+                .join("prompts")
+                .join(format!("{name}.md"));
             write_if_needed(&target, expected.as_bytes(), force, name, &mut report);
         }
         return Ok(report);
@@ -382,7 +400,9 @@ fn write_if_needed(
             return;
         }
         if !force {
-            report.skipped.push(format!("{name}: 수정된 파일이 있어 건너뜀"));
+            report
+                .skipped
+                .push(format!("{name}: 수정된 파일이 있어 건너뜀"));
             return;
         }
     }
@@ -428,7 +448,9 @@ pub fn uninstall_pack_skills_in(
         match skill_status_in(base, pack, agent, name).state {
             SkillState::Installed => {
                 let target = match agent {
-                    CODEX => agent_home_in(base, CODEX).join("prompts").join(format!("{name}.md")),
+                    CODEX => agent_home_in(base, CODEX)
+                        .join("prompts")
+                        .join(format!("{name}.md")),
                     _ => claude_skill_target_in(base, pack, name),
                 };
                 let removed = std::fs::remove_file(&target).is_ok();
@@ -889,7 +911,10 @@ mod tests {
             "---\nname: alpha\n---\n첫 판\n"
         );
         let manifest = fs::read_to_string(plugin_dir.join(".claude-plugin/plugin.json")).unwrap();
-        assert!(manifest.contains("sawhorse-demo"), "스킬 디렉터리 플러그인 이름: {manifest}");
+        assert!(
+            manifest.contains("sawhorse-demo"),
+            "스킬 디렉터리 플러그인 이름: {manifest}"
+        );
         // 설치 상태는 materialize 된 파일을 본다
         assert_eq!(
             skill_status_in(&fakehome, &pack, CLAUDE, "alpha").state,
@@ -897,9 +922,16 @@ mod tests {
         );
 
         // 소스를 고친 뒤 force 없이 → 수정본으로 남기고 건너뜀
-        fs::write(packdir.join("skills/alpha/SKILL.md"), "---\nname: alpha\n---\n둘째 판\n").unwrap();
+        fs::write(
+            packdir.join("skills/alpha/SKILL.md"),
+            "---\nname: alpha\n---\n둘째 판\n",
+        )
+        .unwrap();
         let r2 = install_pack_skills_in(&fakehome, &pack, CLAUDE, false).unwrap();
-        assert!(r2.skipped.iter().any(|s| s.contains("수정된 파일")), "{r2:?}");
+        assert!(
+            r2.skipped.iter().any(|s| s.contains("수정된 파일")),
+            "{r2:?}"
+        );
         assert_eq!(
             skill_status_in(&fakehome, &pack, CLAUDE, "alpha").state,
             SkillState::Modified
@@ -923,7 +955,10 @@ mod tests {
         let empty = fake_pack(&tempdir("empty"), &[]);
         let mut p = empty.clone();
         p.manifest.skills = vec!["nope".into()];
-        assert_eq!(skill_status_in(&fakehome, &p, CLAUDE, "nope").state, SkillState::NoSource);
+        assert_eq!(
+            skill_status_in(&fakehome, &p, CLAUDE, "nope").state,
+            SkillState::NoSource
+        );
 
         // 설치 대상이 아닌 에이전트는 거절
         assert!(install_pack_skills(&pack, "opencode", false).is_err());
@@ -931,7 +966,10 @@ mod tests {
 
         // 사용자 팩 제거는 플러그인 폴더째 — 남겨진 수정본도 같이 가진다(폴더 주인이 앱)
         let ru = uninstall_pack_skills_in(&fakehome, &pack, CLAUDE).unwrap();
-        assert!(ru.installed.iter().any(|s| s.contains("sawhorse-demo")), "{ru:?}");
+        assert!(
+            ru.installed.iter().any(|s| s.contains("sawhorse-demo")),
+            "{ru:?}"
+        );
         assert!(!plugin_dir.exists());
 
         fs::remove_dir_all(&packdir).unwrap();
