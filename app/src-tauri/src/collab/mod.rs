@@ -20,6 +20,20 @@ pub mod store;
 use chrono::Utc;
 
 /// 작업 디렉터리(`~/.claude/sawhorse`). config.json과 같은 부모다.
+#[cfg(test)]
+thread_local! {
+    static TEST_ROOT: std::path::PathBuf = {
+        let path = std::env::temp_dir().join(format!("sawhorse-collab-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&path).expect("create isolated test root");
+        path
+    };
+}
+#[cfg(test)]
+pub fn workbench_root() -> std::path::PathBuf {
+    TEST_ROOT.with(Clone::clone)
+}
+
+#[cfg(not(test))]
 pub fn workbench_root() -> std::path::PathBuf {
     crate::config::config_path()
         .parent()
