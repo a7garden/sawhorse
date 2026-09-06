@@ -138,159 +138,133 @@
   background: transparent;
 }
 
-/* Editable dashboard grid */
-.dashboard-grid .react-grid-layout {
-  min-height: 1px;
-}
 
-.dashboard-grid .react-grid-item {
-  min-width: 0;
-}
-
-.dashboard-grid .widget-grid-item,
-.dashboard-grid .widget-host {
-  height: 100%;
-  min-height: 0;
-}
-
-.dashboard-grid .widget-host {
-  container-type: inline-size;
-}
-
-.dashboard-grid .widget-overview-grid,
-.dashboard-grid .widget-stage-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.dashboard-grid .widget-routines-grid,
-.dashboard-grid .widget-recent-grid {
-  grid-template-columns: minmax(0, 1fr);
-}
-
-@container (min-width: 680px) {
-  .dashboard-grid .widget-routines-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
-@container (min-width: 560px) {
-  .dashboard-grid .widget-stage-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .dashboard-grid .widget-recent-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@container (min-width: 820px) {
-  .dashboard-grid .widget-overview-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-.dashboard-grid-editing .react-grid-item {
-  overflow: visible;
-  border: 1px dashed var(--brand-border);
-  border-radius: 0.875rem;
-  background: color-mix(in oklch, var(--brand-soft) 55%, transparent);
-  padding: 29px 4px 4px;
-  box-shadow: 0 6px 18px oklch(0 0 0 / 6%);
-}
-
-.dashboard-grid-editing .react-grid-layout {
-  border-radius: 0.875rem;
-  background-image: linear-gradient(
-    to bottom,
-    transparent 41px,
-    color-mix(in oklch, var(--brand-border) 28%, transparent) 42px
-  );
-  background-size: 100% 42px;
-}
-
-.dashboard-grid-editing .react-grid-item.react-draggable-dragging,
-.dashboard-grid-editing .react-grid-item.resizing {
-  border-style: solid;
-  border-color: var(--brand);
-  box-shadow: 0 14px 36px oklch(0 0 0 / 14%);
-}
-
-.dashboard-grid .widget-edit-bar {
-  position: absolute;
-  inset: 0 0 auto;
-  z-index: 5;
-  display: flex;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 4px;
-}
-
-.dashboard-grid .widget-drag-handle,
-.dashboard-grid .widget-remove-button {
-  display: grid;
-  place-items: center;
-  color: var(--muted-foreground);
-  transition: color 120ms ease, background 120ms ease;
-}
-
-.dashboard-grid .widget-drag-handle {
-  width: 42px;
-  height: 22px;
-  cursor: grab;
-  border-radius: 999px;
-}
-
-.dashboard-grid .widget-drag-handle:active {
-  cursor: grabbing;
-}
-
-.dashboard-grid .widget-drag-handle:hover {
-  color: var(--brand);
-  background: var(--brand-soft);
-}
-
-.dashboard-grid .widget-remove-button {
-  position: absolute;
-  right: 4px;
-  width: 22px;
-  height: 22px;
-  border-radius: 0.4rem;
-}
-
-.dashboard-grid .widget-remove-button:hover {
-  color: var(--destructive);
-  background: color-mix(in oklch, var(--destructive) 12%, transparent);
-}
-
-.dashboard-grid-editing .react-grid-item > .react-resizable-handle {
-  right: 0;
-  bottom: 0;
-  width: 28px;
-  height: 28px;
-  opacity: 1;
-}
-
-.dashboard-grid-editing .react-grid-item > .react-resizable-handle::after {
-  right: 6px;
-  bottom: 6px;
+/* Terminal — agent status indicators. The dot itself is colored by `data-tone`;
+ * a wrapper `.term-dot-pulse` adds a soft halo we animate so the inner dot stays steady. */
+.term-dot {
+  position: relative;
+  display: inline-block;
   width: 8px;
   height: 8px;
-  border-color: var(--brand);
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+.term-dot[data-tone="working"] { background: var(--primary); }
+.term-dot[data-tone="blocked"] { background: var(--warning); }
+.term-dot[data-tone="idle"] { background: var(--muted-foreground); opacity: 0.55; }
+.term-dot[data-tone="done"] { background: var(--success); }
+.term-dot[data-tone="focused"] {
+  background: var(--brand);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--brand) 30%, transparent);
+}
+.term-dot-pulse {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+}
+.term-dot-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  opacity: 0.55;
+  animation: term-dot-pulse 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  pointer-events: none;
+}
+.term-dot-pulse[data-tone="working"]::after { background: var(--primary); }
+.term-dot-pulse[data-tone="blocked"]::after { background: var(--warning); }
+@keyframes term-dot-pulse {
+  0% { transform: scale(0.8); opacity: 0.55; }
+  70% { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
 }
 
-.dashboard-grid .react-grid-placeholder {
-  border: 1px solid var(--brand);
-  border-radius: 0.875rem;
-  background: var(--brand-soft);
-  opacity: 0.65;
+/* Terminal — slim left rail stripe on tab/agent rows gives a quiet visual spine. */
+.term-rail {
+  width: 3px;
+  border-radius: 999px;
+  background: var(--border);
+  align-self: stretch;
+}
+.term-rail[data-tone="working"] { background: var(--primary); }
+.term-rail[data-tone="blocked"] { background: var(--warning); }
+.term-rail[data-tone="focused"] { background: var(--brand); }
+
+/* Terminal — small numeric pill with colored bar (counts by status). */
+.term-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px 6px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+}
+.term-counter-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+.term-counter-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 12px;
+  line-height: 1;
+}
+.term-counter-label {
+  font-size: 11px;
+  color: var(--muted-foreground);
+  line-height: 1;
 }
 
+/* Terminal — agent row hover reveals secondary actions without shifting layout. */
+.term-row-actions {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.term-row:hover .term-row-actions,
+.term-row:focus-within .term-row-actions {
+  opacity: 1;
+}
 @media (prefers-reduced-motion: reduce) {
-  .dashboard-grid .react-grid-layout,
-  .dashboard-grid .react-grid-item {
-    transition: none;
-  }
+  .term-row-actions { opacity: 1; transition: none; }
+  .term-dot-pulse::after { animation: none; }
+}
+
+/* Slim scrollbar inside preview blocks so they don't compete with content. */
+.term-pre::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.term-pre::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+
+/* Terminal — agent kind chips (claude / codex / shell). The chip itself is a
+ * quiet badge so the status dot stays the loud element. */
+.term-kind-claude {
+  background: color-mix(in oklch, var(--brand) 14%, transparent);
+  color: var(--brand);
+  border: 1px solid color-mix(in oklch, var(--brand) 28%, transparent);
+}
+.term-kind-codex {
+  background: color-mix(in oklch, var(--success) 14%, transparent);
+  color: var(--success);
+  border: 1px solid color-mix(in oklch, var(--success) 30%, transparent);
+}
+.term-kind-shell {
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
 }
 
 /* Terminal — agent status indicators. The dot itself is colored by `data-tone`;

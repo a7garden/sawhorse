@@ -330,33 +330,36 @@
   background: #e3f0e5;
   color: #427e4c;
 }
-.wb-stage-summary {
-  padding: 12px 20px 24px;
+.wb-stage-tiles {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 7px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 4px 20px 18px;
 }
-.wb-stage-summary div {
-  position: relative;
+.wb-stage-tile {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--wb-line);
+  border-radius: 11px;
+  background: var(--wb-warm);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease;
 }
-.wb-stage-summary span {
-  font-size: 10px;
+.wb-stage-tile:hover {
+  border-color: var(--wb-teal);
+  background: var(--wb-teal-soft);
+}
+.wb-stage-tile span {
+  font-size: 11px;
   color: var(--wb-muted);
-  display: block;
 }
-.wb-stage-summary strong {
+.wb-stage-tile strong {
   font-size: 20px;
   letter-spacing: -0.04em;
-}
-.wb-stage-summary i {
-  height: 4px;
-  background: var(--wb-teal-soft);
-  display: block;
-  border-radius: 3px;
-  margin-top: 5px;
-}
-.wb-stage-summary div:nth-child(2n) i {
-  background: #dcebe8;
+  color: var(--wb-ink);
+  font-variant-numeric: tabular-nums;
 }
 .wb-project-brief {
   border-top: 1px solid var(--wb-line);
@@ -1584,4 +1587,159 @@ bind every visible surface to the workbench palette. */
   color: var(--wb-ink);
   font: inherit;
   resize: vertical;
+}
+
+/* Overview slots */
+.wb-slot-two-col {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+.wb-slot-done-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.wb-slot-done-grid .wb-dense-row {
+  border-top: 0;
+  border-radius: 10px;
+}
+.wb-dense-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 15px;
+  border-top: 1px solid var(--wb-line);
+  background: transparent;
+  text-align: left;
+}
+.wb-dense-row:hover {
+  background: var(--wb-warm);
+}
+.wb-dense-title {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--wb-ink);
+}
+.wb-dense-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--wb-muted);
+  font-variant-numeric: tabular-nums;
+}
+.wb-date-chip {
+  flex-shrink: 0;
+  min-width: 42px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: var(--wb-warm);
+  color: var(--wb-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.wb-date-chip.is-overdue {
+  background: var(--wb-teal-soft);
+  color: var(--wb-teal);
+}
+.wb-event-kind {
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border: 1px solid var(--wb-line);
+  border-radius: 999px;
+  color: var(--wb-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+.wb-done-check {
+  flex-shrink: 0;
+  color: var(--wb-teal);
+}
+.wb-slot-empty {
+  margin: 0 20px 18px;
+  padding: 18px 10px;
+  border: 1px dashed var(--wb-line);
+  border-radius: 11px;
+  color: var(--wb-muted);
+  font-size: 12px;
+  text-align: center;
+}
+.wb-panel-link {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--wb-teal);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.wb-panel-link:hover {
+  text-decoration: underline;
+}
+@media (min-width: 720px) {
+  .wb-slot-done-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 960px) {
+  .wb-slot-two-col {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.wb-slot-panel {
+  min-height: 0;
+}
+.wb-slot-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+.wb-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wb-slot-dialog-hint {
+  margin: 0 0 12px;
+  color: var(--wb-muted);
+  font-size: 12px;
+}
+.wb-slot-dialog-list {
+  display: grid;
+  gap: 8px;
+}
+.wb-slot-dialog-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--wb-line);
+  border-radius: 11px;
+}
+.wb-slot-dialog-label {
+  min-width: 0;
+  cursor: pointer;
+}
+.wb-slot-dialog-label span {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wb-ink);
+}
+.wb-slot-dialog-label small {
+  display: block;
+  margin-top: 2px;
+  color: var(--wb-muted);
+  font-size: 11px;
+}
+.wb-slot-dialog-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 14px;
 }

@@ -16,6 +16,7 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
+  CircleCheck,
   CircleDot,
   Clock3,
   FilePenLine,
@@ -32,12 +33,20 @@ import {
   SquareTerminal,
   StopCircle,
   X,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useApp } from "@/lib/store";
+import { Switch } from "@/components/ui/switch";
 import { api as vaultApi } from "@/lib/api";
 import { sddApi, workflowApi } from "./api";
+import {
+  OVERVIEW_SLOTS,
+  useOverviewSlots,
+  type OverviewSlotId,
+} from "./overview-store";
 import {
   ARTIFACTS,
   ARTIFACT_LABELS,
@@ -92,6 +101,12 @@ const eventLabels: Record<CalendarEvent["kind"], string> = {
   release: "릴리스",
   meeting: "회의",
 };
+const PRIORITY_RANK: Record<Priority, number> = {
+  urgent: 0,
+  high: 1,
+  normal: 2,
+  low: 3,
+};
 const dateText = new Intl.DateTimeFormat("ko-KR", {
   month: "short",
   day: "numeric",
@@ -107,6 +122,21 @@ function localDate(value = new Date()) {
 }
 function isoToday() {
   return localDate();
+}
+function plusDays(date: string, days: number) {
+  const next = new Date(`${date}T00:00:00`);
+  next.setDate(next.getDate() + days);
+  return localDate(next);
+}
+function daysUntil(date: string) {
+  const target = new Date(`${date}T00:00:00`);
+  const today = new Date(`${isoToday()}T00:00:00`);
+  return Math.round((target.getTime() - today.getTime()) / 86_400_000);
+}
+function dueChip(days: number) {
+  if (days < 0) return `D+${-days}`;
+  if (days === 0) return "오늘";
+  return `D-${days}`;
 }
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
@@ -398,6 +428,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     work,
     projects,
     workflows,
+    events: snapshot.events,
     notice,
     setNotice,
     reload,
@@ -596,6 +627,7 @@ function OverviewView({
   work,
   projects,
   workflows,
+  events,
   onNewWork,
   onSelectWork,
   onEditWork,
@@ -603,19 +635,42 @@ function OverviewView({
   work: WorkItem[];
   projects: Project[];
   workflows: WorkflowDefinition[];
+  events: CalendarEvent[];
   onNewWork: () => void;
   onSelectWork: (id: string) => void;
   onEditWork: (item: WorkItem) => void;
 }) {
+  const [slotsOpen, setSlotsOpen] = useState(false);
+  const enabled = useOverviewSlots((state) => state.enabled);
+  const setPage = useApp((state) => state.setPage);
+  const show = (id: OverviewSlotId) => enabled.includes(id);
   const today = isoToday();
-  const due = work.filter(
-    (item) => item.dueDate && item.dueDate <= today && item.status !== "done",
-  );
+  const open = work.filter((item) => item.status !== "done");
   const active = work.filter((item) => item.status === "running");
   const ready = work.filter((item) => item.status === "ready");
-  const recent = [...work]
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+  const due = open.filter((item) => item.dueDate && item.dueDate <= today);
+  const doneCount = work.filter((item) => item.status === "done").length;
+  const nextUp = [...open]
+    .sort((a, b) => {
+      const ad = a.dueDate ?? "9999-12-31";
+      const bd = b.dueDate ?? "9999-12-31";
+      if (ad !== bd) return ad.localeCompare(bd);
+      const byPriority = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
+      if (byPriority !== 0) return byPriority;
+      return b.updatedAt.localeCompare(a.updatedAt);
+    })
+    .slice(0, 6);
+  const dueSoon = open
+    .filter((item) => item.dueDate && item.dueDate <= plusDays(today, 7))
+    .sort((a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""));
+  const upcomingEvents = events
+    .filter((event) => (event.endDate ?? event.date) >= today)
+    .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 5);
+  const recentlyDone = [...work]
+    .filter((item) => item.status === "done")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 6);
   const stageEntries = workflows
     .filter((definition) =>
       work.some(
@@ -627,137 +682,340 @@ function OverviewView({
     .flatMap((definition) =>
       definition.nodes.map((node) => ({ definition, node })),
     );
+  const stageTiles =
+    stageEntries.length > 0
+      ? stageEntries
+      : STAGES.map((stage) => ({
+          definition: undefined,
+          node: { id: stage, label: STAGE_LABELS[stage] },
+        }));
   return (
     <>
       <PageHeader
-        title="작업의 흐름을 선명하게"
-        subtitle={`${projects.length}개 프로젝트 · ${work.length}개 작업을 연결하고 있습니다.`}
+        title="오늘의 작업"
+        subtitle={`진행 ${active.length} · 기한 임박 ${due.length} · 완료 ${doneCount}`}
       >
-        <Button onClick={onNewWork}>
-          <Plus /> 새 작업
-        </Button>
+        <div className="wb-header-actions">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setSlotsOpen(true)}
+          >
+            <SlidersHorizontal size={14} /> 구성
+          </Button>
+          <Button onClick={onNewWork}>
+            <Plus /> 새 작업
+          </Button>
+        </div>
       </PageHeader>
-      <section className="wb-metric-grid">
-        <Metric
-          label="진행 중"
-          value={active.length}
-          hint="지금 집중할 항목"
-          icon={<CircleDot />}
-        />
-        <Metric
-          label="준비됨"
-          value={ready.length}
-          hint="바로 시작 가능"
-          icon={<ArrowRight />}
-        />
-        <Metric
-          label="기한 주의"
-          value={due.length}
-          hint={
-            due.length
-              ? due
-                  .map((item) => item.title)
-                  .slice(0, 2)
-                  .join(" · ")
-              : "차분하게 진행 중"
-          }
-          icon={<Clock3 />}
-          warn={due.length > 0}
-        />
-        <Metric
-          label="완료"
-          value={work.filter((item) => item.status === "done").length}
-          hint="축적된 결과"
-          icon={<Check />}
-        />
-      </section>
-      <section className="wb-two-column">
-        <div className="wb-panel">
-          <div className="wb-panel-title">
-            <div>
-              <h2>다음에 할 일</h2>
-              <span>작업 흐름을 이어갈 항목</span>
+      {show("metrics") && (
+        <section className="wb-metric-grid">
+          <Metric
+            label="진행 중"
+            value={active.length}
+            hint="지금 집중할 항목"
+            icon={<CircleDot />}
+          />
+          <Metric
+            label="준비됨"
+            value={ready.length}
+            hint="바로 시작 가능"
+            icon={<ArrowRight />}
+          />
+          <Metric
+            label="기한 주의"
+            value={due.length}
+            hint={
+              due.length
+                ? due
+                    .map((item) => item.title)
+                    .slice(0, 2)
+                    .join(" · ")
+                : "차분하게 진행 중"
+            }
+            icon={<Clock3 />}
+            warn={due.length > 0}
+          />
+          <Metric label="완료" value={doneCount} hint="축적된 결과" icon={<Check />} />
+        </section>
+      )}
+      {(show("next") || show("stages")) && (
+        <section className="wb-two-column">
+          {show("next") && (
+            <div className="wb-panel">
+              <div className="wb-panel-title">
+                <div>
+                  <h2>다음에 할 일</h2>
+                  <span>기한과 우선순위순</span>
+                </div>
+                <button
+                  onClick={onNewWork}
+                  className="wb-icon-button"
+                  aria-label="새 작업"
+                >
+                  <Plus size={17} />
+                </button>
+              </div>
+              {nextUp.length ? (
+                <div>
+                  {nextUp.map((item) => (
+                    <WorkRow
+                      key={item.id}
+                      item={item}
+                      project={projects.find(
+                        (project) => project.id === item.projectId,
+                      )}
+                      workflows={workflows}
+                      onClick={() => onSelectWork(item.id)}
+                      onEdit={() => onEditWork(item)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="첫 작업을 만들어 보세요"
+                  description="의도부터 검증까지 하나의 흐름으로 남길 수 있습니다."
+                  action={
+                    <Button size="sm" onClick={onNewWork}>
+                      <Plus /> 새 작업
+                    </Button>
+                  }
+                />
+              )}
             </div>
-            <button
-              onClick={onNewWork}
-              className="wb-icon-button"
-              aria-label="새 작업"
+          )}
+          {show("stages") && (
+            <div className="wb-panel wb-stage-panel">
+              <div className="wb-panel-title">
+                <div>
+                  <h2>단계별 맥락</h2>
+                  <span>타일을 누르면 백로그로 이동합니다</span>
+                </div>
+              </div>
+              <div className="wb-stage-tiles">
+                {stageTiles.map(({ definition, node }) => (
+                  <button
+                    key={`${definition?.id ?? "legacy"}:${node.id}`}
+                    className="wb-stage-tile"
+                    onClick={() => setPage("board")}
+                    title="백로그에서 이 단계의 작업 보기"
+                  >
+                    <span>
+                      {workflows.length > 1 && definition
+                        ? `${definition.label} · ${node.label}`
+                        : node.label}
+                    </span>
+                    <strong>
+                      {
+                        work.filter(
+                          (item) =>
+                            item.stage === node.id &&
+                            (!definition || item.workflowId === definition.id),
+                        ).length
+                      }
+                    </strong>
+                  </button>
+                ))}
+              </div>
+              <div className="wb-project-brief">
+                <span>프로젝트</span>
+                <strong>
+                  {projects[0]?.name ?? "아직 연결된 프로젝트가 없습니다"}
+                </strong>
+                <p>
+                  {projects[0]?.description ||
+                    "프로젝트를 추가하면 저장소와 검증 명령을 작업에 연결할 수 있습니다."}
+                </p>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+      {(show("due") || show("events")) && (
+        <section
+          className={cx(
+            "wb-slot-two-col",
+            !(show("due") && show("events")) && "wb-slot-single",
+          )}
+        >
+          {show("due") && (
+            <SlotCard
+              title="기한 임박"
+              description="지난 것 포함 일주일 안에 마감"
             >
-              <Plus size={17} />
-            </button>
-          </div>
-          {recent.length ? (
-            <div className="wb-list">
-              {recent.map((item) => (
-                <WorkRow
+              {dueSoon.length ? (
+                dueSoon.map((item) => (
+                  <DueRow
+                    key={item.id}
+                    item={item}
+                    onClick={() => onSelectWork(item.id)}
+                  />
+                ))
+              ) : (
+                <div className="wb-slot-empty">
+                  기한이 임박한 작업이 없습니다.
+                </div>
+              )}
+            </SlotCard>
+          )}
+          {show("events") && (
+            <SlotCard
+              title="임박 일정"
+              description="다가오는 약속과 마일스톤"
+              action={
+                <button
+                  className="wb-panel-link"
+                  onClick={() => setPage("calendar")}
+                >
+                  캘린더 열기
+                </button>
+              }
+            >
+              {upcomingEvents.length ? (
+                upcomingEvents.map((event) => (
+                  <EventRow
+                    key={event.id}
+                    event={event}
+                    onClick={() => setPage("calendar")}
+                  />
+                ))
+              ) : (
+                <div className="wb-slot-empty">등록된 일정이 없습니다.</div>
+              )}
+            </SlotCard>
+          )}
+        </section>
+      )}
+      {show("done") && (
+        <SlotCard title="최근 완료" description="방금 끝낸 작업들">
+          {recentlyDone.length ? (
+            <div className="wb-slot-done-grid">
+              {recentlyDone.map((item) => (
+                <DoneRow
                   key={item.id}
                   item={item}
-                  project={projects.find(
-                    (project) => project.id === item.projectId,
-                  )}
-                  workflows={workflows}
                   onClick={() => onSelectWork(item.id)}
-                  onEdit={() => onEditWork(item)}
                 />
               ))}
             </div>
           ) : (
-            <EmptyState
-              title="첫 작업을 만들어 보세요"
-              description="의도부터 검증까지 하나의 흐름으로 남길 수 있습니다."
-              action={
-                <Button size="sm" onClick={onNewWork}>
-                  <Plus /> 새 작업
-                </Button>
-              }
-            />
+            <div className="wb-slot-empty">아직 완료한 작업이 없습니다.</div>
           )}
-        </div>
-        <div className="wb-panel wb-stage-panel">
-          <div className="wb-panel-title">
-            <div>
-              <h2>단계별 맥락</h2>
-              <span>문서가 다음 결정을 준비합니다</span>
-            </div>
-          </div>
-          <div className="wb-stage-summary">
-            {(stageEntries.length
-              ? stageEntries
-              : STAGES.map((stage) => ({
-                  definition: undefined,
-                  node: { id: stage, label: STAGE_LABELS[stage] },
-                })))
-              .map(({ definition, node }) => (
-              <div key={`${definition?.id ?? "legacy"}:${node.id}`}>
-                <span>
-                  {workflows.length > 1 && definition
-                    ? `${definition.label} · ${node.label}`
-                    : node.label}
-                </span>
-                <strong>
-                  {work.filter(
-                    (item) =>
-                      item.stage === node.id &&
-                      (!definition || item.workflowId === definition.id),
-                  ).length}
-                </strong>
-                <i />
-              </div>
-            ))}
-          </div>
-          <div className="wb-project-brief">
-            <span>프로젝트</span>
-            <strong>
-              {projects[0]?.name ?? "아직 연결된 프로젝트가 없습니다"}
-            </strong>
-            <p>
-              {projects[0]?.description ||
-                "프로젝트를 추가하면 저장소와 검증 명령을 작업에 연결할 수 있습니다."}
-            </p>
-          </div>
-        </div>
-      </section>
+        </SlotCard>
+      )}
+      <SlotSettingsDialog
+        open={slotsOpen}
+        onClose={() => setSlotsOpen(false)}
+      />
     </>
+  );
+}
+function SlotCard({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="wb-panel wb-slot-panel">
+      <div className="wb-panel-title">
+        <div>
+          <h2>{title}</h2>
+          {description && <span>{description}</span>}
+        </div>
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+function DueRow({ item, onClick }: { item: WorkItem; onClick: () => void }) {
+  const days = item.dueDate ? daysUntil(item.dueDate) : 0;
+  return (
+    <button className="wb-dense-row" onClick={onClick} title={item.title}>
+      <span className={cx("wb-date-chip", days < 0 && "is-overdue")}>
+        {dueChip(days)}
+      </span>
+      <span className="wb-dense-title">{item.title}</span>
+      <span className="wb-dense-meta">{formatDate(item.dueDate)}</span>
+    </button>
+  );
+}
+function EventRow({
+  event,
+  onClick,
+}: {
+  event: CalendarEvent;
+  onClick: () => void;
+}) {
+  return (
+    <button className="wb-dense-row" onClick={onClick} title={event.title}>
+      <span className="wb-event-kind">{eventLabels[event.kind]}</span>
+      <span className="wb-dense-title">{event.title}</span>
+      <span className="wb-dense-meta">
+        {formatDate(event.endDate ?? event.date)}
+      </span>
+    </button>
+  );
+}
+function DoneRow({ item, onClick }: { item: WorkItem; onClick: () => void }) {
+  return (
+    <button className="wb-dense-row" onClick={onClick} title={item.title}>
+      <CircleCheck size={14} className="wb-done-check" />
+      <span className="wb-dense-title">{item.title}</span>
+      <span className="wb-dense-meta">
+        {formatDate(item.updatedAt.slice(0, 10))}
+      </span>
+    </button>
+  );
+}
+function SlotSettingsDialog({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  const enabled = useOverviewSlots((state) => state.enabled);
+  const toggle = useOverviewSlots((state) => state.toggle);
+  const reset = useOverviewSlots((state) => state.reset);
+  return (
+    <Dialog open={open} onClose={onClose} title="작업대 구성">
+      <p className="wb-slot-dialog-hint">
+        표시할 섹션을 고릅니다. 선택은 이 브라우저에 저장됩니다.
+      </p>
+      <div className="wb-slot-dialog-list">
+        {OVERVIEW_SLOTS.map((slot) => (
+          <div key={slot.id} className="wb-slot-dialog-row">
+            <label
+              htmlFor={`overview-slot-${slot.id}`}
+              className="wb-slot-dialog-label"
+            >
+              <span>{slot.label}</span>
+              <small>{slot.description}</small>
+            </label>
+            <Switch
+              id={`overview-slot-${slot.id}`}
+              checked={enabled.includes(slot.id)}
+              onCheckedChange={() => toggle(slot.id)}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="wb-slot-dialog-footer">
+        <Button size="sm" variant="ghost" onClick={reset}>
+          기본값 복원
+        </Button>
+        <Button size="sm" onClick={onClose}>
+          완료
+        </Button>
+      </div>
+    </Dialog>
   );
 }
 function Metric({
