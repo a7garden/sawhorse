@@ -20,10 +20,9 @@ jobs:
           - platform: ubuntu-latest
             args: ""
           - platform: windows-latest
-            args: ""
+            # WiX(msi)는 비 ASCII productName 을 못 묶는다 — nsis 는 유니코드 지원.
+            args: "--bundles nsis"
     runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
