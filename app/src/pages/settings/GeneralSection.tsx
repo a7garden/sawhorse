@@ -45,15 +45,6 @@ export default function GeneralSection({
               ))}
             </Select>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="excel-dir">엑셀 출력 폴더</Label>
-            <Input
-              id="excel-dir"
-              value={draft.dashboard.excelOutputDir}
-              onChange={(e) => patchDraft((d) => (d.dashboard.excelOutputDir = e.target.value))}
-              placeholder="/path/to/output"
-            />
-          </div>
         </CardContent>
       </Card>
 

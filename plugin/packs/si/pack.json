@@ -11,7 +11,7 @@
     "daily-log", "daily-report",
     "wiki", "init-vault", "setup", "vault-tidy",
     "project-doc", "codebase-docs",
-    "issues", "improve", "improve-excel"
+    "issues", "improve"
   ],
 
   "workspace": {
@@ -114,13 +114,6 @@
       "prompt": "/{{ns}}:issues 마일스톤 {{name}}",
       "cwd": "workspace",
       "params": [{ "key": "name", "type": "text", "label": "마일스톤 이름 (선택)" }]
-    },
-    {
-      "id": "excel",
-      "label": "보고용 엑셀",
-      "description": "이슈 노트를 발주처 보고용 체크리스트 엑셀로 뽑는다 (근거 이미지 포함)",
-      "prompt": "/{{ns}}:improve-excel",
-      "cwd": "workspace"
     },
     {
       "id": "wiki",

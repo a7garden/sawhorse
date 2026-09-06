@@ -24,7 +24,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          "dashboard-grid": ["react-grid-layout"],
+          "markdown-editor": ["@atomic-editor/editor"],
         },
       },
     },

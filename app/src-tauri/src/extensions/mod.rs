@@ -8,4 +8,5 @@ pub mod feeds;
 pub mod github;
 pub mod github_outbound;
 pub mod manifest;
+pub mod package;
 pub mod signing;

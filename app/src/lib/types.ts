@@ -286,7 +286,17 @@ export interface PluginBundle {
 
 export type SettingFieldType = "text" | "path" | "number" | "bool" | "select" | "table";
 export type ScheduleKind = "daily" | "weekdays" | "once";
-export type ViewKind = "notes" | "native";
+export type ViewKind =
+  | "notes"
+  | "native"
+  | "table"
+  | "board"
+  | "form"
+  | "document"
+  | "timeline"
+  | "review-queue"
+  | "graph"
+  | "metrics";
 export type ActionParamType = "text" | "list" | "select" | "project";
 
 export interface Choice {
@@ -388,6 +398,90 @@ export interface BrokenPack {
 export interface PackRegistryView {
   packs: PackInfo[];
   broken: BrokenPack[];
+}
+
+export interface ExtensionPackageManifest {
+  manifestVersion: number;
+  id: string;
+  publisher: string;
+  name: string;
+  version: string;
+  engineApi: string;
+  dependencies: Array<{ id: string; requirement: string; optional: boolean }>;
+  provides: string[];
+  contributions: Record<string, string[]>;
+  permissions: string[];
+  fileDigests: Record<string, string>;
+}
+
+export interface InstalledExtensionPackage {
+  manifest: ExtensionPackageManifest;
+  digest: string;
+  path: string;
+  source: string;
+  commit: string | null;
+  installedAt: string;
+}
+
+export interface PortableExtensionPackage {
+  manifest: ExtensionPackageManifest;
+  files: Record<string, { encoding: "base64"; data: string } | string>;
+}
+
+export interface LockedExtensionPackage {
+  id: string;
+  version: string;
+  digest: string;
+  permissions: string[];
+  source: string;
+  commit: string | null;
+}
+
+export interface ExtensionLock {
+  formatVersion: number;
+  projects: Record<string, LockedExtensionPackage[]>;
+}
+
+export interface IngestionDraft {
+  path: string;
+  content: string;
+  provenance: Array<{
+    claim: string;
+    snapshotFileId: string;
+    evidencePath: string;
+    location: string;
+  }>;
+  conflict: boolean;
+  conflictReason: string | null;
+}
+
+export interface IngestionJob {
+  formatVersion: number;
+  id: string;
+  key: string;
+  projectId: string;
+  outputPrefix: string;
+  status: "paused" | "running" | "waiting-review" | "applied" | "cancelled" | "failed";
+  stage: string;
+  processedFiles: number;
+  totalFiles: number;
+  processedBytes: number;
+  snapshots: Array<{
+    id: string;
+    sourceLabel: string;
+    originalPath: string;
+    relativePath: string;
+    evidencePath: string;
+    digest: string;
+    size: number;
+    mediaType: string;
+  }>;
+  drafts: IngestionDraft[];
+  changeSetId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  error: string | null;
+  autoApply: boolean;
 }
 
 export interface NavEntry {

@@ -337,7 +337,11 @@ pub fn save_pack_settings(
 }
 
 #[tauri::command]
-pub fn query_pack_view(pack_id: String, view_id: String) -> Result<notes::QueryResult, String> {
+pub fn query_pack_view(
+    pack_id: String,
+    view_id: String,
+    project_id: Option<String>,
+) -> Result<notes::QueryResult, String> {
     let (reg, cfg) = registry();
     let (_, v) = reg
         .view(&pack_id, &view_id)
@@ -345,16 +349,52 @@ pub fn query_pack_view(pack_id: String, view_id: String) -> Result<notes::QueryR
     if v.query.is_empty() {
         return Err(format!("{view_id} 뷰에 질의(folders)가 없습니다"));
     }
-    Ok(notes::query(Path::new(&cfg.vault_path), &v.query))
+    let mut result = notes::query(Path::new(&cfg.vault_path), &v.query);
+    if let Some(package_id) = pack_id.strip_prefix("x-") {
+        let project_id = project_id
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| "확장 화면은 활성화한 project ID가 필요합니다".to_string())?;
+        let root = crate::sdlc::vault_root()?;
+        crate::extensions::package::authorize_at(&root, &project_id, package_id, "vault:read")?;
+        result.rows.retain(|row| {
+            ["projectId", "project"]
+                .iter()
+                .filter_map(|key| row.fields.get(*key))
+                .any(|value| {
+                    value.as_str() == Some(project_id.as_str())
+                        || value.as_array().is_some_and(|values| {
+                            values
+                                .iter()
+                                .any(|value| value.as_str() == Some(project_id.as_str()))
+                        })
+                })
+        });
+    }
+    Ok(result)
 }
 
 #[tauri::command]
 pub fn run_pack_action(
     pack_id: String,
     action_id: String,
-    params: Map<String, Value>,
+    mut params: Map<String, Value>,
+    project_id: Option<String>,
     mgr: State<'_, Arc<JobManager>>,
 ) -> Result<Job, String> {
+    if let Some(package_id) = pack_id.strip_prefix("x-") {
+        let root = crate::sdlc::vault_root()?;
+        let project_id = project_id
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| "확장 action은 활성화한 project ID가 필요합니다".to_string())?;
+        crate::extensions::package::authorize_at(
+            &root,
+            &project_id,
+            package_id,
+            &format!("adapter:{package_id}"),
+        )?;
+        crate::extensions::package::authorize_at(&root, &project_id, package_id, "vault:write")?;
+        params.insert("projectId".into(), Value::String(project_id));
+    }
     mgr.enqueue(JobRequest {
         kind: "action".into(),
         pack_id: Some(pack_id),
@@ -800,7 +840,6 @@ pub fn reject_request(id: String, reason: Option<String>, app: AppHandle) -> Res
     }
     result
 }
-
 
 // ---------- 협업(멀티에이전트 통합 레인) ----------
 

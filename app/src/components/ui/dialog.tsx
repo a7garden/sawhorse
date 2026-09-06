@@ -18,11 +18,21 @@ export function Dialog({
   className?: string;
   wide?: boolean;
 }) {
+  const titleId = React.useId();
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title != null ? titleId : undefined}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && onClose) {
+            event.stopPropagation();
+            onClose();
+          }
+        }}
         className={cn(
           "relative z-10 max-h-[85vh] w-full overflow-hidden rounded-xl border bg-card shadow-lg flex flex-col",
           wide ? "max-w-3xl" : "max-w-md",
@@ -31,9 +41,16 @@ export function Dialog({
       >
         {title != null && (
           <div className="flex items-center justify-between border-b px-4 py-2.5">
-            <div className="text-sm font-semibold">{title}</div>
+            <div id={titleId} className="text-sm font-semibold">
+              {title}
+            </div>
             {onClose && (
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="닫기">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onClose}
+                aria-label="닫기"
+              >
                 <X />
               </Button>
             )}

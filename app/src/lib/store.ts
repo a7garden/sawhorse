@@ -24,7 +24,7 @@ import type {
  * 코어 페이지는 호스트가 항상 들고 있고, 그 사이의 화면은 팩이 기여한다.
  * 팩 화면의 id 는 `view:<packId>:<viewId>`.
  */
-export const CORE_PAGES = ["home", "jobs", "tasks", "sessions", "review", "sources", "reading", "terminal", "packs", "settings"] as const;
+export const CORE_PAGES = ["home", "overview", "board", "calendar", "harness", "knowledge", "projects", "workflows", "schemas", "onboarding", "jobs", "tasks", "sessions", "review", "sources", "reading", "terminal", "packs", "settings"] as const;
 export type CorePage = (typeof CORE_PAGES)[number];
 export type PageId = CorePage | `view:${string}:${string}`;
 
@@ -94,7 +94,7 @@ interface AppState {
 let initialized = false;
 
 export const useApp = create<AppState>((set, get) => ({
-  page: "home",
+  page: "overview",
 
   /**
    * 팩 화면 id 를 그대로 받고, 예전 이름(`improve`·`todos`…)은 그 화면을 가진 뷰로 옮긴다.
@@ -138,6 +138,7 @@ export const useApp = create<AppState>((set, get) => ({
   init: async () => {
     if (initialized) return;
     initialized = true;
+    if (!("__TAURI_INTERNALS__" in window)) return;
     const unlisteners: UnlistenFn[] = [];
     unlisteners.push(
       await listen<{ jobId: string; entry: ProgressEntry }>(EVENTS.jobProgress, (e) =>

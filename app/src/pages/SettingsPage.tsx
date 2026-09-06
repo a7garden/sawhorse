@@ -90,7 +90,6 @@ export default function SettingsPage() {
         vaultPath: draft.vaultPath.trim(),
         defaultProject: draft.defaultProject,
         projects: draft.projects,
-        excelOutputDir: draft.dashboard.excelOutputDir,
         claudeBin: draft.dashboard.claudeBin,
         permissionMode: draft.dashboard.permissionMode,
         launchAtLogin: draft.dashboard.launchAtLogin,

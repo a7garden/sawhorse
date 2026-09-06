@@ -1,0 +1,23 @@
+{
+  "id": "xlsx-reports",
+  "label": "XLSX 보고서",
+  "icon": "sheet",
+  "type": "table",
+  "component": "",
+  "query": {
+    "folders": ["사업/*/이슈", "사업/*/개선"],
+    "exclude": ["*.base"],
+    "where": [],
+    "sort": { "field": "", "source": "mtime", "desc": true },
+    "limit": 2000
+  },
+  "columns": [
+    { "field": "id", "label": "ID", "source": "", "type": "text", "width": 100 },
+    { "field": "", "label": "제목", "source": "title", "type": "text", "width": 0 },
+    { "field": "status", "label": "상태", "source": "", "type": "badge", "width": 90 },
+    { "field": "project", "label": "사업", "source": "", "type": "text", "width": 120 }
+  ],
+  "groupBy": "status",
+  "actions": ["export"],
+  "empty": "내보낼 이슈가 없습니다."
+}

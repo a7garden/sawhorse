@@ -144,9 +144,11 @@ fn skill_dirs(root: &Path) -> Vec<PathBuf> {
         .ok()
         .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
         .and_then(|v| {
-            v.get("skills")?
-                .as_array()
-                .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
+            v.get("skills")?.as_array().map(|a| {
+                a.iter()
+                    .filter_map(|x| x.as_str().map(str::to_string))
+                    .collect()
+            })
         });
     match declared {
         Some(dirs) => dirs
@@ -207,7 +209,6 @@ pub fn read_skill_at(skills_dir: &Path, name: &str) -> Result<String, String> {
     let p = skills_dir.join(name).join("SKILL.md");
     std::fs::read_to_string(&p).map_err(|e| format!("SKILL.md 읽기 실패: {e}"))
 }
-
 
 /// plugin.json 의 `name` — 설치된 플러그인 감지(`agents::plugin_installs`)의 키.
 pub fn plugin_name() -> Result<String, String> {
@@ -312,7 +313,11 @@ mod tests {
             r#"{"skills": ["./skills", "./packs/si/skills"]}"#,
         )
         .unwrap();
-        for d in ["skills/workbench", "packs/si/skills/morning", "packs/si/skills/zzz"] {
+        for d in [
+            "skills/workbench",
+            "packs/si/skills/morning",
+            "packs/si/skills/zzz",
+        ] {
             fs::create_dir_all(root.join(d)).unwrap();
         }
         fs::write(
@@ -339,5 +344,4 @@ mod tests {
         assert_eq!(got[1].description, "앱 고유", "첫 선언(skills/)이 이긴다");
         fs::remove_dir_all(&root).unwrap();
     }
-
 }

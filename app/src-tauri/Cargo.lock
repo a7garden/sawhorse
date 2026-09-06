@@ -3544,6 +3544,7 @@ dependencies = [
 name = "sawhorse-dashboard"
 version = "1.0.0"
 dependencies = [
+ "base64 0.22.1",
  "chrono",
  "dirs 6.0.0",
  "ed25519-dalek",
@@ -3559,6 +3560,7 @@ dependencies = [
  "rand",
  "reqwest",
  "rusqlite",
+ "semver",
  "serde",
  "serde_json",
  "serde_yaml",

@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 2,
+  "id": "xlsx-export",
+  "publisher": "sawhorse",
+  "name": "XLSX Export",
+  "version": "1.0.0",
+  "engineApi": "^1.0",
+  "dependencies": [],
+  "provides": ["exporter:xlsx"],
+  "contributions": {
+    "workflows": [],
+    "schemas": [],
+    "templates": [],
+    "views": ["views/reports.json"],
+    "actions": ["actions/export.json"],
+    "skills": ["skills/xlsx-export"],
+    "analyzers": [],
+    "exporters": []
+  },
+  "permissions": ["vault:read", "vault:write", "adapter:xlsx-export"],
+  "fileDigests": {
+    "actions/export.json": "af57f1e3b673fc9ef800097d52ece26659ffac7ec7efbf4bbd88cb23a380f2ff",
+    "skills/xlsx-export/SKILL.md": "baaa7714089a288e6c81302d370a431da5d135b43bd3ebf8ed4c465ec1dc70ad",
+    "views/reports.json": "59caa546b2c5728592c7cb1a649f93ac2782ef9241d57f5b274c5216c7288b45"
+  }
+}
