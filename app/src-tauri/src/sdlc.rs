@@ -1243,11 +1243,24 @@ fn save_work_at(root: &Path, mut input: WorkItem) -> Result<WorkItem, String> {
     input.description = body;
     Ok(input)
 }
+fn milestone_has_issues(root: &Path, id: &str) -> bool {
+    let names = crate::vault::project_pairs(root, &[])
+        .into_iter()
+        .map(|(name, _)| name)
+        .collect::<Vec<_>>();
+    crate::vault::scan_improvements(root, None, &names)
+        .iter()
+        .any(|n| n.milestone == id)
+}
+
 fn save_event_at(root: &Path, mut input: CalendarEvent) -> Result<CalendarEvent, String> {
     let _guard = mutation_lock();
     ensure_initialized(root)?;
     if input.id.trim().is_empty() {
         input.id = format!("event-{}", Uuid::new_v4().simple());
+    }
+    if input.kind != "milestone" && milestone_has_issues(root, &input.id) {
+        return Err("마일스톤에 포함된 이슈를 먼저 제거해 주세요.".into());
     }
     validate_event(&input)?;
     if let Some(project) = &input.project_id {
@@ -1947,6 +1960,9 @@ pub fn sdd_delete_event(id: String) -> Result<(), String> {
     let root = vault_root()?;
     ensure_initialized(&root)?;
     validate_id(&id)?;
+    if milestone_has_issues(&root, &id) {
+        return Err("마일스톤에 포함된 이슈를 먼저 제거해 주세요.".into());
+    }
     let path = event_path(&root, &id);
     if !path.exists() {
         return Err(format!("일정을 찾을 수 없습니다: {id}"));
@@ -1986,6 +2002,48 @@ mod tests {
             ..Default::default()
         }
     }
+    #[test]
+    fn milestone_kind_preserves_issue_membership() {
+        let root = tempdir("milestone-membership");
+        initialize(&root).unwrap();
+        let event = save_event_at(
+            &root,
+            CalendarEvent {
+                id: "release-1".into(),
+                title: "Release".into(),
+                date: "2026-09-10".into(),
+                kind: "milestone".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let dir = root.join("사업/FDR/이슈");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("FDR-001 Task.md"),
+            "---\ntype: 이슈\nid: FDR-001\nstate: open\nmilestone: release-1\n---\nBody\n",
+        )
+        .unwrap();
+        assert!(milestone_has_issues(&root, &event.id));
+        assert!(save_event_at(
+            &root,
+            CalendarEvent {
+                kind: "meeting".into(),
+                ..event.clone()
+            }
+        )
+        .is_err());
+        assert!(save_event_at(
+            &root,
+            CalendarEvent {
+                title: "Renamed".into(),
+                ..event
+            }
+        )
+        .is_ok());
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn initialization_is_idempotent_and_preserves_content() {
         let root = tempdir("init");

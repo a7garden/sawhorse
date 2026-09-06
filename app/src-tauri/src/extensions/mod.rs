@@ -10,3 +10,5 @@ pub mod github_outbound;
 pub mod manifest;
 pub mod package;
 pub mod signing;
+
+pub mod github_management;

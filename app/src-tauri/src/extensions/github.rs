@@ -106,6 +106,9 @@ pub async fn poll_issues(
         let link =
             store.find_external_link("github", &config.repository_id, &issue.id.to_string())?;
         let payload = serde_json::json!({
+            "account": config.account,
+            "repositoryId": config.repository_id,
+            "repository": config.repository,
             "number": issue.number,
             "title": issue.title,
             "body": issue.body.clone().unwrap_or_default(),
@@ -202,7 +205,19 @@ pub fn accept_import(
     let title = payload["title"].as_str().unwrap_or("무제").to_string();
     let next_number = next_note_number(notes_dir, id_prefix)?;
     let note_id = format!("{id_prefix}-{next_number:03}");
-    let file_name = format!("{note_id} {title}.md");
+    crate::sdlc::validate_id(id_prefix)?;
+    let safe_title: String = title
+        .chars()
+        .map(|c| {
+            if c.is_control() || matches!(c, '/' | '\\' | ':') {
+                '-'
+            } else {
+                c
+            }
+        })
+        .take(100)
+        .collect();
+    let file_name = format!("{note_id} {safe_title}.md");
     let target = notes_dir.join(&file_name);
     if target.exists() {
         return Err(format!("노트 파일이 이미 있다: {}", target.display()));
@@ -225,7 +240,7 @@ pub fn accept_import(
         project_id,
         &target.to_string_lossy().to_string(),
         "github",
-        "",
+        payload["account"].as_str().unwrap_or(""),
         &repository_id,
         inbound["externalId"].as_str().unwrap_or(""),
     )?;
@@ -297,14 +312,28 @@ pub fn update_frontmatter_field(
     let mut lines: Vec<String> = Vec::new();
     for line in fm.lines() {
         if line.starts_with(&key) && !replaced {
-            lines.push(format!("{field}: \"{}\"", value.replace('"', "\\\"")));
+            lines.push(format!(
+                "{field}: \"{}\"",
+                value
+                    .replace('\\', "\\\\")
+                    .replace('"', "\\\"")
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r")
+            ));
             replaced = true;
         } else {
             lines.push(line.to_string());
         }
     }
     if !replaced {
-        lines.push(format!("{field}: \"{}\"", value.replace('"', "\\\"")));
+        lines.push(format!(
+            "{field}: \"{}\"",
+            value
+                .replace('\\', "\\\\")
+                .replace('"', "\\\"")
+                .replace('\n', "\\n")
+                .replace('\r', "\\r")
+        ));
     }
     let mut out = lines.join("\n");
     out.push_str(rest);
@@ -390,6 +419,21 @@ mod tests {
         assert!(updated.starts_with("---\ntype: 이슈\nstatus: 제안\nstate: \"closed\"\n---\n"));
         assert!(updated.ends_with("\n\n본문\n"), "본문 보존");
         assert!(update_frontmatter_field("본문만", "state", "open").is_err());
+    }
+
+    #[test]
+    fn frontmatter_update_cannot_inject_keys() {
+        let note = "---\nmilestone: old\napprove: false\n---\nBody\n";
+        let updated =
+            update_frontmatter_field(note, "milestone", "release\\next\nstate: closed").unwrap();
+        let split = crate::vault::split_frontmatter(&updated).unwrap();
+        let mapping: serde_yaml::Value = serde_yaml::from_str(&split.yaml).unwrap();
+        assert_eq!(
+            mapping["milestone"].as_str(),
+            Some("release\\next\nstate: closed")
+        );
+        assert!(mapping["state"].is_null());
+        assert_eq!(split.after_close, "Body\n");
     }
 
     #[test]

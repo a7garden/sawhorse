@@ -1,0 +1,40 @@
+{
+  "id": "github",
+  "name": "GitHub",
+  "version": "0.1.0",
+  "components": [
+    {
+      "id": "issues",
+      "type": "connector",
+      "adapter": "builtin:github",
+      "requests": {
+        "repository": [
+          "read"
+        ],
+        "issues": [
+          "read"
+        ],
+        "network": [
+          "api.github.com"
+        ],
+        "secrets": [
+          "github.oauth"
+        ]
+      },
+      "contributes": {
+        "sources": [
+          {
+            "id": "issues",
+            "type": "issue"
+          }
+        ],
+        "views": [
+          {
+            "id": "github-sync",
+            "renderer": "sync-status"
+          }
+        ]
+      }
+    }
+  ]
+}
