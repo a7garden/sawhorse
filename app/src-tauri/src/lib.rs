@@ -75,6 +75,7 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             apply_dock_icon();
             // 번들은 plugin/ 통째로 실는다 — 리소스 디렉터리의 plugin 이 플러그인 루트다.
@@ -92,6 +93,7 @@ pub fn run() {
                 let _ = handle.emit(event, payload.clone());
             });
             let mgr = jobs::JobManager::start(state.clone(), emit_fn.clone());
+            scheduler::start_tick(mgr.clone(), state.clone(), emit_fn.clone());
             // 협업 서비스: 장부 열기 + 인박스 감시 + 큐 틱.
             let collab_tick_emit = emit_fn.clone();
             match collab::store::Store::open() {
@@ -290,6 +292,7 @@ pub fn run() {
             commands::diagnostics,
             commands::list_improvements,
             commands::list_issues,
+            commands::set_issue_milestone,
             commands::read_note,
             commands::approve_note,
             commands::approve_issue,
@@ -333,6 +336,15 @@ pub fn run() {
             commands::collab_inbox_tick,
             // 확장·소스(connector)
             commands::extensions_list,
+            extensions::github_management::github_account,
+            extensions::github_management::github_oauth_start,
+            extensions::github_management::github_oauth_poll,
+            extensions::github_management::github_oauth_cancel,
+            extensions::github_management::github_disconnect,
+            extensions::github_management::github_repositories,
+            extensions::github_management::github_clone_project,
+            commands::fetch_extension_catalog,
+            commands::set_connector_enabled,
             extensions::package::extension_package_install,
             extensions::package::extension_package_list,
             extensions::package::extension_package_resolve,

@@ -82,6 +82,45 @@ pub fn list_issues(project: Option<String>) -> Vec<vault::ImprovementNote> {
     list_improvements(project)
 }
 
+/// Membership is stored on the existing issue note, so external vault tools see the same milestone.
+#[tauri::command]
+pub fn set_issue_milestone(paths: Vec<String>, milestone: String) -> Result<(), String> {
+    if milestone.len() > 256 || milestone.chars().any(char::is_control) {
+        return Err("잘못된 마일스톤입니다.".into());
+    }
+    let known = list_issues(None);
+    if !milestone.is_empty()
+        && !known.iter().any(|n| n.milestone == milestone)
+        && !crate::sdlc::sdd_snapshot()?
+            .events
+            .iter()
+            .any(|e| e.id == milestone && e.kind == "milestone")
+    {
+        return Err("마일스톤을 찾을 수 없습니다.".into());
+    }
+    let root = crate::sdlc::vault_root()?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let mut updates = Vec::new();
+    for path in paths.iter().collect::<std::collections::HashSet<_>>() {
+        if !known.iter().any(|n| &n.path == path) {
+            return Err("등록된 이슈만 마일스톤에 넣을 수 있습니다.".into());
+        }
+        let target = Path::new(path).canonicalize().map_err(|e| e.to_string())?;
+        if !target.starts_with(&root) {
+            return Err("볼트 밖의 이슈는 수정할 수 없습니다.".into());
+        }
+        let text = std::fs::read_to_string(&target).map_err(|e| e.to_string())?;
+        let updated =
+            crate::extensions::github::update_frontmatter_field(&text, "milestone", &milestone)?;
+        updates.push((target, updated));
+    }
+    for (target, updated) in updates {
+        crate::config::write_atomic(&target, updated.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub fn read_note(path: String) -> Result<NoteView, String> {
     let (frontmatter, markdown) = vault::read_note(Path::new(&path))?;
@@ -688,36 +727,86 @@ pub struct TasksView {
     pub rejected: Vec<crate::tasks::RejectedRequest>,
 }
 
-fn builtin_rows(view: &config::ConfigView, state: &AppState) -> Vec<TaskRow> {
-    let s = &view.dashboard.schedules;
-    [
-        ("morning", &s.morning, "아침 브리핑"),
-        ("lunch", &s.lunch, "오전 결산"),
-        ("evening", &s.evening, "퇴근 정산"),
-    ]
-    .into_iter()
-    .map(|(id, sched, title)| TaskRow {
-        last_run: state.state.lock().last_run.get(id).cloned(),
-        def: crate::tasks::TaskDef {
-            id: id.into(),
-            title: title.into(),
-            skill: Some(format!("sawhorse:{id}")),
-            builtin: true,
-            enabled: sched.enabled,
-            schedule: Some(crate::tasks::Schedule {
-                kind: crate::tasks::ScheduleKind::Daily,
-                time: sched.time.clone(),
-                date: None,
-            }),
-            source: crate::tasks::Source {
-                kind: "builtin".into(),
-                agent: None,
-                request: None,
+fn builtin_rows(state: &AppState) -> Vec<TaskRow> {
+    let mut rows: Vec<TaskRow> = scheduler::list_schedules(state)
+        .into_iter()
+        .map(|entry| TaskRow {
+            last_run: entry.last_run,
+            def: crate::tasks::TaskDef {
+                id: entry.key,
+                title: entry.label,
+                builtin: true,
+                enabled: entry.enabled,
+                schedule: Some(crate::tasks::Schedule {
+                    kind: if entry.kind == "weekdays" {
+                        crate::tasks::ScheduleKind::Weekdays
+                    } else {
+                        crate::tasks::ScheduleKind::Daily
+                    },
+                    time: entry.time,
+                    date: None,
+                }),
+                source: crate::tasks::Source {
+                    kind: "builtin".into(),
+                    ..Default::default()
+                },
+                ..Default::default()
             },
-            ..crate::tasks::TaskDef::default()
+        })
+        .collect();
+
+    // 예약 여부는 작업의 실행 방식일 뿐이다. 활성 팩이 제공하는 수동 액션도
+    // 같은 작업 목록에 넣되, 이미 예약 행으로 들어온 액션은 중복시키지 않는다.
+    let existing: std::collections::HashSet<String> =
+        rows.iter().map(|row| row.def.id.clone()).collect();
+    let view = config::load_view();
+    let reg = packs::load_registry(&view.packs.enabled);
+    let last_run = state.state.lock().last_run.clone();
+    for pack in reg.enabled() {
+        for action in &pack.manifest.actions {
+            let id = format!("{}.{}", pack.manifest.id, action.id);
+            if existing.contains(&id) {
+                continue;
+            }
+            rows.push(TaskRow {
+                last_run: last_run
+                    .get(&id)
+                    .or_else(|| last_run.get(&action.id))
+                    .cloned(),
+                def: crate::tasks::TaskDef {
+                    id,
+                    title: action.label.clone(),
+                    prompt: action.description.clone(),
+                    builtin: true,
+                    enabled: true,
+                    skill: Some(action.id.clone()),
+                    source: crate::tasks::Source {
+                        kind: "pack".into(),
+                        request: Some(pack.manifest.id.clone()),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            });
+        }
+    }
+    rows.push(TaskRow {
+        last_run: last_run.get("core.promote").cloned(),
+        def: crate::tasks::TaskDef {
+            id: "core.promote".into(),
+            title: "인박스 승격 검토".into(),
+            prompt: "미승격 인박스 항목을 검토해 실행 가능한 이슈로 승격합니다.".into(),
+            builtin: true,
+            enabled: true,
+            source: crate::tasks::Source {
+                kind: "core".into(),
+                ..Default::default()
+            },
+            ..Default::default()
         },
-    })
-    .collect()
+    });
+    rows.sort_by(|a, b| a.def.title.cmp(&b.def.title).then(a.def.id.cmp(&b.def.id)));
+    rows
 }
 
 #[tauri::command]
@@ -725,8 +814,7 @@ pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
     let root = crate::tasks::workbench_root();
     let _ = crate::tasks::ensure_dirs(&root);
     crate::tasks::process_inbox(&root, &chrono::Local::now().format("%Y-%m-%d").to_string());
-    let view = config::load_view();
-    let builtin = builtin_rows(&view, &state);
+    let builtin = builtin_rows(&state);
     let tasks: Vec<TaskRow> = {
         let st = state.state.lock();
         let last_run = st.last_run.clone();
@@ -786,6 +874,12 @@ pub fn delete_task(id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn set_task_enabled(id: String, enabled: bool) -> Result<(), String> {
     let root = crate::tasks::workbench_root();
+    if let Some(entry) = scheduler::entries(&config::load_view())
+        .into_iter()
+        .find(|e| e.pack_id != scheduler::TASKS_PACK_ID && (e.key == id || e.action_id == id))
+    {
+        return set_schedule(entry.key, enabled, entry.time).map(|_| ());
+    }
     if scheduler::LEGACY_ROUTINES.contains(&id.as_str()) {
         let scheds = &config::load_view().dashboard.schedules;
         let time = match id.as_str() {
@@ -807,6 +901,31 @@ pub fn run_task_now(
     mgr: State<'_, Arc<JobManager>>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<Job, String> {
+    if id == "core.promote" {
+        let job = mgr.enqueue(JobRequest {
+            kind: "promote".into(),
+            ..Default::default()
+        })?;
+        state
+            .state
+            .lock()
+            .last_run
+            .insert(id, chrono::Local::now().format("%Y-%m-%d").to_string());
+        state.save_state();
+        return Ok(job);
+    }
+    if let Some((pack_id, action_id)) = id.split_once('.') {
+        let view = config::load_view();
+        let reg = packs::load_registry(&view.packs.enabled);
+        if reg.action(pack_id, action_id).is_some() {
+            return mgr.enqueue(JobRequest {
+                kind: "action".into(),
+                pack_id: Some(pack_id.into()),
+                action_id: Some(action_id.into()),
+                ..Default::default()
+            });
+        }
+    }
     scheduler::run_scheduled_now(&mgr, &state, &id)
 }
 
@@ -1109,49 +1228,88 @@ pub fn builtin_extension_manifests() -> Vec<crate::extensions::manifest::Extensi
         }],
         ..Default::default()
     };
-    let github = crate::extensions::manifest::ExtensionManifest {
-        id: "github".into(),
-        name: "GitHub".into(),
-        version: "0.1.0".into(),
-        components: vec![crate::extensions::manifest::ExtensionComponent {
-            id: "issues".into(),
-            kind: "connector".into(),
-            adapter: "builtin:github".into(),
-            requests: crate::extensions::manifest::PermissionRequests {
-                repository: vec!["read".into()],
-                issues: vec!["read".into()],
-                network: vec!["api.github.com".into()],
-                secrets: vec!["github.oauth".into()],
-            },
-            contributes: crate::extensions::manifest::ComponentContribution {
-                sources: vec![crate::extensions::manifest::SourceContribution {
-                    id: "issues".into(),
-                    kind: "issue".into(),
-                }],
-                views: vec![crate::extensions::manifest::ViewContribution {
-                    id: "github-sync".into(),
-                    renderer: "sync-status".into(),
-                }],
-            },
-            ..Default::default()
-        }],
-        ..Default::default()
-    };
-    vec![feeds, github]
+    vec![feeds]
+}
+
+fn connector_preferences_path() -> std::path::PathBuf {
+    crate::collab::workbench_root().join("connector-preferences.json")
+}
+fn connector_preferences() -> Result<std::collections::BTreeMap<String, bool>, String> {
+    let path = connector_preferences_path();
+    if !path.exists() {
+        return Ok(Default::default());
+    }
+    serde_json::from_str(&std::fs::read_to_string(path).map_err(|e| e.to_string())?)
+        .map_err(|e| e.to_string())
+}
+fn connector_is_enabled(id: &str, preferences: &std::collections::BTreeMap<String, bool>) -> bool {
+    preferences
+        .get(if id == "core-feeds" { "feeds" } else { id })
+        .copied()
+        .unwrap_or(true)
+}
+fn available_connector_manifests(
+) -> Result<Vec<crate::extensions::manifest::ExtensionManifest>, String> {
+    let preferences = connector_preferences()?;
+    let mut manifests = builtin_extension_manifests();
+    for bundle in crate::extensions::manifest::discover(None)? {
+        if !manifests.iter().any(|m| m.id == bundle.manifest.id) {
+            manifests.push(bundle.manifest);
+        }
+    }
+    manifests.retain(|m| connector_is_enabled(&m.id, &preferences));
+    Ok(manifests)
+}
+
+#[tauri::command]
+pub fn set_connector_enabled(id: String, enabled: bool) -> Result<(), String> {
+    if !["feeds", "github"].contains(&id.as_str()) {
+        return Err("알 수 없는 확장입니다.".into());
+    }
+    if id == "github" && enabled {
+        let dir = crate::extensions::manifest::user_extensions_dir().join("github");
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let path = dir.join("extension.json");
+        if !path.exists() {
+            let source = include_str!("../../../plugin/connector-extensions/github/extension.json");
+            crate::extensions::manifest::ExtensionManifest::parse(source)?;
+            std::fs::write(path, source).map_err(|e| e.to_string())?;
+        }
+    }
+    let mut preferences = connector_preferences()?;
+    preferences.insert(id, enabled);
+    let path = connector_preferences_path();
+    std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+    let tmp = path.with_extension("tmp");
+    std::fs::write(
+        &tmp,
+        serde_json::to_vec_pretty(&preferences).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    std::fs::rename(tmp, path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn extensions_list() -> Result<serde_json::Value, String> {
-    let user = crate::extensions::manifest::discover(None)?;
-    let mut all: Vec<serde_json::Value> = builtin_extension_manifests()
+    let preferences = connector_preferences()?;
+    let mut manifests = builtin_extension_manifests();
+    for bundle in crate::extensions::manifest::discover(None)? {
+        if !manifests.iter().any(|m| m.id == bundle.manifest.id) {
+            manifests.push(bundle.manifest);
+        }
+    }
+    let all: Vec<serde_json::Value> = manifests
         .into_iter()
         .map(|m| {
-            serde_json::json!({ "manifest": serde_json::to_value(&m).unwrap_or_default(), "source": "builtin", "dir": "" })
+            let source = if m.id == "core-feeds" {
+                "builtin"
+            } else {
+                "user"
+            };
+            let enabled = connector_is_enabled(&m.id, &preferences);
+            serde_json::json!({"manifest": m, "source": source, "dir": "", "enabled": enabled})
         })
         .collect();
-    for b in user {
-        all.push(serde_json::json!({ "manifest": serde_json::to_value(&b.manifest).unwrap_or_default(), "source": b.source, "dir": b.dir }));
-    }
     Ok(serde_json::json!({ "bundles": all }))
 }
 
@@ -1165,7 +1323,7 @@ pub fn sources_upsert_instance(
     network: Vec<String>,
 ) -> Result<serde_json::Value, String> {
     let store = crate::collab::store::Store::open()?;
-    let manifests = builtin_extension_manifests();
+    let manifests = available_connector_manifests()?;
     let known = manifests
         .iter()
         .find(|m| m.id == extension_id)
@@ -1202,6 +1360,12 @@ pub fn sources_list_instances() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 pub async fn sources_refresh(instance_id: String) -> Result<serde_json::Value, String> {
+    if !available_connector_manifests()?
+        .iter()
+        .any(|m| m.components.iter().any(|c| c.adapter == "builtin:rss"))
+    {
+        return Err("읽을거리 확장을 먼저 켜세요.".into());
+    }
     let store = crate::collab::store::Store::open()?;
     let config_value = store
         .instance_config(&instance_id)?
@@ -1248,6 +1412,12 @@ pub fn article_set_state(
 
 #[tauri::command]
 pub async fn github_import_tick(instance_id: String) -> Result<serde_json::Value, String> {
+    if !available_connector_manifests()?
+        .iter()
+        .any(|m| m.components.iter().any(|c| c.adapter == "builtin:github"))
+    {
+        return Err("GitHub 연동 확장을 먼저 설치하고 켜세요.".into());
+    }
     let store = crate::collab::store::Store::open()?;
     let config_value = store
         .instance_config(&instance_id)?
@@ -1333,4 +1503,115 @@ pub fn remote_operation_reconcile(
         remote_created,
         &result,
     )
+}
+
+/// Read-only catalogue lookup. Installation still uses package signature/digest validation.
+#[tauri::command]
+pub async fn fetch_extension_catalog(url: String) -> Result<Value, String> {
+    let parsed = reqwest::Url::parse(&url).map_err(|e| e.to_string())?;
+    if parsed.scheme() != "https" || !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err("마켓플레이스는 인증 정보 없는 HTTPS 주소여야 합니다.".into());
+    }
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|e| e.to_string())?;
+    let mut response = client
+        .get(parsed)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?;
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
+        if bytes.len() + chunk.len() > 2 * 1024 * 1024 {
+            return Err("카탈로그는 2MB 이하여야 합니다.".into());
+        }
+        bytes.extend_from_slice(&chunk);
+    }
+    let catalog: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    validate_extension_catalog(&catalog)?;
+    Ok(catalog)
+}
+fn validate_extension_catalog(catalog: &Value) -> Result<(), String> {
+    if catalog.get("name").and_then(Value::as_str).is_none() {
+        return Err("카탈로그 이름이 없습니다.".into());
+    }
+    let packages = catalog
+        .get("packages")
+        .and_then(Value::as_array)
+        .ok_or("packages 목록이 없습니다.")?;
+    let mut ids = std::collections::HashSet::new();
+    for item in packages {
+        let id = item
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty())
+            .ok_or("패키지 ID가 없습니다.")?;
+        if !ids.insert(id) || item.get("name").and_then(Value::as_str).is_none() {
+            return Err("패키지 이름 또는 고유 ID를 확인하세요.".into());
+        }
+        for field in ["description", "category"] {
+            if item.get(field).is_some_and(|v| !v.is_string()) {
+                return Err(format!("{field}는 문자열이어야 합니다."));
+            }
+        }
+        let source = &item["source"];
+        let kind = source["kind"].as_str().unwrap_or("");
+        let location = source["location"].as_str().unwrap_or("");
+        let parsed = reqwest::Url::parse(location).map_err(|e| e.to_string())?;
+        if !["git", "https"].contains(&kind) || parsed.scheme() != "https" {
+            return Err("카탈로그 패키지는 HTTPS 주소를 사용해야 합니다.".into());
+        }
+        if kind == "git"
+            && !source["commit"]
+                .as_str()
+                .is_some_and(|c| c.len() == 40 && c.chars().all(|v| v.is_ascii_hexdigit()))
+        {
+            return Err("Git 패키지는 40자리 commit이 필요합니다.".into());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod ux_catalog_tests {
+    use super::*;
+    #[test]
+    fn github_is_an_installable_extension_and_feeds_is_core() {
+        let builtins = builtin_extension_manifests();
+        assert!(builtins.iter().any(|m| m.id == "core-feeds"));
+        assert!(!builtins.iter().any(|m| m.id == "github"));
+        let github = crate::extensions::manifest::ExtensionManifest::parse(include_str!(
+            "../../../plugin/connector-extensions/github/extension.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            github.component("issues").unwrap().adapter,
+            "builtin:github"
+        );
+        let preferences = std::collections::BTreeMap::from([("feeds".to_string(), false)]);
+        assert!(!connector_is_enabled("core-feeds", &preferences));
+    }
+    #[test]
+    fn catalogue_rejects_local_sources_duplicate_ids_and_unpinned_git() {
+        let valid = serde_json::json!({"name":"Skills","packages":[{"id":"a","name":"A","source":{"kind":"https","location":"https://example.com/a.json"}}]});
+        assert!(validate_extension_catalog(&valid).is_ok());
+        let mut local = valid.clone();
+        local["packages"][0]["source"]["kind"] = "local-directory".into();
+        assert!(validate_extension_catalog(&local).is_err());
+        let mut duplicate = valid.clone();
+        duplicate["packages"]
+            .as_array_mut()
+            .unwrap()
+            .push(valid["packages"][0].clone());
+        assert!(validate_extension_catalog(&duplicate).is_err());
+        let mut git = valid.clone();
+        git["packages"][0]["source"]["kind"] = "git".into();
+        assert!(validate_extension_catalog(&git).is_err());
+        git["packages"][0]["source"]["commit"] = "a".repeat(40).into();
+        assert!(validate_extension_catalog(&git).is_ok());
+    }
 }
