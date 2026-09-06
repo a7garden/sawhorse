@@ -49,11 +49,6 @@ export default function TodosPage() {
     <div>
       <PageHeader
         title="할 일"
-        desc={
-          todos
-            ? `${todos.date} 일지 — 체크와 추가는 볼트 일지 파일에 바로 기록됩니다.`
-            : "일지의 오늘/내일 체크리스트입니다."
-        }
       />
 
       {todos && !todos.fileExists && (

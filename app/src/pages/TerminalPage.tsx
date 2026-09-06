@@ -128,7 +128,6 @@ export default function TerminalPage() {
     <div className="flex h-full flex-col">
       <PageHeader
         title="터미널"
-        desc="herdr 세션에서 무엇이 돌고 무엇이 사람을 기다리는지 봅니다. 잡도 여기서 열립니다."
       >
         <Button size="sm" variant="outline" disabled={busy || !snap?.available} onClick={() => void act(() => api.herdrOpenTab(target || undefined), "새 탭을 열었습니다.")}>
           <Plus /> 새 탭
