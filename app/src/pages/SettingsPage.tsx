@@ -16,7 +16,12 @@ import GeneralSection from "./settings/GeneralSection";
 import ProjectsSection from "./settings/ProjectsSection";
 import { Empty, PageHeader } from "./common";
 
-type SectionId = "general" | "projects" | "collaboration" | "execution" | "diagnostics";
+type SectionId =
+  | "general"
+  | "projects"
+  | "collaboration"
+  | "execution"
+  | "diagnostics";
 
 const SECTIONS: { value: SectionId; label: string }[] = [
   { value: "general", label: "일반" },
@@ -33,11 +38,13 @@ function validate(d: ConfigView): string | null {
     if (p.name.trim().length === 0) return "프로젝트 이름이 비어 있습니다.";
     if (names.has(p.name)) return `프로젝트 이름이 중복됩니다: ${p.name}`;
     names.add(p.name);
-    if (p.path.trim().length === 0) return `${p.name} 프로젝트의 경로가 비어 있습니다.`;
+    if (p.path.trim().length === 0)
+      return `${p.name} 프로젝트의 경로가 비어 있습니다.`;
   }
   if (d.defaultProject.length > 0 && !names.has(d.defaultProject))
     return "기본 프로젝트가 프로젝트 목록에 없습니다.";
-  if (d.dashboard.claudeBin.trim().length === 0) return "claude 실행 파일을 입력하세요.";
+  if (d.dashboard.claudeBin.trim().length === 0)
+    return "claude 실행 파일을 입력하세요.";
   return null;
 }
 
@@ -54,7 +61,9 @@ export default function SettingsPage() {
   const openWizard = useApp((s) => s.openWizard);
 
   const [section, setSection] = useState<SectionId>("general");
-  const [draft, setDraft] = useState<ConfigView | null>(config ? structuredClone(config) : null);
+  const [draft, setDraft] = useState<ConfigView | null>(
+    config ? structuredClone(config) : null,
+  );
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -63,7 +72,10 @@ export default function SettingsPage() {
   }, [config]);
 
   const dirty = useMemo(
-    () => config != null && draft != null && JSON.stringify(draft) !== JSON.stringify(config),
+    () =>
+      config != null &&
+      draft != null &&
+      JSON.stringify(draft) !== JSON.stringify(config),
     [config, draft],
   );
 
@@ -119,7 +131,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <PageHeader title="설정" desc="볼트·프로젝트·예약과 실행 옵션을 관리합니다.">
+      <PageHeader title="설정">
         <Button size="sm" variant="ghost" onClick={openWizard}>
           마법사
         </Button>
@@ -134,13 +146,26 @@ export default function SettingsPage() {
         >
           되돌리기
         </Button>
-        <Button size="sm" disabled={!dirty || saving} onClick={() => void save()}>
+        <Button
+          size="sm"
+          disabled={!dirty || saving}
+          onClick={() => void save()}
+        >
           {saving ? "저장 중…" : "저장"}
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => useApp.getState().setPage("schemas")}
+        >
+          볼트 문서 구조
         </Button>
       </PageHeader>
 
       {msg && (
-        <div className={`px-4 pt-2 text-xs ${msg.ok ? "text-success" : "text-destructive"}`}>
+        <div
+          className={`px-4 pt-2 text-xs ${msg.ok ? "text-success" : "text-destructive"}`}
+        >
           {msg.text}
         </div>
       )}
@@ -154,11 +179,21 @@ export default function SettingsPage() {
           </div>
 
           {section === "general" && (
-            <GeneralSection draft={draft} patchDraft={patchDraft} onLaunchAtLogin={toggleLogin} />
+            <GeneralSection
+              draft={draft}
+              patchDraft={patchDraft}
+              onLaunchAtLogin={toggleLogin}
+            />
           )}
-          {section === "projects" && <ProjectsSection draft={draft} patchDraft={patchDraft} />}
-          {section === "collaboration" && <CollaborationSection draft={draft} patchDraft={patchDraft} />}
-          {section === "execution" && <ExecutionSection draft={draft} patchDraft={patchDraft} />}
+          {section === "projects" && (
+            <ProjectsSection draft={draft} patchDraft={patchDraft} />
+          )}
+          {section === "collaboration" && (
+            <CollaborationSection draft={draft} patchDraft={patchDraft} />
+          )}
+          {section === "execution" && (
+            <ExecutionSection draft={draft} patchDraft={patchDraft} />
+          )}
           {section === "diagnostics" && (
             <DiagnosticsSection
               diag={diag}
