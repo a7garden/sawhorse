@@ -1,3 +1,5 @@
+import { IssueMilestones } from "@/components/IssueMilestones";
+
 import { useEffect, useState } from "react";
 import { Hammer, Inbox, PencilRuler } from "lucide-react";
 import { api } from "@/lib/api";
@@ -30,6 +32,10 @@ import {
 type RunKind = "design" | "implement";
 
 export default function ImprovePage() {
+  const [milestone, setMilestone] = useState<string | null>(null);
+  const [milestoneNames, setMilestoneNames] = useState<Record<string, string>>(
+    {},
+  );
   const config = useApp((s) => s.config);
   const improvements = useApp((s) => s.improvements);
   const inboxCount = useApp((s) => s.inboxCount);
@@ -47,30 +53,39 @@ export default function ImprovePage() {
   const [msg, setMsg] = useState<string | null>(null);
 
   useEffect(() => {
+    void refreshImprovements();
+  }, [refreshImprovements]);
+
+  useEffect(() => {
     if (project === null && config) setProject(config.defaultProject || "");
   }, [config, project]);
 
   const effectiveProject = project ?? "";
   const notes = improvements
     .filter((n) => effectiveProject === "" || n.project === effectiveProject)
+    .filter((n) => milestone === null || n.milestone === milestone)
     .filter((n) => status === "전체" || n.status === status)
     .sort((a, b) => b.mtimeMs - a.mtimeMs);
   const selNotes = improvements.filter((n) => selected.has(n.path));
   const selectedProjects = [...new Set(selNotes.map((n) => n.project))];
-  const selectedProject = selectedProjects.length === 1 ? selectedProjects[0] : "";
+  const selectedProject =
+    selectedProjects.length === 1 ? selectedProjects[0] : "";
   // approve opens implementation permission; re-runs of in-flight work stay allowed
   const canExecute =
     selNotes.length > 0 &&
-    selNotes.every((n) =>
-      n.approve ||
-      ["진행중", "부분완료", "구현중", "부분구현"].includes(n.status),
+    selNotes.every(
+      (n) =>
+        n.approve ||
+        ["진행중", "부분완료", "구현중", "부분구현"].includes(n.status),
     );
 
   const detail = improvements.find((n) => n.path === detailPath) ?? null;
   const executionTargets = detailMd
-    ? extractSection(detailMd, "실행 대상") || extractSection(detailMd, "변경 대상")
+    ? extractSection(detailMd, "실행 대상") ||
+      extractSection(detailMd, "변경 대상")
     : "";
-  const canApprove = detail != null && !detail.approve && detail.status === "승인대기";
+  const canApprove =
+    detail != null && !detail.approve && detail.status === "승인대기";
 
   function toggleRow(path: string, on: boolean) {
     setSelected((prev) => {
@@ -89,7 +104,7 @@ export default function ImprovePage() {
       const v = await api.readNote(n.path);
       setDetailMd(v.markdown);
     } catch (e) {
-      setDetailMd(`> 노트를 읽지 못했습니다: ${String(e)}`);
+      setDetailMd(`> 이슈 문서를 읽지 못했습니다: ${String(e)}`);
     } finally {
       setDetailLoading(false);
     }
@@ -140,7 +155,7 @@ export default function ImprovePage() {
 
   return (
     <div>
-      <PageHeader title="이슈" desc="이슈의 설계·승인·실행 기록을 관리합니다.">
+      <PageHeader title="이슈">
         <Badge variant="warning" className={`gap-1 ${WARN_TEXT}`}>
           <Inbox className="size-3" /> 인박스 {inboxCount}
         </Badge>
@@ -151,7 +166,12 @@ export default function ImprovePage() {
           aria-label="프로젝트"
         >
           <option value="">전체 프로젝트</option>
-          {[...new Set([...improvements.map((n) => n.project), ...(config?.projects.map((p) => p.name) ?? [])])]
+          {[
+            ...new Set([
+              ...improvements.map((n) => n.project),
+              ...(config?.projects.map((p) => p.name) ?? []),
+            ]),
+          ]
             .sort()
             .map((name) => (
               <option key={name} value={name}>
@@ -173,15 +193,25 @@ export default function ImprovePage() {
         </Select>
         <Button
           size="sm"
-          disabled={selNotes.length === 0 || selectedProjects.length !== 1 || busy !== null}
+          disabled={
+            selNotes.length === 0 ||
+            selectedProjects.length !== 1 ||
+            busy !== null
+          }
           onClick={() => void run("design")}
           title="선택한 이슈의 설계안을 작성합니다."
         >
-          <PencilRuler /> 설계 실행{selNotes.length > 0 ? ` (${selNotes.length})` : ""}
+          <PencilRuler /> 설계 실행
+          {selNotes.length > 0 ? ` (${selNotes.length})` : ""}
         </Button>
         <Button
           size="sm"
-          disabled={selNotes.length === 0 || selectedProjects.length !== 1 || !canExecute || busy !== null}
+          disabled={
+            selNotes.length === 0 ||
+            selectedProjects.length !== 1 ||
+            !canExecute ||
+            busy !== null
+          }
           onClick={() => void run("implement")}
           title={
             canExecute
@@ -193,92 +223,115 @@ export default function ImprovePage() {
         </Button>
       </PageHeader>
 
-      {msg && <div className="px-4 pt-2 text-xs text-muted-foreground">{msg}</div>}
+      {msg && (
+        <div className="px-4 pt-2 text-xs text-muted-foreground">{msg}</div>
+      )}
 
-      <div className="p-4">
-        {notes.length === 0 ? (
-          <Empty>조건에 맞는 이슈가 없습니다.</Empty>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-8" />
-                <TableHead className="w-24">ID</TableHead>
-                <TableHead>제목</TableHead>
-                <TableHead className="w-28">마일스톤</TableHead>
-                <TableHead className="w-28">실행 유형</TableHead>
-                <TableHead className="w-20">중요도</TableHead>
-                <TableHead className="w-24">상태</TableHead>
-                <TableHead className="w-20">승인</TableHead>
-                <TableHead className="w-24">의존</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {notes.map((n) => {
-                const dep =
-                  `전 ${n.dependsOn.length}`.trim() + ` / 후 ${n.dependents.length}`.trim();
-                return (
-                  <TableRow
-                    key={n.path}
-                    className="cursor-pointer"
-                    onClick={() => void openDetail(n)}
-                  >
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={selected.has(n.path)}
-                        onChange={(e) => toggleRow(n.path, e.target.checked)}
-                        aria-label={`${n.id} 선택`}
-                      />
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{n.id || "-"}</TableCell>
-                    <TableCell>
-                      <div className="max-w-[280px] truncate text-[13px]" title={n.title}>
-                        {n.title}
-                      </div>
-                      {n.legacy && (
-                        <div className="text-[11px] text-muted-foreground">레거시 개선 노트</div>
-                      )}
-                    </TableCell>
-                    <TableCell className="truncate text-xs text-muted-foreground" title={n.milestone}>
-                      {n.milestone || "-"}
-                    </TableCell>
-                    <TableCell className="truncate text-xs text-muted-foreground" title={n.executionType}>
-                      {n.executionType || n.issueType || n.category || "-"}
-                    </TableCell>
-                    <TableCell>
-                      <PriorityBadge p={n.priority} />
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={n.status} />
-                    </TableCell>
-                    <TableCell>
-                      {n.approve ? (
-                        <Badge variant="success" title={n.approved || undefined}>
-                          승인
-                        </Badge>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">대기</span>
-                      )}
-                    </TableCell>
-                    <TableCell
-                      className="text-[11px] text-muted-foreground"
-                      title={`선행: ${n.dependsOn.join(", ") || "없음"}\n후행: ${n.dependents.join(", ") || "없음"}`}
+      <div className="flex flex-col gap-5 p-4 lg:flex-row">
+        <IssueMilestones
+          issues={improvements}
+          selected={milestone}
+          onSelect={(id) => {
+            setMilestone(id);
+            setSelected(new Set());
+          }}
+          onChanged={refreshImprovements}
+          onNames={setMilestoneNames}
+        />
+        <div className="min-w-0 flex-1 overflow-x-auto">
+          {milestone !== null && (
+            <h2 className="mb-4 text-sm font-semibold">
+              {milestoneNames[milestone] || milestone || "마일스톤 없음"}
+            </h2>
+          )}
+          {notes.length === 0 ? (
+            <Empty>조건에 맞는 이슈가 없습니다.</Empty>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8" />
+                  <TableHead className="w-24">ID</TableHead>
+                  <TableHead>제목</TableHead>
+                  <TableHead className="w-28">마일스톤</TableHead>
+                  <TableHead className="w-20">중요도</TableHead>
+                  <TableHead className="w-24">상태</TableHead>
+                  <TableHead className="w-20">승인</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {notes.map((n) => {
+                  return (
+                    <TableRow
+                      key={n.path}
+                      className="cursor-pointer"
+                      onClick={() => void openDetail(n)}
                     >
-                      {n.dependsOn.length + n.dependents.length > 0 ? dep : "-"}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selected.has(n.path)}
+                          onChange={(e) => toggleRow(n.path, e.target.checked)}
+                          aria-label={`${n.id} 선택`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {n.id || "-"}
+                      </TableCell>
+                      <TableCell>
+                        <div
+                          className="max-w-[280px] truncate text-[13px]"
+                          title={n.title}
+                        >
+                          {n.title}
+                        </div>
+                        {n.legacy && (
+                          <div className="text-[11px] text-muted-foreground">
+                            레거시 개선 문서
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell
+                        className="truncate text-xs text-muted-foreground"
+                        title={n.milestone}
+                      >
+                        {milestoneNames[n.milestone] || n.milestone || "-"}
+                      </TableCell>
+                      <TableCell>
+                        <PriorityBadge p={n.priority} />
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge status={n.status} />
+                      </TableCell>
+                      <TableCell>
+                        {n.approve ? (
+                          <Badge
+                            variant="success"
+                            title={n.approved || undefined}
+                          >
+                            승인
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">
+                            대기
+                          </span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </div>
       </div>
 
       <Dialog
         open={detailPath != null}
         onClose={() => setDetailPath(null)}
         wide
-        title={detail ? `${detail.id || "무제"} ${detail.title}` : "불러오는 중…"}
+        title={
+          detail ? `${detail.id || "무제"} ${detail.title}` : "불러오는 중…"
+        }
       >
         {detail && (
           <div className="mb-3 flex flex-wrap items-center gap-1.5">
@@ -286,14 +339,26 @@ export default function ImprovePage() {
             {detail.legacy && <Badge variant="warning">레거시</Badge>}
             <StatusBadge status={detail.status} />
             <PriorityBadge p={detail.priority} />
-            {detail.milestone && <Badge variant="outline">{detail.milestone}</Badge>}
-            {detail.executionType && <Badge variant="outline">{detail.executionType}</Badge>}
-            {detail.issueType && <Badge variant="outline">{detail.issueType}</Badge>}
+            {detail.milestone && (
+              <Badge variant="outline">
+                {milestoneNames[detail.milestone] || detail.milestone}
+              </Badge>
+            )}
+            {detail.executionType && (
+              <Badge variant="outline">{detail.executionType}</Badge>
+            )}
+            {detail.issueType && (
+              <Badge variant="outline">{detail.issueType}</Badge>
+            )}
             {detail.url && <Badge variant="outline">{detail.url}</Badge>}
-            {detail.githubNumber && <Badge variant="outline">GitHub #{detail.githubNumber}</Badge>}
+            {detail.githubNumber && (
+              <Badge variant="outline">GitHub #{detail.githubNumber}</Badge>
+            )}
             <span className="text-[11px] text-muted-foreground">
               검증 {detail.verified || "미확인"}
-              {detail.commits.length > 0 ? ` · 커밋 ${detail.commits.length}건` : ""}
+              {detail.commits.length > 0
+                ? ` · 커밋 ${detail.commits.length}건`
+                : ""}
             </span>
           </div>
         )}
@@ -305,22 +370,29 @@ export default function ImprovePage() {
                 <MarkdownView src={executionTargets} />
               ) : (
                 <div className={`text-xs ${WARN_TEXT}`}>
-                  `### 실행 대상` 절이 비어 있습니다 — 승인해도 실행되지 않습니다.
+                  `### 실행 대상` 절이 비어 있습니다 — 승인해도 실행되지
+                  않습니다.
                 </div>
               )}
             </div>
             <div className="mt-2 flex items-center gap-2">
-              <Button size="sm" variant="success" disabled={busy !== null} onClick={() => void approve()}>
+              <Button
+                size="sm"
+                variant="success"
+                disabled={busy !== null}
+                onClick={() => void approve()}
+              >
                 승인
               </Button>
               <span className="text-[11px] text-muted-foreground">
-                승인하면 approve·approved·status 3개 키만 갱신되고 본문은 보존됩니다.
+                승인하면 approve·approved·status 3개 키만 갱신되고 본문은
+                보존됩니다.
               </span>
             </div>
           </div>
         )}
         {detailLoading ? (
-          <Empty>노트를 불러오는 중…</Empty>
+          <Empty>이슈 문서를 불러오는 중…</Empty>
         ) : detailMd != null ? (
           <MarkdownView src={detailMd} className="selectable" />
         ) : null}
