@@ -22,6 +22,28 @@ function statusBadge(s: string): { label: string; variant: BadgeVariant } {
   return { label: known ?? (s || "없음"), variant: "secondary" };
 }
 
+type Tone = "working" | "blocked" | "idle" | "done" | "focused";
+
+function toneOf(status: string): Tone {
+  if (status === "working" || status === "blocked" || status === "done" || status === "focused") {
+    return status;
+  }
+  return "idle";
+}
+
+/** 작은 호흡 점. working/blocked 만 호흡한다. */
+function StatusDot({ tone, pulse }: { tone: string; pulse?: boolean }) {
+  const t: Tone = toneOf(tone);
+  if (pulse && (t === "working" || t === "blocked")) {
+    return (
+      <span className="term-dot-pulse" data-tone={t} aria-hidden>
+        <span className="term-dot" data-tone={t} />
+      </span>
+    );
+  }
+  return <span className="term-dot" data-tone={t} aria-hidden />;
+}
+
 export default function TerminalPage() {
   const config = useApp((s) => s.config);
   const packs = useApp((s) => s.packs);
@@ -60,18 +82,16 @@ export default function TerminalPage() {
       .filter((p) => p.path.length > 0)
       .map((p) => ({ value: p.path, label: `${p.name} (${p.path})` })),
   ];
-/** 작은 호흡 점. working/blocked 만 호흡한다. */
-function StatusDot({ tone, pulse }: { tone: string; pulse?: boolean }) {
-  const t: Tone = toneOf(tone);
-  if (pulse && (t === "working" || t === "blocked")) {
-    return (
-      <span className="term-dot-pulse" data-tone={t} aria-hidden>
-        <span className="term-dot" data-tone={t} />
-      </span>
-    );
-  }
-  return <span className="term-dot" data-tone={t} aria-hidden />;
-}
+  async function act(fn: () => Promise<unknown>, note?: string) {
+    setBusy(true);
+    setMsg(null);
+    try {
+      await fn();
+      if (note) setMsg(note);
+      await load();
+    } catch (e) {
+      setMsg(String(e));
+    } finally {
       setBusy(false);
     }
   }
@@ -268,6 +288,7 @@ function StatusDot({ tone, pulse }: { tone: string; pulse?: boolean }) {
                       return (
                         <div key={t.tabId} className="rounded-md border px-2.5 py-1.5">
                           <div className="flex items-center gap-2">
+                            <span className="term-rail" data-tone={toneOf(t.agentStatus)} aria-hidden />
                             <span className="min-w-0 flex-1 truncate text-xs font-medium">
                               {t.label || `탭 ${t.number}`}
                             </span>
@@ -285,15 +306,18 @@ function StatusDot({ tone, pulse }: { tone: string; pulse?: boolean }) {
                           </div>
                           {agents.map((a) => {
                             const as = statusBadge(a.agentStatus);
+                            const tone = toneOf(a.agentStatus);
                             return (
                               <div
                                 key={a.paneId}
                                 className={cn(
-                                  "mt-1 flex items-center gap-2 rounded px-1.5 py-1 text-[11px]",
+                                  "term-row mt-1 flex items-center gap-2 rounded px-1.5 py-1 text-[11px]",
                                   a.agentStatus === "blocked" && "bg-warning/10",
                                   preview?.paneId === a.paneId && "bg-secondary",
                                 )}
                               >
+                                <span className="term-rail" data-tone={tone} aria-hidden />
+                                <StatusDot tone={a.agentStatus} pulse />
                                 <span className="shrink-0 font-mono text-muted-foreground">{a.agent || "shell"}</span>
                                 <button
                                   onClick={() => void peek(a.paneId, a.terminalTitle || a.paneId)}
@@ -303,6 +327,7 @@ function StatusDot({ tone, pulse }: { tone: string; pulse?: boolean }) {
                                   {a.terminalTitle || a.cwd || a.paneId}
                                 </button>
                                 <Badge variant={as.variant}>{as.label}</Badge>
+                                <span className="term-row-actions">
                                 <Button
                                   size="xs"
                                   variant="ghost"
@@ -312,6 +337,7 @@ function StatusDot({ tone, pulse }: { tone: string; pulse?: boolean }) {
                                 >
                                   열기
                                 </Button>
+                                </span>
                               </div>
                             );
                           })}

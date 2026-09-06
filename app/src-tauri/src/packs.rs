@@ -1102,6 +1102,7 @@ mod tests {
         };
         m.views.push(PackView {
             id: "v".into(),
+            kind: "notes".into(),
             group: "nope".into(),
             ..Default::default()
         });
