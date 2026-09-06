@@ -188,7 +188,11 @@ impl ExtensionContext {
         accept: &str,
     ) -> Result<GuardedResponse, String> {
         self.require_capability(super::manifest::CAPABILITY_SECRET_USE)?;
-        let token = crate::extensions::broker::secrets::read(secret_name)?;
+        let token = if secret_name == "github.oauth" {
+            crate::extensions::github_management::oauth_access_token().await?
+        } else {
+            crate::extensions::broker::secrets::read(secret_name)?
+        };
         let mut current = url.to_string();
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -283,9 +287,6 @@ pub mod secrets {
         if name.is_empty() || value.is_empty() {
             return Err("secret 이름과 값은 비어 있을 수 없다".into());
         }
-        let _ = std::process::Command::new("security")
-            .args(["delete-generic-password", "-s", "sawhorse", "-a", name])
-            .output();
         let out = std::process::Command::new("security")
             .args([
                 "add-generic-password",
