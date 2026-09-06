@@ -335,6 +335,16 @@ pub fn run_scheduled_now(
     if let Some(entry) = list.iter().find(|e| e.key == key || e.action_id == key) {
         return enqueue_entry(mgr, state, entry);
     }
+    if let Ok(request) = manual_task_request(&crate::tasks::workbench_root(), key) {
+        let job = mgr.enqueue(request)?;
+        state
+            .state
+            .lock()
+            .last_run
+            .insert(key.into(), Local::now().format("%Y-%m-%d").to_string());
+        state.save_state();
+        return Ok(job);
+    }
     if LEGACY_ROUTINES.contains(&key) {
         // 팩이 꺼져 있어도 트레이 메뉴는 동작해야 한다
         return mgr.enqueue(JobRequest {
@@ -344,6 +354,15 @@ pub fn run_scheduled_now(
         });
     }
     Err(format!("알 수 없는 예약: {key}"))
+}
+
+fn manual_task_request(root: &std::path::Path, id: &str) -> Result<JobRequest, String> {
+    crate::tasks::get_task(root, id)?;
+    Ok(JobRequest {
+        kind: "task".into(),
+        task_id: Some(id.into()),
+        ..Default::default()
+    })
 }
 
 /// Missed-card dismissal. `run=true` also enqueues the entry immediately.
@@ -434,6 +453,23 @@ mod tests {
 
     fn sched(h: u32, mi: u32) -> NaiveTime {
         NaiveTime::from_hms_opt(h, mi, 0).unwrap()
+    }
+
+    #[test]
+    fn manual_task_can_run_without_a_schedule() {
+        let root = std::env::temp_dir().join(format!("sawhorse-manual-{}", uuid::Uuid::new_v4()));
+        let def = crate::tasks::TaskDef {
+            id: "manual-task".into(),
+            title: "Summarize".into(),
+            prompt: "Summarize notes".into(),
+            ..Default::default()
+        };
+        crate::tasks::save_task(&root, &def).unwrap();
+        let request = manual_task_request(&root, &def.id).unwrap();
+        assert_eq!(request.kind, "task");
+        assert_eq!(request.task_id.as_deref(), Some("manual-task"));
+        assert!(manual_task_request(&root, "missing").is_err());
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
