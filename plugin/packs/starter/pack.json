@@ -4,15 +4,15 @@
   "version": "1.0.0",
   "author": "sawhorse",
   "icon": "notebook-pen",
-  "description": "업종·조직 어휘가 하나도 없는 최소 팩. 매일 기록 한 장, 빠른 캡처, 주간 회고 — 이 세 가지만 한다. 팩을 직접 만들려면 이 폴더를 복사해 시작하는 것이 가장 빠르다. 설정은 config.json 의 packs.settings.starter 에 저장된다.",
+  "description": "업종·조직 어휘가 하나도 없는 최소 팩. 매일 일지 한 장, 빠른 메모, 주간 회고 — 이 세 가지만 한다. 팩을 직접 만들려면 이 폴더를 복사해 시작하는 것이 가장 빠르다. 설정은 config.json 의 packs.settings.starter 에 저장된다.",
 
   "skills": ["capture", "weekly-review"],
 
   "workspace": {
-    "folders": ["기록", "노트", "보관"],
+    "folders": ["일지", "문서", "보관"],
     "files": [
-      { "src": "templates/기록.md", "dest": "템플릿/기록.md" },
-      { "src": "templates/노트.md", "dest": "템플릿/노트.md" }
+      { "src": "templates/기록.md", "dest": "템플릿/일지.md" },
+      { "src": "templates/노트.md", "dest": "템플릿/문서.md" }
     ]
   },
 
@@ -44,16 +44,16 @@
     {
       "key": "useWikiLinks",
       "type": "bool",
-      "label": "노트를 위키링크로 연결",
-      "description": "켜면 기록에서 언급한 주제를 [[노트 이름]] 으로 잇고, 없는 노트는 만듭니다"
+      "label": "문서를 위키링크로 연결",
+      "description": "켜면 일지에서 언급한 주제를 [[문서 이름]] 으로 잇고, 없는 문서는 만듭니다"
     }
   ],
 
   "actions": [
     {
       "id": "today",
-      "label": "오늘 기록 준비",
-      "description": "오늘 날짜 기록 노트를 만들고 어제 미완료 항목을 이월한다",
+      "label": "오늘 일지 준비",
+      "description": "오늘 날짜 일지를 만들고 어제 미완료 항목을 이월한다",
       "prompt": "/{{ns}}:capture --today",
       "cwd": "workspace",
       "featured": true,
@@ -61,8 +61,8 @@
     },
     {
       "id": "capture",
-      "label": "빠른 기록",
-      "description": "한 줄을 오늘 기록에 적는다. 성격에 따라 할 일 / 한 일 / 메모로 나눠 넣는다",
+      "label": "빠른 메모",
+      "description": "한 줄을 오늘 일지에 적는다. 성격에 따라 할 일 / 한 일 / 메모로 나눠 넣는다",
       "prompt": "/{{ns}}:capture {{text}}",
       "cwd": "workspace",
       "featured": true,
@@ -71,7 +71,7 @@
     {
       "id": "review",
       "label": "주간 회고",
-      "description": "이번 주 기록을 모아 회고 노트를 쓰고 다음 주 할 일을 남긴다",
+      "description": "이번 주 일지를 모아 회고 문서를 쓰고 다음 주 할 일을 남긴다",
       "prompt": "/{{ns}}:weekly-review {{week}}",
       "cwd": "workspace",
       "featured": true,
@@ -79,46 +79,5 @@
     }
   ],
 
-  "views": [
-    {
-      "id": "logs",
-      "label": "기록",
-      "icon": "calendar-days",
-      "group": "vault",
-      "type": "notes",
-      "query": {
-        "folders": ["기록"],
-        "exclude": ["*.base"],
-        "sort": { "field": "", "source": "title", "desc": true },
-        "limit": 120
-      },
-      "columns": [
-        { "field": "", "source": "title", "label": "날짜", "width": 120 },
-        { "field": "mood", "label": "컨디션", "type": "badge", "width": 90 },
-        { "field": "tags", "label": "태그", "type": "list" },
-        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
-      ],
-      "empty": "아직 기록이 없습니다. '오늘 기록 준비' 를 실행하면 첫 장이 생깁니다."
-    },
-    {
-      "id": "notes",
-      "label": "노트",
-      "icon": "sticky-note",
-      "group": "vault",
-      "type": "notes",
-      "query": {
-        "folders": ["노트"],
-        "exclude": ["*.base"],
-        "sort": { "field": "", "source": "title", "desc": false }
-      },
-      "columns": [
-        { "field": "", "source": "title", "label": "제목" },
-        { "field": "topic", "label": "주제", "type": "badge", "width": 120 },
-        { "field": "tags", "label": "태그", "type": "list" },
-        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
-      ],
-      "groupBy": "topic",
-      "empty": "노트가 없습니다. 기록에서 반복되는 주제를 노트로 빼면 여기 모입니다."
-    }
-  ]
+  "views": []
 }

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "author": "won",
   "icon": "briefcase",
-  "description": "Obsidian 볼트를 지식베이스로 쓰는 SI 업무 방식 전체 — 일과 루틴, 업무일지·보고, 위키(개념 노트), 사업 문서화, 이슈·마일스톤 워크플로, 발주처 보고용 엑셀. 설정은 config.json 의 vaultPath·improve·dashboard 블록을 그대로 쓴다(팩 이전부터 있던 정본이라 packs.settings 로 옮기지 않는다 — 상태가 두 곳에 있으면 반드시 어긋난다).",
+  "description": "Obsidian 볼트를 지식베이스로 쓰는 SI 업무 방식 전체 — 일과 루틴, 업무일지·보고, 위키(개념 문서), 사업 문서화, 이슈·마일스톤 워크플로, 발주처 보고용 엑셀. 설정은 config.json 의 vaultPath·improve·dashboard 블록을 그대로 쓴다(팩 이전부터 있던 정본이라 packs.settings 로 옮기지 않는다 — 상태가 두 곳에 있으면 반드시 어긋난다).",
 
   "skills": [
     "morning", "lunch", "evening",
@@ -72,7 +72,7 @@
     {
       "id": "daily-log",
       "label": "업무일지 갱신",
-      "description": "오늘 세션을 분석해 일지 노트의 업무기록 자동 영역만 다시 쓴다",
+      "description": "오늘 세션을 분석해 일지의 업무기록 자동 영역만 다시 쓴다",
       "prompt": "/{{ns}}:daily-log {{note}}",
       "cwd": "workspace",
       "params": [{ "key": "note", "type": "text", "label": "덧붙일 구두 업무 (선택)" }]
@@ -110,7 +110,7 @@
     {
       "id": "milestone",
       "label": "마일스톤 계획",
-      "description": "납기·릴리스·검수 목표를 마일스톤 노트로 정리하고 이슈를 묶는다",
+      "description": "납기·릴리스·검수 목표를 마일스톤 문서로 정리하고 이슈를 묶는다",
       "prompt": "/{{ns}}:issues 마일스톤 {{name}}",
       "cwd": "workspace",
       "params": [{ "key": "name", "type": "text", "label": "마일스톤 이름 (선택)" }]
@@ -118,7 +118,7 @@
     {
       "id": "wiki",
       "label": "개념 정리",
-      "description": "문서에 나온 개념을 위키링크로 연결하고 없는 개념 노트를 만든다",
+      "description": "문서에 나온 개념을 위키링크로 연결하고 없는 개념 문서를 만든다",
       "prompt": "/{{ns}}:wiki {{topic}}",
       "cwd": "workspace",
       "params": [{ "key": "topic", "type": "text", "label": "정리할 개념/문서 (선택)" }]
@@ -181,67 +181,6 @@
       "group": "work",
       "type": "native",
       "component": "todos"
-    },
-    {
-      "id": "milestones",
-      "label": "마일스톤",
-      "icon": "flag",
-      "group": "work",
-      "type": "notes",
-      "query": {
-        "folders": ["사업/*/마일스톤"],
-        "exclude": ["*.base"],
-        "where": [{ "field": "type", "op": "eq", "value": "마일스톤" }],
-        "sort": { "field": "due", "desc": false }
-      },
-      "columns": [
-        { "field": "id", "label": "ID", "width": 100 },
-        { "field": "", "source": "title", "label": "제목" },
-        { "field": "state", "label": "상태", "type": "badge", "width": 80 },
-        { "field": "due", "label": "기한", "type": "date", "width": 110 },
-        { "field": "project", "label": "사업", "width": 120 }
-      ],
-      "groupBy": "state",
-      "actions": ["milestone"],
-      "empty": "아직 마일스톤 노트가 없습니다. 템플릿/마일스톤.md 로 만들거나 '마일스톤 계획' 을 실행하세요."
-    },
-    {
-      "id": "concepts",
-      "label": "개념",
-      "icon": "book-marked",
-      "group": "vault",
-      "type": "notes",
-      "query": {
-        "folders": ["개념"],
-        "exclude": ["*.base"],
-        "sort": { "field": "", "source": "title", "desc": false }
-      },
-      "columns": [
-        { "field": "", "source": "title", "label": "개념" },
-        { "field": "domain", "label": "분류", "type": "badge", "width": 110 },
-        { "field": "aliases", "label": "다른 이름", "type": "list" },
-        { "field": "sources", "label": "출처", "type": "list" },
-        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
-      ],
-      "groupBy": "domain",
-      "actions": ["wiki"],
-      "empty": "개념 노트가 아직 없습니다. '개념 정리' 를 실행하면 문서에 나온 용어부터 만듭니다."
-    },
-    {
-      "id": "docs",
-      "label": "문서",
-      "icon": "file-text",
-      "group": "vault",
-      "type": "native",
-      "component": "docs"
-    },
-    {
-      "id": "vault",
-      "label": "볼트",
-      "icon": "folder-search",
-      "group": "vault",
-      "type": "native",
-      "component": "vault"
     }
   ]
 }

@@ -10,7 +10,7 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
 # pack.json 의 "id" 를 "my-pack" 으로 바꾼다 (소문자·숫자·하이픈)
 ```
 
-앱의 **확장** 탭에서 새로고침 → 목록에 나타난다. 켜면 사이드바에 화면이 생긴다.
+앱의 **확장 관리**에서 새로고침하면 목록에 나타난다. `views`가 있는 팩만 업무 화면을 추가한다.
 
 같은 `id` 의 사용자 팩은 내장 팩을 **덮어쓴다**. 내장 SI 확장을 내 방식대로 고치고
 싶으면 `packs/si/` 를 `~/.claude/sawhorse/packs/si/` 로 복사해 고치면 된다.
@@ -35,7 +35,7 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
 | `workspace` | `folders[]` 와 `files[{src,dest}]`. **기존 파일은 덮지 않는다** |
 | `settings` | 확장 화면이 폼을 자동 생성. 값은 `config.json` 의 `packs.settings.<id>` |
 | `actions` | 실행 단위. 잡 큐에 들어가고 예약 대상이 된다 |
-| `views` | 사이드바 화면 |
+| `views` | 별도 업무 흐름이 필요한 확장 화면. 볼트 폴더 분류에는 쓰지 않는다 |
 
 ### actions
 
@@ -76,12 +76,14 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
   "empty": "아직 없습니다. …" }
 ```
 
+- `일지`, `개념`처럼 볼트 안의 폴더·문서 유형은 `views`로 만들지 않는다. 앱의 단일
+  `문서` 화면이 전체 볼트 파일 트리를 그대로 보여 준다.
 - 술어 연산자: `eq` `ne` `in` `contains` `exists` `truthy` `notEmpty`.
   모르는 연산자는 거르지 않는다(오타로 화면이 비지 않게).
 - 컬럼 타입: `text` `badge` `list` `check` `date`.
 - `source` 는 프론트매터가 아니라 노트 자체에서 오는 값: `title`(첫 `# 헤딩`, 없으면 파일명)
   `mtime` `path`.
-- `type: "native"` 는 앱이 이미 가진 화면(`issues` `todos` `docs` `vault`)을 가리킨다.
+- `type: "native"` 는 앱이 이미 가진 업무 화면(`issues` `todos`)을 가리킨다.
   내장 SI 확장만 쓴다.
 
 ### settings

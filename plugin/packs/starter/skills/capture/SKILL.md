@@ -1,16 +1,16 @@
 ---
 name: capture
-description: Use when the user wants to jot something into today's log — "오늘 기록에 적어줘", "이거 캡처해줘", "할 일 추가", "오늘 노트 만들어줘", "capture this" — or when a scheduled workbench action asks to prepare today's log note. Writes one line into the day's note in the sawhorse workspace, sorting it into 할 일 / 한 일 / 메모.
+description: Use when the user wants to jot something into today's daily note — "오늘 일지에 적어줘", "이거 메모해줘", "할 일 추가", "오늘 문서 만들어줘", "capture this" — or when a scheduled workbench action asks to prepare today's daily note. Writes one line into the day's journal in the sawhorse workspace, sorting it into 할 일 / 한 일 / 메모.
 ---
 
-# 빠른 기록 (capture)
+# 빠른 메모 (capture)
 
-작업공간의 오늘 기록 노트에 한 줄을 넣는다. 성격에 따라 자리를 정하고, 사용자의 문장은
+작업공간의 오늘 일지에 한 줄을 넣는다. 성격에 따라 자리를 정하고, 사용자의 문장은
 고쳐 쓰지 않는다. 이 스킬은 **기본 작업(starter) 팩**의 것이고 업종 어휘를 쓰지 않는다.
 
 ## 입력
 
-- `--today` — 내용 없이 오늘 노트만 준비한다(예약 실행이 이 형태로 부른다).
+- `--today` — 내용 없이 오늘 일지만 준비한다(예약 실행이 이 형태로 부른다).
 - 그 밖의 `$ARGUMENTS` — 적을 내용 한 줄.
 
 ## 설정 읽기
@@ -19,18 +19,18 @@ description: Use when the user wants to jot something into today's log — "오�
 
 - `vaultPath` — 작업공간 루트. 비어 있으면 **아무것도 쓰지 않고** 대시보드에서 작업공간을
   먼저 지정하라고 안내하고 멈춘다.
-- `packs.settings.starter.useWikiLinks` — 참이면 주제어를 `[[노트 이름]]` 으로 잇는다.
+- `packs.settings.starter.useWikiLinks` — 참이면 주제어를 `[[문서 이름]]` 으로 잇는다.
 - `packs.settings.starter.ownerName` — 사람 이름이 필요할 때만 쓴다.
 
 ## 절차
 
-1. 오늘 날짜(`YYYY-MM-DD`)로 `<작업공간>/기록/<날짜>.md` 경로를 정한다.
-2. 파일이 없으면 `<작업공간>/템플릿/기록.md` 를 복사해 만든다. 템플릿이 없으면 아래 최소
+1. 오늘 날짜(`YYYY-MM-DD`)로 `<작업공간>/일지/<날짜>.md` 경로를 정한다. 기존 작업공간에 `일지/`는 없고 `기록/`만 있으면 기존 폴더를 계속 사용한다.
+2. 파일이 없으면 `<작업공간>/템플릿/일지.md` 를 복사해 만든다. 새 템플릿은 없고 `템플릿/기록.md`만 있으면 기존 템플릿을 사용한다. 템플릿이 없으면 아래 최소
    골격으로 만든다. `date` 프로퍼티에 오늘 날짜를 넣는다.
 
    ```markdown
    ---
-   type: 기록
+   type: 일지
    date: <날짜>
    mood:
    tags: []
@@ -45,7 +45,7 @@ description: Use when the user wants to jot something into today's log — "오�
    ## 메모
    ```
 
-3. `--today` 인 경우: 어제 기록의 `## 할 일` 에서 **체크되지 않은 줄만** 오늘 `## 할 일` 로
+3. `--today` 인 경우: 어제 일지의 `## 할 일` 에서 **체크되지 않은 줄만** 오늘 `## 할 일` 로
    옮겨 적는다. 단, 오늘 `## 할 일` 에 이미 뭔가 적혀 있으면 이월하지 않고 어제 목록을
    보고에만 표시한다 — 사용자가 미리 계획해 둔 하루를 덮지 않는다.
 4. 내용이 있는 경우: 문장을 읽고 자리를 정해 **줄 하나를 덧붙인다**.
@@ -58,7 +58,7 @@ description: Use when the user wants to jot something into today's log — "오�
 
    판단이 애매하면 `## 메모` 에 원문 그대로 넣는다. **분류를 위해 문장을 고치지 않는다.**
 5. `useWikiLinks` 가 참이면, 방금 넣은 줄에서 반복 등장하는 주제어 하나를 `[[주제]]` 로
-   감싸고 `<작업공간>/노트/<주제>.md` 가 없으면 `템플릿/노트.md` 로 만든다(죽은 링크 금지).
+   감싸고 `<작업공간>/문서/<주제>.md` 가 없으면 `템플릿/문서.md` 로 만든다(죽은 링크 금지). 기존 작업공간에 `문서/`는 없고 `노트/`만 있으면 기존 경로와 템플릿을 계속 사용한다.
    주제가 분명하지 않으면 링크하지 않는다.
 6. 무엇을 어디에 넣었는지 한 줄로 보고한다.
 
@@ -70,4 +70,4 @@ description: Use when the user wants to jot something into today's log — "오�
 | `vaultPath` 없이 경로 추정 | 엉뚱한 폴더에 기록이 쌓인다 |
 | 분류하려고 문장 다듬기 | 원문이 남아야 나중에 회고가 정확하다 |
 | 여러 줄 한꺼번에 넣기 | 한 번에 한 줄. 여러 건이면 항목마다 판단해서 각각 넣는다 |
-| 작업공간 밖 파일 쓰기 | 기록은 작업공간 안에만 |
+| 작업공간 밖 파일 쓰기 | 일지는 작업공간 안에만 |

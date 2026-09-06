@@ -1037,11 +1037,18 @@ mod tests {
             assert!(si.dir.join(&seed.src).is_file(), "없는 원본: {}", seed.src);
         }
         assert!(si.manifest.views.iter().any(|v| v.kind == "native"));
-        assert!(si
-            .manifest
-            .views
-            .iter()
-            .any(|v| v.kind == "notes" && !v.query.is_empty()));
+        assert!(
+            si.manifest.views.iter().all(|v| v.id != "milestones"),
+            "마일스톤은 이슈 화면에서만 관리한다"
+        );
+        assert!(
+            si.manifest.actions.iter().any(|a| a.id == "milestone"),
+            "마일스톤 계획은 화면이 아니라 실행할 작업으로 남는다"
+        );
+        assert!(
+            si.manifest.views.iter().all(|v| v.group != "vault"),
+            "개념과 볼트는 문서 탐색기와 별도 화면으로 노출하지 않는다"
+        );
 
         let starter = reg.get("starter").expect("starter 팩이 있어야 한다");
         assert_eq!(
@@ -1063,8 +1070,8 @@ mod tests {
             );
         }
         assert!(
-            starter.manifest.views.iter().all(|v| v.kind == "notes"),
-            "starter 는 네이티브 화면 없이 선언만으로 서야 한다"
+            starter.manifest.views.is_empty(),
+            "일지는 문서 탐색기 안의 폴더이지 별도 화면이 아니다"
         );
         assert!(
             !starter.manifest.settings.is_empty(),
@@ -1103,6 +1110,7 @@ mod tests {
         m.views.push(PackView {
             id: "v".into(),
             group: "nope".into(),
+            kind: "notes".into(),
             ..Default::default()
         });
         assert!(m.validate().unwrap_err().contains("그룹"));

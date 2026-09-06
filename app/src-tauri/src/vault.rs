@@ -515,6 +515,19 @@ fn is_closed_status(status: &str) -> bool {
 
 fn milestone_ids(vault: &Path, project: &str) -> std::collections::HashSet<String> {
     let mut ids = std::collections::HashSet::new();
+    if let Ok(entries) = std::fs::read_dir(vault.join("calendar")) {
+        for entry in entries.flatten() {
+            if let Ok(text) = std::fs::read_to_string(entry.path()) {
+                if let Some(split) = split_frontmatter(&text) {
+                    if let Ok(map) = parse_mapping(&split.yaml) {
+                        if fm_str(&map, "kind") == "milestone" {
+                            ids.insert(fm_str(&map, "id"));
+                        }
+                    }
+                }
+            }
+        }
+    }
     let dir = vault.join("사업").join(project).join("마일스톤");
     let Ok(entries) = std::fs::read_dir(dir) else {
         return ids;
@@ -1287,6 +1300,19 @@ mod tests {
         assert!(messages
             .iter()
             .any(|m| m.contains("FDR-M404") && m.contains("문서 없음")));
+    }
+
+    #[test]
+    fn calendar_milestones_are_valid_issue_targets() {
+        let vault = fixture_vault("calendar-milestone");
+        std::fs::create_dir_all(vault.join("calendar")).unwrap();
+        std::fs::write(
+            vault.join("calendar/event-release.md"),
+            "---\nid: event-release\nkind: milestone\ntitle: Release\n---\n",
+        )
+        .unwrap();
+        assert!(milestone_ids(&vault, "FDR").contains("event-release"));
+        std::fs::remove_dir_all(vault).unwrap();
     }
 
     #[test]
