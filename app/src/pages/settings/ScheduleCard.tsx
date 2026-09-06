@@ -15,7 +15,13 @@ import { Empty } from "../common";
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** 예약 한 줄. 시각은 타이핑 중 저장하지 않고, 형식이 맞을 때만 커밋한다. */
-function ScheduleRow({ entry, onSaved }: { entry: ScheduleView; onSaved: () => void }) {
+function ScheduleRow({
+  entry,
+  onSaved,
+}: {
+  entry: ScheduleView;
+  onSaved: () => void;
+}) {
   const [time, setTime] = useState(entry.time);
   const [err, setErr] = useState(false);
   useEffect(() => setTime(entry.time), [entry.time]);
@@ -41,7 +47,11 @@ function ScheduleRow({ entry, onSaved }: { entry: ScheduleView; onSaved: () => v
         checked={entry.enabled}
         onCheckedChange={(on) => void save(on, time)}
       />
-      <Label htmlFor={`sched-${entry.key}`} className="min-w-0 flex-1 truncate" title={entry.label}>
+      <Label
+        htmlFor={`sched-${entry.key}`}
+        className="min-w-0 flex-1 truncate"
+        title={entry.label}
+      >
         {entry.label}
       </Label>
       <span className="shrink-0 text-[10px] text-muted-foreground">
@@ -59,13 +69,14 @@ function ScheduleRow({ entry, onSaved }: { entry: ScheduleView; onSaved: () => v
   );
 }
 
-export default function ScheduleCard() {
+export default function ScheduleCard({ onChange }: { onChange?: () => void }) {
   const schedules = useApp((s) => s.schedules);
   const refreshSchedules = useApp((s) => s.refreshSchedules);
   const refreshConfig = useApp((s) => s.refreshConfig);
   const onSaved = () => {
     void refreshSchedules();
     void refreshConfig();
+    onChange?.();
   };
 
   return (
@@ -75,15 +86,17 @@ export default function ScheduleCard() {
       </CardHeader>
       <CardContent className="space-y-2.5">
         {schedules.length === 0 && (
-          <Empty className="py-4">예약 가능한 액션이 없습니다. 확장 탭에서 확장을 켜세요.</Empty>
+          <Empty className="py-4">
+            예약 가능한 액션이 없습니다. 확장 탭에서 확장을 켜세요.
+          </Empty>
         )}
         {schedules.map((s) => (
           <ScheduleRow key={s.key} entry={s} onSaved={onSaved} />
         ))}
         <p className="text-[11px] text-muted-foreground">
-          예약은 확장이 선언하고, 여기서 바꾼 값이 그 위에 덮입니다. 시각이 지나도 앱이 꺼져
-          있었다면 자동 실행하지 않고 홈에 알립니다. 에이전트가 만든 작업은 예약 페이지에서
-          다룹니다.
+          예약은 확장이 선언하고, 여기서 바꾼 값이 그 위에 덮입니다. 시각이
+          지나도 앱이 꺼져 있었다면 자동 실행하지 않고 홈에 알립니다. 에이전트가
+          만든 작업은 예약 페이지에서 다룹니다.
         </p>
       </CardContent>
     </Card>

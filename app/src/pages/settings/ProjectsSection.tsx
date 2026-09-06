@@ -1,3 +1,4 @@
+import { PathInput } from "@/components/ui/path-input";
 import { Plus, Trash2 } from "lucide-react";
 import type { ConfigView, ProjectCfg } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -38,14 +39,18 @@ export default function ProjectsSection({
           </Button>
         </CardHeader>
         <CardContent className="space-y-2">
-          {draft.projects.length === 0 && <Empty className="py-4">등록된 프로젝트가 없습니다.</Empty>}
+          {draft.projects.length === 0 && (
+            <Empty className="py-4">등록된 프로젝트가 없습니다.</Empty>
+          )}
           {draft.projects.map((p, i) => (
             <div key={i} className="space-y-2 rounded-lg border p-2.5">
               <div className="flex items-center gap-2">
                 <Input
                   className="h-7 flex-1"
                   value={p.name}
-                  onChange={(e) => patchDraft((d) => (d.projects[i].name = e.target.value))}
+                  onChange={(e) =>
+                    patchDraft((d) => (d.projects[i].name = e.target.value))
+                  }
                   placeholder="사업명"
                   aria-label="프로젝트 이름"
                 />
@@ -58,10 +63,12 @@ export default function ProjectsSection({
                   <Trash2 />
                 </Button>
               </div>
-              <Input
+              <PathInput
                 className="h-7"
                 value={p.path}
-                onChange={(e) => patchDraft((d) => (d.projects[i].path = e.target.value))}
+                onValueChange={(value) =>
+                  patchDraft((d) => (d.projects[i].path = value))
+                }
                 placeholder="프로젝트 경로"
                 aria-label="프로젝트 경로"
               />
@@ -69,28 +76,38 @@ export default function ProjectsSection({
                 <Input
                   className="h-7"
                   value={p.workBranch}
-                  onChange={(e) => patchDraft((d) => (d.projects[i].workBranch = e.target.value))}
+                  onChange={(e) =>
+                    patchDraft(
+                      (d) => (d.projects[i].workBranch = e.target.value),
+                    )
+                  }
                   placeholder="작업 브랜치"
                   aria-label="작업 브랜치"
                 />
                 <Input
                   className="h-7"
                   value={p.idPrefix}
-                  onChange={(e) => patchDraft((d) => (d.projects[i].idPrefix = e.target.value))}
+                  onChange={(e) =>
+                    patchDraft((d) => (d.projects[i].idPrefix = e.target.value))
+                  }
                   placeholder="ID 접두 (예: FDR)"
                   aria-label="ID 접두"
                 />
-                <Input
+                <PathInput
                   className="h-7"
                   value={p.portableBase}
-                  onChange={(e) => patchDraft((d) => (d.projects[i].portableBase = e.target.value))}
+                  onValueChange={(value) =>
+                    patchDraft((d) => (d.projects[i].portableBase = value))
+                  }
                   placeholder="portable 기준 경로"
                   aria-label="portable 기준 경로"
                 />
                 <Input
                   className="h-7"
                   value={p.verify}
-                  onChange={(e) => patchDraft((d) => (d.projects[i].verify = e.target.value))}
+                  onChange={(e) =>
+                    patchDraft((d) => (d.projects[i].verify = e.target.value))
+                  }
                   placeholder="검증 명령"
                   aria-label="검증 명령"
                 />

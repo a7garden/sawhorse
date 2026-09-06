@@ -1,6 +1,7 @@
+import { PathInput } from "@/components/ui/path-input";
 import type { ConfigView } from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
+import { Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 
@@ -22,10 +23,12 @@ export default function GeneralSection({
         <CardContent className="space-y-3">
           <div className="space-y-1">
             <Label htmlFor="vault-path">볼트 경로</Label>
-            <Input
+            <PathInput
               id="vault-path"
               value={draft.vaultPath}
-              onChange={(e) => patchDraft((d) => (d.vaultPath = e.target.value))}
+              onValueChange={(value) =>
+                patchDraft((d) => (d.vaultPath = value))
+              }
               placeholder="/path/to/vault"
             />
           </div>
@@ -35,7 +38,9 @@ export default function GeneralSection({
               id="default-project"
               className="w-full"
               value={draft.defaultProject}
-              onChange={(e) => patchDraft((d) => (d.defaultProject = e.target.value))}
+              onChange={(e) =>
+                patchDraft((d) => (d.defaultProject = e.target.value))
+              }
             >
               <option value="">(없음)</option>
               {draft.projects.map((p) => (

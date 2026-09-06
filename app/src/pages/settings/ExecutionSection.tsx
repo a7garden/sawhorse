@@ -1,9 +1,15 @@
-import type { ConfigView, HerdrCleanup, HerdrMode, PermissionMode } from "@/lib/types";
+import { PathInput } from "@/components/ui/path-input";
+import type {
+  ConfigView,
+  HerdrCleanup,
+  HerdrMode,
+  PermissionMode,
+} from "@/lib/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import ScheduleCard from "./ScheduleCard";
+
 import {
   HERDR_CLEANUP_OPTIONS,
   HERDR_MODE_OPTIONS,
@@ -21,8 +27,6 @@ export default function ExecutionSection({
   return (
     <div className="grid items-start gap-4 p-4 lg:grid-cols-2">
       <div className="space-y-4">
-        <ScheduleCard />
-
         <Card>
           <CardHeader className="pb-1">
             <CardTitle className="text-[13px]">실행 옵션</CardTitle>
@@ -30,10 +34,13 @@ export default function ExecutionSection({
           <CardContent className="space-y-3">
             <div className="space-y-1">
               <Label htmlFor="claude-bin">claude 실행 파일</Label>
-              <Input
+              <PathInput
+                directory={false}
                 id="claude-bin"
                 value={draft.dashboard.claudeBin}
-                onChange={(e) => patchDraft((d) => (d.dashboard.claudeBin = e.target.value))}
+                onValueChange={(value) =>
+                  patchDraft((d) => (d.dashboard.claudeBin = value))
+                }
                 placeholder="claude"
               />
             </div>
@@ -44,7 +51,11 @@ export default function ExecutionSection({
                 className="w-full"
                 value={draft.dashboard.permissionMode}
                 onChange={(e) =>
-                  patchDraft((d) => (d.dashboard.permissionMode = e.target.value as PermissionMode))
+                  patchDraft(
+                    (d) =>
+                      (d.dashboard.permissionMode = e.target
+                        .value as PermissionMode),
+                  )
                 }
               >
                 {PERMISSION_OPTIONS.map((o) => (
@@ -54,13 +65,12 @@ export default function ExecutionSection({
                 ))}
               </Select>
               <p className="text-[11px] text-muted-foreground">
-                무인 루틴·구현 실행에는 권한 우회가 필요합니다. 안전망은 플러그인 승인·범위 게이트와 훅입니다.
+                무인 루틴·구현 실행에는 권한 우회가 필요합니다. 안전망은
+                플러그인 승인·범위 게이트와 훅입니다.
               </p>
             </div>
           </CardContent>
         </Card>
-
-
       </div>
 
       <Card>
@@ -75,7 +85,9 @@ export default function ExecutionSection({
               className="w-full"
               value={draft.dashboard.herdr.mode}
               onChange={(e) =>
-                patchDraft((d) => (d.dashboard.herdr.mode = e.target.value as HerdrMode))
+                patchDraft(
+                  (d) => (d.dashboard.herdr.mode = e.target.value as HerdrMode),
+                )
               }
             >
               {HERDR_MODE_OPTIONS.map((o) => (
@@ -85,17 +97,21 @@ export default function ExecutionSection({
               ))}
             </Select>
             <p className="text-[11px] text-muted-foreground">
-              herdr로 실행하면 잡이 보이는 터미널 세션이 됩니다 — 도중에 이어받고, 승인
-              프롬프트에 직접 답하고, 대시보드를 재시작해도 세션이 살아남습니다.
+              herdr로 실행하면 잡이 보이는 터미널 세션이 됩니다 — 도중에
+              이어받고, 승인 프롬프트에 직접 답하고, 대시보드를 재시작해도
+              세션이 살아남습니다.
             </p>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="herdr-bin">herdr 실행 파일</Label>
-              <Input
+              <PathInput
+                directory={false}
                 id="herdr-bin"
                 value={draft.dashboard.herdr.bin}
-                onChange={(e) => patchDraft((d) => (d.dashboard.herdr.bin = e.target.value))}
+                onValueChange={(value) =>
+                  patchDraft((d) => (d.dashboard.herdr.bin = value))
+                }
                 placeholder="herdr"
               />
             </div>
@@ -105,7 +121,9 @@ export default function ExecutionSection({
                 id="herdr-session"
                 value={draft.dashboard.herdr.session}
                 onChange={(e) =>
-                  patchDraft((d) => (d.dashboard.herdr.session = e.target.value))
+                  patchDraft(
+                    (d) => (d.dashboard.herdr.session = e.target.value),
+                  )
                 }
                 placeholder="(기본 세션)"
               />
@@ -118,7 +136,9 @@ export default function ExecutionSection({
                 value={draft.dashboard.herdr.cleanup}
                 onChange={(e) =>
                   patchDraft(
-                    (d) => (d.dashboard.herdr.cleanup = e.target.value as HerdrCleanup),
+                    (d) =>
+                      (d.dashboard.herdr.cleanup = e.target
+                        .value as HerdrCleanup),
                   )
                 }
               >
@@ -140,7 +160,12 @@ export default function ExecutionSection({
                 onChange={(e) =>
                   patchDraft(
                     (d) =>
-                      (d.dashboard.herdr.maxParallel = clampInt(e.target.value, 1, 8, 1)),
+                      (d.dashboard.herdr.maxParallel = clampInt(
+                        e.target.value,
+                        1,
+                        8,
+                        1,
+                      )),
                   )
                 }
               />
@@ -191,14 +216,16 @@ export default function ExecutionSection({
             <Switch
               id="herdr-notify"
               checked={draft.dashboard.herdr.notify}
-              onCheckedChange={(on) => patchDraft((d) => (d.dashboard.herdr.notify = on))}
+              onCheckedChange={(on) =>
+                patchDraft((d) => (d.dashboard.herdr.notify = on))
+              }
             />
             <Label htmlFor="herdr-notify">승인 대기·실패 시 herdr 알림</Label>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            잡마다 「{draft.dashboard.herdr.workspaceLabel}」 워크스페이스에 탭 하나가
-            생깁니다. 승인 대기가 실제로 쓸모 있으려면 권한 모드를 `default` 또는
-            `acceptEdits`로 두세요.
+            잡마다 「{draft.dashboard.herdr.workspaceLabel}」 워크스페이스에 탭
+            하나가 생깁니다. 승인 대기가 실제로 쓸모 있으려면 권한 모드를
+            `default` 또는 `acceptEdits`로 두세요.
           </p>
         </CardContent>
       </Card>
