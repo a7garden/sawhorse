@@ -20,7 +20,7 @@ pub struct Store {
 pub type StoreHandle = Arc<Store>;
 
 /// 스키마 버전. 구조 변경 시 이 숫자를 올리고 migrate의 match에 분기를 추가한다.
-pub const SCHEMA_VERSION: i64 = 1;
+pub const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS project (
@@ -274,6 +274,13 @@ CREATE TABLE IF NOT EXISTS article_state (
 );
 "#;
 
+const SCHEMA_V2: &str = r#"
+ALTER TABLE article ADD COLUMN authors_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE article ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE article ADD COLUMN published_at TEXT NOT NULL DEFAULT '';
+ALTER TABLE article ADD COLUMN discovered_at TEXT NOT NULL DEFAULT '';
+"#;
+
 impl Store {
     /// 열거나 만든다. 부모 디렉터리가 없으면 만든다.
     pub fn open() -> Result<StoreHandle, String> {
@@ -314,6 +321,10 @@ impl Store {
         if current < 1 {
             tx.execute_batch(SCHEMA_V1)
                 .map_err(|e| format!("스키마 v1 적용 실패: {e}"))?;
+        }
+        if current < 2 {
+            tx.execute_batch(SCHEMA_V2)
+                .map_err(|e| format!("스키마 v2 적용 실패: {e}"))?;
         }
         tx.pragma_update(None, "user_version", SCHEMA_VERSION)
             .map_err(|e| format!("user_version 갱신 실패: {e}"))?;
@@ -1547,6 +1558,46 @@ mod tests {
         let dir =
             std::env::temp_dir().join(format!("sawhorse-store-test-{}", uuid::Uuid::new_v4()));
         Store::open_at(dir.join("workbench.sqlite")).unwrap()
+    }
+
+    #[test]
+    fn v1_store_migrates_article_columns_and_roundtrips_articles() {
+        let dir =
+            std::env::temp_dir().join(format!("sawhorse-store-v1-test-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("workbench.sqlite");
+        let conn = Connection::open(&path).unwrap();
+        conn.execute_batch(SCHEMA_V1).unwrap();
+        conn.pragma_update(None, "user_version", 1).unwrap();
+        drop(conn);
+
+        let store = Store::open_at(path).unwrap();
+        assert!(store
+            .upsert_article(
+                "a-1",
+                "feed-1",
+                "entry-1",
+                "https://example.com/entry-1",
+                "새 기사",
+                "기사 요약",
+                r#"["작성자"]"#,
+                r#"["rust"]"#,
+                "2026-09-08T00:00:00Z",
+            )
+            .unwrap());
+
+        let articles = store.list_articles("feed-1", 10).unwrap();
+        assert_eq!(articles.len(), 1);
+        assert_eq!(articles[0]["title"], "새 기사");
+        assert_eq!(articles[0]["tags"], r#"["rust"]"#);
+        assert_eq!(articles[0]["publishedAt"], "2026-09-08T00:00:00Z");
+        assert!(!articles[0]["discoveredAt"].as_str().unwrap().is_empty());
+
+        let conn = store.conn.lock();
+        let version: i64 = conn
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
     }
 
     fn sample_session(id: &str) -> Session {
