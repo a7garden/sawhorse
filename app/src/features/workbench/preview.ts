@@ -1,4 +1,5 @@
 // Opt-in browser tour only. Failed desktop IPC never falls back to this store.
+import i18n from "@/i18n";
 import {
   ARTIFACTS,
   STAGES,
@@ -343,7 +344,7 @@ function doc(workId: string, artifact: string): Document {
   const key = `${workId}/${artifact}`;
   if (!state.documents[key]) {
     const w = state.snapshot.work.find((w) => w.id === workId);
-    if (!w) throw new Error("개발 항목을 찾을 수 없습니다.");
+    if (!w) throw new Error(i18n.t("workbench:errors.workNotFound"));
     state.documents[key] = {
       workId,
       artifact: artifact as Document["artifact"],
@@ -378,7 +379,7 @@ export async function previewInvoke(
       const project = s.projects.find(
         (candidate) => candidate.id === id || candidate.id === args.projectId,
       );
-      if (!project) throw new Error("프로젝트를 찾을 수 없습니다.");
+      if (!project) throw new Error(i18n.t("workbench:preview.projectNotFound"));
       project.workflowId = String(args.workflowId);
       project.workflowVersion = String(args.workflowVersion);
       project.workflowDigest = `preview-${project.workflowId}-${project.workflowVersion}`;
@@ -394,7 +395,8 @@ export async function previewInvoke(
         args.input,
       ) as WorkspaceSnapshot["projects"][number];
       p.id ||= crypto.randomUUID();
-      if (!p.name.trim()) throw new Error("프로젝트 이름을 입력하세요.");
+      if (!p.name.trim())
+        throw new Error(i18n.t("workbench:preview.projectNameRequired"));
       p.workflowDigest = `preview-${p.workflowId}-${p.workflowVersion}`;
       const i = s.projects.findIndex((v) => v.id === p.id);
       if (i < 0) s.projects.push(p);
@@ -405,10 +407,11 @@ export async function previewInvoke(
     case "sdd_save_work": {
       const w = structuredClone(args.input) as WorkItem;
       w.id ||= crypto.randomUUID();
-      if (!w.title.trim()) throw new Error("개발 항목 이름을 입력하세요.");
+      if (!w.title.trim())
+        throw new Error(i18n.t("workbench:preview.workTitleRequired"));
       const i = s.work.findIndex((v) => v.id === w.id);
       if (i >= 0 && s.work[i].stage !== w.stage)
-        throw new Error("단계 전환 버튼을 사용하세요.");
+        throw new Error(i18n.t("workbench:preview.useTransitionButton"));
       w.createdAt ||= now();
       w.updatedAt = now();
       if (i < 0) {
@@ -436,7 +439,7 @@ export async function previewInvoke(
     }
     case "sdd_transition": {
       const w = s.work.find((v) => v.id === id);
-      if (!w) throw new Error("개발 항목을 찾을 수 없습니다.");
+      if (!w) throw new Error(i18n.t("workbench:errors.workNotFound"));
       const next = args.stage as WorkItem["stage"];
       const definition = s.workflows.find(
         (candidate) =>
@@ -448,7 +451,7 @@ export async function previewInvoke(
           (edge) => edge.from === w.stage && edge.to === next,
         )
       )
-        throw new Error("현재 워크플로우에 정의된 전환이 아닙니다.");
+        throw new Error(i18n.t("workbench:errors.invalidTransition"));
       w.stage = next;
       w.updatedAt = now();
       w.decisions.push({
@@ -468,9 +471,9 @@ export async function previewInvoke(
         note: string;
       };
       const w = s.work.find((candidate) => candidate.id === input.workId);
-      if (!w) throw new Error("개발 항목을 찾을 수 없습니다.");
+      if (!w) throw new Error(i18n.t("workbench:errors.workNotFound"));
       if (w.stage !== input.expectedNodeId)
-        throw new Error("워크플로우 노드가 다른 변경으로 이동했습니다.");
+        throw new Error(i18n.t("workbench:preview.nodeMovedConcurrently"));
       const definition = s.workflows.find(
         (candidate) =>
           candidate.id === w.workflowId &&
@@ -483,7 +486,7 @@ export async function previewInvoke(
           (!input.targetNodeId || edge.to === input.targetNodeId),
       );
       if (edges?.length !== 1)
-        throw new Error("처리할 수 없는 워크플로우 이벤트입니다.");
+        throw new Error(i18n.t("workbench:preview.unhandledEvent"));
       w.stage = edges[0].to;
       w.updatedAt = now();
       w.decisions.push({ stage: w.stage, at: now(), note: input.note });
@@ -496,7 +499,7 @@ export async function previewInvoke(
       const d = doc(String(args.workId), String(args.artifact));
       if (d.revision !== args.revision)
         throw new Error(
-          "다른 곳에서 문서가 변경되었습니다. 다시 불러온 뒤 저장하세요.",
+          i18n.t("workbench:preview.documentChangedElsewhere"),
         );
       d.markdown = String(args.markdown);
       d.revision = crypto.randomUUID();
@@ -510,7 +513,7 @@ export async function previewInvoke(
       ) as WorkspaceSnapshot["events"][number];
       e.id ||= crypto.randomUUID();
       if (!e.title.trim() || !e.date)
-        throw new Error("제목과 날짜가 필요합니다.");
+        throw new Error(i18n.t("workbench:preview.titleAndDateRequired"));
       const i = s.events.findIndex((v) => v.id === e.id);
       if (i < 0) s.events.push(e);
       else s.events[i] = e;
@@ -547,12 +550,12 @@ export async function previewInvoke(
     case "sdd_runs":
       return [];
     case "sdd_launch":
-      throw new Error(
-        "실제 에이전트 실행은 Sawhorse 데스크톱 앱과 Herdr 연결이 필요합니다.",
-      );
+      throw new Error(i18n.t("workbench:preview.launchNeedsDesktop"));
     case "sdd_run_output":
       return "";
     default:
-      throw new Error(`체험 모드에서 지원하지 않는 동작: ${command}`);
+      throw new Error(
+        i18n.t("workbench:preview.unsupportedCommand", { command }),
+      );
   }
 }

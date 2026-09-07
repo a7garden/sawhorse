@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import i18n from "@/i18n";
 import type {
   ArtifactKind,
   CalendarEvent,
@@ -33,9 +34,7 @@ async function call<T>(
     return previewInvoke(command, args) as Promise<T>;
   }
   if (!isTauri())
-    throw new Error(
-      "Sawhorse 데스크톱 앱에서 작업공간을 열어 주세요. 브라우저 체험은 ?preview=1로 시작할 수 있습니다.",
-    );
+    throw new Error(i18n.t("workbench:api.desktopOnly"));
   return invoke<T>(command, args);
 }
 export const sddApi = {
