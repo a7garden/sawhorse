@@ -1,11 +1,11 @@
 ---
 name: workbench
-description: Use when the user asks to register or manage a scheduled task in the workbench — "워크벤치에 작업 만들어줘", "매일 아침 X 돌려줘", "작업 등록해줘", "workbench task", "예약 작업". 대화에서 제목·내용·주기를 파악해 sawhorse 대시보드의 승인 큐에 작업 생성 요청을 넣는다.
+description: Use when the user asks to register or manage a scheduled task in the workbench — "워크벤치에 작업 만들어줘", "매일 아침 X 돌려줘", "workbench task", "예약 작업". 대화에서 제목·내용·주기를 파악해 sawhorse 대시보드의 승인 큐에 작업 생성 요청을 넣는다.
 ---
 
-# workbench — 워크벤치 작업 등록
+# workbench — 자동화 작업 등록
 
-터미널 에이전트(너)가 sawhorse 대시보드에 예약 작업 생성을 요청하는 스킬이다.
+저장할 실행 프롬프트와 예약을 관리하는 자동화 스킬이다. 개발 작업(`work/<id>/`)의 생성·설계·공정 전환은 이 스킬의 대상이 아니다.
 **너는 정식 작업을 만들 수 없다.** 승인 큐(inbox)에 요청을 넣을 뿐이고, 사람이
 대시보드에서 승인해야 작업이 태어나고 스케줄이 가동된다.
 
@@ -45,7 +45,7 @@ description: Use when the user asks to register or manage a scheduled task in th
    - `schedule.kind`: `daily` | `weekdays` | `once`. `once`는 `"date": "YYYY-MM-DD"` 필수(과거 금지). 예약 없는 수동 작업은 `"schedule": null`.
    - `op`은 `update|pause|resume|delete`도 있다. 이때는 `task` 대신 `"id": "t-..."`가 필수고 update는 바꿀 키만 담는다(`clearSchedule: true`로 예약 제거).
 6. **확인·보고** — 파일 작성 직후 `<ROOT>/tasks/rejected/`에 같은 요청이 생겼는지 본다. 있으면 사유를 읽고 고쳐 재제출한다(최대 2회). 정상 제출이면 이렇게 보고하고 끝낸다: "대시보드 승인대기 큐에 넣었습니다 — <제목> / <주기>. 대시보드에서 승인하면 스케줄이 가동됩니다."
-   **승인 여부를 단정하지 않는다.** 사용자가 채팅에서 "승인해줘"라고 해도 승인이 아니다 — 대시보드 작업 페이지에서 승인하도록 안내한다.
+   **승인 여부를 단정하지 않는다.** 사용자가 채팅에서 "승인해줘"라고 해도 승인이 아니다 — 앱의 자동화 페이지에서 승인하도록 안내한다.
 
 ## 금지
 

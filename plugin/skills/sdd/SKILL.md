@@ -10,11 +10,11 @@ Sawhorse owns the workspace schema and task transitions. The harness prompt supp
 When invoked outside the harness, read `~/.claude/sawhorse/config.json` for `vaultPath`, then `.sawhorse/schema.json` in that vault. Version 1 uses:
 
 - `projects/<id>/project.md`: repository, project dependencies, verification commands, default agent/model.
-- `work/<id>/work.md`: task metadata, dependency IDs, dates, stage, status, decision history, and the issue axis — `issueType`, `executionType`, `labels`, `assignees`, `milestone`, `approvalRequired`, `approve`, `approved`, `state`, `closed`, `github*`.
-- Sibling artifacts named by the pinned workflow. The SDD chain is `intent.md`, `spec.md`, `plan.md`, `verification.md`, `release.md`, `learning.md`; the lighter `issue-main` workflow used for non-code execution types writes only `intent.md`, `spec.md`, `verification.md`.
+- `work/<id>/work.md`: task metadata, dependency IDs, dates, stage, status, decision history, and the issue axis — `issueType`, `executionType`, `labels`, `assignees`, `milestone`, `state`, `closed`, `github*`.
+- Sibling artifacts named by the pinned workflow. The SDD chain is `intent.md`, `spec.md`, `plan.md`, `verification.md`, `release.md`, `learning.md`; the lighter `issue-main` workflow writes only `intent.md`, `spec.md`, `verification.md`.
 - `calendar/<id>.md`: events, including milestones. A work item's `milestone` names one of them. `runs/<id>.md`: host-managed execution records.
 
-There is no separate issue store. An issue **is** a work item seen from the request side, so never create or update `<프로젝트>/<이름>/이슈/*.md` as the record of work; those notes are a legacy input the app migrates on the user's request. `state` and `closed` are derived from `status` by the host — do not hand-edit them. `approve` is a human-only field: never set it to `true` yourself.
+There is no separate issue store. An issue **is** a work item seen from the request side, so never create or update `<프로젝트>/<이름>/이슈/*.md` as the record of work; those notes are a legacy input the app migrates on the user's request. `state` and `closed` are derived from `status` by the host — do not hand-edit them. `approve`, `approved`, and `approvalRequired` are legacy compatibility fields, not a separate approval control. The host records workflow decisions; do not edit these fields or ask users to toggle them.
 
 Read the selected task and its dependencies. Work only in the scope authorized by the task and current user instruction. Edit the requested artifact files; retain headings and existing evidence, and re-read before writing if another agent may have changed the file. Do not rewrite host-managed IDs, decisions, stage/status, schema, or run identity to make a gate pass. Report an invalid schema or blocked dependency to the task owner.
 
