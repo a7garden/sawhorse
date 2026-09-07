@@ -1,7 +1,9 @@
 // Shared building blocks for the six pages. Page-local concerns stay in each page file.
 import { useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
+import { useTranslation } from "react-i18next";
 import remarkGfm from "remark-gfm";
+import i18n from "@/i18n";
 import { Badge } from "@/components/ui/badge";
 import { api } from "@/lib/api";
 import { preprocessObsidianMd } from "@/lib/markdown";
@@ -34,9 +36,9 @@ export function fmtDur(ms: number): string {
   const s = Math.floor(ms / 1000);
   const m = Math.floor(s / 60);
   const h = Math.floor(m / 60);
-  if (h > 0) return `${h}시간 ${m % 60}분`;
-  if (m > 0) return `${m}분 ${s % 60}초`;
-  return `${s}초`;
+  if (h > 0) return i18n.t("settings:duration.hours", { h, m: m % 60 });
+  if (m > 0) return i18n.t("settings:duration.minutes", { m, s: s % 60 });
+  return i18n.t("settings:duration.seconds", { s });
 }
 
 // ---------- labels / badges ----------
@@ -45,40 +47,51 @@ export const WARN_TEXT = "text-warning-foreground";
 export type BadgeVariant =
   "default" | "secondary" | "outline" | "destructive" | "success" | "warning";
 
-export const JOB_STATUS_KO: Record<JobStatus, string> = {
-  queued: "대기",
-  running: "실행중",
-  success: "완료",
-  failed: "실패",
-  cancelled: "취소",
-  interrupted: "중단",
-};
+// Label maps keep their Record shape for callers but resolve through i18n on
+// every access, so a runtime language switch shows up without a reload.
+function labelRecord<K extends string>(
+  prefix: string,
+  keys: readonly K[],
+): Record<K, string> {
+  const out = {} as Record<K, string>;
+  for (const key of keys) {
+    Object.defineProperty(out, key, {
+      get: () => i18n.t(`settings:${prefix}.${key}`),
+    });
+  }
+  return out;
+}
 
-export const JOB_KIND_KO: Record<Job["kind"], string> = {
-  design: "설계",
-  implement: "구현",
-  routine: "루틴",
-  task: "자동 실행",
-  excel: "엑셀",
-  promote: "승격 검토",
-  initVault: "init-vault",
-  setup: "setup",
-  action: "확장 액션",
-};
+export const JOB_STATUS_KO: Record<JobStatus, string> = labelRecord(
+  "labels.jobStatus",
+  ["queued", "running", "success", "failed", "cancelled", "interrupted"],
+);
 
-export const JOB_RUNNER_KO: Record<JobRunner, string> = {
-  headless: "백그라운드",
-  herdr: "herdr",
-};
+export const JOB_KIND_KO: Record<Job["kind"], string> = labelRecord(
+  "labels.jobKind",
+  [
+    "design",
+    "implement",
+    "routine",
+    "task",
+    "excel",
+    "promote",
+    "initVault",
+    "setup",
+    "action",
+  ],
+);
+
+export const JOB_RUNNER_KO: Record<JobRunner, string> = labelRecord(
+  "labels.jobRunner",
+  ["headless", "herdr"],
+);
 
 // A running herdr job says more than "실행중": the pane may be waiting on a human.
-export const AGENT_STATUS_KO: Record<AgentStatus, string> = {
-  idle: "입력 대기",
-  working: "작업 중",
-  blocked: "승인 대기",
-  done: "정리 중",
-  unknown: "상태 불명",
-};
+export const AGENT_STATUS_KO: Record<AgentStatus, string> = labelRecord(
+  "labels.agentStatus",
+  ["idle", "working", "blocked", "done", "unknown"],
+);
 
 export function agentBadgeVariant(s: AgentStatus): BadgeVariant {
   switch (s) {
@@ -182,8 +195,8 @@ export function PriorityBadge({ p }: { p: string }) {
 
 export function entryText(e: ProgressEntry): string {
   if (e.kind === "result")
-    return e.summary ?? e.text ?? (e.isError ? "비정상 종료" : "완료");
-  return e.text ?? e.summary ?? (e.tool ? `도구: ${e.tool}` : e.kind);
+    return e.summary ?? e.text ?? i18n.t(e.isError ? "settings:progress.error" : "settings:progress.done");
+  return e.text ?? e.summary ?? (e.tool ? i18n.t("settings:progress.tool", { tool: e.tool }) : e.kind);
 }
 
 // ---------- layout primitives ----------
@@ -272,6 +285,7 @@ function MarkdownImage({
   alt?: string;
   title?: string;
 }) {
+  const { t } = useTranslation("settings");
   const [resolved, setResolved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -284,7 +298,7 @@ function MarkdownImage({
     }
     if (!notePath) {
       setResolved(null);
-      setError("문서 경로를 알 수 없어 이미지를 찾지 못했습니다");
+      setError(t("markdown.noPath"));
       return;
     }
     let alive = true;
@@ -305,14 +319,14 @@ function MarkdownImage({
   if (error) {
     return (
       <span className="inline-flex items-center gap-1 rounded bg-muted px-1 py-0.5 text-[12px] text-muted-foreground">
-        [이미지] {alt || src} — {error}
+        {t("markdown.imageFailed", { name: alt || src, error })}
       </span>
     );
   }
   if (!resolved) {
     return (
       <span className="inline-flex items-center gap-1 rounded bg-muted px-1 py-0.5 text-[12px] text-muted-foreground">
-        [이미지] {alt || src} 불러오는 중…
+        {t("markdown.imageLoading", { name: alt || src })}
       </span>
     );
   }

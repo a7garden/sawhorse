@@ -18,15 +18,16 @@ export default function GeneralSection({
   onLaunchAtLogin: (on: boolean) => void;
 }) {
   const { t } = useTranslation("common");
+  const { t: ts } = useTranslation("settings");
   return (
     <div className="grid items-start gap-4 p-4 lg:grid-cols-2">
       <Card>
         <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">저장 위치</CardTitle>
+          <CardTitle className="text-[13px]">{ts("general.saveLocation")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="vault-path">볼트 경로</Label>
+            <Label htmlFor="vault-path">{ts("fields.vaultPath")}</Label>
             <PathInput
               id="vault-path"
               value={draft.vaultPath}
@@ -37,7 +38,7 @@ export default function GeneralSection({
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="default-project">기본 프로젝트</Label>
+            <Label htmlFor="default-project">{ts("fields.defaultProject")}</Label>
             <Select
               id="default-project"
               className="w-full"
@@ -46,7 +47,7 @@ export default function GeneralSection({
                 patchDraft((d) => (d.defaultProject = e.target.value))
               }
             >
-              <option value="">(없음)</option>
+              <option value="">{ts("general.noProject")}</option>
               {draft.projects.map((p) => (
                 <option key={p.name} value={p.name}>
                   {p.name}
@@ -59,7 +60,7 @@ export default function GeneralSection({
 
       <Card>
         <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">앱</CardTitle>
+          <CardTitle className="text-[13px]">{ts("general.appTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2">
@@ -68,7 +69,7 @@ export default function GeneralSection({
               checked={draft.dashboard.launchAtLogin}
               onCheckedChange={(on) => onLaunchAtLogin(on)}
             />
-            <Label htmlFor="launch-at-login">로그인 시 자동 시작</Label>
+            <Label htmlFor="launch-at-login">{ts("general.launchAtLogin")}</Label>
           </div>
           <div className="flex items-center gap-2">
             <Label htmlFor="app-language">{t("language")}</Label>

@@ -4,6 +4,8 @@
 // 예약 카드(ExecutionSection 안)만 예외로 draft 를 타지 않는다 — 예약은 자기 API 로
 // 즉시 커밋된다. 자세한 이유는 settings/ScheduleCard.tsx.
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import type { ConfigPatch, ConfigView } from "@/lib/types";
@@ -19,32 +21,39 @@ import { Empty, PageHeader } from "./common";
 type SectionId =
   "general" | "projects" | "collaboration" | "execution" | "diagnostics";
 
-const SECTIONS: { value: SectionId; label: string }[] = [
-  { value: "general", label: "일반" },
-  { value: "projects", label: "프로젝트" },
-  { value: "collaboration", label: "협업" },
-  { value: "execution", label: "실행" },
-  { value: "diagnostics", label: "진단" },
+const SECTION_IDS: SectionId[] = [
+  "general",
+  "projects",
+  "collaboration",
+  "execution",
+  "diagnostics",
 ];
 
 function validate(d: ConfigView): string | null {
-  if (d.vaultPath.trim().length === 0) return "볼트 경로를 입력하세요.";
+  if (d.vaultPath.trim().length === 0) return i18n.t("settings:validate.vaultPathRequired");
   const names = new Set<string>();
   for (const p of d.projects) {
-    if (p.name.trim().length === 0) return "프로젝트 이름이 비어 있습니다.";
-    if (names.has(p.name)) return `프로젝트 이름이 중복됩니다: ${p.name}`;
+    if (p.name.trim().length === 0)
+      return i18n.t("settings:validate.projectNameEmpty");
+    if (names.has(p.name))
+      return i18n.t("settings:validate.projectNameDuplicate", { name: p.name });
     names.add(p.name);
     if (p.path.trim().length === 0)
-      return `${p.name} 프로젝트의 경로가 비어 있습니다.`;
+      return i18n.t("settings:validate.projectPathEmpty", { name: p.name });
   }
   if (d.defaultProject.length > 0 && !names.has(d.defaultProject))
-    return "기본 프로젝트가 프로젝트 목록에 없습니다.";
+    return i18n.t("settings:validate.defaultProjectMissing");
   if (d.dashboard.claudeBin.trim().length === 0)
-    return "claude 실행 파일을 입력하세요.";
+    return i18n.t("settings:validate.claudeBinRequired");
   return null;
 }
 
 export default function SettingsPage() {
+  const { t } = useTranslation("settings");
+  const tabs = SECTION_IDS.map((value) => ({
+    value,
+    label: t(`sections.${value}`),
+  }));
   const config = useApp((s) => s.config);
   const diag = useApp((s) => s.diag);
   const refreshConfig = useApp((s) => s.refreshConfig);
@@ -106,9 +115,9 @@ export default function SettingsPage() {
       await api.saveConfig(patch);
       await refreshConfig();
       await refreshDiagnostics();
-      setMsg({ ok: true, text: "설정을 저장했습니다." });
+      setMsg({ ok: true, text: t("page.saved") });
     } catch (e) {
-      setMsg({ ok: false, text: `저장 실패: ${String(e)}` });
+      setMsg({ ok: false, text: t("page.saveFailed", { error: String(e) }) });
     } finally {
       setSaving(false);
     }
@@ -121,15 +130,15 @@ export default function SettingsPage() {
     try {
       await api.setLaunchAtLogin(on);
     } catch (e) {
-      setMsg({ ok: false, text: `자동 시작 설정 실패: ${String(e)}` });
+      setMsg({ ok: false, text: t("page.autoStartFailed", { error: String(e) }) });
     }
   }
 
   return (
     <div>
-      <PageHeader title="설정">
+      <PageHeader title={t("page.title")}>
         <Button size="sm" variant="ghost" onClick={openWizard}>
-          마법사
+          {t("page.wizard")}
         </Button>
         <Button
           size="sm"
@@ -140,21 +149,21 @@ export default function SettingsPage() {
             setMsg(null);
           }}
         >
-          되돌리기
+          {t("page.revert")}
         </Button>
         <Button
           size="sm"
           disabled={!dirty || saving}
           onClick={() => void save()}
         >
-          {saving ? "저장 중…" : "저장"}
+          {saving ? t("actions.saving") : t("actions.save")}
         </Button>
         <Button
           size="sm"
           variant="outline"
           onClick={() => useApp.getState().setPage("schemas")}
         >
-          볼트 문서 구조
+          {t("page.schemas")}
         </Button>
       </PageHeader>
 
@@ -167,11 +176,11 @@ export default function SettingsPage() {
       )}
 
       {!draft ? (
-        <Empty>설정을 불러오는 중…</Empty>
+        <Empty>{t("page.loading")}</Empty>
       ) : (
         <>
           <div className="sticky top-[58px] z-10 border-b bg-background/90 px-4 py-2 backdrop-blur-xl lg:px-5">
-            <Tabs tabs={SECTIONS} value={section} onChange={setSection} />
+            <Tabs tabs={tabs} value={section} onChange={setSection} />
           </div>
 
           {section === "general" && (

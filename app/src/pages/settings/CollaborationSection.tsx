@@ -3,6 +3,7 @@
 // 값과 달리 즉시 커밋한다 — 활성 세션은 시작 때 찍은 snapshot을 따르므로 안전.
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import type {
   CollabProjectsView,
@@ -16,9 +17,9 @@ import { Input, Label, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Empty } from "../common";
 
-const APPROVAL_OPTIONS: { value: LocalIntegrationApproval; label: string }[] = [
-  { value: "required", label: "필수 — 후보마다 사람이 승인" },
-  { value: "autoAfterPreflight", label: "사전검사 통과 시 자동 허가" },
+const APPROVAL_OPTIONS: { value: LocalIntegrationApproval; key: string }[] = [
+  { value: "required", key: "collab.approval.required" },
+  { value: "autoAfterPreflight", key: "collab.approval.autoAfterPreflight" },
 ];
 
 interface CheckDraft {
@@ -56,6 +57,7 @@ export default function CollaborationSection({
   draft: ConfigView;
   patchDraft: (fn: (d: ConfigView) => void) => void;
 }) {
+  const { t } = useTranslation("settings");
   const [projects, setProjects] = useState<CollabProjectsView | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -85,19 +87,22 @@ export default function CollaborationSection({
       await api.saveConfig({
         dashboard: { collaboration: { localIntegrationApproval: v } },
       });
-      setMsg({ ok: true, text: "승인 정책을 저장했습니다." });
+      setMsg({ ok: true, text: t("collab.approval.saved") });
     } catch (e) {
-      setMsg({ ok: false, text: `승인 정책 저장 실패: ${String(e)}` });
+      setMsg({
+        ok: false,
+        text: t("collab.approval.saveFailed", { error: String(e) }),
+      });
     }
   }
 
   async function saveProfile() {
     if (!profileProject) {
-      setMsg({ ok: false, text: "프로젝트를 선택하세요." });
+      setMsg({ ok: false, text: t("collab.projectRequired") });
       return;
     }
     if (profileName.trim().length === 0) {
-      setMsg({ ok: false, text: "프로필 이름을 입력하세요." });
+      setMsg({ ok: false, text: t("collab.nameRequired") });
       return;
     }
     const built = checks
@@ -113,11 +118,14 @@ export default function CollaborationSection({
       });
       setMsg({
         ok: true,
-        text: `검증 프로필 "${profileName.trim()}"을 저장했습니다.`,
+        text: t("collab.profileSaved", { name: profileName.trim() }),
       });
       reload();
     } catch (e) {
-      setMsg({ ok: false, text: `검증 프로필 저장 실패: ${String(e)}` });
+      setMsg({
+        ok: false,
+        text: t("collab.profileSaveFailed", { error: String(e) }),
+      });
     } finally {
       setBusy(false);
     }
@@ -133,10 +141,13 @@ export default function CollaborationSection({
     setMsg(null);
     try {
       await api.collabRegisterProject(name, path, branch, verifyProfile);
-      setMsg({ ok: true, text: `"${name}" 프로젝트를 등록했습니다.` });
+      setMsg({ ok: true, text: t("collab.registeredMsg", { name }) });
       reload();
     } catch (e) {
-      setMsg({ ok: false, text: `프로젝트 등록 실패: ${String(e)}` });
+      setMsg({
+        ok: false,
+        text: t("collab.registerFailed", { error: String(e) }),
+      });
     } finally {
       setBusy(false);
     }
@@ -158,7 +169,7 @@ export default function CollaborationSection({
 
       <Card>
         <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">승인 정책</CardTitle>
+          <CardTitle className="text-[13px]">{t("collab.approval.title")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           <Select
@@ -166,33 +177,34 @@ export default function CollaborationSection({
             onChange={(e) =>
               void setApproval(e.target.value as LocalIntegrationApproval)
             }
-            aria-label="로컬 통합 승인 정책"
+            aria-label={t("collab.approval.aria")}
           >
             {APPROVAL_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
-                {o.label}
+                {t(o.key)}
               </option>
             ))}
           </Select>
           <p className="text-xs text-muted-foreground">
-            새 세션의 초기값으로만 쓰입니다. 이미 시작한 세션은 시작 때의 정책
-            스냅샷을 따릅니다.
+            {t("collab.approval.hint")}
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-          <CardTitle className="text-[13px]">등록 프로젝트</CardTitle>
+          <CardTitle className="text-[13px]">{t("collab.registeredTitle")}</CardTitle>
           {(projects?.registered.length ?? 0) > 0 && (
             <span className="text-xs text-muted-foreground">
-              {projects?.registered.length}개
+              {t("collab.registeredCount", {
+                count: projects?.registered.length ?? 0,
+              })}
             </span>
           )}
         </CardHeader>
         <CardContent className="space-y-2">
           {projects && projects.registered.length === 0 && (
-            <Empty className="py-3">등록된 협업 프로젝트가 없습니다.</Empty>
+            <Empty className="py-3">{t("collab.noRegistered")}</Empty>
           )}
           {(projects?.registered ?? []).map((p) => (
             <div
@@ -200,11 +212,15 @@ export default function CollaborationSection({
               className="space-y-0.5 rounded-lg border p-2.5 text-xs"
             >
               <div className="font-medium">{p.name}</div>
-              <div className="text-muted-foreground">경로: {p.path}</div>
               <div className="text-muted-foreground">
-                통합: {p.integration.path || p.path} ·{" "}
-                {p.integration.branch || "기본 브랜치"} · 프로필:{" "}
-                {p.integration.verifyProfile || "기본"}
+                {t("collab.path", { path: p.path })}
+              </div>
+              <div className="text-muted-foreground">
+                {t("collab.integration", {
+                  path: p.integration.path || p.path,
+                  branch: p.integration.branch || t("collab.defaultBranch"),
+                  profile: p.integration.verifyProfile || t("collab.defaultProfile"),
+                })}
               </div>
             </div>
           ))}
@@ -213,18 +229,18 @@ export default function CollaborationSection({
 
       <Card>
         <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">검증 프로필</CardTitle>
+          <CardTitle className="text-[13px]">{t("collab.profileTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <Label>프로젝트</Label>
+              <Label>{t("collab.projectLabel")}</Label>
               <Select
                 className="w-full"
                 value={profileProject}
                 onChange={(e) => setProfileProject(e.target.value)}
               >
-                <option value="">선택…</option>
+                <option value="">{t("collab.select")}</option>
                 {(projects?.registered ?? []).map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -233,7 +249,7 @@ export default function CollaborationSection({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>프로필 이름</Label>
+              <Label>{t("collab.profileName")}</Label>
               <Input
                 className="w-full"
                 value={profileName}
@@ -248,14 +264,14 @@ export default function CollaborationSection({
                     setManual([...existing.manual]);
                   }
                 }}
-                placeholder="예: 기본"
+                placeholder={t("collab.profileNamePlaceholder")}
               />
             </div>
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>자동 검사</Label>
+              <Label>{t("collab.autoChecks")}</Label>
               <div className="flex gap-1">
                 <Button
                   size="xs"
@@ -264,7 +280,7 @@ export default function CollaborationSection({
                     setChecks((cs) => [...cs, emptyCheck("command")])
                   }
                 >
-                  <Plus /> 명령
+                  <Plus /> {t("collab.command")}
                 </Button>
                 <Button
                   size="xs"
@@ -276,7 +292,7 @@ export default function CollaborationSection({
               </div>
             </div>
             {checks.length === 0 && (
-              <Empty className="py-2">자동 검사가 없습니다.</Empty>
+              <Empty className="py-2">{t("collab.noChecks")}</Empty>
             )}
             {checks.map((c, i) => (
               <div key={i} className="space-y-1 rounded-lg border p-2.5">
@@ -295,15 +311,15 @@ export default function CollaborationSection({
                         ),
                       )
                     }
-                    aria-label={`검사 ${i + 1} 종류`}
+                    aria-label={t("collab.checkKindAria", { index: i + 1 })}
                   >
-                    <option value="command">명령</option>
-                    <option value="http">HTTP</option>
+                    <option value="command">{t("collab.command")}</option>
+                    <option value="http">{t("collab.http")}</option>
                   </Select>
                   <Button
                     size="icon"
                     variant="ghost"
-                    aria-label={`검사 ${i + 1} 삭제`}
+                    aria-label={t("collab.checkDeleteAria", { index: i + 1 })}
                     onClick={() =>
                       setChecks((cs) => cs.filter((_, j) => j !== i))
                     }
@@ -323,8 +339,8 @@ export default function CollaborationSection({
                           ),
                         )
                       }
-                      placeholder="작업 디렉터리 (비면 저장소 루트)"
-                      aria-label={`검사 ${i + 1} 작업 디렉터리`}
+                      placeholder={t("collab.cwdPlaceholder")}
+                      aria-label={t("collab.cwdAria", { index: i + 1 })}
                     />
                     <Input
                       className="h-7"
@@ -336,8 +352,8 @@ export default function CollaborationSection({
                           ),
                         )
                       }
-                      placeholder="명령 (쉼표 구분, 예: npm, run, build)"
-                      aria-label={`검사 ${i + 1} 명령`}
+                      placeholder={t("collab.argvPlaceholder")}
+                      aria-label={t("collab.argvAria", { index: i + 1 })}
                     />
                   </div>
                 ) : (
@@ -352,7 +368,7 @@ export default function CollaborationSection({
                       )
                     }
                     placeholder="http://localhost:5173"
-                    aria-label={`검사 ${i + 1} URL`}
+                    aria-label={t("collab.urlAria", { index: i + 1 })}
                   />
                 )}
               </div>
@@ -361,18 +377,18 @@ export default function CollaborationSection({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <Label>수동 확인 항목</Label>
+              <Label>{t("collab.manualTitle")}</Label>
               <Button
                 size="xs"
                 variant="outline"
                 onClick={() => setManual((ms) => [...ms, ""])}
               >
-                <Plus /> 항목 추가
+                <Plus /> {t("collab.addItem")}
               </Button>
             </div>
             {manual.length === 0 && (
               <Empty className="py-2">
-                수동 확인이 없으면 자동 검사 통과 뒤 곧바로 검증 완료가 됩니다.
+                {t("collab.noManual")}
               </Empty>
             )}
             {manual.map((m, i) => (
@@ -386,13 +402,13 @@ export default function CollaborationSection({
                       ms.map((x, j) => (j === i ? e.target.value : x)),
                     )
                   }
-                  placeholder="예: 개발 서버에서 홈 화면이 그려지는지 확인"
-                  aria-label={`수동 확인 ${i + 1}`}
+                  placeholder={t("collab.manualPlaceholder")}
+                  aria-label={t("collab.manualAria", { index: i + 1 })}
                 />
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label={`수동 확인 ${i + 1} 삭제`}
+                  aria-label={t("collab.manualDeleteAria", { index: i + 1 })}
                   onClick={() =>
                     setManual((ms) => ms.filter((_, j) => j !== i))
                   }
@@ -409,7 +425,7 @@ export default function CollaborationSection({
               disabled={busy}
               onClick={() => void saveProfile()}
             >
-              프로필 저장
+              {t("collab.saveProfile")}
             </Button>
           </div>
         </CardContent>
@@ -418,13 +434,13 @@ export default function CollaborationSection({
       <Card>
         <CardHeader className="pb-1">
           <CardTitle className="text-[13px]">
-            프로젝트 등록 (기존 목록)
+            {t("collab.legacyTitle")}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {projects && projects.legacy.length === 0 && (
             <Empty className="py-3">
-              기존 프로젝트 목록이 없습니다. 설정 &gt; 프로젝트에서 추가하세요.
+              {t("collab.noLegacy")}
             </Empty>
           )}
           {(projects?.legacy ?? []).map((p) => (
@@ -435,8 +451,11 @@ export default function CollaborationSection({
               <div className="min-w-0 flex-1">
                 <div className="font-medium">{p.name}</div>
                 <div className="text-muted-foreground">
-                  {p.path} · {p.workBranch || "기본 브랜치"} · 검증:{" "}
-                  {p.verify || "없음"}
+                  {t("collab.legacyMeta", {
+                    path: p.path,
+                    branch: p.workBranch || t("collab.defaultBranch"),
+                    verify: p.verify || t("collab.verifyNone"),
+                  })}
                 </div>
               </div>
               <Button
@@ -447,7 +466,7 @@ export default function CollaborationSection({
                   void register(p.name, p.path, p.workBranch, p.verify)
                 }
               >
-                등록
+                {t("collab.register")}
               </Button>
             </div>
           ))}

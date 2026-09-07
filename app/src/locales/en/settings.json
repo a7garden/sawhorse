@@ -1,1 +1,399 @@
-{}
+{
+  "actions": {
+    "run": "Run",
+    "runNow": "Run now",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "edit": "Edit",
+    "delete": "Delete",
+    "add": "Add",
+    "rescan": "Rescan"
+  },
+  "sections": {
+    "general": "General",
+    "projects": "Projects",
+    "collaboration": "Collaboration",
+    "execution": "Execution",
+    "diagnostics": "Diagnostics"
+  },
+  "fields": {
+    "vaultPath": "Vault path",
+    "defaultProject": "Default project",
+    "claudeBin": "claude executable",
+    "herdrBin": "herdr executable",
+    "permissionMode": "Permission mode"
+  },
+  "status": {
+    "ok": "OK",
+    "missing": "Missing",
+    "problem": "Problem"
+  },
+  "labels": {
+    "jobStatus": {
+      "queued": "Queued",
+      "running": "Running",
+      "success": "Success",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "interrupted": "Interrupted"
+    },
+    "jobKind": {
+      "design": "Design",
+      "implement": "Implement",
+      "routine": "Routine",
+      "task": "Auto run",
+      "excel": "Excel",
+      "promote": "Promotion review",
+      "initVault": "init-vault",
+      "setup": "setup",
+      "action": "Extension action"
+    },
+    "jobRunner": {
+      "headless": "Background",
+      "herdr": "herdr"
+    },
+    "agentStatus": {
+      "idle": "Waiting for input",
+      "working": "Working",
+      "blocked": "Awaiting approval",
+      "done": "Wrapping up",
+      "unknown": "Unknown"
+    }
+  },
+  "duration": {
+    "hours": "{{h}}h {{m}}m",
+    "minutes": "{{m}}m {{s}}s",
+    "seconds": "{{s}}s"
+  },
+  "progress": {
+    "error": "Abnormal exit",
+    "done": "Done",
+    "tool": "Tool: {{tool}}"
+  },
+  "markdown": {
+    "imageFailed": "[Image] {{name}} — {{error}}",
+    "imageLoading": "[Image] {{name}} — loading…",
+    "noPath": "Couldn't find the image because the note path is unknown"
+  },
+  "home": {
+    "title": "Home",
+    "problems": {
+      "configMissing": "The config file (~/.claude/sawhorse/config.json) is missing. Setting just the workspace path is enough to start.",
+      "vaultPath": "The vault path is invalid. Check the path in settings.",
+      "claudeCli": "The claude CLI can't be run. Check the executable location in settings.",
+      "projectPaths": "Project path check failed: {{names}}",
+      "count": "{{count}} diagnostic issue(s)"
+    },
+    "goToSettings": "Open settings",
+    "setupWizard": "Setup wizard",
+    "missed": {
+      "title": "Missed schedule: {{label}}",
+      "detail": "Was due {{date}} {{time}} — it did not run automatically. Review it and run when ready."
+    },
+    "skip": "Skip",
+    "state": {
+      "scheduled": "Scheduled",
+      "running": "Running",
+      "queued": "Queued",
+      "missed": "Missed",
+      "done": "Done",
+      "off": "Off"
+    },
+    "schedule": {
+      "weekdays": "Weekdays",
+      "daily": "Daily",
+      "disabled": "Disabled"
+    },
+    "card": {
+      "startedAt": "started {{time}}",
+      "queuedAt": "queued {{time}}"
+    },
+    "todayTitle": "Today's work",
+    "viewAll": "View all",
+    "emptyToday": "No tasks for today in the journal.",
+    "tomorrow": "Tomorrow ({{count}})",
+    "activityTitle": "Activity summary",
+    "doneToday": "Jobs completed today",
+    "failedToday": "Jobs failed today",
+    "lastFailed": "Last failure {{time}} · see logs in Jobs",
+    "lastReport": "Latest report",
+    "vaultTitle": "Vault status",
+    "vaultCheck": "Vault audit",
+    "unpromoted": "Unpromoted items",
+    "journalToday": "Today's journal",
+    "journal": {
+      "unchecked": "Not checked",
+      "yes": "Yes",
+      "no": "No"
+    },
+    "recentIssues": "Recently updated issues",
+    "noIssues": "No issues.",
+    "issueFlow": "Issue workflow",
+    "flow": {
+      "proposal": "Proposed",
+      "awaiting": "Pending approval",
+      "ready": "Ready to run"
+    },
+    "runningJobs": "Running jobs",
+    "jobs": "Jobs",
+    "emptyJobs": "No pending jobs.",
+    "elapsed": "{{duration}} elapsed",
+    "waitingEvents": "Waiting for progress events…"
+  },
+  "tasks": {
+    "title": {
+      "library": "Automation tasks",
+      "schedules": "Schedules & repeats"
+    },
+    "add": "Add definition",
+    "addReservation": "Schedule existing",
+    "op": {
+      "create": "Create",
+      "update": "Update",
+      "pause": "Pause",
+      "resume": "Resume",
+      "delete": "Delete"
+    },
+    "pendingTitle": "Pending approval",
+    "duplicateSuspected": "Possible duplicate · {{id}}",
+    "note": "Note: {{note}}",
+    "approve": "Approve",
+    "reject": "Reject",
+    "rejectedTitle": "Rejected",
+    "filter": {
+      "all": "All",
+      "once": "One-time",
+      "repeat": "Repeating"
+    },
+    "listTitle": {
+      "library": "Registered automation tasks",
+      "schedules": "Run schedule"
+    },
+    "empty": {
+      "library": "Add a definition for what should run.",
+      "schedules": "Nothing scheduled yet. Pick an existing definition and set a run time."
+    },
+    "builtinScheduleTitle": "Set run times for built-in definitions",
+    "chooseTitle": "Choose a task to schedule",
+    "chooseHint": "Only the time changes — the definition stays as is.",
+    "chooseEmpty": "Add definitions in \"Automation tasks\" first.",
+    "badge": {
+      "pack": "Extension",
+      "builtin": "Built-in",
+      "needsInput": "Needs input",
+      "off": "Off"
+    },
+    "schedule": {
+      "manual": "Manual",
+      "daily": "Daily",
+      "weekdays": "Weekdays"
+    },
+    "lastRun": "Last run {{time}}",
+    "dialog": {
+      "runTitle": "{{label}} · Run",
+      "runFallback": "Run definition",
+      "addTitle": "Add automation task",
+      "editTitle": "Edit automation task",
+      "scheduleTitle": "{{title}} · Run time",
+      "titleLabel": "Automation task title",
+      "titlePlaceholder": "Title",
+      "promptLabel": "What to run",
+      "promptPlaceholder": "What should it run? Include any materials and the outcome you want.",
+      "when": "When should it run?",
+      "freqLabel": "Schedule",
+      "freq": {
+        "none": "Run manually when needed",
+        "daily": "Daily",
+        "weekdays": "Weekdays",
+        "once": "One-time"
+      },
+      "select": "Select one",
+      "listPlaceholder": "Comma-separated",
+      "askAgent": "Delegate to agent"
+    },
+    "ask": {
+      "none": "run directly without a schedule",
+      "once": "run once at {{date}} {{time}}",
+      "daily": "daily",
+      "weekdays": "every weekday",
+      "exec": "run {{cycle}} at {{time}}",
+      "body": "Create a task in the workbench.\nTitle: {{title}}\nContent: {{prompt}}\nSchedule: {{schedule}}\nQueue it for approval following the workbench skill spec.",
+      "noTitle": "(title)",
+      "noContent": "(content)"
+    }
+  },
+  "vault": {
+    "title": "Vault",
+    "promoteRun": "Inbox promotion review",
+    "promoteFailed": "Failed to queue promotion review: {{error}}",
+    "quickScan": "Quick audit",
+    "issueCount": "{{count}}",
+    "unchecked": "No audit yet. Press Rescan.",
+    "noIssues": "No issues found.",
+    "sev": {
+      "error": "Critical",
+      "warn": "Warning",
+      "info": "Info"
+    },
+    "unpromotedTitle": "Unpromoted items: {{count}}",
+    "emptyUnpromoted": "No unpromoted items.",
+    "openList": "Open list",
+    "mismatch": "Vault mismatch",
+    "mismatchHint": "This path doesn't match the vault path in settings",
+    "preview": "Document preview",
+    "previewEmpty": "Open a document from the audit results or a list."
+  },
+  "page": {
+    "title": "Settings",
+    "wizard": "Wizard",
+    "revert": "Revert",
+    "schemas": "Vault document schema",
+    "loading": "Loading settings…",
+    "saved": "Settings saved.",
+    "saveFailed": "Save failed: {{error}}",
+    "autoStartFailed": "Failed to update launch-at-login: {{error}}"
+  },
+  "validate": {
+    "vaultPathRequired": "Enter the vault path.",
+    "projectNameEmpty": "Project name is empty.",
+    "projectNameDuplicate": "Duplicate project name: {{name}}",
+    "projectPathEmpty": "The path for project {{name}} is empty.",
+    "defaultProjectMissing": "The default project is not in the project list.",
+    "claudeBinRequired": "Enter the claude executable."
+  },
+  "general": {
+    "saveLocation": "Save location",
+    "noProject": "(none)",
+    "appTitle": "App",
+    "launchAtLogin": "Launch at login"
+  },
+  "projects": {
+    "title": "Projects",
+    "empty": "No registered projects.",
+    "namePlaceholder": "Project name",
+    "nameAria": "Project name",
+    "deleteAria": "Delete {{name}}",
+    "pathPlaceholder": "Project path",
+    "pathAria": "Project path",
+    "branchPlaceholder": "Work branch",
+    "branchAria": "Work branch",
+    "idPrefixPlaceholder": "ID prefix (e.g. FDR)",
+    "idPrefixAria": "ID prefix",
+    "portablePlaceholder": "portable base path",
+    "portableAria": "portable base path",
+    "verifyPlaceholder": "Verify command",
+    "verifyAria": "Verify command"
+  },
+  "collab": {
+    "approval": {
+      "title": "Approval policy",
+      "required": "Required — a human approves each candidate",
+      "autoAfterPreflight": "Auto-approve after preflight passes",
+      "aria": "Local integration approval policy",
+      "hint": "Used only as the initial value for new sessions. Sessions already running follow the policy snapshot taken when they started.",
+      "saved": "Approval policy saved.",
+      "saveFailed": "Failed to save approval policy: {{error}}"
+    },
+    "registeredTitle": "Registered projects",
+    "registeredCount": "{{count}}",
+    "noRegistered": "No registered collaboration projects.",
+    "path": "Path: {{path}}",
+    "integration": "Integration: {{path}} · {{branch}} · Profile: {{profile}}",
+    "defaultBranch": "default branch",
+    "defaultProfile": "default",
+    "profileTitle": "Verification profiles",
+    "projectLabel": "Project",
+    "select": "Select…",
+    "profileName": "Profile name",
+    "profileNamePlaceholder": "e.g. default",
+    "autoChecks": "Automated checks",
+    "command": "Command",
+    "http": "HTTP",
+    "noChecks": "No automated checks.",
+    "checkKindAria": "Type of check {{index}}",
+    "checkDeleteAria": "Delete check {{index}}",
+    "cwdPlaceholder": "Working directory (empty = repository root)",
+    "cwdAria": "Check {{index}} working directory",
+    "argvPlaceholder": "Command (comma-separated, e.g. npm, run, build)",
+    "argvAria": "Check {{index}} command",
+    "urlAria": "Check {{index}} URL",
+    "manualTitle": "Manual checks",
+    "addItem": "Add item",
+    "noManual": "With no manual checks, verification completes right after the automated checks pass.",
+    "manualPlaceholder": "e.g. confirm the home screen renders on the dev server",
+    "manualAria": "Manual check {{index}}",
+    "manualDeleteAria": "Delete manual check {{index}}",
+    "saveProfile": "Save profile",
+    "projectRequired": "Select a project.",
+    "nameRequired": "Enter a profile name.",
+    "profileSaved": "Saved verification profile \"{{name}}\".",
+    "profileSaveFailed": "Failed to save verification profile: {{error}}",
+    "registeredMsg": "Registered project \"{{name}}\".",
+    "registerFailed": "Failed to register project: {{error}}",
+    "legacyTitle": "Register project (existing list)",
+    "noLegacy": "No existing project list. Add one under Settings > Projects.",
+    "legacyMeta": "{{path}} · {{branch}} · Verify: {{verify}}",
+    "verifyNone": "none",
+    "register": "Register"
+  },
+  "diag": {
+    "title": "Diagnostics",
+    "noResults": "No results yet.",
+    "configFile": "Config file",
+    "claudeCli": "claude CLI",
+    "herdrDisabled": "Disabled",
+    "serverConnected": "Server connected",
+    "noServer": "No server",
+    "notInstalled": "Not installed",
+    "nextJob": "Next job: {{runner}}",
+    "runnerHerdr": "herdr session",
+    "badgePath": "Path",
+    "badgeBranch": "Branch",
+    "requirementsTitle": "Required programs",
+    "agentsTitle": "Agents",
+    "noAgents": "No agents detected.",
+    "badgeDefault": "Default",
+    "badgeSkillInstallable": "Skill install available",
+    "badgeRunsJobs": "Runs jobs",
+    "defaultAgentHint": "Change the default agent in the wizard (\"Reopen wizard\" at the top of Settings)."
+  },
+  "exec": {
+    "runOptions": "Run options",
+    "herdrTitle": "herdr session",
+    "mode": "Run mode",
+    "perm": {
+      "default": "Default",
+      "acceptEdits": "Auto-approve edits",
+      "bypass": "Bypass permissions (unattended)"
+    },
+    "herdrMode": {
+      "auto": "Auto (herdr when available, else background)",
+      "herdr": "herdr only",
+      "headless": "Background only"
+    },
+    "cleanup": {
+      "closeOnSuccess": "Close on success",
+      "keep": "Always keep",
+      "closeAlways": "Always close (default)"
+    },
+    "permissionHint": "Unattended routine and implement runs need permission bypass. The safety net is plugin approvals, scope gates, and hooks.",
+    "herdrHint": "With herdr the job runs in a visible terminal session — take over mid-run, answer approval prompts directly, and the session survives a dashboard restart.",
+    "sessionName": "Session name",
+    "sessionPlaceholder": "(default session)",
+    "cleanupLabel": "Tab when finished",
+    "parallel": "Parallel jobs",
+    "startTimeout": "Startup wait (s)",
+    "jobTimeout": "Max run time (min, 0 = unlimited)",
+    "notify": "herdr notify on approval wait or failure",
+    "workspaceHint": "Each job gets one tab in the \"{{workspace}}\" workspace. For approval waits to be useful, keep the permission mode at `default` or `acceptEdits`."
+  },
+  "schedule": {
+    "title": "Schedules",
+    "empty": "No schedulable actions. Turn on extensions in the Extensions tab.",
+    "weekdays": "Weekdays",
+    "daily": "Daily",
+    "timeAria": "Scheduled time for {{label}}",
+    "hint": "Schedules are declared by extensions; values changed here are overrides on top. If the app was closed when the time passed, it won't auto-run and will notify on Home instead. Automation tasks created by the agent are handled under Schedules & repeats in Automation."
+  }
+}

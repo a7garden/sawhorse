@@ -1,21 +1,21 @@
 import type { HerdrCleanup, HerdrMode, PermissionMode } from "@/lib/types";
 
-export const PERMISSION_OPTIONS: { value: PermissionMode; label: string }[] = [
-  { value: "default", label: "기본" },
-  { value: "acceptEdits", label: "편집 자동 승인" },
-  { value: "bypassPermissions", label: "권한 우회 (무인 실행)" },
+export const PERMISSION_OPTIONS: { value: PermissionMode; key: string }[] = [
+  { value: "default", key: "exec.perm.default" },
+  { value: "acceptEdits", key: "exec.perm.acceptEdits" },
+  { value: "bypassPermissions", key: "exec.perm.bypass" },
 ];
 
-export const HERDR_MODE_OPTIONS: { value: HerdrMode; label: string }[] = [
-  { value: "auto", label: "자동 (herdr 가능하면 herdr, 아니면 백그라운드)" },
-  { value: "herdr", label: "herdr 전용" },
-  { value: "headless", label: "백그라운드 전용" },
+export const HERDR_MODE_OPTIONS: { value: HerdrMode; key: string }[] = [
+  { value: "auto", key: "exec.herdrMode.auto" },
+  { value: "herdr", key: "exec.herdrMode.herdr" },
+  { value: "headless", key: "exec.herdrMode.headless" },
 ];
 
-export const HERDR_CLEANUP_OPTIONS: { value: HerdrCleanup; label: string }[] = [
-  { value: "closeOnSuccess", label: "성공하면 닫기" },
-  { value: "keep", label: "항상 남기기" },
-  { value: "closeAlways", label: "항상 닫기 (기본값)" },
+export const HERDR_CLEANUP_OPTIONS: { value: HerdrCleanup; key: string }[] = [
+  { value: "closeOnSuccess", key: "exec.cleanup.closeOnSuccess" },
+  { value: "keep", key: "exec.cleanup.keep" },
+  { value: "closeAlways", key: "exec.cleanup.closeAlways" },
 ];
 
 /// Number inputs hand back strings, including "" while the field is being retyped.

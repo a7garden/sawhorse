@@ -1,4 +1,5 @@
 import { RefreshCw } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type {
   AgentPresence,
   Diagnostics,
@@ -25,30 +26,31 @@ export default function DiagnosticsSection({
   defaultAgent: string;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation("settings");
   return (
     <div className="space-y-4 p-4">
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-          <CardTitle className="text-[13px]">진단</CardTitle>
+          <CardTitle className="text-[13px]">{t("diag.title")}</CardTitle>
           <Button size="xs" variant="outline" onClick={onRefresh}>
-            <RefreshCw /> 다시 검사
+            <RefreshCw /> {t("actions.rescan")}
           </Button>
         </CardHeader>
         <CardContent className="space-y-1.5">
           {!diag ? (
-            <Empty className="py-4">검사 결과가 없습니다.</Empty>
+            <Empty className="py-4">{t("diag.noResults")}</Empty>
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <span className="w-24 text-xs font-medium">설정 파일</span>
+                <span className="w-24 text-xs font-medium">{t("diag.configFile")}</span>
                 <Badge variant={diag.configExists ? "success" : "destructive"}>
-                  {diag.configExists ? "정상" : "없음"}
+                  {diag.configExists ? t("status.ok") : t("status.missing")}
                 </Badge>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-24 text-xs font-medium">볼트 경로</span>
+                <span className="w-24 text-xs font-medium">{t("fields.vaultPath")}</span>
                 <Badge variant={diag.vaultPathOk ? "success" : "destructive"}>
-                  {diag.vaultPathOk ? "정상" : "문제"}
+                  {diag.vaultPathOk ? t("status.ok") : t("status.problem")}
                 </Badge>
                 <span
                   className="truncate text-[11px] text-muted-foreground"
@@ -58,9 +60,9 @@ export default function DiagnosticsSection({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-24 text-xs font-medium">claude CLI</span>
+                <span className="w-24 text-xs font-medium">{t("diag.claudeCli")}</span>
                 <Badge variant={diag.claudeOk ? "success" : "destructive"}>
-                  {diag.claudeOk ? "정상" : "없음"}
+                  {diag.claudeOk ? t("status.ok") : t("status.missing")}
                 </Badge>
                 {diag.claudeVersion && (
                   <span className="truncate text-[11px] text-muted-foreground">
@@ -80,18 +82,23 @@ export default function DiagnosticsSection({
                   }
                 >
                   {diag.herdr.mode === "headless"
-                    ? "사용 안 함"
+                    ? t("diag.herdrDisabled")
                     : diag.herdr.serverOk
-                      ? "서버 연결됨"
+                      ? t("diag.serverConnected")
                       : diag.herdr.binOk
-                        ? "서버 없음"
-                        : "미설치"}
+                        ? t("diag.noServer")
+                        : t("diag.notInstalled")}
                 </Badge>
                 <span className="truncate text-[11px] text-muted-foreground">
-                  다음 잡:{" "}
-                  {diag.herdr.effectiveRunner === "herdr"
-                    ? "herdr 세션"
-                    : "백그라운드"}
+                  {t(
+                    "diag.nextJob",
+                    {
+                      runner:
+                        diag.herdr.effectiveRunner === "herdr"
+                          ? t("diag.runnerHerdr")
+                          : t("labels.jobRunner.headless"),
+                    },
+                  )}
                   {diag.herdr.version ? ` · ${diag.herdr.version}` : ""}
                 </span>
               </div>
@@ -107,7 +114,7 @@ export default function DiagnosticsSection({
                     {p.name}
                   </span>
                   <Badge variant={p.pathOk ? "success" : "destructive"}>
-                    경로
+                    {t("diag.badgePath")}
                   </Badge>
                   <Badge variant={p.gitOk ? "success" : "destructive"}>
                     git
@@ -121,7 +128,7 @@ export default function DiagnosticsSection({
                           : "warning"
                     }
                   >
-                    브랜치
+                    {t("diag.badgeBranch")}
                   </Badge>
                 </div>
               ))}
@@ -134,11 +141,11 @@ export default function DiagnosticsSection({
           다시 열지 않고 여기서 확인·설치할 수 있어야 한다. */}
       <Card>
         <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">필요한 프로그램</CardTitle>
+          <CardTitle className="text-[13px]">{t("diag.requirementsTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1.5">
           {requirements.length === 0 ? (
-            <Empty className="py-4">검사 결과가 없습니다.</Empty>
+            <Empty className="py-4">{t("diag.noResults")}</Empty>
           ) : (
             requirements.map((r) => (
               <DetectRow
@@ -164,11 +171,11 @@ export default function DiagnosticsSection({
 
       <Card>
         <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">에이전트</CardTitle>
+          <CardTitle className="text-[13px]">{t("diag.agentsTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-1.5">
           {agents.filter((a) => a.detected).length === 0 ? (
-            <Empty className="py-4">감지된 에이전트가 없습니다.</Empty>
+            <Empty className="py-4">{t("diag.noAgents")}</Empty>
           ) : (
             agents
               .filter((a) => a.detected)
@@ -180,12 +187,16 @@ export default function DiagnosticsSection({
                   badge={
                     <>
                       {a.id === defaultAgent && (
-                        <Badge variant="success">기본</Badge>
+                        <Badge variant="success">{t("diag.badgeDefault")}</Badge>
                       )}
                       {a.installable && (
-                        <Badge variant="outline">스킬 설치 가능</Badge>
+                        <Badge variant="outline">
+                          {t("diag.badgeSkillInstallable")}
+                        </Badge>
                       )}
-                      {a.runsJobs && <Badge variant="outline">잡 실행</Badge>}
+                      {a.runsJobs && (
+                        <Badge variant="outline">{t("diag.badgeRunsJobs")}</Badge>
+                      )}
                     </>
                   }
                   version={a.version}
@@ -194,8 +205,7 @@ export default function DiagnosticsSection({
               ))
           )}
           <p className="text-[11px] text-muted-foreground">
-            기본 에이전트는 마법사(설정 상단의 「마법사 다시 열기」)에서
-            바꿉니다.
+            {t("diag.defaultAgentHint")}
           </p>
         </CardContent>
       </Card>

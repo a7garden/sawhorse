@@ -1,1 +1,399 @@
-{}
+{
+  "actions": {
+    "run": "실행",
+    "runNow": "지금 실행",
+    "cancel": "취소",
+    "save": "저장",
+    "saving": "저장 중…",
+    "edit": "편집",
+    "delete": "삭제",
+    "add": "추가",
+    "rescan": "다시 검사"
+  },
+  "sections": {
+    "general": "일반",
+    "projects": "프로젝트",
+    "collaboration": "협업",
+    "execution": "실행",
+    "diagnostics": "진단"
+  },
+  "fields": {
+    "vaultPath": "볼트 경로",
+    "defaultProject": "기본 프로젝트",
+    "claudeBin": "claude 실행 파일",
+    "herdrBin": "herdr 실행 파일",
+    "permissionMode": "권한 모드"
+  },
+  "status": {
+    "ok": "정상",
+    "missing": "없음",
+    "problem": "문제"
+  },
+  "labels": {
+    "jobStatus": {
+      "queued": "대기",
+      "running": "실행중",
+      "success": "완료",
+      "failed": "실패",
+      "cancelled": "취소",
+      "interrupted": "중단"
+    },
+    "jobKind": {
+      "design": "설계",
+      "implement": "구현",
+      "routine": "루틴",
+      "task": "자동 실행",
+      "excel": "엑셀",
+      "promote": "승격 검토",
+      "initVault": "init-vault",
+      "setup": "setup",
+      "action": "확장 액션"
+    },
+    "jobRunner": {
+      "headless": "백그라운드",
+      "herdr": "herdr"
+    },
+    "agentStatus": {
+      "idle": "입력 대기",
+      "working": "작업 중",
+      "blocked": "승인 대기",
+      "done": "정리 중",
+      "unknown": "상태 불명"
+    }
+  },
+  "duration": {
+    "hours": "{{h}}시간 {{m}}분",
+    "minutes": "{{m}}분 {{s}}초",
+    "seconds": "{{s}}초"
+  },
+  "progress": {
+    "error": "비정상 종료",
+    "done": "완료",
+    "tool": "도구: {{tool}}"
+  },
+  "markdown": {
+    "imageFailed": "[이미지] {{name}} — {{error}}",
+    "imageLoading": "[이미지] {{name}} 불러오는 중…",
+    "noPath": "문서 경로를 알 수 없어 이미지를 찾지 못했습니다"
+  },
+  "home": {
+    "title": "홈",
+    "problems": {
+      "configMissing": "설정 파일(~/.claude/sawhorse/config.json)이 없습니다. 작업공간 경로만 지정해도 시작할 수 있습니다.",
+      "vaultPath": "볼트 경로가 유효하지 않습니다. 설정에서 경로를 확인하세요.",
+      "claudeCli": "claude CLI를 실행할 수 없습니다. 설정에서 실행 파일 위치를 확인하세요.",
+      "projectPaths": "프로젝트 경로 확인 실패: {{names}}",
+      "count": "진단 문제 {{count}}건"
+    },
+    "goToSettings": "설정으로 이동",
+    "setupWizard": "설정 마법사",
+    "missed": {
+      "title": "{{label}} 예약을 놓쳤습니다",
+      "detail": "{{date}} {{time}} 예정 — 자동 실행되지 않았습니다. 확인 후 실행하세요."
+    },
+    "skip": "건너뛰기",
+    "state": {
+      "scheduled": "예정",
+      "running": "실행중",
+      "queued": "대기",
+      "missed": "놓침",
+      "done": "완료",
+      "off": "꺼짐"
+    },
+    "schedule": {
+      "weekdays": "평일",
+      "daily": "매일",
+      "disabled": "비활성"
+    },
+    "card": {
+      "startedAt": "시작 {{time}}",
+      "queuedAt": "등록 {{time}}"
+    },
+    "todayTitle": "오늘의 업무",
+    "viewAll": "전체",
+    "emptyToday": "일지에 오늘 할 일이 없습니다.",
+    "tomorrow": "내일 {{count}}건",
+    "activityTitle": "활동 요약",
+    "doneToday": "오늘 완료 잡",
+    "failedToday": "오늘 실패 잡",
+    "lastFailed": "마지막 실패 {{time}} · 작업 탭에서 로그 보기",
+    "lastReport": "마지막 리포트",
+    "vaultTitle": "볼트 현황",
+    "vaultCheck": "볼트 점검",
+    "unpromoted": "미승격 항목",
+    "journalToday": "오늘 일지",
+    "journal": {
+      "unchecked": "검사 전",
+      "yes": "있음",
+      "no": "없음"
+    },
+    "recentIssues": "최근 변경 이슈",
+    "noIssues": "이슈가 없습니다.",
+    "issueFlow": "이슈 워크플로",
+    "flow": {
+      "proposal": "제안",
+      "awaiting": "승인대기",
+      "ready": "실행대기"
+    },
+    "runningJobs": "실행 중 잡",
+    "jobs": "작업",
+    "emptyJobs": "대기 중인 작업이 없습니다.",
+    "elapsed": "{{duration}} 경과",
+    "waitingEvents": "진행 이벤트를 기다리는 중…"
+  },
+  "tasks": {
+    "title": {
+      "library": "자동화 작업",
+      "schedules": "예약과 반복"
+    },
+    "add": "정의 추가",
+    "addReservation": "기존 정의 예약",
+    "op": {
+      "create": "생성",
+      "update": "수정",
+      "pause": "일시정지",
+      "resume": "재개",
+      "delete": "삭제"
+    },
+    "pendingTitle": "승인대기",
+    "duplicateSuspected": "중복 의심 · {{id}}",
+    "note": "비고: {{note}}",
+    "approve": "승인",
+    "reject": "거부",
+    "rejectedTitle": "반려됨",
+    "filter": {
+      "all": "전체",
+      "once": "한 번 예약",
+      "repeat": "반복 실행"
+    },
+    "listTitle": {
+      "library": "등록된 자동화 작업",
+      "schedules": "실행 일정"
+    },
+    "empty": {
+      "library": "실행할 내용을 정의로 추가하세요.",
+      "schedules": "예약된 정의가 없습니다. 기존 정의를 선택해 실행 시간을 지정하세요."
+    },
+    "builtinScheduleTitle": "기본 제공 정의의 실행 시간 설정",
+    "chooseTitle": "예약할 자동화 작업 선택",
+    "chooseHint": "실행 내용은 그대로 두고 시간만 설정합니다.",
+    "chooseEmpty": "먼저 ‘자동화 작업’에서 정의를 추가하세요.",
+    "badge": {
+      "pack": "확장 정의",
+      "builtin": "기본 정의",
+      "needsInput": "입력 후 실행",
+      "off": "꺼짐"
+    },
+    "schedule": {
+      "manual": "수동",
+      "daily": "매일",
+      "weekdays": "평일"
+    },
+    "lastRun": "마지막 실행 {{time}}",
+    "dialog": {
+      "runTitle": "{{label}} · 실행",
+      "runFallback": "정의 실행",
+      "addTitle": "자동화 작업 추가",
+      "editTitle": "자동화 작업 편집",
+      "scheduleTitle": "{{title}} · 실행 시간",
+      "titleLabel": "자동화 작업 제목",
+      "titlePlaceholder": "제목",
+      "promptLabel": "실행 내용",
+      "promptPlaceholder": "어떤 일을 실행할까요? 필요한 자료와 원하는 결과를 적어 주세요.",
+      "when": "언제 실행할까요?",
+      "freqLabel": "실행 주기",
+      "freq": {
+        "none": "필요할 때 직접 실행",
+        "daily": "매일",
+        "weekdays": "평일",
+        "once": "한 번 예약"
+      },
+      "select": "선택하세요",
+      "listPlaceholder": "쉼표로 구분",
+      "askAgent": "에이전트에게 시키기"
+    },
+    "ask": {
+      "none": "예약 없이 직접 실행으로",
+      "once": "{{date}} {{time}}에 1회 실행",
+      "daily": "매일",
+      "weekdays": "평일마다",
+      "exec": "{{cycle}} {{time}}에 실행",
+      "body": "워크벤치에 작업 만들어줘.\n제목: {{title}}\n내용: {{prompt}}\n주기: {{schedule}}\n워크벤치 스킬 규격대로 승인 큐에 넣어줘.",
+      "noTitle": "(제목)",
+      "noContent": "(내용)"
+    }
+  },
+  "vault": {
+    "title": "볼트",
+    "promoteRun": "인박스 승격 검토",
+    "promoteFailed": "승격 검토 등록 실패: {{error}}",
+    "quickScan": "빠른 검사",
+    "issueCount": "{{count}}건",
+    "unchecked": "아직 검사하지 않았습니다. 다시 검사를 누르세요.",
+    "noIssues": "문제를 찾지 못했습니다.",
+    "sev": {
+      "error": "위험",
+      "warn": "주의",
+      "info": "정보"
+    },
+    "unpromotedTitle": "미승격 항목 {{count}}건",
+    "emptyUnpromoted": "미승격 항목이 없습니다.",
+    "openList": "목록 열기",
+    "mismatch": "볼트 불일치",
+    "mismatchHint": "설정의 볼트 경로와 목록 경로가 일치하지 않습니다",
+    "preview": "문서 미리보기",
+    "previewEmpty": "검사 결과나 목록에서 문서를 열어보세요."
+  },
+  "page": {
+    "title": "설정",
+    "wizard": "마법사",
+    "revert": "되돌리기",
+    "schemas": "볼트 문서 구조",
+    "loading": "설정을 불러오는 중…",
+    "saved": "설정을 저장했습니다.",
+    "saveFailed": "저장 실패: {{error}}",
+    "autoStartFailed": "자동 시작 설정 실패: {{error}}"
+  },
+  "validate": {
+    "vaultPathRequired": "볼트 경로를 입력하세요.",
+    "projectNameEmpty": "프로젝트 이름이 비어 있습니다.",
+    "projectNameDuplicate": "프로젝트 이름이 중복됩니다: {{name}}",
+    "projectPathEmpty": "{{name}} 프로젝트의 경로가 비어 있습니다.",
+    "defaultProjectMissing": "기본 프로젝트가 프로젝트 목록에 없습니다.",
+    "claudeBinRequired": "claude 실행 파일을 입력하세요."
+  },
+  "general": {
+    "saveLocation": "저장 위치",
+    "noProject": "(없음)",
+    "appTitle": "앱",
+    "launchAtLogin": "로그인 시 자동 시작"
+  },
+  "projects": {
+    "title": "프로젝트",
+    "empty": "등록된 프로젝트가 없습니다.",
+    "namePlaceholder": "프로젝트명",
+    "nameAria": "프로젝트 이름",
+    "deleteAria": "{{name}} 삭제",
+    "pathPlaceholder": "프로젝트 경로",
+    "pathAria": "프로젝트 경로",
+    "branchPlaceholder": "작업 브랜치",
+    "branchAria": "작업 브랜치",
+    "idPrefixPlaceholder": "ID 접두 (예: FDR)",
+    "idPrefixAria": "ID 접두",
+    "portablePlaceholder": "portable 기준 경로",
+    "portableAria": "portable 기준 경로",
+    "verifyPlaceholder": "검증 명령",
+    "verifyAria": "검증 명령"
+  },
+  "collab": {
+    "approval": {
+      "title": "승인 정책",
+      "required": "필수 — 후보마다 사람이 승인",
+      "autoAfterPreflight": "사전검사 통과 시 자동 허가",
+      "aria": "로컬 통합 승인 정책",
+      "hint": "새 세션의 초기값으로만 쓰입니다. 이미 시작한 세션은 시작 때의 정책 스냅샷을 따릅니다.",
+      "saved": "승인 정책을 저장했습니다.",
+      "saveFailed": "승인 정책 저장 실패: {{error}}"
+    },
+    "registeredTitle": "등록 프로젝트",
+    "registeredCount": "{{count}}개",
+    "noRegistered": "등록된 협업 프로젝트가 없습니다.",
+    "path": "경로: {{path}}",
+    "integration": "통합: {{path}} · {{branch}} · 프로필: {{profile}}",
+    "defaultBranch": "기본 브랜치",
+    "defaultProfile": "기본",
+    "profileTitle": "검증 프로필",
+    "projectLabel": "프로젝트",
+    "select": "선택…",
+    "profileName": "프로필 이름",
+    "profileNamePlaceholder": "예: 기본",
+    "autoChecks": "자동 검사",
+    "command": "명령",
+    "http": "HTTP",
+    "noChecks": "자동 검사가 없습니다.",
+    "checkKindAria": "검사 {{index}} 종류",
+    "checkDeleteAria": "검사 {{index}} 삭제",
+    "cwdPlaceholder": "작업 디렉터리 (비면 저장소 루트)",
+    "cwdAria": "검사 {{index}} 작업 디렉터리",
+    "argvPlaceholder": "명령 (쉼표 구분, 예: npm, run, build)",
+    "argvAria": "검사 {{index}} 명령",
+    "urlAria": "검사 {{index}} URL",
+    "manualTitle": "수동 확인 항목",
+    "addItem": "항목 추가",
+    "noManual": "수동 확인이 없으면 자동 검사 통과 뒤 곧바로 검증 완료가 됩니다.",
+    "manualPlaceholder": "예: 개발 서버에서 홈 화면이 그려지는지 확인",
+    "manualAria": "수동 확인 {{index}}",
+    "manualDeleteAria": "수동 확인 {{index}} 삭제",
+    "saveProfile": "프로필 저장",
+    "projectRequired": "프로젝트를 선택하세요.",
+    "nameRequired": "프로필 이름을 입력하세요.",
+    "profileSaved": "검증 프로필 \"{{name}}\"을 저장했습니다.",
+    "profileSaveFailed": "검증 프로필 저장 실패: {{error}}",
+    "registeredMsg": "\"{{name}}\" 프로젝트를 등록했습니다.",
+    "registerFailed": "프로젝트 등록 실패: {{error}}",
+    "legacyTitle": "프로젝트 등록 (기존 목록)",
+    "noLegacy": "기존 프로젝트 목록이 없습니다. 설정 > 프로젝트에서 추가하세요.",
+    "legacyMeta": "{{path}} · {{branch}} · 검증: {{verify}}",
+    "verifyNone": "없음",
+    "register": "등록"
+  },
+  "diag": {
+    "title": "진단",
+    "noResults": "검사 결과가 없습니다.",
+    "configFile": "설정 파일",
+    "claudeCli": "claude CLI",
+    "herdrDisabled": "사용 안 함",
+    "serverConnected": "서버 연결됨",
+    "noServer": "서버 없음",
+    "notInstalled": "미설치",
+    "nextJob": "다음 잡: {{runner}}",
+    "runnerHerdr": "herdr 세션",
+    "badgePath": "경로",
+    "badgeBranch": "브랜치",
+    "requirementsTitle": "필요한 프로그램",
+    "agentsTitle": "에이전트",
+    "noAgents": "감지된 에이전트가 없습니다.",
+    "badgeDefault": "기본",
+    "badgeSkillInstallable": "스킬 설치 가능",
+    "badgeRunsJobs": "잡 실행",
+    "defaultAgentHint": "기본 에이전트는 마법사(설정 상단의 「마법사 다시 열기」)에서 바꿉니다."
+  },
+  "exec": {
+    "runOptions": "실행 옵션",
+    "herdrTitle": "herdr 세션",
+    "mode": "실행 방식",
+    "perm": {
+      "default": "기본",
+      "acceptEdits": "편집 자동 승인",
+      "bypass": "권한 우회 (무인 실행)"
+    },
+    "herdrMode": {
+      "auto": "자동 (herdr 가능하면 herdr, 아니면 백그라운드)",
+      "herdr": "herdr 전용",
+      "headless": "백그라운드 전용"
+    },
+    "cleanup": {
+      "closeOnSuccess": "성공하면 닫기",
+      "keep": "항상 남기기",
+      "closeAlways": "항상 닫기 (기본값)"
+    },
+    "permissionHint": "무인 루틴·구현 실행에는 권한 우회가 필요합니다. 안전망은 플러그인 승인·범위 게이트와 훅입니다.",
+    "herdrHint": "herdr로 실행하면 잡이 보이는 터미널 세션이 됩니다 — 도중에 이어받고, 승인 프롬프트에 직접 답하고, 대시보드를 재시작해도 세션이 살아남습니다.",
+    "sessionName": "세션 이름",
+    "sessionPlaceholder": "(기본 세션)",
+    "cleanupLabel": "끝난 뒤 탭",
+    "parallel": "동시 실행",
+    "startTimeout": "기동 대기 (초)",
+    "jobTimeout": "최대 실행 (분, 0=무제한)",
+    "notify": "승인 대기·실패 시 herdr 알림",
+    "workspaceHint": "잡마다 「{{workspace}}」 워크스페이스에 탭 하나가 생깁니다. 승인 대기가 실제로 쓸모 있으려면 권한 모드를 `default` 또는 `acceptEdits`로 두세요."
+  },
+  "schedule": {
+    "title": "예약",
+    "empty": "예약 가능한 액션이 없습니다. 확장 탭에서 확장을 켜세요.",
+    "weekdays": "평일",
+    "daily": "매일",
+    "timeAria": "{{label}} 예약 시각",
+    "hint": "예약은 확장이 선언하고, 여기서 바꾼 값이 그 위에 덮입니다. 시각이 지나도 앱이 꺼져 있었다면 자동 실행하지 않고 홈에 알립니다. 에이전트가 만든 자동화 작업는 자동화의 예약과 반복에서 다룹니다."
+  }
+}

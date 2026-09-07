@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { ListChecks, RefreshCw, SquareTerminal, TriangleAlert } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import { jobRequestKey } from "@/lib/jobs";
@@ -10,10 +12,28 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, MarkdownView, PageHeader } from "./common";
 
-const SEV: Record<AuditIssue["severity"], { label: string; variant: "destructive" | "warning" | "secondary" }> = {
-  error: { label: "위험", variant: "destructive" },
-  warn: { label: "주의", variant: "warning" },
-  info: { label: "정보", variant: "secondary" },
+const SEV: Record<
+  AuditIssue["severity"],
+  { label: string; variant: "destructive" | "warning" | "secondary" }
+> = {
+  get error() {
+    return {
+      label: i18n.t("settings:vault.sev.error"),
+      variant: "destructive" as const,
+    };
+  },
+  get warn() {
+    return {
+      label: i18n.t("settings:vault.sev.warn"),
+      variant: "warning" as const,
+    };
+  },
+  get info() {
+    return {
+      label: i18n.t("settings:vault.sev.info"),
+      variant: "secondary" as const,
+    };
+  },
 };
 
 // 미승격 목록의 절대 경로에서 볼트 경로 prefix를 떼어 볼트 기준 상대 경로로 바꾼다.
@@ -27,6 +47,7 @@ function vaultRel(listPath: string, vaultPath: string): string | null {
 }
 
 export default function VaultPage() {
+  const { t } = useTranslation("settings");
   const audit = useApp((s) => s.audit);
   const unpromoted = useApp((s) => s.unpromoted);
   const refreshAudit = useApp((s) => s.refreshAudit);
@@ -87,16 +108,16 @@ export default function VaultPage() {
 
   return (
     <div>
-      <PageHeader title="볼트">
+      <PageHeader title={t("vault.title")}>
         <Button size="sm" variant="outline" disabled={scanning} onClick={() => void scan()}>
-          <RefreshCw /> 다시 검사
+          <RefreshCw /> {t("actions.rescan")}
         </Button>
         <RunButton
           size="sm"
           variant="default"
           icon={<SquareTerminal />}
           jobKey={jobRequestKey({ kind: "promote" })}
-          label="인박스 승격 검토"
+          label={t("vault.promoteRun")}
           disabled={promoting}
           onRun={promote}
           onError={setError}
@@ -105,7 +126,8 @@ export default function VaultPage() {
 
       {error && (
         <p className="mx-4 mb-1 flex items-center gap-1.5 text-xs text-destructive">
-          <TriangleAlert className="size-3.5 shrink-0" /> 승격 검토 등록 실패: {error}
+          <TriangleAlert className="size-3.5 shrink-0" />{" "}
+          {t("vault.promoteFailed", { error })}
         </p>
       )}
 
@@ -113,14 +135,18 @@ export default function VaultPage() {
         <div className="space-y-3">
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-[13px]">빠른 검사</CardTitle>
-              {audit && <span className="text-[11px] text-muted-foreground">{audit.issues.length}건</span>}
+              <CardTitle className="text-[13px]">{t("vault.quickScan")}</CardTitle>
+              {audit && (
+                <span className="text-[11px] text-muted-foreground">
+                  {t("vault.issueCount", { count: audit.issues.length })}
+                </span>
+              )}
             </CardHeader>
             <CardContent>
               {audit == null ? (
-                <Empty>아직 검사하지 않았습니다. 다시 검사를 누르세요.</Empty>
+                <Empty>{t("vault.unchecked")}</Empty>
               ) : audit.issues.length === 0 ? (
-                <Empty>문제를 찾지 못했습니다.</Empty>
+                <Empty>{t("vault.noIssues")}</Empty>
               ) : (
                 <ul className="space-y-1.5">
                   {audit.issues.map((iss, i) => (
@@ -144,12 +170,13 @@ export default function VaultPage() {
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
               <CardTitle className="text-[13px]">
-                <ListChecks className="mr-1 inline size-3.5" /> 미승격 항목 {unpromoted.length}건
+                <ListChecks className="mr-1 inline size-3.5" />{" "}
+                {t("vault.unpromotedTitle", { count: unpromoted.length })}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {unpromoted.length === 0 ? (
-                <Empty>미승격 항목이 없습니다.</Empty>
+                <Empty>{t("vault.emptyUnpromoted")}</Empty>
               ) : (
                 <ul className="space-y-1">
                   {unpromoted.map((it, i) => {
@@ -160,11 +187,14 @@ export default function VaultPage() {
                         <span className="min-w-0 flex-1">{it.text}</span>
                         {rel ? (
                           <button onClick={() => void openList(rel)} className="shrink-0 text-[11px] text-muted-foreground hover:underline">
-                            목록 열기
+                            {t("vault.openList")}
                           </button>
                         ) : (
-                          <span className="shrink-0 text-[11px] text-muted-foreground" title="설정의 볼트 경로와 목록 경로가 일치하지 않습니다">
-                            볼트 불일치
+                          <span
+                            className="shrink-0 text-[11px] text-muted-foreground"
+                            title={t("vault.mismatchHint")}
+                          >
+                            {t("vault.mismatch")}
                           </span>
                         )}
                       </li>
@@ -178,7 +208,9 @@ export default function VaultPage() {
 
         <Card className="self-start">
           <CardHeader className="pb-1">
-            <CardTitle className="text-[13px]">{view ? view.title : "문서 미리보기"}</CardTitle>
+            <CardTitle className="text-[13px]">
+              {view ? view.title : t("vault.preview")}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {view ? (
@@ -188,7 +220,7 @@ export default function VaultPage() {
                 className="selectable"
               />
             ) : (
-              <Empty>검사 결과나 목록에서 문서를 열어보세요.</Empty>
+              <Empty>{t("vault.previewEmpty")}</Empty>
             )}
           </CardContent>
         </Card>

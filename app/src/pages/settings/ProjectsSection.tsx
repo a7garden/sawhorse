@@ -1,5 +1,6 @@
 import { PathInput } from "@/components/ui/path-input";
 import { Plus, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { ConfigView, ProjectCfg } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -13,11 +14,12 @@ export default function ProjectsSection({
   draft: ConfigView;
   patchDraft: (fn: (d: ConfigView) => void) => void;
 }) {
+  const { t } = useTranslation("settings");
   return (
     <div className="space-y-4 p-4">
       <Card>
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-          <CardTitle className="text-[13px]">프로젝트</CardTitle>
+          <CardTitle className="text-[13px]">{t("projects.title")}</CardTitle>
           <Button
             size="xs"
             variant="outline"
@@ -35,12 +37,12 @@ export default function ProjectsSection({
               })
             }
           >
-            <Plus /> 추가
+            <Plus /> {t("actions.add")}
           </Button>
         </CardHeader>
         <CardContent className="space-y-2">
           {draft.projects.length === 0 && (
-            <Empty className="py-4">등록된 프로젝트가 없습니다.</Empty>
+            <Empty className="py-4">{t("projects.empty")}</Empty>
           )}
           {draft.projects.map((p, i) => (
             <div key={i} className="space-y-2 rounded-lg border p-2.5">
@@ -51,13 +53,15 @@ export default function ProjectsSection({
                   onChange={(e) =>
                     patchDraft((d) => (d.projects[i].name = e.target.value))
                   }
-                  placeholder="프로젝트명"
-                  aria-label="프로젝트 이름"
+                  placeholder={t("projects.namePlaceholder")}
+                  aria-label={t("projects.nameAria")}
                 />
                 <Button
                   size="xs"
                   variant="ghost"
-                  aria-label={`${p.name || "프로젝트"} 삭제`}
+                  aria-label={t("projects.deleteAria", {
+                    name: p.name || t("projects.title"),
+                  })}
                   onClick={() => patchDraft((d) => d.projects.splice(i, 1))}
                 >
                   <Trash2 />
@@ -69,8 +73,8 @@ export default function ProjectsSection({
                 onValueChange={(value) =>
                   patchDraft((d) => (d.projects[i].path = value))
                 }
-                placeholder="프로젝트 경로"
-                aria-label="프로젝트 경로"
+                placeholder={t("projects.pathPlaceholder")}
+                aria-label={t("projects.pathAria")}
               />
               <div className="grid grid-cols-2 gap-2">
                 <Input
@@ -81,8 +85,8 @@ export default function ProjectsSection({
                       (d) => (d.projects[i].workBranch = e.target.value),
                     )
                   }
-                  placeholder="작업 브랜치"
-                  aria-label="작업 브랜치"
+                  placeholder={t("projects.branchPlaceholder")}
+                  aria-label={t("projects.branchAria")}
                 />
                 <Input
                   className="h-7"
@@ -90,8 +94,8 @@ export default function ProjectsSection({
                   onChange={(e) =>
                     patchDraft((d) => (d.projects[i].idPrefix = e.target.value))
                   }
-                  placeholder="ID 접두 (예: FDR)"
-                  aria-label="ID 접두"
+                  placeholder={t("projects.idPrefixPlaceholder")}
+                  aria-label={t("projects.idPrefixAria")}
                 />
                 <PathInput
                   className="h-7"
@@ -99,8 +103,8 @@ export default function ProjectsSection({
                   onValueChange={(value) =>
                     patchDraft((d) => (d.projects[i].portableBase = value))
                   }
-                  placeholder="portable 기준 경로"
-                  aria-label="portable 기준 경로"
+                  placeholder={t("projects.portablePlaceholder")}
+                  aria-label={t("projects.portableAria")}
                 />
                 <Input
                   className="h-7"
@@ -108,8 +112,8 @@ export default function ProjectsSection({
                   onChange={(e) =>
                     patchDraft((d) => (d.projects[i].verify = e.target.value))
                   }
-                  placeholder="검증 명령"
-                  aria-label="검증 명령"
+                  placeholder={t("projects.verifyPlaceholder")}
+                  aria-label={t("projects.verifyAria")}
                 />
               </div>
             </div>

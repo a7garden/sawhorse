@@ -4,6 +4,8 @@ import ScheduleCard from "./settings/ScheduleCard";
 import { useCallback, useEffect, useState } from "react";
 import { ClipboardCopy, Pencil, Plus, Trash2 } from "lucide-react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import { api, EVENTS } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import { RunButton } from "@/components/RunButton";
@@ -24,20 +26,20 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Empty, PageHeader, WARN_TEXT } from "./common";
 
-const OP_KO: Record<string, string> = {
-  create: "생성",
-  update: "수정",
-  pause: "일시정지",
-  resume: "재개",
-  delete: "삭제",
+const OP_KEY: Record<string, string> = {
+  create: "tasks.op.create",
+  update: "tasks.op.update",
+  pause: "tasks.op.pause",
+  resume: "tasks.op.resume",
+  delete: "tasks.op.delete",
 };
 
-function scheduleLabel(t: TaskDef): string {
-  const s = t.schedule;
-  if (!s) return "수동";
+function scheduleLabel(def: TaskDef): string {
+  const s = def.schedule;
+  if (!s) return i18n.t("settings:tasks.schedule.manual");
   const kind: Record<ScheduleKind, string> = {
-    daily: "매일",
-    weekdays: "평일",
+    daily: i18n.t("settings:tasks.schedule.daily"),
+    weekdays: i18n.t("settings:tasks.schedule.weekdays"),
     once: s.date ?? "",
   };
   return `${kind[s.kind]} ${s.time}`;
@@ -48,6 +50,7 @@ export default function TasksPage({
 }: {
   mode?: "library" | "schedules";
 }) {
+  const { t } = useTranslation("settings");
   const [filter, setFilter] = useState("all");
   const [choosing, setChoosing] = useState(false);
   const [view, setView] = useState<TasksView | null>(null);
@@ -135,7 +138,7 @@ export default function TasksPage({
 
   return (
     <div>
-      <PageHeader title={mode === "library" ? "자동화 작업" : "예약과 반복"}>
+      <PageHeader title={mode === "library" ? t("tasks.title.library") : t("tasks.title.schedules")}>
         <Button
           size="sm"
           onClick={() => {
@@ -146,7 +149,8 @@ export default function TasksPage({
             }
           }}
         >
-          <Plus /> {mode === "library" ? "정의 추가" : "기존 정의 예약"}
+          <Plus />{" "}
+          {mode === "library" ? t("tasks.add") : t("tasks.addReservation")}
         </Button>
       </PageHeader>
 
@@ -160,27 +164,29 @@ export default function TasksPage({
         {view && view.pending.length > 0 && (
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-[13px]">승인대기</CardTitle>
+              <CardTitle className="text-[13px]">{t("tasks.pendingTitle")}</CardTitle>
               <Badge variant="secondary">{view.pending.length}</Badge>
             </CardHeader>
             <CardContent className="space-y-2">
               {view.pending.map((p) => (
                 <div key={p.id} className="rounded-xl border bg-muted/15 p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">{OP_KO[p.op] ?? p.op}</Badge>
+                    <Badge variant="secondary">
+                      {OP_KEY[p.op] ? t(OP_KEY[p.op]) : p.op}
+                    </Badge>
                     <span className="text-[13px] font-semibold">
                       {p.targetTitle}
                     </span>
                     <Badge variant="outline">{p.agent || "agent"}</Badge>
                     {p.duplicateOf && (
                       <Badge variant="warning">
-                        중복 의심 · {p.duplicateOf}
+                        {t("tasks.duplicateSuspected", { id: p.duplicateOf })}
                       </Badge>
                     )}
                   </div>
                   {p.note && (
                     <p className="mt-1 text-xs text-muted-foreground">
-                      비고: {p.note}
+                      {t("tasks.note", { note: p.note })}
                     </p>
                   )}
                   {p.summary.length > 0 && (
@@ -198,7 +204,7 @@ export default function TasksPage({
                         void guard(() => api.approveTaskRequest(p.id))
                       }
                     >
-                      승인
+                      {t("tasks.approve")}
                     </Button>
                     <Button
                       size="sm"
@@ -208,7 +214,7 @@ export default function TasksPage({
                         void guard(() => api.rejectTaskRequest(p.id))
                       }
                     >
-                      거부
+                      {t("tasks.reject")}
                     </Button>
                   </div>
                 </div>
@@ -221,7 +227,7 @@ export default function TasksPage({
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
               <CardTitle className={`text-[13px] ${WARN_TEXT}`}>
-                반려됨
+                {t("tasks.rejectedTitle")}
               </CardTitle>
               <Badge variant="warning">{view.rejected.length}</Badge>
             </CardHeader>
@@ -238,9 +244,9 @@ export default function TasksPage({
         {mode === "schedules" && (
           <div className="flex gap-2">
             {[
-              ["all", "전체"],
-              ["once", "한 번 예약"],
-              ["repeat", "반복 실행"],
+              ["all", t("tasks.filter.all")],
+              ["once", t("tasks.filter.once")],
+              ["repeat", t("tasks.filter.repeat")],
             ].map(([id, label]) => (
               <Button
                 key={id}
@@ -256,7 +262,9 @@ export default function TasksPage({
         <Card>
           <CardHeader>
             <CardTitle>
-              {mode === "library" ? "등록된 자동화 작업" : "실행 일정"}
+              {mode === "library"
+                ? t("tasks.listTitle.library")
+                : t("tasks.listTitle.schedules")}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -284,8 +292,8 @@ export default function TasksPage({
             {(mode === "library" ? all : scheduled).length === 0 && (
               <Empty>
                 {mode === "library"
-                  ? "실행할 내용을 정의로 추가하세요."
-                  : "예약된 정의가 없습니다. 기존 정의를 선택해 실행 시간을 지정하세요."}
+                  ? t("tasks.empty.library")
+                  : t("tasks.empty.schedules")}
               </Empty>
             )}
           </CardContent>
@@ -293,7 +301,7 @@ export default function TasksPage({
         {mode === "schedules" && (
           <details className="rounded-lg border p-3">
             <summary className="cursor-pointer text-sm">
-              기본 제공 정의의 실행 시간 설정
+              {t("tasks.builtinScheduleTitle")}
             </summary>
             <ScheduleCard onChange={() => void refresh()} />
           </details>
@@ -303,10 +311,10 @@ export default function TasksPage({
       <Dialog
         open={choosing}
         onClose={() => setChoosing(false)}
-        title="예약할 자동화 작업 선택"
+        title={t("tasks.chooseTitle")}
       >
         <p className="mb-3 text-xs text-muted-foreground">
-          실행 내용은 그대로 두고 시간만 설정합니다.
+          {t("tasks.chooseHint")}
         </p>
         {view?.tasks.map((row) => (
           <button
@@ -325,7 +333,7 @@ export default function TasksPage({
           </button>
         ))}
         {!view?.tasks.length && (
-          <Empty>먼저 ‘자동화 작업’에서 정의를 추가하세요.</Empty>
+          <Empty>{t("tasks.chooseEmpty")}</Empty>
         )}
       </Dialog>
       <TaskDialog
@@ -382,39 +390,44 @@ function TaskLine({
   packName?: string;
   hasParameters: boolean;
 }) {
-  const t = row.def;
+  const def = row.def;
+  const { t } = useTranslation("settings");
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/15 p-3">
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-semibold">{t.title}</span>
-          {t.builtin && (
+          <span className="truncate text-[13px] font-semibold">{def.title}</span>
+          {def.builtin && (
             <Badge variant="outline">
-              {t.source.kind === "pack" || packName ? "확장 정의" : "기본 정의"}
+              {def.source.kind === "pack" || packName
+                ? t("tasks.badge.pack")
+                : t("tasks.badge.builtin")}
             </Badge>
           )}
-          {hasParameters && <Badge variant="secondary">입력 후 실행</Badge>}
-          {!t.enabled && <Badge variant="warning">꺼짐</Badge>}
+          {hasParameters && (
+            <Badge variant="secondary">{t("tasks.badge.needsInput")}</Badge>
+          )}
+          {!def.enabled && <Badge variant="warning">{t("tasks.badge.off")}</Badge>}
         </div>
         <p className="mt-0.5 text-[10px] text-muted-foreground">
-          {scheduleLabel(t)}
+          {scheduleLabel(def)}
           {packName ? ` · ${packName}` : ""}
-          {row.lastRun ? ` · 마지막 실행 ${row.lastRun}` : ""}
+          {row.lastRun ? ` · ${t("tasks.lastRun", { time: row.lastRun })}` : ""}
         </p>
       </div>
-      {(!t.builtin || t.schedule) && (
+      {(!def.builtin || def.schedule) && (
         <Switch
-          checked={t.enabled}
+          checked={def.enabled}
           disabled={busy}
-          onCheckedChange={(v) => void guard(() => api.setTaskEnabled(t.id, v))}
+          onCheckedChange={(v) => void guard(() => api.setTaskEnabled(def.id, v))}
         />
       )}
       <RunButton
         size="xs"
         variant="ghost"
         label=""
-        ariaLabel="지금 실행"
-        title="지금 실행"
+        ariaLabel={t("actions.runNow")}
+        title={t("actions.runNow")}
         jobKey={row.jobKey}
         disabled={busy}
         onRun={onRun}
@@ -423,21 +436,21 @@ function TaskLine({
         <Button
           size="icon"
           variant="ghost"
-          aria-label="편집"
-          title="편집"
-          onClick={() => onEdit(t)}
+          aria-label={t("actions.edit")}
+          title={t("actions.edit")}
+          onClick={() => onEdit(def)}
         >
           <Pencil />
         </Button>
       )}
-      {!t.builtin && (
+      {!def.builtin && (
         <Button
           size="icon"
           variant="ghost"
-          aria-label="삭제"
-          title="삭제"
+          aria-label={t("actions.delete")}
+          title={t("actions.delete")}
           disabled={busy}
-          onClick={() => void guard(() => api.deleteTask(t.id))}
+          onClick={() => void guard(() => api.deleteTask(def.id))}
         >
           <Trash2 />
         </Button>
@@ -461,6 +474,7 @@ function PackActionTaskDialog({
   onClose: () => void;
   onRun: (params: Record<string, unknown>) => Promise<void>;
 }) {
+  const { t } = useTranslation("settings");
   const [values, setValues] = useState<Record<string, string>>({});
   useEffect(() => setValues({}), [target]);
   const missingRequired =
@@ -471,7 +485,11 @@ function PackActionTaskDialog({
     <Dialog
       open={target !== null}
       onClose={onClose}
-      title={target ? `${target.action.label} · 실행` : "정의 실행"}
+      title={
+        target
+          ? t("tasks.dialog.runTitle", { label: target.action.label })
+          : t("tasks.dialog.runFallback")
+      }
     >
       {target && (
         <form
@@ -512,7 +530,7 @@ function PackActionTaskDialog({
                     setValues({ ...values, [param.key]: event.target.value })
                   }
                 >
-                  <option value="">선택하세요</option>
+                  <option value="">{t("tasks.dialog.select")}</option>
                   {param.options.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label || option.value}
@@ -527,7 +545,7 @@ function PackActionTaskDialog({
                     setValues({ ...values, [param.key]: event.target.value })
                   }
                 >
-                  <option value="">기본 프로젝트</option>
+                  <option value="">{t("fields.defaultProject")}</option>
                   {projects.map((project) => (
                     <option key={project} value={project}>
                       {project}
@@ -538,7 +556,7 @@ function PackActionTaskDialog({
                 <Input
                   value={values[param.key] ?? ""}
                   placeholder={
-                    param.type === "list" ? "쉼표로 구분" : undefined
+                    param.type === "list" ? t("tasks.dialog.listPlaceholder") : undefined
                   }
                   onChange={(event) =>
                     setValues({ ...values, [param.key]: event.target.value })
@@ -554,10 +572,10 @@ function PackActionTaskDialog({
           )}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={onClose}>
-              취소
+              {t("actions.cancel")}
             </Button>
             <Button type="submit" disabled={busy || missingRequired}>
-              실행
+              {t("actions.run")}
             </Button>
           </div>
         </form>
@@ -583,6 +601,7 @@ function TaskDialog({
   busy: boolean;
   guard: (fn: () => Promise<unknown>) => Promise<boolean>;
 }) {
+  const { t } = useTranslation("settings");
   const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
   const [kind, setKind] = useState<ScheduleKind | "none">("none");
@@ -636,11 +655,19 @@ function TaskDialog({
   const askAgent = () => {
     const scheduleText =
       kind === "none"
-        ? "예약 없이 직접 실행으로"
+        ? t("tasks.ask.none")
         : kind === "once"
-          ? `${date} ${time}에 1회 실행`
-          : `${kind === "daily" ? "매일" : "평일마다"} ${time}에 실행`;
-    const text = `워크벤치에 작업 만들어줘.\n제목: ${title || "(제목)"}\n내용: ${prompt || "(내용)"}\n주기: ${scheduleText}\n워크벤치 스킬 규격대로 승인 큐에 넣어줘.`;
+          ? t("tasks.ask.once", { date, time })
+          : t("tasks.ask.exec", {
+              cycle:
+                kind === "daily" ? t("tasks.ask.daily") : t("tasks.ask.weekdays"),
+              time,
+            });
+    const text = t("tasks.ask.body", {
+      title: title || t("tasks.ask.noTitle"),
+      prompt: prompt || t("tasks.ask.noContent"),
+      schedule: scheduleText,
+    });
     void navigator.clipboard.writeText(text);
   };
 
@@ -650,10 +677,12 @@ function TaskDialog({
       onClose={() => setOpen(false)}
       title={
         scheduleOnly
-          ? `${editing?.title ?? "자동화 작업"} · 실행 시간`
+          ? t("tasks.dialog.scheduleTitle", {
+              title: editing?.title ?? t("tasks.title.library"),
+            })
           : editing
-            ? "자동화 작업 편집"
-            : "자동화 작업 추가"
+            ? t("tasks.dialog.editTitle")
+            : t("tasks.dialog.addTitle")
       }
     >
       <div className="space-y-3">
@@ -665,31 +694,31 @@ function TaskDialog({
         {!scheduleOnly && (
           <>
             <Input
-              aria-label="자동화 작업 제목"
-              placeholder="제목"
+              aria-label={t("tasks.dialog.titleLabel")}
+              placeholder={t("tasks.dialog.titlePlaceholder")}
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
             <Textarea
               className="min-h-40"
-              aria-label="실행 내용"
-              placeholder="어떤 일을 실행할까요? 필요한 자료와 원하는 결과를 적어 주세요."
+              aria-label={t("tasks.dialog.promptLabel")}
+              placeholder={t("tasks.dialog.promptPlaceholder")}
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
             />
           </>
         )}
-        <p className="text-xs font-medium">언제 실행할까요?</p>
+        <p className="text-xs font-medium">{t("tasks.dialog.when")}</p>
         <div className="flex flex-wrap items-center gap-2">
           <Select
-            aria-label="실행 주기"
+            aria-label={t("tasks.dialog.freqLabel")}
             value={kind}
             onChange={(e) => setKind(e.target.value as ScheduleKind | "none")}
           >
-            <option value="none">필요할 때 직접 실행</option>
-            <option value="daily">매일</option>
-            <option value="weekdays">평일</option>
-            <option value="once">한 번 예약</option>
+            <option value="none">{t("tasks.dialog.freq.none")}</option>
+            <option value="daily">{t("tasks.dialog.freq.daily")}</option>
+            <option value="weekdays">{t("tasks.dialog.freq.weekdays")}</option>
+            <option value="once">{t("tasks.dialog.freq.once")}</option>
           </Select>
           {kind !== "none" && (
             <Input
@@ -710,7 +739,7 @@ function TaskDialog({
         </div>
         <div className="flex justify-between">
           <Button variant="ghost" size="sm" onClick={askAgent}>
-            <ClipboardCopy /> 에이전트에게 시키기
+            <ClipboardCopy /> {t("tasks.dialog.askAgent")}
           </Button>
           <Button
             size="sm"
@@ -724,7 +753,7 @@ function TaskDialog({
             }
             onClick={() => void submit()}
           >
-            저장
+            {t("actions.save")}
           </Button>
         </div>
       </div>

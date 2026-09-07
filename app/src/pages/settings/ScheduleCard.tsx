@@ -4,6 +4,7 @@
 // (config 의 `dashboard.schedules` 에 재정의로 쌓인다) 목록 자체는 백엔드가 만든다.
 // 그래서 이 카드는 draft 를 받지 않고 스토어를 직접 본다.
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import type { ScheduleView } from "@/lib/types";
@@ -22,6 +23,7 @@ function ScheduleRow({
   entry: ScheduleView;
   onSaved: () => void;
 }) {
+  const { t } = useTranslation("settings");
   const [time, setTime] = useState(entry.time);
   const [err, setErr] = useState(false);
   useEffect(() => setTime(entry.time), [entry.time]);
@@ -55,7 +57,7 @@ function ScheduleRow({
         {entry.label}
       </Label>
       <span className="shrink-0 text-[10px] text-muted-foreground">
-        {entry.kind === "weekdays" ? "평일" : "매일"}
+        {entry.kind === "weekdays" ? t("schedule.weekdays") : t("schedule.daily")}
       </span>
       <Input
         className={`w-24 shrink-0 ${err ? "border-destructive" : ""}`}
@@ -63,13 +65,14 @@ function ScheduleRow({
         onChange={(e) => setTime(e.target.value)}
         onBlur={() => void save(entry.enabled, time)}
         placeholder="HH:MM"
-        aria-label={`${entry.label} 예약 시각`}
+        aria-label={t("schedule.timeAria", { label: entry.label })}
       />
     </div>
   );
 }
 
 export default function ScheduleCard({ onChange }: { onChange?: () => void }) {
+  const { t } = useTranslation("settings");
   const schedules = useApp((s) => s.schedules);
   const refreshSchedules = useApp((s) => s.refreshSchedules);
   const refreshConfig = useApp((s) => s.refreshConfig);
@@ -82,21 +85,19 @@ export default function ScheduleCard({ onChange }: { onChange?: () => void }) {
   return (
     <Card>
       <CardHeader className="pb-1">
-        <CardTitle className="text-[13px]">예약</CardTitle>
+        <CardTitle className="text-[13px]">{t("schedule.title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2.5">
         {schedules.length === 0 && (
           <Empty className="py-4">
-            예약 가능한 액션이 없습니다. 확장 탭에서 확장을 켜세요.
+            {t("schedule.empty")}
           </Empty>
         )}
         {schedules.map((s) => (
           <ScheduleRow key={s.key} entry={s} onSaved={onSaved} />
         ))}
         <p className="text-[11px] text-muted-foreground">
-          예약은 확장이 선언하고, 여기서 바꾼 값이 그 위에 덮입니다. 시각이
-          지나도 앱이 꺼져 있었다면 자동 실행하지 않고 홈에 알립니다. 에이전트가
-          만든 자동화 작업는 자동화의 예약과 반복에서 다룹니다.
+          {t("schedule.hint")}
         </p>
       </CardContent>
     </Card>
