@@ -435,6 +435,22 @@ export interface InstalledExtensionPackage {
   installedAt: string;
 }
 
+export interface PackageWorkflowEntry {
+  id: string;
+  label: string;
+  version: string;
+  description: string;
+  nodes: number;
+}
+
+export interface PackageWorkflowSummary {
+  packageId: string;
+  packageName: string;
+  packageVersion: string;
+  source: string;
+  workflows: PackageWorkflowEntry[];
+}
+
 export interface PortableExtensionPackage {
   manifest: ExtensionPackageManifest;
   files: Record<string, { encoding: "base64"; data: string } | string>;
@@ -1048,8 +1064,9 @@ export interface GitHubSourceCfg {
   account: string;
   repository: string;
   repositoryId: string;
-  /** open | closed | all */
   state: string;
+  /** 이 동기화가 묶인 프로젝트(sdlc id). 이전 인스턴스는 없을 수 있다. */
+  projectId?: string;
 }
 
 export type SourceInstanceCfg = FeedSourceCfg | GitHubSourceCfg;

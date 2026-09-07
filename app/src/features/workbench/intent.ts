@@ -1,9 +1,9 @@
 import { sddApi, workflowApi } from "./api";
 import type { Project, WorkItem } from "./types";
 export const INTENT_WORKFLOW = "intent-flow";
-export interface IntentAttachment { name: string; dataUrl: string }
+export interface IntentAttachment { name: string; dataUrl: string; reference?: string }
 export const intentTitle = (markdown: string, fallback: string) =>
-  markdown.split("\n").map((line) => line.replace(/^\s*[#>*-]+\s*/, "").trim()).find(Boolean)?.slice(0, 80) || fallback;
+  markdown.split("\n").filter((line) => !/^\s*!\[/.test(line)).map((line) => line.replace(/^\s*[#>*-]+\s*/, "").trim()).find(Boolean)?.slice(0, 80) || fallback;
 
 export async function launchIntent(work: WorkItem, project: Project, instructions = "") {
   const current = (await sddApi.snapshot()).work.find((item) => item.id === work.id);

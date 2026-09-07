@@ -39,6 +39,7 @@ test("note and image survive saving, editing and reopening", async ({page}) => {
   await expect(page.locator(".wb-intent-review-document img")).toHaveJSProperty("naturalWidth",1);
   await expect(page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true})).toBeDisabled();
   await page.locator(".wb-intent-flow").getByRole("button",{name:"편집",exact:true}).click();
+  await expect(page.locator(".wb-intent-review-document .cm-atomic-image img")).toHaveJSProperty("naturalWidth",1);
   await page.locator(".wb-intent-review-document [contenteditable=true]").press("ControlOrMeta+End");
   await page.keyboard.insertText("\n\n추가 메모.");
   await page.locator(".wb-intent-flow").getByRole("button",{name:"저장",exact:true}).click();
@@ -53,7 +54,9 @@ test("note and image survive saving, editing and reopening", async ({page}) => {
 test("image-only intent supports removal and saving",async ({page}) => {
   await open(page);
   await page.locator('input[type="file"]').setInputFiles({name:"only.png",mimeType:"image/png",buffer:png});
-  await page.getByRole("button",{name:"only.png 이미지 제거",exact:true}).click();
+  const editor = page.getByRole("dialog").getByRole("textbox");
+  await expect(page.locator(".wb-atomic-editor .cm-atomic-image img")).toHaveJSProperty("naturalWidth",1);
+  await editor.press("ControlOrMeta+z");
   await expect(page.getByRole("button",{name:"메모만 저장",exact:true})).toBeDisabled();
   await page.locator('input[type="file"]').setInputFiles({name:"only.png",mimeType:"image/png",buffer:png});
   await page.getByRole("button",{name:"메모만 저장",exact:true}).click();
@@ -91,4 +94,46 @@ test("approval rejects a design changed since review",async ({page}) => {
   await page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true}).click();
   await expect(page.getByRole("alert")).toContainText("design changed");
   await expect(page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true})).toBeVisible();
+});
+
+
+test("images are embedded at the caret, with undo/redo and portable saved order", async ({page}) => {
+  await open(page);
+  const editor = page.getByRole("dialog").getByRole("textbox");
+  await editor.fill("before\n\nafter");
+  await editor.press("ControlOrMeta+Home");
+  for (let i=0; i<6; i++) await editor.press("ArrowRight");
+  await page.locator('input[type="file"]').setInputFiles({name:"middle.png",mimeType:"image/png",buffer:png});
+  await expect(page.locator(".wb-intent-images")).toHaveCount(0);
+  await expect(page.locator(".wb-atomic-editor .cm-atomic-image img")).toHaveJSProperty("naturalWidth",1);
+  await editor.press("ControlOrMeta+z");
+  await expect(page.locator(".wb-atomic-editor .cm-atomic-image")).toHaveCount(0);
+  await expect(editor).toContainText("before");
+  await expect(editor).toContainText("after");
+  await editor.press("ControlOrMeta+Shift+z");
+  await expect(page.locator(".wb-atomic-editor .cm-atomic-image img")).toHaveJSProperty("naturalWidth",1);
+  await page.getByRole("button",{name:"미리보기",exact:true}).click();
+  await expect(page.locator(".wb-intent-preview img")).toHaveJSProperty("naturalWidth",1);
+  await page.getByRole("button",{name:"메모만 저장",exact:true}).click();
+  await expect(page.locator(".wb-intent-review-document img")).toHaveJSProperty("naturalWidth",1);
+  const saved = await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key)!);
+    const work = state.snapshot.work.find((item:{workflowId:string}) => item.workflowId === "intent-flow");
+    return state.documents[`${work.id}/intent`].markdown as string;
+  },KEY);
+  expect(saved.indexOf("before")).toBeLessThan(saved.indexOf("![middle.png]"));
+  expect(saved.indexOf("![middle.png]")).toBeLessThan(saved.indexOf("after"));
+  expect(saved).not.toContain("blob:");
+});
+
+test("deleting an embedded image does not append it again when saving", async ({page}) => {
+  await open(page);
+  const editor = page.getByRole("dialog").getByRole("textbox");
+  await editor.fill("keep this note");
+  await page.locator('input[type="file"]').setInputFiles({name:"removed.png",mimeType:"image/png",buffer:png});
+  await expect(page.locator(".wb-atomic-editor .cm-atomic-image img")).toBeVisible();
+  await editor.press("ControlOrMeta+z");
+  await page.getByRole("button",{name:"메모만 저장",exact:true}).click();
+  await expect(page.locator(".wb-intent-review-document")).toHaveText("keep this note");
+  await expect(page.locator(".wb-intent-review-document img")).toHaveCount(0);
 });

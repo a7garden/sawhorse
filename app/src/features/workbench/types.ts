@@ -104,6 +104,8 @@ export interface Project {
   repoPath: string;
   /** 기본 폴더 외에 프로젝트가 같이 보는 폴더들. 비어 있으면 단일 폴더 프로젝트다. */
   extraPaths: string[];
+  /** 프로젝트에 연결된 GitHub 저장소(owner/repo). 이슈 연결·동기화가 이 바인딩을 따른다. */
+  githubRepos: string[];
   dependsOn: string[];
   verifyCommands: string[];
   defaultAgent: string;

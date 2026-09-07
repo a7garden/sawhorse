@@ -52,6 +52,9 @@ pub struct Project {
     /// 메인 저장소 옆에 같이 열어 둘 추가 디렉터리. 에이전트 실행 때 `--add-dir` 로
     /// 그대로 전달되고, 비어 있으면 직전 동작과 완전히 같다.
     pub extra_paths: Vec<String>,
+    /// 프로젝트에 연결된 GitHub 저장소 목록(owner/repo 표기). 이슈 동기화 인스턴스와
+    /// 깃허브 확장 화면이 이 바인딩을 기준으로 프로젝트를 찾는다.
+    pub github_repos: Vec<String>,
     pub depends_on: Vec<String>,
     pub verify_commands: Vec<String>,
     pub default_agent: String,
@@ -391,7 +394,7 @@ fn schema_path(root: &Path) -> PathBuf {
 fn project_path(root: &Path, id: &str) -> PathBuf {
     root.join("projects").join(id).join("project.md")
 }
-fn work_path(root: &Path, id: &str) -> PathBuf {
+pub fn work_path(root: &Path, id: &str) -> PathBuf {
     root.join("work").join(id).join("work.md")
 }
 #[cfg(test)]
@@ -644,6 +647,16 @@ fn validate_project(project: &Project) -> Result<(), String> {
     if project.extra_paths.len() > 8 {
         return Err("추가 디렉터리는 최대 8개까지 지정할 수 있습니다".into());
     }
+    if project.github_repos.len() > 8 {
+        return Err("GitHub 저장소는 최대 8개까지 연결할 수 있습니다".into());
+    }
+    let mut seen_repos = HashSet::new();
+    for repository in &project.github_repos {
+        validate_repository_slug(repository)?;
+        if !seen_repos.insert(repository.as_str()) {
+            return Err(format!("중복된 GitHub 저장소: {repository}"));
+        }
+    }
     let repo = project.repo_path.trim();
     let mut seen_paths = HashSet::new();
     for path in &project.extra_paths {
@@ -662,6 +675,27 @@ fn validate_project(project: &Project) -> Result<(), String> {
     }
     Ok(())
 }
+
+/// GitHub 저장소 표기(owner/repo) 검증. 프로젝트 바인딩과 클론 대상 검증이 같은
+/// 규칙을 쓰도록 여기서 하나만 둔다.
+pub fn validate_repository_slug(value: &str) -> Result<(), String> {
+    let parts: Vec<_> = value.split('/').collect();
+    if parts.len() != 2
+        || parts.iter().any(|p| {
+            p.is_empty()
+                || *p == "."
+                || *p == ".."
+                || p.starts_with('-')
+                || !p
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+        })
+    {
+        return Err("저장소 이름은 소유자/저장소 형식이어야 합니다.".into());
+    }
+    Ok(())
+}
+
 /// `status` 하나가 열림·닫힘의 정본이다. 이슈 노트에서는 `state`·`closed` 를
 /// 사람이 따로 맞춰야 해서 늘 어긋났다. 저장할 때마다 다시 파생시켜 그 어긋남을
 /// 구조적으로 없앤다.
@@ -1212,7 +1246,7 @@ pub fn snapshot(root: &Path) -> Result<WorkspaceSnapshot, String> {
     })
 }
 
-fn initialize(root: &Path) -> Result<WorkspaceSnapshot, String> {
+pub fn initialize(root: &Path) -> Result<WorkspaceSnapshot, String> {
     let _guard = mutation_lock();
     if root.as_os_str().is_empty() {
         return Err("볼트 경로가 비어 있습니다".into());
@@ -1521,6 +1555,76 @@ fn save_work_locked(root: &Path, mut input: WorkItem) -> Result<WorkItem, String
     input.description = body;
     Ok(input)
 }
+
+/// 외부(GitHub) 이슈를 작업 항목으로 가져올 때의 원문 필드.
+pub struct ExternalIssue {
+    pub title: String,
+    pub body: String,
+    pub repository: String,
+    pub number: i64,
+    pub url: String,
+    pub state: String,
+    pub updated_at: String,
+}
+
+/// 가져온 외부 이슈의 정착지는 work/ 다. 이슈는 별개 저장소가 아니라 같은
+/// 개발 항목의 요청 축이므로, 임의 폴더에 레거시 노트를 찍지 않고 프로젝트의
+/// 기본 워크플로로 backlog 작업을 만든다. 상태·승인은 사람 소유 그대로 둔다.
+pub fn import_issue_work_at(
+    root: &Path,
+    project_id: &str,
+    issue: ExternalIssue,
+) -> Result<WorkItem, String> {
+    let _guard = mutation_lock();
+    ensure_initialized(root)?;
+    let project = project_by_id(root, project_id)?;
+    let title = issue.title.trim();
+    let work = WorkItem {
+        id: format!("work-{}", Uuid::new_v4().simple()),
+        title: if title.is_empty() {
+            format!("#{}", issue.number)
+        } else {
+            title.to_string()
+        },
+        description: issue.body,
+        project_id: project.id,
+        issue_type: "작업".into(),
+        execution_type: "코드".into(),
+        github_repo: issue.repository,
+        github_number: issue.number.to_string(),
+        github_url: issue.url,
+        github_state: issue.state,
+        github_updated: issue.updated_at,
+        ..Default::default()
+    };
+    save_work_locked(root, work)
+}
+
+/// work.md 의 GitHub 미러 필드만 갱신해 갱신본 markdown을 돌려준다. 로컬
+/// status는 GitHub의 open/closed로 축소하지 않는다(설계 690-716줄). 제목이
+/// 빈 payload면 건드리지 않는다.
+pub fn apply_external_field_update(
+    root: &Path,
+    work_id: &str,
+    title: &str,
+    github_state: &str,
+    github_updated: &str,
+) -> Result<String, String> {
+    validate_id(work_id)?;
+    let path = work_path(root, work_id);
+    let (mut work, body) = read_markdown::<WorkItem>(root, &path)?;
+    if !title.trim().is_empty() {
+        work.title = title.trim().to_string();
+    }
+    if !github_state.is_empty() {
+        work.github_state = github_state.into();
+    }
+    if !github_updated.is_empty() {
+        work.github_updated = github_updated.into();
+    }
+    markdown(&work, &body)
+}
+
 /// 마일스톤은 `calendar/` 일정이 정본이다. 이슈가 개발 항목으로 합쳐지면서
 /// 참조하는 쪽이 `work/` 로 옮겨졌으므로 존재 확인도 여기서 한 번만 한다.
 fn milestone_by_id(root: &Path, id: &str) -> Result<CalendarEvent, String> {
@@ -2375,7 +2479,7 @@ fn work_status_from_note(status: &str) -> &'static str {
 
 fn work_priority_from_note(priority: &str) -> &'static str {
     match priority {
-        "긴급" => "urgent",
+        "긴급" | "최우선" => "urgent",
         "중요" | "높음" => "high",
         "낮음" => "low",
         _ => "normal",
@@ -2498,6 +2602,79 @@ pub fn plan_issue_migration(root: &Path) -> Result<Vec<IssueMigrationItem>, Stri
     Ok(items)
 }
 
+/// Rebase inline Markdown destinations when splitting an old note into work
+/// artifacts. Preserve anchors, URLs, wiki links and fenced code verbatim.
+fn rebase_legacy_links(body: &str, root: &Path, source: &Path, target: &Path) -> String {
+    let Some(source_dir) = source
+        .parent()
+        .and_then(|path| path.strip_prefix(root).ok())
+    else {
+        return body.into();
+    };
+    let Some(target_dir) = target
+        .parent()
+        .and_then(|path| path.strip_prefix(root).ok())
+    else {
+        return body.into();
+    };
+    let prefix = format!(
+        "{}{}{}",
+        "../".repeat(target_dir.components().count()),
+        source_dir.to_string_lossy().replace('\\', "/"),
+        if source_dir.as_os_str().is_empty() {
+            ""
+        } else {
+            "/"
+        }
+    );
+    let mut output = String::new();
+    let mut fenced = false;
+    for line in body.split_inclusive('\n') {
+        if line.trim_start().starts_with("```") || line.trim_start().starts_with("~~~") {
+            fenced = !fenced;
+            output.push_str(line);
+            continue;
+        }
+        if fenced {
+            output.push_str(line);
+            continue;
+        }
+        let mut rest = line;
+        while let Some(index) = rest.find("](") {
+            output.push_str(&rest[..index + 2]);
+            rest = &rest[index + 2..];
+            let whitespace = rest.len() - rest.trim_start().len();
+            output.push_str(&rest[..whitespace]);
+            rest = &rest[whitespace..];
+            let angle = rest.starts_with('<');
+            if angle {
+                output.push('<');
+                rest = &rest[1..];
+            }
+            let end = rest
+                .find(|c: char| {
+                    if angle {
+                        c == '>'
+                    } else {
+                        c == ')' || c.is_whitespace()
+                    }
+                })
+                .unwrap_or(rest.len());
+            let destination = &rest[..end];
+            if !destination.is_empty()
+                && !destination.starts_with(['/', '#'])
+                && !destination.contains(':')
+            {
+                output.push_str(&prefix.replace(' ', "%20"));
+            }
+            output.push_str(destination);
+            rest = &rest[end..];
+        }
+        output.push_str(rest);
+    }
+    output
+}
+
 fn migrate_one(
     root: &Path,
     note: &crate::vault::ImprovementNote,
@@ -2565,9 +2742,13 @@ fn migrate_one(
             continue;
         }
         let path = resolved_artifact_path(root, &work, &definition, role)?;
+        let body = rebase_legacy_links(&body, root, Path::new(&note.path), &path);
         let contents = format!(
             "# {heading}\n\n{body}\n\n---\n\n<!-- {} 에서 이관했습니다. -->\n",
-            note.path
+            Path::new(&note.path)
+                .strip_prefix(root)
+                .unwrap_or(Path::new(&note.path))
+                .display()
         );
         write_atomic(root, &path, &contents)?;
     }
@@ -2589,6 +2770,192 @@ fn migrate_one(
     crate::config::write_atomic(Path::new(&note.path), stamped.as_bytes())
         .map_err(|e| format!("이관 표시 실패: {e}"))?;
     Ok(())
+}
+
+/// Called only against the upgrader's isolated copy. Unknown fields and bodies
+/// remain in the original note and a work-local source document.
+pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Result<usize, String> {
+    let view = crate::config::view(config, true);
+    for legacy in &view.projects {
+        let id = ensure_project_for(root, &legacy.name)?;
+        let mut project = project_by_id(root, &id)?;
+        if project.repo_path.is_empty() {
+            project.repo_path = legacy.path.clone();
+        }
+        if project.verify_commands.is_empty() && !legacy.verify.trim().is_empty() {
+            project.verify_commands.push(legacy.verify.clone());
+        }
+        save_project_at(root, project)?;
+    }
+    for (id, legacy) in &view.core_projects {
+        let project_id = ensure_project_for(root, id)?;
+        let mut project = project_by_id(root, &project_id)?;
+        if project.repo_path.is_empty() {
+            project.repo_path = legacy.path.clone();
+        }
+        save_project_at(root, project)?;
+    }
+    let mut notes = Vec::new();
+    let mut milestones = HashMap::new();
+    let mut migrated_ids = HashMap::new();
+    let mut reserved_work: HashSet<String> = list_work(root, &mut Vec::new())
+        .iter()
+        .map(|work| work.id.clone())
+        .collect();
+    let mut reserved_events: HashSet<String> = list_events(root, &mut Vec::new())
+        .iter()
+        .map(|event| event.id.clone())
+        .collect();
+    let stable_id = |prefix: &str, path: &str| {
+        format!(
+            "{prefix}-{}",
+            &hex::encode(Sha256::digest(path.as_bytes()))[..24]
+        )
+    };
+    for path in crate::upgrade::files(root)? {
+        let rel = path
+            .strip_prefix(root)
+            .map_err(|e| e.to_string())?
+            .to_string_lossy()
+            .replace('\\', "/");
+        let parts: Vec<_> = rel.split('/').collect();
+        if parts.len() < 4
+            || !matches!(parts[0], "사업" | "프로젝트")
+            || path.extension().and_then(|e| e.to_str()) != Some("md")
+        {
+            continue;
+        }
+        if !matches!(parts[2], "이슈" | "개선" | "마일스톤") {
+            continue;
+        }
+        let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let Some(split) = crate::vault::split_frontmatter(&raw) else {
+            continue;
+        };
+        let map =
+            serde_yaml::from_str::<serde_yaml::Mapping>(&split.yaml).map_err(|e| e.to_string())?;
+        let value = |key: &str| {
+            map.get(serde_yaml::Value::String(key.into()))
+                .and_then(serde_yaml::Value::as_str)
+                .unwrap_or("")
+                .to_string()
+        };
+        let kind = value("type");
+        let migrated = value("migrated_to");
+        if !migrated.is_empty() {
+            validate_id(&migrated)?;
+            let target_exists = if kind == "마일스톤" {
+                root.join("calendar")
+                    .join(format!("{migrated}.md"))
+                    .is_file()
+            } else {
+                work_path(root, &migrated).is_file()
+            };
+            if !target_exists {
+                return Err(format!(
+                    "{rel}: 이미 이관했다는 대상 {migrated}을 찾지 못했습니다"
+                ));
+            }
+            if !value("id").is_empty() {
+                if kind == "마일스톤" {
+                    milestones.insert((parts[1].to_string(), value("id")), migrated);
+                } else {
+                    migrated_ids.insert((parts[1].to_string(), value("id")), migrated);
+                }
+            }
+            continue;
+        }
+        if kind == "마일스톤" {
+            let old_id = value("id");
+            let id = if validate_id(&old_id).is_ok() && !reserved_events.contains(&old_id) {
+                old_id.clone()
+            } else {
+                stable_id("milestone", &rel)
+            };
+            reserved_events.insert(id.clone());
+            let project_id = ensure_project_for(root, parts[1])?;
+            save_event_at(
+                root,
+                CalendarEvent {
+                    id: id.clone(),
+                    title: path.file_stem().unwrap().to_string_lossy().to_string(),
+                    date: value("due"),
+                    kind: "milestone".into(),
+                    project_id: Some(project_id),
+                    notes: raw.clone(),
+                    ..Default::default()
+                },
+            )
+            .map_err(|error| format!("{rel}: {error}"))?;
+            if !old_id.is_empty()
+                && milestones
+                    .insert((parts[1].to_string(), old_id), id.clone())
+                    .is_some()
+            {
+                return Err(format!(
+                    "{rel}: 동일 프로젝트 안에 마일스톤 ID가 중복됩니다"
+                ));
+            }
+            fs::write(
+                &path,
+                crate::extensions::github::update_frontmatter_field(&raw, "migrated_to", &id)?,
+            )
+            .map_err(|e| e.to_string())?;
+        } else if matches!(kind.as_str(), "이슈" | "개선")
+            || (parts[2] == "개선" && kind.is_empty() && !value("id").is_empty())
+        {
+            let note = crate::vault::note_from_file(parts[1], &path, &map, parts[2] == "개선");
+            notes.push((note, raw, rel));
+        }
+    }
+    let mut ids = migrated_ids;
+    for (note, _, rel) in &notes {
+        let id = if validate_id(&note.id).is_ok() && !reserved_work.contains(&note.id) {
+            note.id.clone()
+        } else {
+            stable_id("legacy", rel)
+        };
+        reserved_work.insert(id.clone());
+        if !note.id.is_empty()
+            && ids
+                .insert((note.project.clone(), note.id.clone()), id.clone())
+                .is_some()
+        {
+            return Err(format!(
+                "동일 프로젝트 안에 이슈 ID가 중복됩니다: {} / {}",
+                note.project, note.id
+            ));
+        }
+    }
+    for (note, raw, rel) in &mut notes {
+        let id = ids
+            .get(&(note.project.clone(), note.id.clone()))
+            .cloned()
+            .unwrap_or_else(|| stable_id("legacy", rel));
+        if let Some(target) = milestones.get(&(note.project.clone(), note.milestone.clone())) {
+            note.milestone = target.clone();
+        }
+        let mut item = migration_item(root, note);
+        item.work_id = id.clone();
+        item.blocked.clear();
+        migrate_one(root, note, &item)?;
+        fs::write(work_path(root, &id).with_file_name("legacy-source.md"), raw)
+            .map_err(|e| e.to_string())?;
+        let mut work = work_by_id(root, &id)?;
+        work.depends_on = note
+            .depends_on
+            .iter()
+            .map(|dependency| {
+                ids.get(&(note.project.clone(), dependency.clone()))
+                    .cloned()
+                    .unwrap_or_else(|| dependency.clone())
+            })
+            .collect();
+        let source_link = format!("원본: [이전 문서](../../{rel})\n");
+        work.description = source_link.clone();
+        write_atomic(root, &work_path(root, &id), &markdown(&work, &source_link)?)?;
+    }
+    Ok(notes.len())
 }
 
 /// 선택한 노트만 옮긴다. 하나가 실패해도 나머지는 계속하고 사유를 함께 돌려준다.
@@ -2675,6 +3042,8 @@ pub fn sdd_save_project(input: Project) -> Result<Project, String> {
 pub struct IntentAttachment {
     pub name: String,
     pub data_url: String,
+    #[serde(default)]
+    pub reference: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2735,9 +3104,30 @@ fn capture_intent_at(root: &Path, mut input: CaptureIntentInput) -> Result<WorkI
             .filter(|c| !matches!(c, '[' | ']' | '\n' | '\r' | '\\'))
             .take(160)
             .collect();
-        input
-            .markdown
-            .push_str(&format!("\n\n![{}](attachments/{})", name, filename));
+        if let Some(reference) = attachment.reference {
+            // New editors embed draft images at the caret. Only replace that
+            // image destination; never relocate it or serialize temporary URLs.
+            if !reference.starts_with("blob:")
+                || reference.len() > 512
+                || reference
+                    .chars()
+                    .any(|c| c.is_whitespace() || matches!(c, '(' | ')' | '<' | '>'))
+            {
+                return Err("잘못된 본문 이미지 참조입니다".into());
+            }
+            let destination = format!("({reference})");
+            if !input.markdown.contains(&destination) {
+                return Err("본문에서 이미지를 찾을 수 없습니다".into());
+            }
+            input.markdown = input
+                .markdown
+                .replace(&destination, &format!("(attachments/{filename})"));
+        } else {
+            // Compatibility with saved requests from the attachment-only editor.
+            input
+                .markdown
+                .push_str(&format!("\n\n![{}](attachments/{})", name, filename));
+        }
         images.push((filename, bytes));
     }
     input.work.workflow_id = "intent-flow".into();
@@ -2971,6 +3361,7 @@ mod tests {
             work: work("capture", ""),
             markdown: note.into(),
             attachments: vec![IntentAttachment {
+                reference: None,
                 name: "../screen[1].png".into(),
                 data_url: format!(
                     "data:image/png;base64,{}",
@@ -2999,12 +3390,48 @@ mod tests {
             work: work("invalid", ""),
             markdown: "".into(),
             attachments: vec![IntentAttachment {
+                reference: None,
                 name: "bad.png".into(),
                 data_url: "data:image/png;base64,aGVsbG8=".into(),
             }],
         };
         assert!(capture_intent_at(&root, invalid).is_err());
         assert!(!root.join("work/invalid").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn intent_capture_keeps_embedded_images_between_paragraphs() {
+        use base64::Engine;
+        let root = tempdir("intent-embedded");
+        initialize(&root).unwrap();
+        let bytes = b"\x89PNG\r\n\x1a\nfixture";
+        let data_url = format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        );
+        let input = || CaptureIntentInput {
+            work: work("embedded", ""),
+            markdown: "before\n\n![screen](blob:http://localhost/image-1)\n\nafter".into(),
+            attachments: vec![IntentAttachment {
+                name: "screen.png".into(),
+                data_url: data_url.clone(),
+                reference: Some("blob:http://localhost/image-1".into()),
+            }],
+        };
+        let saved = capture_intent_at(&root, input()).unwrap();
+        let markdown = read_document(&root, &saved.id, "intent").unwrap().markdown;
+        let filename = format!("{}.png", hex::encode(Sha256::digest(bytes)));
+        assert_eq!(
+            markdown,
+            format!("before\n\n![screen](attachments/{filename})\n\nafter")
+        );
+        assert_eq!(capture_intent_at(&root, input()).unwrap().id, saved.id);
+        let mut missing = input();
+        missing.work.id = "missing".into();
+        missing.markdown = "removed the image".into();
+        assert!(capture_intent_at(&root, missing).is_err());
+        assert!(!root.join("work/missing").exists());
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -219,7 +219,8 @@ const seed: WorkspaceSnapshot = {
       description: "의도를 실행과 기록으로 연결하는 개발 작업대",
       repoPath: "/projects/sawhorse",
       extraPaths: ["/projects/sawhorse-docs"],
-      dependsOn: ["herdr"],
+      githubRepos: ["a7garden/sawhorse"],
+      dependsOn: [],
       verifyCommands: ["npm run build", "cargo test"],
       defaultAgent: "codex",
       defaultModel: "",
@@ -233,6 +234,7 @@ const seed: WorkspaceSnapshot = {
       description: "지속되는 에이전트 터미널과 오케스트레이션",
       repoPath: "/projects/herdr",
       extraPaths: [],
+      githubRepos: [],
       dependsOn: [],
       verifyCommands: ["cargo test"],
       defaultAgent: "codex",
@@ -249,6 +251,7 @@ const seed: WorkspaceSnapshot = {
       extraPaths: [],
       dependsOn: ["sawhorse"],
       verifyCommands: ["npm test"],
+      githubRepos: [],
       defaultAgent: "claude",
       defaultModel: "",
       workflowId: "sdd-main",
@@ -433,9 +436,16 @@ export async function previewInvoke(
       return p;
     }
     case "sdd_capture_intent": {
-      const input = args.input as { work: WorkItem; markdown: string; attachments: Array<{ name: string; dataUrl: string }> };
+      const input = args.input as { work: WorkItem; markdown: string; attachments: Array<{ name: string; dataUrl: string; reference?: string }> };
       if (!input.markdown.trim() && !input.attachments.length) throw new Error("Add a note or image");
-      const markdown = input.markdown + input.attachments.map((image) => `\n\n![${image.name.replace(/[\[\]\n\r]/g, "")}](<${image.dataUrl}>)`).join("");
+      let markdown = input.markdown;
+      for (const image of input.attachments) {
+        if (image.reference) {
+          const destination = `(${image.reference})`;
+          if (!markdown.includes(destination)) throw new Error("Embedded image was removed");
+          markdown = markdown.replaceAll(destination, `(${image.dataUrl})`);
+        } else markdown += `\n\n![${image.name.replace(/[\[\]\n\r]/g, "")}](${image.dataUrl})`;
+      }
       const existing = s.work.find((work) => work.id === input.work.id);
       if (existing) {
         if (existing.workflowId === "intent-flow" && existing.projectId === input.work.projectId && doc(existing.id, "intent").markdown === markdown) return existing;

@@ -1,3 +1,4 @@
+import { JournalWidget } from "@/features/journal/JournalPage";
 import { IntentComposer } from "./IntentComposer";
 import { IntentFlowPanel } from "./IntentFlowPanel";
 import { INTENT_WORKFLOW } from "./intent";
@@ -40,6 +41,7 @@ import {
   FilePenLine,
   FileText,
   Columns3,
+  Github,
   Folder,
   FolderPlus,
   List,
@@ -245,6 +247,7 @@ function blankProject(defaultAgent: string): Project {
     description: "",
     repoPath: "",
     extraPaths: [],
+    githubRepos: [],
     dependsOn: [],
     verifyCommands: [],
     defaultAgent,
@@ -1112,6 +1115,8 @@ function OverviewView({
             <ScheduledTasksWidget />
           </SlotCard>
         );
+      case "journal":
+        return <SlotCard title={i18n.t("journal:title")}><JournalWidget /></SlotCard>;
       case "checklist":
         return (
           <SlotCard
@@ -3042,6 +3047,68 @@ function FolderPicker({
     </div>
   );
 }
+function GithubReposPicker({
+  repos,
+  onChange,
+}: {
+  repos: string[];
+  onChange: (repos: string[]) => void;
+}) {
+  const { t } = useTranslation("workbench");
+  const [typed, setTyped] = useState("");
+  const add = () => {
+    // github.com 주소를 그대로 붙여 넣어도 owner/repo로 정규화한다.
+    const value = typed
+      .trim()
+      .replace(/^https?:\/\/github\.com\//i, "")
+      .replace(/\.git$/i, "");
+    if (!value || repos.includes(value)) return;
+    onChange([...repos, value]);
+    setTyped("");
+  };
+  return (
+    <div className="wb-field is-wide">
+      <span>{t("form.githubRepos")}</span>
+      {repos.length > 0 && (
+        <div className="wb-folder-list">
+          {repos.map((repo) => (
+            <div key={repo} className="wb-folder-row">
+              <Github size={14} className="wb-folder-icon" />
+              <span className="wb-folder-path" title={repo}>
+                {repo}
+              </span>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label={t("form.removeGithubRepo")}
+                onClick={() => onChange(repos.filter((r) => r !== repo))}
+              >
+                <X size={14} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="wb-folder-add">
+        <Input
+          aria-label={t("form.githubRepoAria")}
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              add();
+            }
+          }}
+          placeholder={t("form.githubRepoPlaceholder")}
+        />
+      </div>
+      <small className="wb-muted">{t("form.githubReposHint")}</small>
+    </div>
+  );
+}
+
 function ProjectFormDialog({
   open,
   initial,
@@ -3094,6 +3161,7 @@ function ProjectFormDialog({
         ...draft,
         name: draft.name.trim(),
         verifyCommands: draft.verifyCommands.filter(Boolean),
+        githubRepos: (draft.githubRepos ?? []).map((repo) => repo.trim()).filter(Boolean),
       });
       // 새 프로젝트는 저장과 동시에 분석을 발사한다. 설명·검증 명령을
       // 에이전트가 채우고 완료는 `project-analyzed` 이벤트로 온다.
@@ -3169,6 +3237,10 @@ function ProjectFormDialog({
               return next;
             })
           }
+        />
+        <GithubReposPicker
+          repos={draft.githubRepos ?? []}
+          onChange={(githubRepos) => set("githubRepos", githubRepos)}
         />
         <label className="wb-field">
           {t("form.defaultAgent")}

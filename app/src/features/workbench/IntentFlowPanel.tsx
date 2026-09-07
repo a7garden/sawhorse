@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { vaultImageSources } from "./embedded-images";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, Loader2, Play, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { AtomicCodeMirrorEditor } from "@atomic-editor/editor";
@@ -57,6 +58,7 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
     return () => { alive = false; clearTimeout(timer); };
   }, [work.id, refresh]);
   const doc = review?.documents.find((document) => document.artifact === tab);
+  const imageExtensions = useMemo(() => doc ? [vaultImageSources(doc.path)] : [], [doc?.path]);
   const substantial = (role: string) => !!review?.documents.find((document) => document.artifact === role)?.markdown
     .replace(/<!--[\s\S]*?-->/g, "").split("\n").some((line) => line.trim() && !line.trim().startsWith("#"));
   async function act(action: "run" | "approve" | "complete" | "revise") {
@@ -112,7 +114,7 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
       </>}
     </div>}
     <div className="wb-intent-review-document" role="tabpanel">
-      {editing ? <AtomicCodeMirrorEditor documentId={`${work.id}:intent:${editRevision}`} markdownSource={draft} readOnly={busy} onMarkdownChange={setDraft} /> : doc ? <MarkdownView src={doc.markdown || t("intent.waitingDocument")} notePath={doc.path} /> : <Loader2 className="wb-spin" />}
+      {editing ? <AtomicCodeMirrorEditor documentId={`${work.id}:intent:${editRevision}`} markdownSource={draft} extensions={imageExtensions} readOnly={busy} onMarkdownChange={setDraft} /> : doc ? <MarkdownView src={doc.markdown || t("intent.waitingDocument")} notePath={doc.path} /> : <Loader2 className="wb-spin" />}
     </div>
     {!closed && <>
       <textarea className="wb-intent-feedback" value={feedback} onChange={(event) => setFeedback(event.target.value)} aria-label={t("intent.feedback")} placeholder={t("intent.feedbackHint")} disabled={busy || editing || active} />

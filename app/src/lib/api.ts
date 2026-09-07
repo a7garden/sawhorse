@@ -61,6 +61,7 @@ import type {
   RemoteOperationsView,
   SourcesInstancesView,
   InstalledExtensionPackage,
+  PackageWorkflowSummary,
   ExtensionLock,
   IngestionJob,
 } from "./types";
@@ -165,6 +166,8 @@ export const api = {
     version: string;
     grants: Record<string, string[]>;
   }): Promise<ExtensionLock> => invoke("extension_package_activate", { input }),
+  extensionPackageWorkflows: (): Promise<PackageWorkflowSummary[]> =>
+    invoke("extension_package_workflows"),
   ingestionStart: (input: {
     projectId: string;
     sources: Array<{ path: string; label: string }>;
@@ -388,8 +391,6 @@ export const api = {
   inboundAcceptImport: (input: {
     inboundId: string;
     projectId: string;
-    notesDir: string;
-    idPrefix: string;
   }): Promise<{ notePath: string }> =>
     invoke("inbound_accept_import", { ...input }),
   inboundAcceptUpdate: (inboundId: string): Promise<{ notePath: string }> =>

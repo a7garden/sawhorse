@@ -39,7 +39,7 @@ async function call<T>(
 }
 export const sddApi = {
   captureImage: (path: string): Promise<string> => call("sdd_capture_image", { path }),
-  captureIntent: (work: WorkItem, markdown: string, attachments: Array<{ name: string; dataUrl: string }>): Promise<WorkItem> =>
+  captureIntent: (work: WorkItem, markdown: string, attachments: Array<{ name: string; dataUrl: string; reference?: string }>): Promise<WorkItem> =>
     call("sdd_capture_intent", { input: { work, markdown, attachments } }),
   intentReview: (workId: string): Promise<{ documents: Document[]; inputDigest: string }> =>
     call("sdd_intent_review", { workId }),
