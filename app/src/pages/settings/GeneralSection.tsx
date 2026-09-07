@@ -4,6 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { useTranslation } from "react-i18next";
+
+import { getLanguage, setLanguage, type Language } from "@/i18n";
 
 export default function GeneralSection({
   draft,
@@ -14,6 +17,7 @@ export default function GeneralSection({
   patchDraft: (fn: (d: ConfigView) => void) => void;
   onLaunchAtLogin: (on: boolean) => void;
 }) {
+  const { t } = useTranslation("common");
   return (
     <div className="grid items-start gap-4 p-4 lg:grid-cols-2">
       <Card>
@@ -65,6 +69,18 @@ export default function GeneralSection({
               onCheckedChange={(on) => onLaunchAtLogin(on)}
             />
             <Label htmlFor="launch-at-login">로그인 시 자동 시작</Label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label htmlFor="app-language">{t("language")}</Label>
+            <Select
+              id="app-language"
+              className="w-full"
+              value={getLanguage()}
+              onChange={(e) => setLanguage(e.target.value as Language)}
+            >
+              <option value="ko">한국어</option>
+              <option value="en">English</option>
+            </Select>
           </div>
         </CardContent>
       </Card>
