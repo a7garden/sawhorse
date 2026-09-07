@@ -37,15 +37,27 @@ pub fn no_window_async(mut command: tokio::process::Command) -> tokio::process::
     command
 }
 
-/// 외부 CLI 스폰의 단일 문. Windows에서는 npm 셈(.cmd)까지 해석되도록 `cmd /c`로
-/// 감싸고 — CreateProcess는 .cmd를 직접 실행하지 못한다 — 콘솔 창 억제 플래그를
-/// 건다. 다른 플랫폼에서는 창 억제만 적용한다. cwd·env·stdio는 반환값 빌더 체인으로
-/// 잇는다. 새 스폰 지점은 이 함수만 쓴다.
+/// 외부 CLI 스폰의 단일 문. Windows에서는 네이티브 실행 파일(.exe/.com)을 직접
+/// 실행하고, npm 셈 같은 스크립트만 `cmd /c`로 감싼다. 모든 명령을 cmd로 보내면
+/// 긴 에이전트 프롬프트가 cmd의 8,191자 제한에 걸린다. CreateProcess가 직접 실행할
+/// 수 없는 스크립트에는 기존 셸 호환성을 유지한다. 다른 플랫폼에서는 창 억제만
+/// 적용한다. cwd·env·stdio는 반환값 빌더 체인으로 잇는다. 새 스폰 지점은 이 함수만 쓴다.
 pub fn platform_command(bin: impl AsRef<std::ffi::OsStr>, args: &[&str]) -> StdCommand {
     #[cfg(windows)]
     {
-        let mut c = no_window(StdCommand::new("cmd"));
-        c.arg("/c").arg(bin).args(args);
+        let bin = bin.as_ref();
+        let native = std::path::Path::new(bin)
+            .extension()
+            .and_then(std::ffi::OsStr::to_str)
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("exe") || ext.eq_ignore_ascii_case("com"));
+        let mut c = if native {
+            no_window(StdCommand::new(bin))
+        } else {
+            let mut c = no_window(StdCommand::new("cmd"));
+            c.arg("/c").arg(bin);
+            c
+        };
+        c.args(args);
         c
     }
     #[cfg(not(windows))]
@@ -99,5 +111,40 @@ mod tests {
             String::from_utf8_lossy(&out.stdout).trim(),
             "spawn-smoke-ok"
         );
+    }
+
+    /// 회귀: Herdr에 보내는 설계 프롬프트는 cmd.exe의 8,191자보다 길 수 있다.
+    /// 네이티브 실행 파일을 직접 시작하면 Windows CreateProcess 한도 안에서 정상 전달된다.
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn native_executable_accepts_argument_longer_than_cmd_limit() {
+        let dir = tempfile::tempdir().unwrap();
+        let script = dir.path().join("measure-argument.ps1");
+        std::fs::write(&script, "$args[0].Length\r\n").unwrap();
+        let powershell = std::path::PathBuf::from(std::env::var_os("SystemRoot").unwrap())
+            .join("System32")
+            .join("WindowsPowerShell")
+            .join("v1.0")
+            .join("powershell.exe");
+        let payload = "x".repeat(8_300);
+        let script = script.to_string_lossy();
+        let mut c = platform_command_async(
+            &powershell,
+            &[
+                "-NoLogo",
+                "-NoProfile",
+                "-NonInteractive",
+                "-File",
+                &script,
+                &payload,
+            ],
+        );
+        let out = c.output().await.unwrap();
+        assert!(
+            out.status.success(),
+            "stderr: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "8300");
     }
 }
