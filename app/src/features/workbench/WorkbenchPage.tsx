@@ -1,3 +1,6 @@
+import { IntentComposer } from "./IntentComposer";
+import { IntentFlowPanel } from "./IntentFlowPanel";
+import { INTENT_WORKFLOW } from "./intent";
 import {
   ChecklistWidget,
   IssuesWidget,
@@ -8,7 +11,7 @@ import {
   TodayActivity,
 } from "@/features/dashboard/FeatureWidgets";
 import OnboardingPage from "@/pages/OnboardingPage";
-import { BrowseButton, PathInput } from "@/components/ui/path-input";
+import { BrowseButton } from "@/components/ui/path-input";
 import { Select } from "@/components/ui/select";
 import i18n from "@/i18n";
 import { useTranslation } from "react-i18next";
@@ -37,6 +40,8 @@ import {
   FilePenLine,
   FileText,
   Columns3,
+  Folder,
+  FolderPlus,
   List,
   X,
   LayoutDashboard,
@@ -47,10 +52,9 @@ import {
   RefreshCw,
   Search,
   Send,
-  SquareTerminal,
   StopCircle,
   SlidersHorizontal,
-  Trash2,
+  SquareTerminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -61,6 +65,7 @@ import { api as vaultApi } from "@/lib/api";
 import { sddApi, workflowApi } from "./api";
 import { workActions } from "./lifecycle";
 import { groupProcesses, jobsForProject, processStageKey, useProjectScope } from "./project-scope";
+import { latestWorkflowVersions } from "./workflow-version";
 import {
   acceptWorkspaceSnapshot,
   ensureWorkspaceSnapshot,
@@ -107,6 +112,7 @@ import {
   type WorkflowInstance,
 } from "./types";
 import "./workbench.css";
+import "./work-view.css";
 type Notice = {
   tone: "error" | "success";
   text: string;
@@ -441,7 +447,7 @@ function EmptyState({
     </div>
   );
 }
-export function WorkbenchPage({ view, globalScope = false }: { view: WorkbenchView; globalScope?: boolean }) {
+export function WorkbenchPage({ view }: { view: WorkbenchView }) {
   const snapshot = useWorkspaceSnapshot((state) => state.snapshot);
   const loading = useWorkspaceSnapshot((state) => state.loading);
   const error = useWorkspaceSnapshot((state) => state.error);
@@ -506,14 +512,14 @@ export function WorkbenchPage({ view, globalScope = false }: { view: WorkbenchVi
   const allWork = snapshot?.work ?? [];
   const selectedProjectId = useProjectScope((state) => state.projectId);
   const selectProject = useProjectScope((state) => state.selectProject);
-  const selectedProject = globalScope ? undefined : snapshot?.projects.find((project) => project.id === selectedProjectId);
+  const selectedProject = snapshot?.projects.find((project) => project.id === selectedProjectId);
   const scopeId = selectedProject?.id ?? "";
   const work = scopeId ? allWork.filter((item) => item.projectId === scopeId) : allWork;
   const events = scopeId ? (snapshot?.events ?? []).filter((event) =>
     event.projectId === scopeId || (!!event.workId && work.some((item) => item.id === event.workId))) : snapshot?.events ?? [];
   useEffect(() => {
-    if (!globalScope && snapshot && selectedProjectId && !selectedProject) selectProject("");
-  }, [snapshot, selectedProjectId, selectedProject, selectProject, globalScope]);
+    if (snapshot && selectedProjectId && !selectedProject) selectProject("");
+  }, [snapshot, selectedProjectId, selectedProject, selectProject]);
   const projects = snapshot?.projects ?? [];
   const workflows = snapshot?.workflows ?? [];
   const selectDocument = (
@@ -531,9 +537,23 @@ export function WorkbenchPage({ view, globalScope = false }: { view: WorkbenchVi
     await reload();
     setNotice({ tone: "success", text });
   };
+  // 커맨드 팔레트처럼 작업대 바깥에서 연 상세 열기 요청. 스냅샷이 준비되면 열고 지운다.
+  const openWorkRequest = useApp((s) => s.openWorkRequest);
+  const clearOpenWork = useApp((s) => s.clearOpenWork);
+  useEffect(() => {
+    if (!openWorkRequest || !snapshot) return;
+    if (allWork.some((item) => item.id === openWorkRequest.workId)) {
+      selectDocument(
+        openWorkRequest.workId,
+        openWorkRequest.artifact,
+        openWorkRequest.snippet ?? null,
+      );
+    }
+    clearOpenWork();
+  }, [openWorkRequest, snapshot, allWork, selectDocument, clearOpenWork]);
   if (loading && !snapshot)
     return (
-      <div className={cx("wb-page", ["work", "board", "issues"].includes(view) && "wb-work-page")}>
+      <div className="wb-page">
         <LoadingState />
       </div>
     );
@@ -570,7 +590,7 @@ export function WorkbenchPage({ view, globalScope = false }: { view: WorkbenchVi
     onEditWork: (item: WorkItem) => setWorkModal(item),
   };
   return (
-    <div className="wb-page">
+    <div className={cx("wb-page", ["work", "board", "issues"].includes(view) && "wb-work-page")}>
       {error && (
         <div className="wb-inline-error" role="alert">
           {error}
@@ -586,7 +606,7 @@ export function WorkbenchPage({ view, globalScope = false }: { view: WorkbenchVi
           </span>
         </div>
       )}
-      {!globalScope && ["overview", "calendar", "harness", "knowledge"].includes(view) && (
+      {["overview", "calendar", "harness", "knowledge"].includes(view) && (
         <div className="wb-project-scope">
           <Select
             id="workbench-project-scope"
@@ -646,7 +666,6 @@ export function WorkbenchPage({ view, globalScope = false }: { view: WorkbenchVi
           onSelectWork={setSelectedWorkId}
           onJump={selectDocument}
           onNotice={setNotice}
-          embedded={globalScope}
         />
       )}
       {view === "projects" && (
@@ -713,8 +732,17 @@ export function WorkbenchPage({ view, globalScope = false }: { view: WorkbenchVi
           })
         }
       />
+      {workModal !== undefined && !workModal?.id && <IntentComposer
+        initial={workModal ?? { ...blankWork(), projectId: scopeId }}
+        projects={projects}
+        onClose={() => { setWorkModal(undefined); void reload(); }}
+        onSaved={(item) => {
+          setWorkModal(undefined); setSelectedWorkId(item.id); setSelectedArtifact("intent");
+          void afterSave(t("toast.workSaved"));
+        }}
+      />}
       <WorkFormDialog
-        open={workModal !== undefined}
+        open={!!workModal?.id}
         initial={workModal ?? { ...blankWork(), projectId: scopeId }}
         projects={projects}
         work={allWork}
@@ -828,6 +856,7 @@ function OverviewView({
     return () => { alive = false; window.clearInterval(timer); };
   }, [project?.id]);
   const processes = groupProcesses(work, workflows, project);
+  const latestVersion = latestWorkflowVersions(workflows);
   const today = isoToday();
   // 지표 위젯이 세는 재료. 어떤 카드를 켜 두었든 같은 스냅샷을 본다.
   const metricSource = { work, jobs, runs, today };
@@ -967,8 +996,11 @@ function OverviewView({
               const id = activeNodeForWork(item);
               if (!nodes.some((node) => node.id === id)) nodes.push({ id, label: id });
             }
+            const versionLabel = workflow && latestVersion.get(workflow.id) !== workflow.version
+              ? t("work.legacyVersion", { version: workflow.version })
+              : workflow?.version;
             return <section className="wb-workflow-summary" key={key} data-workflow={key}>
-              <h3>{workflow?.label ?? key} <small>{workflow?.version}</small></h3>
+              <h3>{workflow?.label ?? key} <small>{versionLabel}</small></h3>
               <div className="wb-stage-tiles">
                 {nodes.map((node) => <button key={node.id} className="wb-stage-tile" onClick={() => setPage("board")}>
                   <span>{node.label}</span><strong>{openItems.filter((item) => activeNodeForWork(item) === node.id).length}</strong>
@@ -1343,6 +1375,7 @@ function BoardView({ work, projects, workflows, onSelectWork }: {
 }) {
   const { t } = useTranslation("workbench");
   const groups = groupProcesses(work, workflows);
+  const latestVersion = latestWorkflowVersions(workflows);
   return <div className="wb-process-boards">
     {groups.length > 1 && <p className="wb-muted wb-work-process-hint">{t("scope.processHint")}</p>}
     {groups.map(({ key, workflow, items }) => {
@@ -1353,8 +1386,11 @@ function BoardView({ work, projects, workflows, onSelectWork }: {
         if (!columns.some((column) => column.id === id)) columns.push({ id, label: stageText(id) });
       }
       if (items.some((item) => isClosedStatus(item.status))) columns.push({ id: "__closed", label: t("work.closed") });
+      const versionLabel = workflow && latestVersion.get(workflow.id) !== workflow.version
+        ? t("work.legacyVersion", { version: workflow.version })
+        : workflow?.version;
       return <section key={key} className="wb-process-group">
-        <h2><span>{workflow?.label ?? key}</span><small>{workflow?.version}</small><span className="wb-work-process-count">{t("issues.nCount", { count: items.length })}</span></h2>
+        <h2><span>{workflow?.label ?? key}</span><small>{versionLabel}</small><span className="wb-work-process-count">{t("issues.nCount", { count: items.length })}</span></h2>
         <div className="wb-board" aria-label={workflow?.label ?? key}>
           {columns.map((column) => {
             const members = items.filter((item) => isClosedStatus(item.status)
@@ -1620,7 +1656,6 @@ function KnowledgeView({
   onSelectWork,
   onJump,
   onNotice,
-  embedded = false,
 }: {
   work: WorkItem[];
   project?: Project;
@@ -1628,7 +1663,6 @@ function KnowledgeView({
   onSelectWork: (id: string) => void;
   onJump: (workId: string, artifact: ArtifactKind, snippet: string) => void;
   onNotice: (notice: Notice) => void;
-  embedded?: boolean;
 }) {
   const { t } = useTranslation("workbench");
   const [query, setQuery] = useState("");
@@ -1703,7 +1737,7 @@ function KnowledgeView({
   };
   return (
     <>
-      {!embedded && <PageHeader title={t("search.title")} />}
+      <PageHeader title={t("search.title")} />
       <form className="wb-search-box" onSubmit={(event) => void search(event)}>
         <Search size={20} />
         <input
@@ -1712,11 +1746,9 @@ function KnowledgeView({
           placeholder={t("search.placeholder")}
           autoFocus
         />
-        {!embedded && (
-          <Button type="submit" disabled={busy}>
-            {busy ? <Loader2 className="wb-spin" /> : t("search.submit")}
-          </Button>
-        )}
+        <Button type="submit" disabled={busy}>
+          {busy ? <Loader2 className="wb-spin" /> : t("search.submit")}
+        </Button>
       </form>
       <div className="wb-search-results">
         {!busy && (
@@ -2923,6 +2955,93 @@ function ModelInput({
     </>
   );
 }
+/**
+ * 폴더 선택을 한 곳으로 모은다. 첫 폴더가 프로젝트 기본 폴더(에이전트 작업
+ * 디렉터리)가 되고, 나머지는 함께 열리는 추가 폴더다. 폴더 찾기 버튼으로
+ * 여러 개를 한 번에 고를 수 있고, 경로를 직접 붙여 넣을 수도 있다.
+ */
+function FolderPicker({
+  repoPath,
+  extraPaths,
+  onChange,
+}: {
+  repoPath: string;
+  extraPaths: string[];
+  onChange: (repoPath: string, extraPaths: string[]) => void;
+}) {
+  const { t } = useTranslation("workbench");
+  const [typed, setTyped] = useState("");
+  const add = (paths: string[]) => {
+    const additions = paths
+      .map((path) => path.trim())
+      .filter(
+        (path) =>
+          path &&
+          path !== repoPath &&
+          !extraPaths.includes(path),
+      );
+    if (!additions.length) return;
+    if (!repoPath) onChange(additions[0], [...extraPaths, ...additions.slice(1)]);
+    else onChange(repoPath, [...extraPaths, ...additions]);
+    setTyped("");
+  };
+  const removeAt = (index: number) => {
+    if (index === 0) onChange(extraPaths[0] ?? "", extraPaths.slice(1));
+    else onChange(repoPath, extraPaths.filter((_, at) => at !== index - 1));
+  };
+  const rows = repoPath ? [repoPath, ...extraPaths] : extraPaths;
+  return (
+    <div className="wb-field is-wide">
+      <span>{t("form.folders")}</span>
+      {rows.length === 0 ? (
+        <div className="wb-folder-empty">
+          <FolderPlus size={22} />
+          <p>{t("form.foldersEmpty")}</p>
+          <small className="wb-muted">{t("form.foldersHint")}</small>
+        </div>
+      ) : (
+        <div className="wb-folder-list">
+          {rows.map((path, index) => (
+            <div key={`${path}-${index}`} className="wb-folder-row">
+              <Folder size={14} className="wb-folder-icon" />
+              <span className="wb-folder-path" title={path}>
+                {path}
+              </span>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label={t("form.removeFolder")}
+                onClick={() => removeAt(index)}
+              >
+                <X size={14} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="wb-folder-add">
+        <BrowseButton
+          multiple
+          label={t(rows.length ? "form.addFolders" : "form.pickFolders")}
+          onSelect={add}
+        />
+        <Input
+          aria-label={t("form.folderPathAria")}
+          value={typed}
+          onChange={(event) => setTyped(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              add([typed]);
+            }
+          }}
+          placeholder={t("form.folderPathPlaceholder")}
+        />
+      </div>
+    </div>
+  );
+}
 function ProjectFormDialog({
   open,
   initial,
@@ -2971,11 +3090,15 @@ function ProjectFormDialog({
     }
     setBusy(true);
     try {
-      await sddApi.saveProject({
+      const saved = await sddApi.saveProject({
         ...draft,
         name: draft.name.trim(),
         verifyCommands: draft.verifyCommands.filter(Boolean),
       });
+      // 새 프로젝트는 저장과 동시에 분석을 발사한다. 설명·검증 명령을
+      // 에이전트가 채우고 완료는 `project-analyzed` 이벤트로 온다.
+      if (!draft.id && isTauri() && saved.id)
+        void sddApi.analyzeProject(saved.id).catch(() => undefined);
       onSaved();
     } catch (e) {
       setError(errorText(e));
@@ -3030,79 +3153,23 @@ function ProjectFormDialog({
             <small className="wb-muted">{t("form.analyzeHint")}</small>
           </div>
         )}
-        <label className="wb-field is-wide">
-          {t("form.basePath")}
-          <PathInput
-            aria-label={t("form.repoPathAria")}
-            value={draft.repoPath}
-            onValueChange={(value) =>
-              setDraft((previous) => {
-                const next = { ...previous, repoPath: value };
-                // 이름이 비어 있거나 이전 경로의 basename을 그대로 미러링하는
-                // 동안은 따라간다. 글자별 입력 이벤트에도 이름이 중간 조각("U" 등)으로
-                // 굳지 않게 하고, 사용자가 이름을 손대는 순간부터는 덮지 않는다.
-                if (
-                  !previous.name.trim() ||
-                  previous.name === pathBasename(previous.repoPath)
-                )
-                  next.name = pathBasename(value);
-                return next;
-              })
-            }
-            placeholder="/path/to/repository"
-          />
-        </label>
-        <div className="wb-field is-wide">
-          <span>{t("form.extraPaths")}</span>
-          {draft.extraPaths.map((path, index) => (
-            <div key={index} className="flex items-start gap-2">
-              <div className="min-w-0 flex-1">
-                <PathInput
-                  aria-label={t("form.extraPathAria")}
-                  value={path}
-                  onValueChange={(value) =>
-                    set(
-                      "extraPaths",
-                      draft.extraPaths.map((candidate, at) =>
-                        at === index ? value : candidate,
-                      ),
-                    )
-                  }
-                  placeholder="/path/to/folder"
-                />
-              </div>
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                aria-label={t("form.removeExtraPath")}
-                onClick={() =>
-                  set(
-                    "extraPaths",
-                    draft.extraPaths.filter((_, at) => at !== index),
-                  )
-                }
-              >
-                <Trash2 size={14} />
-              </Button>
-            </div>
-          ))}
-          <div>
-            <BrowseButton
-              multiple
-              label={t("form.addFolders")}
-              onSelect={(paths) => {
-                const additions = paths.filter(
-                  (candidate) =>
-                    candidate !== draft.repoPath &&
-                    !draft.extraPaths.includes(candidate),
-                );
-                if (additions.length)
-                  set("extraPaths", [...draft.extraPaths, ...additions]);
-              }}
-            />
-          </div>
-        </div>
+        <FolderPicker
+          repoPath={draft.repoPath}
+          extraPaths={draft.extraPaths}
+          onChange={(repoPath, extraPaths) =>
+            setDraft((previous) => {
+              const next = { ...previous, repoPath, extraPaths };
+              // 이름이 비어 있거나 이전 경로의 basename을 그대로 미러링하는
+              // 동안은 따라간다. 사용자가 이름을 손대는 순간부터는 덮지 않는다.
+              if (
+                !previous.name.trim() ||
+                previous.name === pathBasename(previous.repoPath)
+              )
+                next.name = pathBasename(repoPath);
+              return next;
+            })
+          }
+        />
         <label className="wb-field">
           {t("form.defaultAgent")}
           <Select
@@ -3149,19 +3216,22 @@ function ProjectFormDialog({
             {t("form.workflowHint")}
           </small>
         </label>
-        <label className="wb-field is-wide">
-          {t("form.verifyCommands")}
-          <textarea
-            value={draft.verifyCommands.join("\n")}
-            onChange={(event) =>
-              set(
-                "verifyCommands",
-                event.target.value.split("\n").map((command) => command.trim()),
-              )
-            }
-            placeholder={"npm run build\nnpm test"}
-          />
-        </label>
+        {draft.id && (
+          <label className="wb-field is-wide">
+            {t("form.verifyCommands")}
+            <textarea
+              value={draft.verifyCommands.join("\n")}
+              onChange={(event) =>
+                set(
+                  "verifyCommands",
+                  event.target.value.split("\n").map((command) => command.trim()),
+                )
+              }
+              placeholder={"npm run build\nnpm test"}
+            />
+            <small className="wb-muted">{t("form.verifyHint")}</small>
+          </label>
+        )}
         <fieldset className="wb-check-field is-wide">
           <legend>{t("form.prerequisiteProjects")}</legend>
           <div>
@@ -3440,6 +3510,7 @@ function WorkDetailDialog({
   const activeNodeId = work ? activeNodeForWork(work) : null;
   useEffect(() => setReviewNote(""), [work?.id, activeNodeId]);
   if (!work) return null;
+  const intentFlow = work.workflowId === INTENT_WORKFLOW;
   const closed = isClosedStatus(work.status);
   const canTransition = !closed && work.status !== "blocked";
   const actions = workActions(work, workflow);
@@ -3559,10 +3630,10 @@ function WorkDetailDialog({
         <div className="wb-detail-head">
           <div>
             <h2>{work.title}</h2>
-            <p>
+            {!intentFlow && <p>
               {work.description ||
                 t("detail.noDescription")}
-            </p>
+            </p>}
           </div>
           <div className="wb-detail-actions">
             {(closed || work.stage === "maintain") && (
@@ -3575,7 +3646,7 @@ function WorkDetailDialog({
             </Button>
           </div>
         </div>
-        <div className="wb-stepper">
+        {!intentFlow && <div className="wb-stepper">
           {nodes.map((node, stageIndex) => (
             <button
               key={node.id}
@@ -3606,7 +3677,8 @@ function WorkDetailDialog({
             </button>
           ))}
         </div>
-        <div className="wb-detail-meta">
+        }
+        {!intentFlow && <div className="wb-detail-meta">
           <span>
             {t("detail.project")}{" "}
             <strong>
@@ -3630,7 +3702,8 @@ function WorkDetailDialog({
             </span>
           )}
         </div>
-        <div className="wb-detail-split">
+        }
+        {intentFlow ? <IntentFlowPanel key={work.id} onDirtyChange={setEditorDirty} work={work} project={projects.find((project) => project.id === work.projectId)} onReload={onReload} /> : <div className="wb-detail-split">
           <ArtifactEditor
             work={work}
             workflow={workflow}
@@ -3651,6 +3724,7 @@ function WorkDetailDialog({
           />
           )}
         </div>
+        }
         {work.decisions.length > 0 && (
           <div className="wb-ledger">
             <h3>{t("detail.decisions")}</h3>
@@ -3671,7 +3745,7 @@ function WorkDetailDialog({
         {work.workflowInstanceId && (
           <RuntimeLedger instanceId={work.workflowInstanceId} />
         )}
-        {!closed && <>
+        {!closed && !intentFlow && <>
         <label className="wb-review-note">
           {t("detail.reviewNote")}
           <textarea

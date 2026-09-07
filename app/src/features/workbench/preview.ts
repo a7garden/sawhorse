@@ -12,7 +12,18 @@ import {
 } from "./types";
 const KEY = "sawhorse.workflow.preview.v2";
 const now = () => new Date().toISOString();
+const intentWorkflow: WorkflowDefinition = {
+  definitionVersion: 1, id: "intent-flow", version: "1.0.0", label: "메모에서 구현까지", description: "의도와 이미지에서 설계 승인, 구현까지", entry: "design",
+  artifacts: ["intent", "spec", "plan", "verification"].map((role) => ({ role, label: role, path: `work/{workId}/${role}.md`, template: role === "intent" ? "" : `# ${role}\n` })),
+  nodes: ["design", "build"].map((id) => ({ id, label: id === "design" ? "설계" : "구현·검증", kind: "agent", artifactRole: null,
+    actionRef: `intent-${id}`, workflowRef: null, decision: null, inputs: id === "design" ? ["intent"] : ["intent", "spec", "plan"],
+    outputs: id === "design" ? ["spec", "plan"] : ["verification"], allowedRoles: id === "design" ? ["planner", "research"] : ["implementer", "verifier"],
+    instructions: "", requiresCompletedDependencies: id === "build" })),
+  edges: [{ from: "design", to: "build", on: "approved", condition: null, loopRef: null }, { from: "build", to: "design", on: "revise", condition: null, loopRef: "intent-revision" }],
+  loops: [{ id: "intent-revision", maxIterations: 20, onLimit: "pause" }],
+};
 const previewWorkflows: WorkflowDefinition[] = [
+  intentWorkflow,
   {
     definitionVersion: 1,
     id: "sdd-main",
@@ -335,7 +346,10 @@ function load(): Store {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const p = JSON.parse(raw) as Store;
-      if (p.snapshot?.schemaVersion === 1) return p;
+      if (p.snapshot?.schemaVersion === 1) {
+        if (!p.snapshot.workflows.some((w) => w.id === "intent-flow")) p.snapshot.workflows.push(structuredClone(intentWorkflow));
+        return p;
+      }
     }
   } catch {
     /* disposable tour */
@@ -364,7 +378,7 @@ function doc(workId: string, artifact: string): Document {
       artifact: artifact as Document["artifact"],
       path: `work/${workId}/${artifact}.md`,
       revision: "0",
-      markdown: `# ${w.title}\n\n## ${artifact === "intent" ? "문제" : "기록"}\n개발 의도, 코드 변경, 검증 근거가 떨어져 있어 맥락을 다시 찾는 시간이 듭니다.\n\n## 원하는 결과\n하나의 작업에서 문서를 편집하고 에이전트를 실행하며 실제 근거를 확인합니다.\n\n## 제약\n- 기록은 로컬 마크다운으로 남깁니다.\n- 프로젝트 의존성을 확인한 뒤 구현합니다.\n\n## 수용 기준\n- [ ] 문서와 실행 이력이 작업에 연결됩니다.\n- [ ] 검증 결과를 다음 단계에서 확인합니다.\n`,
+      markdown: w.workflowId === "intent-flow" ? (artifact === "intent" ? "" : `# ${artifact}\n`) : `# ${w.title}\n\n## ${artifact === "intent" ? "문제" : "기록"}\n개발 의도, 코드 변경, 검증 근거가 떨어져 있어 맥락을 다시 찾는 시간이 듭니다.\n\n## 원하는 결과\n하나의 작업에서 문서를 편집하고 에이전트를 실행하며 실제 근거를 확인합니다.\n\n## 제약\n- 기록은 로컬 마크다운으로 남깁니다.\n- 프로젝트 의존성을 확인한 뒤 구현합니다.\n\n## 수용 기준\n- [ ] 문서와 실행 이력이 작업에 연결됩니다.\n- [ ] 검증 결과를 다음 단계에서 확인합니다.\n`,
     };
   }
   return structuredClone(state.documents[key]);
@@ -417,6 +431,23 @@ export async function previewInvoke(
       else s.projects[i] = p;
       save();
       return p;
+    }
+    case "sdd_capture_intent": {
+      const input = args.input as { work: WorkItem; markdown: string; attachments: Array<{ name: string; dataUrl: string }> };
+      if (!input.markdown.trim() && !input.attachments.length) throw new Error("Add a note or image");
+      const markdown = input.markdown + input.attachments.map((image) => `\n\n![${image.name.replace(/[\[\]\n\r]/g, "")}](<${image.dataUrl}>)`).join("");
+      const existing = s.work.find((work) => work.id === input.work.id);
+      if (existing) {
+        if (existing.workflowId === "intent-flow" && existing.projectId === input.work.projectId && doc(existing.id, "intent").markdown === markdown) return existing;
+        throw new Error("An intent with this ID already exists");
+      }
+      const work = await previewInvoke("sdd_save_work", { input: { ...input.work, description: input.markdown.slice(0, 180), workflowId: "intent-flow", workflowVersion: "1.0.0" } }) as WorkItem;
+      state.documents[`${work.id}/intent`] = { workId: work.id, artifact: "intent", path: `work/${work.id}/intent.md`, markdown, revision: crypto.randomUUID() };
+      save(); return work;
+    }
+    case "sdd_intent_review": {
+      const documents = ["intent", "spec", "plan", "verification"].map((role) => doc(String(args.workId), role));
+      return { documents, inputDigest: documents.map((document) => document.revision).join(":") };
     }
     case "sdd_save_work": {
       const w = structuredClone(args.input) as WorkItem;
@@ -477,10 +508,13 @@ export async function previewInvoke(
         targetNodeId?: string;
         expectedNodeId: string;
         note: string;
+        inputDigest?: string;
         facts?: Record<string, unknown>;
       };
       const w = s.work.find((candidate) => candidate.id === input.workId);
       if (!w) throw new Error(i18n.t("workbench:errors.workNotFound"));
+      if (w.workflowId === "intent-flow" && input.inputDigest && input.inputDigest !== ["intent", "spec", "plan", "verification"].map((role) => doc(w.id, role).revision).join(":"))
+        throw new Error("The design changed. Refresh and review again.");
       if (w.stage !== input.expectedNodeId)
         throw new Error(i18n.t("workbench:preview.nodeMovedConcurrently"));
       const definition = s.workflows.find(

@@ -1,6 +1,6 @@
 // Shared building blocks for the six pages. Page-local concerns stay in each page file.
 import { useEffect, useState, type ReactNode } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import { useTranslation } from "react-i18next";
 import remarkGfm from "remark-gfm";
 import i18n from "@/i18n";
@@ -360,6 +360,7 @@ export function MarkdownView({
       )}
     >
       <ReactMarkdown
+        urlTransform={(url, key) => key === "src" && /^data:image\/(png|jpeg|webp|gif);base64,/i.test(url) ? url : defaultUrlTransform(url)}
         remarkPlugins={[remarkGfm]}
         components={{
           img: ({ src: imgSrc, alt, title }) => (

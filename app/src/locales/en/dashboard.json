@@ -274,6 +274,7 @@
     "library": "Library",
     "newWorkflow": "New workflow",
     "published": "Published",
+    "latestBadge": "Latest",
     "drafts": "Drafts",
     "valid": "Valid",
     "needsFix": "Fix",

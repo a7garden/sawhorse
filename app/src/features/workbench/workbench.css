@@ -843,6 +843,76 @@
   border-color: var(--wb-teal);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--wb-teal) 14%, transparent);
 }
+.wb-folder-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 22px 12px;
+  border: 1px dashed var(--wb-line);
+  border-radius: 9px;
+  background: var(--wb-warm);
+  color: var(--wb-muted);
+  text-align: center;
+}
+.wb-folder-empty p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--wb-ink);
+}
+.wb-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.wb-folder-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--wb-line);
+  border-radius: 7px;
+  background: var(--wb-paper);
+  padding: 5px 7px;
+  font-size: 12px;
+}
+.wb-folder-icon {
+  flex: none;
+  color: var(--wb-muted);
+}
+.wb-folder-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  unicode-bidi: plaintext;
+  text-align: left;
+}
+.wb-folder-chip {
+  flex: none;
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--wb-teal-soft);
+  color: var(--wb-teal);
+}
+.wb-folder-add {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.wb-folder-add input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--wb-line);
+  border-radius: 7px;
+  outline: 0;
+  background: var(--wb-paper);
+  color: var(--wb-ink);
+  font: inherit;
+  padding: 7px 9px;
+  min-height: 31px;
+}
 .wb-check-field {
   border: 1px solid var(--wb-line);
   border-radius: 8px;

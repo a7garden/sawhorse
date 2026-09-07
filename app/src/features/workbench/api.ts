@@ -38,6 +38,11 @@ async function call<T>(
   return invoke<T>(command, args);
 }
 export const sddApi = {
+  captureImage: (path: string): Promise<string> => call("sdd_capture_image", { path }),
+  captureIntent: (work: WorkItem, markdown: string, attachments: Array<{ name: string; dataUrl: string }>): Promise<WorkItem> =>
+    call("sdd_capture_intent", { input: { work, markdown, attachments } }),
+  intentReview: (workId: string): Promise<{ documents: Document[]; inputDigest: string }> =>
+    call("sdd_intent_review", { workId }),
   snapshot: (): Promise<WorkspaceSnapshot> => call("sdd_snapshot"),
   initialize: (): Promise<WorkspaceSnapshot> => call("sdd_initialize"),
   saveProject: (input: Project): Promise<Project> =>

@@ -1,0 +1,149 @@
+/* Work has its own full-width canvas; shared workbench views keep their layout. */
+.wb-page.wb-work-page {
+  --wb-ink: var(--foreground);
+  --wb-muted: var(--muted-foreground);
+  --wb-line: var(--border);
+  --wb-paper: var(--card);
+  --wb-teal: var(--brand);
+  --wb-teal-soft: color-mix(in srgb, var(--brand) 10%, var(--card));
+  --wb-warm: color-mix(in srgb, var(--foreground) 3%, var(--card));
+  max-width: none;
+  padding-top: 28px;
+}
+.wb-work-header,
+.wb-work-heading,
+.wb-work-navigation,
+.wb-work-toolbar,
+.wb-work-results {
+  display: flex;
+  align-items: center;
+}
+.wb-work-header { justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.wb-work-heading { gap: 10px; }
+.wb-work-heading h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.04em; }
+.wb-work-heading > span {
+  border: 1px solid var(--wb-line);
+  border-radius: 6px;
+  padding: 0 7px;
+  color: var(--wb-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.wb-work-header p { margin: 6px 0 0; font-size: 12px; color: var(--wb-muted); }
+.wb-work-header > button { height: 36px; }
+.wb-work-navigation { justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--wb-line); }
+.wb-work-state-tabs { display: flex; align-self: stretch; gap: 20px; }
+.wb-work-state-tabs > button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 0;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  color: var(--wb-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.wb-work-state-tabs > button[aria-pressed="true"] { color: var(--wb-ink); border-color: var(--wb-teal); font-weight: 600; }
+.wb-work-state-tabs > button > span { padding: 0 5px; border-radius: 4px; background: var(--wb-warm); font-size: 10px; font-variant-numeric: tabular-nums; }
+.wb-work-page .wb-view-switch { gap: 2px; padding: 3px; border: 1px solid var(--wb-line); border-radius: 8px; margin-bottom: 7px; }
+.wb-work-page .wb-view-switch > button { height: 27px; font-size: 11px; color: var(--wb-muted); padding: 0 9px; }
+.wb-work-page .wb-view-switch > button[aria-pressed="true"] { color: var(--wb-ink); background: var(--wb-warm); box-shadow: 0 1px 3px #0000000d; }
+.wb-work-toolbar { gap: 8px; padding: 16px 0 0; flex-wrap: wrap; }
+.wb-work-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+  max-width: 440px;
+  flex: 1;
+  height: 34px;
+  border: 1px solid var(--wb-line);
+  border-radius: 8px;
+  background: var(--wb-paper);
+  padding: 0 10px;
+  color: var(--wb-muted);
+}
+.wb-work-search input { width: 100%; min-width: 0; height: 100%; outline: none; background: transparent; color: var(--wb-ink); font-size: 12px; }
+.wb-work-search input::placeholder { color: var(--wb-muted); }
+.wb-work-search > svg { flex-shrink: 0; }
+.wb-work-search > button { display: grid; place-items: center; cursor: pointer; padding: 3px; border-radius: 3px; }
+.wb-work-search:focus-within { border-color: var(--wb-teal); box-shadow: 0 0 0 2px color-mix(in srgb, var(--wb-teal) 15%, transparent); }
+.wb-work-project-filter { width: 168px; }
+.wb-work-toolbar > button { height: 34px; font-size: 12px; }
+.wb-work-toolbar > button[aria-expanded="true"] { background: var(--wb-teal-soft); color: var(--wb-teal); border-color: color-mix(in srgb, var(--wb-teal) 30%, var(--wb-line)); }
+.wb-work-filter-count { font-size: 10px; padding: 0 5px; border-radius: 4px; background: var(--wb-teal-soft); color: var(--wb-teal); }
+.wb-work-filters { display: grid; grid-template-columns: minmax(180px, 1.5fr) repeat(4, minmax(110px, 1fr)); gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid var(--wb-line); border-radius: 10px; background: var(--wb-warm); }
+.wb-work-filters > label { min-width: 0; }
+.wb-work-filters > label > span { display: block; font-size: 11px; margin-bottom: 6px; color: var(--wb-muted); }
+.wb-work-results { min-height: 52px; gap: 12px; font-size: 11px; color: var(--wb-muted); flex-wrap: wrap; }
+.wb-work-results p { margin: 0; }
+.wb-work-results button { font-size: 11px; }
+.wb-work-sort-hint { margin-left: auto; }
+.wb-work-page .wb-issue-layout { grid-template-columns: minmax(0, 1fr); gap: 0; }
+.wb-work-page .wb-issue-main { overflow-x: auto; }
+.wb-work-page .wb-process-boards { gap: 24px; }
+.wb-work-process-hint { margin: 0; font-size: 11px; }
+.wb-work-page .wb-process-group > h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 12px; }
+.wb-work-page .wb-process-group > h2 small { margin-left: 0; font-size: 10px; font-weight: 400; }
+.wb-work-process-count { margin-left: auto; color: var(--wb-muted); font-size: 11px; font-weight: 400; }
+.wb-work-page .wb-process-group .wb-board { grid-auto-columns: minmax(184px, 1fr); gap: 10px; padding-bottom: 10px; }
+.wb-work-page .wb-board-column { min-height: 340px; background: var(--wb-warm); padding: 10px 8px; border: 1px solid var(--wb-line); border-radius: 10px; }
+.wb-work-page .wb-column-head { padding: 2px 4px 10px; margin: 0 0 8px; border-bottom: 1px solid var(--wb-line); font-size: 12px; }
+.wb-work-page .wb-column-head strong { display: flex; align-items: center; gap: 7px; font-weight: 600; }
+.wb-work-page .wb-column-head strong::before { content: ""; width: 6px; height: 6px; border: 1.5px solid var(--wb-muted); border-radius: 50%; }
+.wb-work-page .wb-column-head small { display: grid; place-items: center; min-width: 18px; height: 18px; border-radius: 4px; background: var(--wb-paper); font-size: 10px; }
+.wb-work-page .wb-card-stack { min-height: 260px; gap: 9px; }
+.wb-work-page .wb-board-card { padding: 0; overflow: hidden; }
+.wb-work-page .wb-board-card:hover { border-color: color-mix(in srgb, var(--wb-teal) 45%, var(--wb-line)); }
+.wb-work-page .wb-board-card > button { display: block; padding: 12px; cursor: pointer; color: inherit; }
+.wb-work-page .wb-board-card strong { display: block; line-height: 1.6; font-size: 12px; font-weight: 600; overflow-wrap: anywhere; }
+.wb-work-page .wb-board-card p { margin: 7px 0 12px; line-height: 1.65; }
+.wb-work-page .wb-card-top { margin-bottom: 10px; justify-content: space-between; }
+.wb-work-card-id { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, monospace; font-size: 9px; }
+.wb-work-page .wb-priority { white-space: nowrap; }
+.wb-work-card-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 10px; color: var(--wb-muted); margin-bottom: 12px; }
+.wb-work-page .wb-board-card footer { padding-top: 10px; gap: 6px; }
+.wb-work-page .wb-board-card footer > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-work-page .wb-board-card footer time { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.wb-work-page .wb-drop-hint { border: 0; min-height: 70px; font-size: 11px; opacity: 0.7; }
+.wb-work-page .wb-milestone-rail { margin-top: 14px; padding: 0 14px 14px; border-radius: 10px; }
+.wb-work-page .wb-milestone-rail .wb-panel-title { padding: 10px 0; }
+.wb-work-page .wb-milestone-rail h2 { font-size: 12px; }
+.wb-work-milestones { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+.wb-work-page .wb-milestone-row { flex: 0 0 190px; width: auto; margin: 0; padding: 12px; border: 1px solid var(--wb-line); border-radius: 7px; }
+.wb-work-page .wb-milestone-row.is-active { border-color: color-mix(in srgb, var(--wb-teal) 35%, var(--wb-line)); }
+.wb-work-page .wb-milestone-row strong { font-size: 12px; overflow-wrap: anywhere; }
+.wb-work-page .wb-milestone-row small { margin-top: 4px; }
+.wb-work-page .wb-issue-table { font-size: 12px; border-radius: 10px; }
+.wb-work-page .wb-issue-table th { background: var(--wb-warm); font-size: 11px; font-weight: 500; }
+.wb-work-page .wb-issue-table td { padding-top: 14px; padding-bottom: 14px; }
+.wb-work-page .wb-issue-table td:not(.wb-work-title-cell) { white-space: nowrap; }
+.wb-work-page .wb-work-title-column { width: 48%; min-width: 280px; }
+.wb-work-title-link { display: block; text-align: left; font-size: 13px; line-height: 1.5; font-weight: 600; cursor: pointer; overflow-wrap: anywhere; }
+.wb-work-title-link:hover { color: var(--wb-teal); }
+.wb-work-row-meta { display: flex; gap: 4px 9px; align-items: center; flex-wrap: wrap; margin-top: 6px; color: var(--wb-muted); font-size: 10px; }
+.wb-work-row-meta .wb-issue-id { font-size: 10px; }
+.wb-work-tag { background: var(--wb-warm); border: 1px solid var(--wb-line); padding: 0 4px; border-radius: 4px; }
+.wb-work-page .wb-issue-table tr[data-selected] { background: var(--wb-teal-soft); }
+.wb-work-page .wb-work-state-tabs button:focus-visible,
+.wb-work-page .wb-board-card > button:focus-visible,
+.wb-work-title-link:focus-visible,
+.wb-work-page .wb-milestone-row:focus-visible { outline: 2px solid var(--wb-teal); outline-offset: -2px; border-radius: 5px; }
+@media (max-width: 1100px) {
+  .wb-work-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .wb-work-page { padding: 20px 16px 32px; }
+  .wb-work-header { align-items: flex-start; gap: 10px; }
+  .wb-work-header p { max-width: 230px; line-height: 1.6; }
+  .wb-work-heading h1 { font-size: 21px; }
+  .wb-work-navigation { flex-wrap: wrap; gap: 8px; }
+  .wb-work-state-tabs { gap: 16px; }
+  .wb-work-search { flex-basis: 100%; max-width: none; }
+  .wb-work-project-filter { flex: 1; min-width: 130px; }
+  .wb-work-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wb-work-filters > label:first-child { grid-column: 1 / -1; }
+  .wb-work-page .wb-process-group .wb-board { grid-auto-columns: 220px; }
+}

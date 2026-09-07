@@ -19,6 +19,10 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/pages/common";
 import { workflowApi, sddApi, isWorkbenchPreview } from "@/features/workbench/api";
+import {
+  compareWorkflowVersions,
+  latestWorkflowVersions,
+} from "@/features/workbench/workflow-version";
 import type {
   SimulationResult,
   AgentRole,
@@ -152,8 +156,11 @@ export default function WorkflowStudioPage() {
       versions.push(item);
       groups.set(item.id, versions);
     }
+    for (const versions of groups.values())
+      versions.sort((a, b) => compareWorkflowVersions(a.version, b.version));
     return [...groups.entries()];
   }, [catalog]);
+  const latestVersion = useMemo(() => latestWorkflowVersions(catalog), [catalog]);
 
   // 프로젝트 기본 워크플로와 개별 작업의 고정 버전을 한 번에 센다.
   const usage = useMemo(() => {
@@ -270,23 +277,31 @@ export default function WorkflowStudioPage() {
                       <p className="truncate font-mono text-[10px] text-muted-foreground">
                         {id}
                       </p>
-                      {versions.map((item) => (
-                        <button
-                          key={`${item.id}@${item.version}`}
-                          className="w-full rounded-md border p-2 text-left text-xs hover:bg-accent"
-                          onClick={() => selectDefinition(item)}
-                        >
-                          <span className="flex items-baseline justify-between gap-2">
-                            <strong className="truncate">{item.label}</strong>
-                            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                              v{item.version}
+                      {versions.map((item) => {
+                        const isLatest = latestVersion.get(item.id) === item.version;
+                        return (
+                          <button
+                            key={`${item.id}@${item.version}`}
+                            className="w-full rounded-md border p-2 text-left text-xs hover:bg-accent"
+                            onClick={() => selectDefinition(item)}
+                          >
+                            <span className="flex items-baseline justify-between gap-2">
+                              <strong className="truncate">{item.label}</strong>
+                              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                                {isLatest && (
+                                  <span className="mr-1 rounded bg-primary/10 px-1 font-sans text-primary">
+                                    {t("workflowStudio.latestBadge")}
+                                  </span>
+                                )}
+                                v{item.version}
+                              </span>
                             </span>
-                          </span>
-                          <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                            {usageText(item.id, item.version)}
-                          </span>
-                        </button>
-                      ))}
+                            <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                              {usageText(item.id, item.version)}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   ))}
                 </div>

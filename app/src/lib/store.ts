@@ -74,10 +74,21 @@ export function parseViewPage(
   return packId && viewId ? { packId, viewId } : null;
 }
 
+/** 작업대 바깥(커맨드 팔레트 등)에서 특정 작업 상세를 열어 달라는 요청. WorkbenchPage 가 소비하고 지운다. */
+export type OpenWorkRequest = {
+  workId: string;
+  artifact?: string;
+  snippet?: string;
+};
+
 interface AppState {
   workflowToEdit: WorkflowDefinition | null;
   page: PageId;
   setPage: (p: string) => void;
+  /** 커맨드 팔레트가 작업 상세 열기를 요청하는 통로. */
+  openWorkRequest: OpenWorkRequest | null;
+  openWork: (request: OpenWorkRequest) => void;
+  clearOpenWork: () => void;
 
   nav: NavEntry[];
   packs: PackRegistryView | null;
@@ -147,6 +158,9 @@ export const useApp = create<AppState>((set, get) => ({
     );
     set({ page: hit ? viewPageId(hit.packId, hit.viewId) : "overview" });
   },
+  openWorkRequest: null,
+  openWork: (request) => set({ openWorkRequest: request }),
+  clearOpenWork: () => set({ openWorkRequest: null }),
 
   nav: [],
   packs: null,
