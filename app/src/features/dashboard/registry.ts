@@ -8,6 +8,8 @@ import {
 } from "./metrics";
 export type DashboardBreakpoint = "lg" | "md" | "sm";
 export type PanelWidgetId =
+  | "projects"
+  | "documents"
   | "today"
   | "next"
   | "stages"
@@ -34,6 +36,8 @@ export const DASHBOARD_COLS = { lg: 12, md: 8, sm: 4 };
 // 카테고리는 사이드바 진입점과 같은 이름을 쓴다 — 개발(WorkItem) / 자동화(TaskDef) / 볼트.
 // 지표만은 어느 화면에도 속하지 않는 숫자 한 장이므로 자기 이름을 쓴다.
 const panelEntries: [PanelWidgetId, string, string, string, string][] = [
+  ["projects", "프로젝트 현황", "프로젝트별 진행·검토·보류", "개발", "dev"],
+  ["documents", "작업 문서", "워크플로우별 산출물과 문서 열기", "워크플로", "workflow"],
   [
     "today",
     "오늘 활동",
@@ -160,6 +164,7 @@ export const DEFAULT_METRIC_WIDGET_IDS: MetricWidgetId[] =
 /** 기본 표시 위젯 — 지표 네 장 뒤에 오늘·개발·이슈·기한·일정과 볼트 할 일. */
 export const DEFAULT_WIDGET_IDS: DashboardWidgetId[] = [
   ...DEFAULT_METRIC_WIDGET_IDS,
+  "projects",
   "today",
   "next",
   "issues",
@@ -167,11 +172,19 @@ export const DEFAULT_WIDGET_IDS: DashboardWidgetId[] = [
   "events",
   "checklist",
 ];
-export function createDefaultLayouts(): ResponsiveLayouts<DashboardBreakpoint> {
+export function createDefaultLayouts(ids: DashboardWidgetId[] = DEFAULT_WIDGET_IDS): ResponsiveLayouts<DashboardBreakpoint> {
   return Object.fromEntries(
     (Object.keys(DASHBOARD_COLS) as DashboardBreakpoint[]).map((b) => [
       b,
-      packLayout(DEFAULT_WIDGET_IDS, b),
+      packLayout(ids, b),
     ]),
   );
 }
+
+/** Project dashboards use process context instead of personal feeds and daily checklists. */
+export const PROJECT_WIDGET_IDS = WIDGET_REGISTRY.map((widget) => widget.id)
+  .filter((id) => !["projects", "reading", "checklist", "schedules"].includes(id));
+export const PROJECT_DEFAULT_WIDGET_IDS: DashboardWidgetId[] = [
+  "metric:running", "metric:review", "metric:blocked", "metric:overdue",
+  "stages", "next", "jobs", "documents", "due", "events",
+];

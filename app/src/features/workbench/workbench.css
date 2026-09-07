@@ -374,19 +374,6 @@
   padding: 0 7px;
   height: 32px;
 }
-.wb-filter select {
-  border: 0;
-  /* 투명이면 네이티브 팝업이 흰색으로 뜬다 — 칩과 같은 종이색으로 채운다. */
-  background-color: var(--wb-paper);
-  outline: 0;
-  color: var(--wb-ink);
-  font-size: 12px;
-}
-.wb-page select option,
-.wb-page select optgroup {
-  background-color: var(--wb-paper);
-  color: var(--wb-ink);
-}
 .wb-segment {
   padding: 2px;
 }
@@ -1127,6 +1114,8 @@
 }
 .wb-step-actions {
   display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
   padding-top: 14px;
 }
@@ -2485,6 +2474,17 @@ bind every visible surface to the workbench palette. */
   gap: 18px;
   align-items: start;
 }
+.wb-issue-main { min-width: 0; overflow-x: auto; }
+.wb-view-switch { display: flex; gap: 4px; }
+.wb-process-boards { display: grid; gap: 24px; }
+.wb-process-group { min-width: 0; }
+.wb-process-group > h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+.wb-process-group > h2 small { color: var(--wb-muted); margin-left: 8px; }
+.wb-process-group .wb-board {
+  grid-template-columns: none;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(210px, 1fr);
+}
 @media (max-width: 900px) {
   .wb-issue-layout {
     grid-template-columns: minmax(0, 1fr);
@@ -2595,4 +2595,44 @@ bind every visible surface to the workbench palette. */
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.wb-project-scope {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-bottom: 12px;
+  font-size: 12px;
+}
+.wb-project-scope label { font-weight: 600; }
+.wb-project-scope > span { color: var(--muted-foreground); }
+.wb-project-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  width: 100%;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  font-size: 12px;
+}
+.wb-project-summary:hover { background: var(--muted); }
+.wb-project-summary strong { flex: 1; min-width: 100px; overflow-wrap: anywhere; }
+.wb-project-summary span { color: var(--muted-foreground); font-size: 11px; }
+.wb-workflow-summary { padding: 8px 0 12px; }
+.wb-workflow-summary h3 { font-size: 12px; font-weight: 600; margin-bottom: 8px; }
+.wb-workflow-summary h3 small { font-weight: 400; color: var(--muted-foreground); }
+.dashboard-grid .wb-slot-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.wb-project-summary { padding: 10px 20px; }
+.wb-workflow-summary { padding: 8px 20px 12px; }
+.wb-workflow-summary .wb-project-summary { padding: 8px 0; }
+.dashboard-grid .wb-workflow-summary .wb-stage-tiles {
+  padding: 0;
+  grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
 }

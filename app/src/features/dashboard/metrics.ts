@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Job } from "@/lib/types";
-import { isClosedStatus, type WorkItem } from "@/features/workbench/types";
+import { isClosedStatus, type WorkItem, type HarnessRun } from "@/features/workbench/types";
 
 /**
  * 지표 카드 하나가 곧 위젯 하나다. 어떤 숫자를 볼지는 사람마다 다르므로 — 누구는
@@ -61,6 +61,7 @@ export function isMetricWidgetId(id: string): id is MetricWidgetId {
 export interface MetricSource {
   work: WorkItem[];
   jobs: Job[];
+  runs?: HarnessRun[];
   /** YYYY-MM-DD 로컬 날짜. 호출부가 넘겨 렌더마다 흔들리지 않게 한다. */
   today: string;
 }
@@ -215,7 +216,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
     count: ({ work }) =>
       countWork(
         work,
-        (item) => isOpen(item) && item.approvalRequired && !item.approve,
+        (item) => item.status === "backlog" || item.status === "review",
       ),
   },
   {
@@ -260,9 +261,9 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
     hint: "대기·실행 중인 에이전트 작업",
     icon: Activity,
     page: "jobs",
-    count: ({ jobs }) =>
-      jobs.filter((job) => job.status === "running" || job.status === "queued")
-        .length,
+    count: ({ jobs, runs = [] }) =>
+      jobs.filter((job) => job.status === "running" || job.status === "queued").length +
+      runs.filter((run) => run.status === "starting" || run.status === "running").length,
   },
   {
     key: "jobs-failed",
@@ -271,13 +272,13 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
     icon: CircleX,
     page: "jobs",
     warnWhenPositive: true,
-    count: ({ jobs, today }) => {
+    count: ({ jobs, runs = [], today }) => {
       const dayStart = new Date(`${today}T00:00:00`).getTime();
       return jobs.filter(
         (job) =>
           job.status === "failed" &&
           (job.startedAtMs ?? job.createdAtMs) >= dayStart,
-      ).length;
+      ).length + runs.filter((run) => run.status === "failed" && new Date(run.updatedAt).getTime() >= dayStart).length;
     },
   },
 ];

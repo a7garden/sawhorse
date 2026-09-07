@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode, type RefObject } from "react";
+import { useMemo, useState, type CSSProperties, type ReactNode, type RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import { GripHorizontal, RotateCcw, SlidersHorizontal, X } from "lucide-react";
@@ -14,12 +14,16 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { useDashboardLayout } from "./layout-store";
+import { createDashboardLayout } from "./layout-store";
 import {
   DASHBOARD_BREAKPOINTS,
   DASHBOARD_COLS,
   WIDGET_REGISTRY,
+  DEFAULT_WIDGET_IDS,
+  PROJECT_DEFAULT_WIDGET_IDS,
+  PROJECT_WIDGET_IDS,
   type DashboardBreakpoint,
+  type DashboardWidgetDefinition,
   type DashboardWidgetId,
 } from "./registry";
 import { METRIC_PREFIX, isMetricWidgetId } from "./metrics";
@@ -37,11 +41,12 @@ function widgetTextKeys(id: DashboardWidgetId) {
 }
 
 /** 카탈로그가 길어졌으므로 카테고리로 묶는다. 등록 순서를 그대로 쓴다. */
-function groupWidgets(query: string, t: TFunction) {
+function groupWidgets(query: string, t: TFunction, scope: string) {
   const needle = query.trim().toLowerCase();
   const groups: { categoryKey: string; widgets: typeof WIDGET_REGISTRY }[] =
     [];
   for (const widget of WIDGET_REGISTRY) {
+    if (scope && !PROJECT_WIDGET_IDS.includes(widget.id)) continue;
     const keys = widgetTextKeys(widget.id);
     const haystack = [
       widget.title,
@@ -61,18 +66,99 @@ function groupWidgets(query: string, t: TFunction) {
   return groups;
 }
 
+/**
+ * 미리보기 박스는 위젯의 실제 lg 종횡비를 그대로 쓴다. 보드 폭은 화면마다
+ * 다르므로 대표값 하나를 기준으로 격자 픽셀을 계산해 비율만 남긴다.
+ */
+const PREVIEW_BOARD_WIDTH = 1160;
+const GRID_MARGIN = 12;
+const GRID_ROW_HEIGHT = 30;
+
+function previewGeometry(widget: DashboardWidgetDefinition): CSSProperties {
+  const { w, h } = widget.defaultLayout.lg;
+  const colWidth =
+    (PREVIEW_BOARD_WIDTH - GRID_MARGIN * (DASHBOARD_COLS.lg + 1)) /
+    DASHBOARD_COLS.lg;
+  const itemW = colWidth * w + GRID_MARGIN * (w - 1);
+  const itemH = GRID_ROW_HEIGHT * h + GRID_MARGIN * (h - 1);
+  return {
+    aspectRatio: `${Math.round(itemW)} / ${Math.round(itemH)}`,
+    minHeight: "5.5rem",
+    maxHeight: "13rem",
+  };
+}
+
+/** 카탈로그 한 장. 실제 데이터로 그린 위젯 모습을 보고 추가하게 한다. */
+function CatalogCard({
+  widget,
+  enabled,
+  onToggle,
+  preview,
+}: {
+  widget: DashboardWidgetDefinition;
+  enabled: boolean;
+  onToggle: (next: boolean) => void;
+  preview: ReactNode;
+}) {
+  const { t } = useTranslation("dashboard");
+  const text = widgetTextKeys(widget.id);
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border",
+        enabled && "border-[var(--brand)]",
+        widget.defaultLayout.lg.w >= DASHBOARD_COLS.lg && "sm:col-span-2",
+      )}
+    >
+      <div
+        className="dashboard-grid widget-catalog-preview"
+        style={previewGeometry(widget)}
+        aria-hidden
+      >
+        <div className="widget-host">{preview}</div>
+      </div>
+      <div className="flex items-center gap-3 p-3">
+        <label
+          className="min-w-0 flex-1 cursor-pointer"
+          htmlFor={`widget-${widget.id}`}
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-semibold">
+              {t(text.title)}
+            </span>
+            <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+              {t(`categories.${widget.categoryKey}`)}
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {t(text.description)}
+          </p>
+        </label>
+        <Switch
+          id={`widget-${widget.id}`}
+          checked={enabled}
+          onCheckedChange={onToggle}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function DashboardBoard({
+  scope = "",
   editing,
   catalogOpen,
   onCatalogClose,
   renderWidget,
 }: {
+  scope?: string;
   editing: boolean;
   catalogOpen: boolean;
   onCatalogClose: () => void;
   renderWidget: (id: DashboardWidgetId) => ReactNode;
 }) {
   const { t } = useTranslation("dashboard");
+  const useDashboardLayout = useMemo(() => createDashboardLayout(scope, scope ? PROJECT_DEFAULT_WIDGET_IDS : DEFAULT_WIDGET_IDS), [scope]);
   const enabled = useDashboardLayout((state) => state.enabled);
   const layouts = useDashboardLayout((state) => state.layouts);
   const setLayouts = useDashboardLayout((state) => state.setLayouts);
@@ -81,7 +167,7 @@ export function DashboardBoard({
   );
   const reset = useDashboardLayout((state) => state.reset);
   const [query, setQuery] = useState("");
-  const groups = useMemo(() => groupWidgets(query, t), [query, t]);
+  const groups = useMemo(() => groupWidgets(query, t, scope), [query, t, scope]);
   const { width, containerRef, mounted } = useContainerWidth({
     measureBeforeMount: true,
   });
@@ -215,7 +301,7 @@ export function DashboardBoard({
         open={catalogOpen}
         onClose={onCatalogClose}
         title={t("board.catalogTitle")}
-        className="max-w-xl"
+        wide
       >
         <p className="mb-3 text-xs text-muted-foreground">
           {t("board.catalogIntro")}
@@ -241,36 +327,17 @@ export function DashboardBoard({
                   /{group.widgets.length}
                 </span>
               </h3>
-              {group.widgets.map((widget) => (
-                <div
-                  key={widget.id}
-                  className="flex items-center gap-3 rounded-xl border p-3"
-                >
-                  <label
-                    className="min-w-0 flex-1 cursor-pointer"
-                    htmlFor={`widget-${widget.id}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="text-[13px] font-semibold">
-                        {t(widgetTextKeys(widget.id).title)}
-                      </span>
-                      <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
-                        {t(`categories.${widget.categoryKey}`)}
-                      </span>
-                    </div>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t(widgetTextKeys(widget.id).description)}
-                    </p>
-                  </label>
-                  <Switch
-                    id={`widget-${widget.id}`}
-                    checked={enabled.includes(widget.id)}
-                    onCheckedChange={(next) =>
-                      setWidgetEnabled(widget.id, next)
-                    }
+              <div className="grid gap-2.5 sm:grid-cols-2">
+                {group.widgets.map((widget) => (
+                  <CatalogCard
+                    key={widget.id}
+                    widget={widget}
+                    enabled={enabled.includes(widget.id)}
+                    onToggle={(next) => setWidgetEnabled(widget.id, next)}
+                    preview={renderWidget(widget.id)}
                   />
-                </div>
-              ))}
+                ))}
+              </div>
             </section>
           ))}
           {groups.length === 0 && (

@@ -15,7 +15,7 @@
     "emptyTitle": "No widgets to display.",
     "emptyHint": "Pick the ones you need from the add-widget button above.",
     "catalogTitle": "Widget catalog",
-    "catalogIntro": "Choose the widgets shown on the dashboard. Each metric card is a widget of its own, so pick only the numbers you need and set their size and place separately. Re-added widgets are placed at the end of the board.",
+    "catalogIntro": "Previews show each widget rendered with your real data — pick the ones you like. Each metric card is a widget of its own, and re-added widgets are placed at the end of the board.",
     "searchPlaceholder": "Search by widget name or description",
     "searchLabel": "Search widgets",
     "noResults": "No widgets match your search."
@@ -41,7 +41,7 @@
       "description": "By due date and priority"
     },
     "issues": {
-      "title": "Issues",
+      "title": "Work status",
       "description": "Status distribution and approval, design, run"
     },
     "due": {
@@ -75,28 +75,45 @@
     "checklist": {
       "title": "Todos",
       "description": "Checklist from today's journal"
+    },
+    "projects": {
+      "title": "Projects",
+      "description": "Running, review and blocked work by project"
+    },
+    "documents": {
+      "title": "Work documents",
+      "description": "Open work artifacts for each workflow"
     }
   },
   "metrics": {
-    "backlog": { "label": "Proposals", "hint": "Requests not yet reviewed" },
+    "backlog": {
+      "label": "Proposals",
+      "hint": "Requests not yet reviewed"
+    },
     "review": {
-      "label": "Awaiting approval",
-      "hint": "Items waiting for review or approval"
+      "label": "Acceptance review",
+      "hint": "Results awaiting acceptance"
     },
     "ready": {
-      "label": "Ready to run",
+      "label": "Planned",
       "hint": "Work items ready to start"
     },
     "running": {
       "label": "In progress",
       "hint": "Items being worked on right now"
     },
-    "done": { "label": "Completed", "hint": "Accumulated results" },
+    "done": {
+      "label": "Completed",
+      "hint": "Accumulated results"
+    },
     "hold": {
       "label": "Rejected or cancelled",
       "hint": "Items not accepted or abandoned midway"
     },
-    "overdue": { "label": "Overdue", "hint": "Items past their due date" },
+    "overdue": {
+      "label": "Overdue",
+      "hint": "Items past their due date"
+    },
     "due-today": {
       "label": "Due today",
       "hint": "Items that must be done by today"
@@ -110,8 +127,8 @@
       "hint": "Open items with an assignee"
     },
     "needs-approval": {
-      "label": "Needs approval",
-      "hint": "Items that cannot proceed without approval"
+      "label": "Decision needed",
+      "hint": "Requests or results awaiting acceptance"
     },
     "blocked": {
       "label": "On hold",
@@ -136,17 +153,17 @@
   },
   "issues": {
     "groups": {
-      "backlog": "Proposals",
-      "review": "Awaiting approval",
-      "ready": "Ready",
+      "backlog": "Intake",
+      "review": "Acceptance review",
+      "ready": "Planned",
       "running": "Running",
       "done": "Done",
       "blocked": "On hold",
       "dropped": "Rejected / cancelled"
     },
-    "distribution": "Issue status distribution",
-    "empty": "No issues registered.",
-    "emptyFilter": "No issues in the selected segment.",
+    "distribution": "Work status distribution",
+    "empty": "No work items yet.",
+    "emptyFilter": "No work in this group.",
     "actions": {
       "approve": "Approve",
       "run": "Run",

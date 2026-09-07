@@ -27,7 +27,6 @@
   --ring: oklch(0.55 0.1 179);
   --sidebar: oklch(0.97 0.006 85);
   --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --scrollbar-thumb: oklch(0.87 0.006 286.3);
   --brand: oklch(0.48 0.095 179);
   --brand-soft: oklch(0.95 0.035 259);
   --brand-border: oklch(0.82 0.08 259);
@@ -59,7 +58,6 @@
   --ring: oklch(0.552 0.016 285.938);
   --sidebar: oklch(0.18 0.012 270);
   --sidebar-foreground: oklch(0.985 0 0);
-  --scrollbar-thumb: oklch(0.32 0.007 286.1);
   --brand: oklch(0.72 0.14 259);
   --brand-soft: oklch(0.27 0.05 259);
   --brand-border: oklch(0.47 0.09 259);
@@ -104,21 +102,6 @@
   html.dark {
     color-scheme: dark;
   }
-  /*
-   * 네이티브 select 의 펼침 목록은 컨트롤 자신의 background-color 로 칠해진다.
-   * appearance: none 을 쓰면 색상 스킴만으로는 어두워지지 않아, 배경이 투명한
-   * 셀렉트가 다크 모드에서 흰 팝업으로 뜬다. 컨트롤과 option 양쪽에 불투명
-   * 색을 명시해 두 테마 모두에서 같은 판을 쓰게 한다.
-   */
-  select {
-    background-color: var(--card);
-    color: var(--card-foreground);
-  }
-  select option,
-  select optgroup {
-    background-color: var(--card);
-    color: var(--card-foreground);
-  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family:
@@ -145,17 +128,14 @@
   }
 }
 
-/* thin scrollbars for the ops look */
+/* Hide scrollbar chrome while preserving wheel, touch, and keyboard scrolling. */
+* {
+  scrollbar-width: none;
+}
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 /* Terminal — agent status indicators. The dot itself is colored by `data-tone`;
@@ -288,16 +268,6 @@
   .term-dot-pulse::after {
     animation: none;
   }
-}
-
-/* Slim scrollbar inside preview blocks so they don't compete with content. */
-.term-pre::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.term-pre::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 3px;
 }
 
 /* Terminal — agent kind chips (claude / codex / shell). The chip itself is a
@@ -447,16 +417,6 @@
   }
 }
 
-/* Slim scrollbar inside preview blocks so they don't compete with content. */
-.term-pre::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.term-pre::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 3px;
-}
-
 /* Restored responsive widget board (6184877), adapted to workbench widgets. */
 .dashboard-grid .react-grid-layout {
   min-height: 1px;
@@ -474,6 +434,16 @@
 
 .dashboard-grid .widget-host {
   container-type: inline-size;
+}
+
+/* 위젯 카탈로그 미리보기 — 실제 위젯을 보드와 같은 종횡비 박스에 그려 보여준다. */
+.widget-catalog-preview {
+  pointer-events: none;
+  user-select: none;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--muted) 30%, transparent);
+  padding: 10px 12px 0;
 }
 
 .dashboard-grid .widget-overview-grid,

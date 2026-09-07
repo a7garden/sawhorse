@@ -1,3 +1,5 @@
+import { jobsForProject } from "@/features/workbench/project-scope";
+import type { Project } from "@/features/workbench/types";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -11,7 +13,6 @@ import {
   Pause,
   Play,
   Square,
-  ThumbsUp,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
@@ -23,7 +24,6 @@ import {
   type Job,
   type TaskRow,
 } from "@/lib/types";
-import { sddApi } from "@/features/workbench/api";
 import {
   STATUS_LABELS,
   type CalendarEvent,
@@ -213,24 +213,13 @@ function issueGroup(status: string) {
   );
 }
 
-/**
- * 이슈 위젯 — 개발 항목을 요청·승인의 축으로 요약한다. 이슈 화면으로 넘어가지
- * 않고도 승인 대기 줄을 비울 수 있어야 위젯이 제 몫을 한다. 데이터는 개발 항목
- * 하나이므로 여기서 승인한 값이 칸반과 이슈 화면에 그대로 보인다.
- */
-export function IssuesWidget({
-  work,
-  onOpen,
-  onChanged,
-}: {
+/** Summary of the work lifecycle. Decisions always open the shared work detail. */
+export function IssuesWidget({ work, onOpen }: {
   work: WorkItem[];
-  onOpen: () => void;
-  onChanged: () => Promise<void> | void;
+  onOpen: (id: string) => void;
 }) {
   const { t } = useTranslation("dashboard");
   const [filter, setFilter] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   const segments = useMemo(
     () =>
@@ -256,24 +245,6 @@ export function IssuesWidget({
       .slice(0, 8);
   }, [work, filter]);
 
-  async function move(item: WorkItem, patch: Partial<WorkItem>, note: string) {
-    setBusy(`${item.id}:${note}`);
-    setMessage(null);
-    try {
-      await sddApi.saveWork({
-        ...item,
-        ...patch,
-        updatedAt: new Date().toISOString(),
-      });
-      await onChanged();
-      setMessage(t(`issues.messages.${note}`, { id: item.id }));
-    } catch (error) {
-      setMessage(String(error));
-    } finally {
-      setBusy(null);
-    }
-  }
-
   if (!work.length)
     return <div className="wb-slot-empty">{t("issues.empty")}</div>;
 
@@ -285,22 +256,15 @@ export function IssuesWidget({
         active={filter}
         onPick={setFilter}
       />
-      {message && (
-        <p className="wb-widget-note" role="status">
-          {message}
-        </p>
-      )}
       <div className="wb-action-list">
         {rows.map((item) => {
           const group = issueGroup(item.status);
-          const canApprove = !item.approve && item.status === "review";
-          const canRun = item.approve && item.status === "ready";
           return (
             <div key={item.id} className="wb-action-row">
               <button
                 type="button"
                 className="wb-action-main"
-                onClick={onOpen}
+                onClick={() => onOpen(item.id)}
                 title={item.title}
               >
                 <span className={`wb-dot is-${group}`} />
@@ -314,39 +278,7 @@ export function IssuesWidget({
                 </span>
               </button>
               <div className="wb-action-buttons">
-                {canApprove && (
-                  <MiniAction
-                    label={t("issues.actions.approve")}
-                    primary
-                    icon={<ThumbsUp size={13} />}
-                    busy={busy === `${item.id}:approve`}
-                    onClick={() =>
-                      void move(
-                        item,
-                        { approve: true, status: "ready" },
-                        "approve",
-                      )
-                    }
-                  />
-                )}
-                {canRun && (
-                  <MiniAction
-                    label={t("issues.actions.run")}
-                    primary
-                    icon={<Play size={13} />}
-                    busy={busy === `${item.id}:start`}
-                    onClick={() =>
-                      void move(item, { status: "running" }, "start")
-                    }
-                  />
-                )}
-                {!canApprove && !canRun && (
-                  <MiniAction
-                    label={t("issues.actions.open")}
-                    icon={<CircleDot size={13} />}
-                    onClick={onOpen}
-                  />
-                )}
+                <MiniAction label={t("issues.actions.open")} icon={<CircleDot size={13} />} onClick={() => onOpen(item.id)} />
               </div>
             </div>
           );
@@ -385,9 +317,10 @@ function jobStatusLabel(status: string, t: TFunction) {
   return JOB_LABEL[status] ? t(`jobs.status.${status}`) : status;
 }
 
-export function JobsWidget({ onOpen }: { onOpen: () => void }) {
+export function JobsWidget({ onOpen, project }: { onOpen: () => void; project?: Project }) {
   const { t } = useTranslation("dashboard");
-  const jobs = useApp((s) => s.jobs);
+  const allJobs = useApp((s) => s.jobs);
+  const jobs = jobsForProject(allJobs, project);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const [busy, setBusy] = useState<string | null>(null);
   const live = jobs.filter(
@@ -849,6 +782,7 @@ export function ReadingWidget({ onOpen }: { onOpen: () => void }) {
  * 읽히게 하는 것이 이 위젯의 존재 이유다. 캘린더 화면 머리에서도 같은 것을 쓴다.
  */
 export function TodayActivity({
+  project,
   events,
   work,
   onOpenWork,
@@ -856,6 +790,7 @@ export function TodayActivity({
   onOpenJobs,
   compact,
 }: {
+  project?: Project;
   events: CalendarEvent[];
   work: WorkItem[];
   onOpenWork: (id: string) => void;
@@ -864,8 +799,10 @@ export function TodayActivity({
   compact?: boolean;
 }) {
   const { t } = useTranslation("dashboard");
-  const jobs = useApp((s) => s.jobs);
-  const todos = useApp((s) => s.todos);
+  const allJobs = useApp((s) => s.jobs);
+  const jobs = jobsForProject(allJobs, project);
+  const allTodos = useApp((s) => s.todos);
+  const todos = project ? null : allTodos;
   const refreshJobs = useApp((s) => s.refreshJobs);
   const refreshTodos = useApp((s) => s.refreshTodos);
   const [busyTodo, setBusyTodo] = useState<number | null>(null);
@@ -879,8 +816,8 @@ export function TodayActivity({
   useTicker(anyLive ? 1000 : 30000);
 
   useEffect(() => {
-    if (!todos) refreshTodos().catch(() => {});
-  }, [todos, refreshTodos]);
+    if (!project && !todos) refreshTodos().catch(() => {});
+  }, [project, todos, refreshTodos]);
   useEffect(() => {
     refreshJobs().catch(() => {});
   }, [refreshJobs]);
@@ -940,13 +877,13 @@ export function TodayActivity({
           <strong>{counts.failed}</strong>
           <span>{t("today.failed")}</span>
         </button>
-        <div className="wb-today-stat is-static">
+        {!project && <div className="wb-today-stat is-static">
           <strong>
             {todoDone}
             <small>/{todoTotal}</small>
           </strong>
           <span>{t("today.todos")}</span>
-        </div>
+        </div>}
       </div>
 
       <div className="wb-today-timeline">

@@ -27,11 +27,11 @@ interface DashboardLayoutState extends DashboardLayoutDocument {
   reset: () => void;
 }
 
-function defaultDocument(): DashboardLayoutDocument {
+function defaultDocument(defaultIds = DEFAULT_WIDGET_IDS): DashboardLayoutDocument {
   return {
     version: LAYOUT_VERSION,
-    enabled: [...DEFAULT_WIDGET_IDS],
-    layouts: createDefaultLayouts(),
+    enabled: [...defaultIds],
+    layouts: createDefaultLayouts(defaultIds),
   };
 }
 
@@ -188,30 +188,25 @@ function sanitizeLayouts(
   return result;
 }
 
-/** 옛 판을 읽어 고쳤는지. 첫 로드에서 바로 굳혀 다음 부팅이 다시 고치지 않게 한다. */
-let migratedOnLoad = false;
-
-function loadDocument(): DashboardLayoutDocument {
+function loadDocument(storageKey = STORAGE_KEY, defaultIds = DEFAULT_WIDGET_IDS): DashboardLayoutDocument {
   try {
     const parsed = JSON.parse(
-      localStorage.getItem(STORAGE_KEY) ?? "null",
+      localStorage.getItem(storageKey) ?? "null",
     ) as Partial<DashboardLayoutDocument> | null;
     if (!parsed || ![1, 2, 3, LAYOUT_VERSION].includes(parsed.version ?? 0)) {
       const legacy = JSON.parse(
-        localStorage.getItem("sawhorse.overview-slots") ?? "null",
+        (storageKey === STORAGE_KEY ? localStorage.getItem("sawhorse.overview-slots") : null) ?? "null",
       );
-      const next = defaultDocument();
+      const next = defaultDocument(defaultIds);
       if (legacy?.version === 1 && Array.isArray(legacy.enabled))
         next.enabled = migrateEnabled(legacy.enabled);
-      migratedOnLoad = true;
       return next;
     }
     const enabled = Array.isArray(parsed.enabled)
       ? migrateEnabled(parsed.enabled)
-      : [...DEFAULT_WIDGET_IDS];
+      : [...defaultIds];
     const migrated =
       parsed.version === 1 ? migrateV1Layouts(parsed.layouts) : parsed.layouts;
-    if (parsed.version !== LAYOUT_VERSION) migratedOnLoad = true;
     return {
       version: LAYOUT_VERSION,
       enabled: [...new Set(enabled)],
@@ -222,13 +217,13 @@ function loadDocument(): DashboardLayoutDocument {
       ),
     };
   } catch {
-    return defaultDocument();
+    return defaultDocument(defaultIds);
   }
 }
 
-function saveDocument(document: DashboardLayoutDocument) {
+function saveDocument(document: DashboardLayoutDocument, storageKey = STORAGE_KEY) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(document));
+    localStorage.setItem(storageKey, JSON.stringify(document));
   } catch {
     // UI preferences are best-effort and never block dashboard operation.
   }
@@ -262,46 +257,50 @@ function appendWidget(
   ];
 }
 
-const initial = loadDocument();
-if (migratedOnLoad) saveDocument(initial);
+export function createDashboardLayout(scope = "", defaultIds = DEFAULT_WIDGET_IDS) {
+  const storageKey = scope ? `${STORAGE_KEY}.project:${encodeURIComponent(scope)}` : STORAGE_KEY;
+  const initial = loadDocument(storageKey, defaultIds);
+  // Save normalized preferences once, including intentionally empty boards.
+  saveDocument(initial, storageKey);
+  return create<DashboardLayoutState>((set, get) => ({
+    ...initial,
+    setLayouts: (layouts) => {
+      const sanitized = sanitizeLayouts(layouts);
+      if (sameLayouts(get().layouts, sanitized)) return;
+      const next = { ...get(), layouts: sanitized };
+      set({ layouts: sanitized });
+      saveDocument({
+        version: LAYOUT_VERSION,
+        enabled: next.enabled,
+        layouts: sanitized,
+      }, storageKey);
+    },
+    setWidgetEnabled: (id, enabled) => {
+      const current = get();
+      const nextEnabled = enabled
+        ? [...new Set([...current.enabled, id])]
+        : current.enabled.filter((widgetId) => widgetId !== id);
+      const nextLayouts: ResponsiveLayouts<DashboardBreakpoint> = {};
+      for (const breakpoint of Object.keys(
+        DASHBOARD_COLS,
+      ) as DashboardBreakpoint[]) {
+        const layout = current.layouts[breakpoint] ?? [];
+        nextLayouts[breakpoint] = enabled
+          ? appendWidget(layout, id, breakpoint)
+          : layout.filter((item) => item.i !== id);
+      }
+      set({ enabled: nextEnabled, layouts: nextLayouts });
+      saveDocument({
+        version: LAYOUT_VERSION,
+        enabled: nextEnabled,
+        layouts: nextLayouts,
+      }, storageKey);
+    },
+    reset: () => {
+      const next = defaultDocument(defaultIds);
+      set(next);
+      saveDocument(next, storageKey);
+    },
+  }));
 
-export const useDashboardLayout = create<DashboardLayoutState>((set, get) => ({
-  ...initial,
-  setLayouts: (layouts) => {
-    const sanitized = sanitizeLayouts(layouts);
-    if (sameLayouts(get().layouts, sanitized)) return;
-    const next = { ...get(), layouts: sanitized };
-    set({ layouts: sanitized });
-    saveDocument({
-      version: LAYOUT_VERSION,
-      enabled: next.enabled,
-      layouts: sanitized,
-    });
-  },
-  setWidgetEnabled: (id, enabled) => {
-    const current = get();
-    const nextEnabled = enabled
-      ? [...new Set([...current.enabled, id])]
-      : current.enabled.filter((widgetId) => widgetId !== id);
-    const nextLayouts: ResponsiveLayouts<DashboardBreakpoint> = {};
-    for (const breakpoint of Object.keys(
-      DASHBOARD_COLS,
-    ) as DashboardBreakpoint[]) {
-      const layout = current.layouts[breakpoint] ?? [];
-      nextLayouts[breakpoint] = enabled
-        ? appendWidget(layout, id, breakpoint)
-        : layout.filter((item) => item.i !== id);
-    }
-    set({ enabled: nextEnabled, layouts: nextLayouts });
-    saveDocument({
-      version: LAYOUT_VERSION,
-      enabled: nextEnabled,
-      layouts: nextLayouts,
-    });
-  },
-  reset: () => {
-    const next = defaultDocument();
-    set(next);
-    saveDocument(next);
-  },
-}));
+}

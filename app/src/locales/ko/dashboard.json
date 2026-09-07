@@ -15,7 +15,7 @@
     "emptyTitle": "표시할 위젯이 없습니다.",
     "emptyHint": "상단의 위젯 추가 버튼에서 필요한 항목을 선택하세요.",
     "catalogTitle": "위젯 카탈로그",
-    "catalogIntro": "대시보드에 표시할 위젯을 선택합니다. 지표는 카드 한 장이 위젯 하나이므로 필요한 숫자만 골라 두고 크기와 자리도 따로 정할 수 있습니다. 다시 추가한 위젯은 보드의 마지막에 배치됩니다.",
+    "catalogIntro": "미리보기는 실제 데이터로 그린 위젯 모습입니다. 보고 마음에 드는 위젯을 켜세요. 지표는 카드 한 장이 위젯 하나이고, 다시 추가한 위젯은 보드의 마지막에 배치됩니다.",
     "searchPlaceholder": "위젯 이름이나 설명으로 찾기",
     "searchLabel": "위젯 검색",
     "noResults": "검색어와 맞는 위젯이 없습니다."
@@ -37,16 +37,16 @@
       "description": "오늘 실행·일정·할 일의 24시간 타임라인"
     },
     "next": {
-      "title": "다음 개발 항목",
+      "title": "다음 작업",
       "description": "기한과 우선순위순"
     },
     "issues": {
-      "title": "이슈",
+      "title": "작업 현황",
       "description": "상태 분포와 승인·설계·실행"
     },
     "due": {
       "title": "기한 임박",
-      "description": "일주일 안에 마감되는 개발 항목"
+      "description": "일주일 안에 마감되는 작업"
     },
     "events": {
       "title": "임박 일정",
@@ -58,7 +58,7 @@
     },
     "done": {
       "title": "최근 완료",
-      "description": "완료한 개발 항목과 결과"
+      "description": "완료한 작업과 결과"
     },
     "jobs": {
       "title": "실행 현황",
@@ -75,29 +75,73 @@
     "checklist": {
       "title": "할 일",
       "description": "오늘 일지에 적어 둔 체크리스트"
+    },
+    "projects": {
+      "title": "프로젝트 현황",
+      "description": "프로젝트별 진행·검토·보류"
+    },
+    "documents": {
+      "title": "작업 문서",
+      "description": "워크플로우별 산출물과 문서 열기"
     }
   },
   "metrics": {
-    "backlog": { "label": "제안", "hint": "아직 검토 전인 요청" },
-    "review": { "label": "승인 대기", "hint": "검토·승인을 기다리는 항목" },
-    "ready": { "label": "실행 대기", "hint": "바로 시작할 개발 항목" },
-    "running": { "label": "진행 중", "hint": "지금 손대고 있는 항목" },
-    "done": { "label": "완료", "hint": "축적된 결과" },
+    "backlog": {
+      "label": "제안",
+      "hint": "아직 검토 전인 요청"
+    },
+    "review": {
+      "label": "결과 검토",
+      "hint": "완료 기준의 충족 여부를 확인할 작업"
+    },
+    "ready": {
+      "label": "예정",
+      "hint": "바로 시작할 작업"
+    },
+    "running": {
+      "label": "진행 중",
+      "hint": "지금 손대고 있는 항목"
+    },
+    "done": {
+      "label": "완료",
+      "hint": "축적된 결과"
+    },
     "hold": {
       "label": "반려·취소",
       "hint": "받아들이지 않았거나 중간에 그만둔 항목"
     },
-    "overdue": { "label": "기한 초과", "hint": "마감일이 지난 항목" },
-    "due-today": { "label": "오늘 마감", "hint": "오늘까지 끝내야 하는 항목" },
-    "due-week": { "label": "7일 내 마감", "hint": "이번 주 안에 닥치는 기한" },
-    "assigned": { "label": "담당 지정", "hint": "담당자가 정해진 열린 항목" },
-    "needs-approval": {
-      "label": "승인 필요",
-      "hint": "승인 없이는 못 넘어가는 항목"
+    "overdue": {
+      "label": "기한 초과",
+      "hint": "마감일이 지난 항목"
     },
-    "blocked": { "label": "보류", "hint": "누군가 풀어줘야 움직이는 항목" },
-    "done-today": { "label": "오늘 완료", "hint": "오늘 끝낸 개발 항목" },
-    "done-week": { "label": "최근 7일 완료", "hint": "일주일간 처리한 양" },
+    "due-today": {
+      "label": "오늘 마감",
+      "hint": "오늘까지 끝내야 하는 항목"
+    },
+    "due-week": {
+      "label": "7일 내 마감",
+      "hint": "이번 주 안에 닥치는 기한"
+    },
+    "assigned": {
+      "label": "담당 지정",
+      "hint": "담당자가 정해진 열린 항목"
+    },
+    "needs-approval": {
+      "label": "결정 필요",
+      "hint": "요청 수락 또는 결과 인수를 기다리는 작업"
+    },
+    "blocked": {
+      "label": "보류",
+      "hint": "누군가 풀어줘야 움직이는 항목"
+    },
+    "done-today": {
+      "label": "오늘 완료",
+      "hint": "오늘 끝낸 작업"
+    },
+    "done-week": {
+      "label": "최근 7일 완료",
+      "hint": "일주일간 처리한 양"
+    },
     "jobs-live": {
       "label": "실행 중",
       "hint": "대기·실행 중인 에이전트 작업"
@@ -109,17 +153,17 @@
   },
   "issues": {
     "groups": {
-      "backlog": "제안",
-      "review": "승인 대기",
-      "ready": "실행 대기",
+      "backlog": "접수",
+      "review": "결과 검토",
+      "ready": "예정",
       "running": "진행",
       "done": "완료",
       "blocked": "보류",
       "dropped": "반려·취소"
     },
-    "distribution": "이슈 상태 분포",
-    "empty": "등록된 이슈가 없습니다.",
-    "emptyFilter": "선택한 구간에 해당하는 이슈가 없습니다.",
+    "distribution": "작업 상태 분포",
+    "empty": "등록된 작업이 없습니다.",
+    "emptyFilter": "선택한 구간에 해당하는 작업이 없습니다.",
     "actions": {
       "approve": "승인",
       "run": "실행",
