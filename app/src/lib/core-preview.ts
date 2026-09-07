@@ -1,4 +1,13 @@
-import type { NavEntry, PackInfo, PackView, TaskDef, TaskRow } from "./types";
+import type {
+  Job,
+  NavEntry,
+  PackInfo,
+  PackView,
+  TaskDef,
+  TaskRow,
+  TodoSections,
+} from "./types";
+import { jobRequestKey } from "./jobs";
 
 const PREVIEW_VAULT_VIEWS: Array<{
   packId: string;
@@ -19,6 +28,7 @@ const PREVIEW_VAULT_VIEWS: Array<{
         { field: "", source: "mtime", label: "수정", type: "date", width: 110 },
       ],
       groupBy: "",
+      selection: "none",
       actions: [],
       empty: "아직 일지가 없습니다.",
     },
@@ -34,9 +44,16 @@ const PREVIEW_VAULT_VIEWS: Array<{
       component: "",
       columns: [
         { field: "", source: "title", label: "개념", type: "text", width: 0 },
-        { field: "domain", source: "", label: "분류", type: "badge", width: 110 },
+        {
+          field: "domain",
+          source: "",
+          label: "분류",
+          type: "badge",
+          width: 110,
+        },
       ],
       groupBy: "domain",
+      selection: "none",
       actions: [],
       empty: "개념 문서가 아직 없습니다.",
     },
@@ -52,13 +69,18 @@ const PREVIEW_VAULT_VIEWS: Array<{
       component: "vault",
       columns: [],
       groupBy: "",
+      selection: "none",
       actions: [],
       empty: "",
     },
   },
 ];
 
-const previewPack = (id: string, name: string, views: PackView[]): PackInfo => ({
+const previewPack = (
+  id: string,
+  name: string,
+  views: PackView[],
+): PackInfo => ({
   id,
   name,
   version: "1.0.0",
@@ -115,6 +137,34 @@ export async function corePreview(
     JSON.parse(localStorage.getItem("sawhorse.preview-tasks") ?? "[]");
   const saveTasks = (rows: TaskRow[]) =>
     localStorage.setItem("sawhorse.preview-tasks", JSON.stringify(rows));
+  const readJobs = (): Job[] =>
+    JSON.parse(localStorage.getItem("sawhorse.preview-jobs") ?? "[]");
+  const saveJobs = (rows: Job[]) =>
+    localStorage.setItem("sawhorse.preview-jobs", JSON.stringify(rows));
+  const readTodos = (): TodoSections => {
+    const stored = localStorage.getItem("sawhorse.preview-todos");
+    if (stored) return JSON.parse(stored) as TodoSections;
+    const now = new Date();
+    return {
+      date: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`,
+      today: [
+        { index: 0, text: "작업대 위젯 훑어보기", checked: false },
+        { index: 1, text: "오늘 실행 결과 확인", checked: false },
+      ],
+      tomorrow: [],
+      fileExists: true,
+    };
+  };
+  const saveTodos = (view: TodoSections) =>
+    localStorage.setItem("sawhorse.preview-todos", JSON.stringify(view));
+  // 호스트가 붙이는 중복 판정 키를 브라우저 체험에서도 같은 규칙으로 만든다.
+  const previewTaskKey = (id: string): string => {
+    if (id === "core.promote") return jobRequestKey({ kind: "promote" });
+    const [packId, actionId] = id.split(".", 2);
+    return actionId
+      ? jobRequestKey({ kind: "action", packId, actionId })
+      : jobRequestKey({ kind: "task", taskId: id });
+  };
   const builtinTask = (id: string, title: string, prompt: string): TaskRow => ({
     def: {
       id,
@@ -130,6 +180,7 @@ export async function corePreview(
       updatedAt: "",
     },
     lastRun: null,
+    jobKey: previewTaskKey(id),
   });
   switch (command) {
     case "list_tasks":
@@ -153,7 +204,7 @@ export async function corePreview(
     case "save_task": {
       const def = structuredClone(args.def) as TaskDef;
       if (!def.title.trim() || !def.prompt.trim())
-        throw new Error("제목과 작업 내용을 입력하세요.");
+        throw new Error("제목과 실행 내용을 입력하세요.");
       def.id ||= crypto.randomUUID();
       def.createdAt ||= new Date().toISOString();
       def.updatedAt = new Date().toISOString();
@@ -161,7 +212,7 @@ export async function corePreview(
       const old = rows.find((r) => r.def.id === def.id);
       saveTasks([
         ...rows.filter((r) => r.def.id !== def.id),
-        { def, lastRun: old?.lastRun ?? null },
+        { def, lastRun: old?.lastRun ?? null, jobKey: previewTaskKey(def.id) },
       ]);
       return def;
     }
@@ -310,7 +361,11 @@ export async function corePreview(
       ];
     case "read_vault_note":
       return {
-        title: String(args.rel ?? "").split("/").pop()?.replace(/\.md$/, "") ?? "문서",
+        title:
+          String(args.rel ?? "")
+            .split("/")
+            .pop()
+            ?.replace(/\.md$/, "") ?? "문서",
         markdown: "# 미리보기 문서\n\n볼트에 저장된 문서입니다.",
       };
     case "query_pack_view": {
@@ -366,6 +421,80 @@ export async function corePreview(
       return { packs: previewPacks, broken: [] };
     case "list_nav":
       return previewNav;
+    // 작업대 위젯이 쓰는 읽기·쓰기. 브라우저 체험에서도 실행 타임라인과
+    // 체크리스트가 실제로 움직여야 위젯의 값어치를 확인할 수 있다.
+    case "list_jobs":
+      return readJobs();
+    case "enqueue_job": {
+      const req = (args.req ?? {}) as { kind?: string; ids?: string[] };
+      const kind = (req.kind ?? "action") as Job["kind"];
+      const job: Job = {
+        id: crypto.randomUUID(),
+        kind,
+        label: `${req.kind === "design" ? "설계" : "실행"} ${(req.ids ?? []).join(", ")}`,
+        dedupKey: jobRequestKey({ kind, ids: req.ids }),
+        status: "queued",
+        createdAtMs: Date.now(),
+        runner: "headless",
+      };
+      saveJobs([job, ...readJobs()].slice(0, 30));
+      return job;
+    }
+    case "run_task_now": {
+      const row = readTasks().find((r) => r.def.id === args.id);
+      const job: Job = {
+        id: crypto.randomUUID(),
+        kind: "task",
+        label: row?.def.title ?? String(args.id ?? "실행"),
+        dedupKey: previewTaskKey(String(args.id ?? "")),
+        status: "running",
+        createdAtMs: Date.now(),
+        startedAtMs: Date.now(),
+        runner: "headless",
+      };
+      saveJobs([job, ...readJobs()].slice(0, 30));
+      return job;
+    }
+    case "cancel_job":
+      saveJobs(
+        readJobs().map((job) =>
+          job.id === args.id
+            ? { ...job, status: "cancelled" as const, finishedAtMs: Date.now() }
+            : job,
+        ),
+      );
+      return;
+    case "list_todos":
+      return readTodos();
+    case "toggle_todo": {
+      const view = readTodos();
+      const section = args.section === "tomorrow" ? "tomorrow" : "today";
+      view[section] = view[section].map((item) =>
+        item.index === args.index
+          ? { ...item, checked: Boolean(args.checked) }
+          : item,
+      );
+      saveTodos(view);
+      return;
+    }
+    case "approve_issue":
+    case "approve_note": {
+      const rows = JSON.parse(
+        localStorage.getItem("sawhorse.preview-issues") ?? "[]",
+      ) as Array<{ path: string; status: string; approve: boolean }>;
+      localStorage.setItem(
+        "sawhorse.preview-issues",
+        JSON.stringify(
+          rows.map((row) =>
+            row.path === args.path
+              ? { ...row, approve: true, status: "승인" }
+              : row,
+          ),
+        ),
+      );
+      return;
+    }
+    case "list_missed":
     case "list_schedules":
     case "list_extension_packages":
     case "ingestion_list":

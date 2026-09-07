@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Layout, LayoutItem, ResponsiveLayouts } from "react-grid-layout";
 import {
   DASHBOARD_COLS,
+  DEFAULT_METRIC_WIDGET_IDS,
   DEFAULT_WIDGET_IDS,
   WIDGET_BY_ID,
   createDefaultLayouts,
@@ -10,7 +11,7 @@ import {
 } from "./registry";
 
 const STORAGE_KEY = "sawhorse.dashboard-layout";
-const LAYOUT_VERSION = 3;
+const LAYOUT_VERSION = 4;
 const LEGACY_ROW_PITCH = 60;
 const ROW_PITCH = 42;
 
@@ -41,19 +42,75 @@ function isWidgetId(value: unknown): value is DashboardWidgetId {
   );
 }
 
+/** 이름만 바뀐 위젯. 자리도 크기도 그대로 이어받는다. */
+const LEGACY_ALIASES: Record<string, DashboardWidgetId> = {
+  todos: "next",
+  routines: "schedules",
+  operations: "events",
+};
+/** 묶음이던 핵심 지표 위젯이 서 있던 자리 — 여기서 낱개 카드로 펼친다. */
+const LEGACY_METRIC_IDS = ["metrics", "overview"];
+
+/** 켜져 있던 위젯 목록을 현재 어휘로 옮긴다. 묶음 지표는 낱개 네 장이 된다. */
+function migrateEnabled(value: unknown[]): DashboardWidgetId[] {
+  return value.flatMap((id) => {
+    if (typeof id !== "string") return [];
+    if (LEGACY_METRIC_IDS.includes(id)) return DEFAULT_METRIC_WIDGET_IDS;
+    const mapped = LEGACY_ALIASES[id] ?? id;
+    return isWidgetId(mapped) ? [mapped] : [];
+  });
+}
+
+/**
+ * v3까지의 핵심 지표 한 칸을 낱개 지표 위젯 네 칸으로 편다. 원래 칸이 있던 줄에서
+ * 시작해 폭이 모자라면 다음 줄로 접고, 아래에 있던 위젯은 세로 압축이 밀어낸다.
+ */
+function expandLegacyMetrics(value: unknown): unknown {
+  if (!value || typeof value !== "object") return value;
+  const source = value as Record<string, unknown>;
+  const result: Record<string, unknown> = { ...source };
+  for (const breakpoint of Object.keys(
+    DASHBOARD_COLS,
+  ) as DashboardBreakpoint[]) {
+    const raw = source[breakpoint];
+    if (!Array.isArray(raw)) continue;
+    const index = raw.findIndex(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        LEGACY_METRIC_IDS.includes((item as { i?: string }).i ?? ""),
+    );
+    if (index < 0) continue;
+    const base = raw[index] as { y?: number };
+    const cols = DASHBOARD_COLS[breakpoint];
+    let x = 0;
+    let y = typeof base.y === "number" ? Math.max(0, Math.round(base.y)) : 0;
+    const cards = DEFAULT_METRIC_WIDGET_IDS.map((id) => {
+      const size = WIDGET_BY_ID[id].defaultLayout[breakpoint];
+      if (x > 0 && x + size.w > cols) {
+        x = 0;
+        y += size.h;
+      }
+      const card = { ...size, i: id, x, y };
+      x += size.w;
+      return card;
+    });
+    result[breakpoint] = [
+      ...raw.slice(0, index),
+      ...cards,
+      ...raw.slice(index + 1),
+    ];
+  }
+  return result;
+}
+
 function sanitizeItem(
   item: unknown,
   breakpoint: DashboardBreakpoint,
 ): LayoutItem | null {
   if (!item || typeof item !== "object") return null;
   const value = { ...item } as Partial<LayoutItem>;
-  const aliases: Record<string, DashboardWidgetId> = {
-    overview: "metrics",
-    todos: "next",
-    routines: "schedules",
-    operations: "events",
-  };
-  if (value.i && aliases[value.i]) value.i = aliases[value.i];
+  if (value.i && LEGACY_ALIASES[value.i]) value.i = LEGACY_ALIASES[value.i];
   if (!isWidgetId(value.i)) return null;
   if (
     ![value.x, value.y, value.w, value.h].every(
@@ -131,42 +188,37 @@ function sanitizeLayouts(
   return result;
 }
 
+/** 옛 판을 읽어 고쳤는지. 첫 로드에서 바로 굳혀 다음 부팅이 다시 고치지 않게 한다. */
+let migratedOnLoad = false;
+
 function loadDocument(): DashboardLayoutDocument {
   try {
     const parsed = JSON.parse(
       localStorage.getItem(STORAGE_KEY) ?? "null",
     ) as Partial<DashboardLayoutDocument> | null;
-    if (!parsed || ![1, 2, LAYOUT_VERSION].includes(parsed.version ?? 0)) {
+    if (!parsed || ![1, 2, 3, LAYOUT_VERSION].includes(parsed.version ?? 0)) {
       const legacy = JSON.parse(
         localStorage.getItem("sawhorse.overview-slots") ?? "null",
       );
       const next = defaultDocument();
       if (legacy?.version === 1 && Array.isArray(legacy.enabled))
-        next.enabled = legacy.enabled.filter(isWidgetId);
+        next.enabled = migrateEnabled(legacy.enabled);
+      migratedOnLoad = true;
       return next;
     }
     const enabled = Array.isArray(parsed.enabled)
-      ? parsed.enabled
-          .map(
-            (id) =>
-              (
-                ({
-                  overview: "metrics",
-                  todos: "next",
-                  routines: "schedules",
-                  operations: "events",
-                }) as Record<string, string>
-              )[id] ?? id,
-          )
-          .filter(isWidgetId)
+      ? migrateEnabled(parsed.enabled)
       : [...DEFAULT_WIDGET_IDS];
+    const migrated =
+      parsed.version === 1 ? migrateV1Layouts(parsed.layouts) : parsed.layouts;
+    if (parsed.version !== LAYOUT_VERSION) migratedOnLoad = true;
     return {
       version: LAYOUT_VERSION,
       enabled: [...new Set(enabled)],
       layouts: sanitizeLayouts(
-        parsed.version === 1
-          ? migrateV1Layouts(parsed.layouts)
-          : parsed.layouts,
+        (parsed.version ?? 0) < LAYOUT_VERSION
+          ? expandLegacyMetrics(migrated)
+          : migrated,
       ),
     };
   } catch {
@@ -211,6 +263,7 @@ function appendWidget(
 }
 
 const initial = loadDocument();
+if (migratedOnLoad) saveDocument(initial);
 
 export const useDashboardLayout = create<DashboardLayoutState>((set, get) => ({
   ...initial,

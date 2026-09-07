@@ -1,0 +1,11 @@
+{
+  "id": "generate",
+  "label": "선택 목업 만들기",
+  "description": "체크한 이슈만 현행 화면과 대조해 화면 맥락별 개선 목업으로 만듭니다.",
+  "prompt": "/{{ns}}:mockup-generator generate --project {{projectId}} --selection {{selectionMode}} --ids {{ids}}",
+  "cwd": "workspace",
+  "params": [
+    { "key": "ids", "type": "list", "label": "대상 이슈", "required": true }
+  ],
+  "featured": false
+}

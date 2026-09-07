@@ -2,6 +2,7 @@
 import {
   ARTIFACTS,
   STAGES,
+  isClosedStatus,
   type Document,
   type WorkItem,
   type WorkspaceSnapshot,
@@ -14,9 +15,9 @@ const previewWorkflows: WorkflowDefinition[] = [
     definitionVersion: 1,
     id: "sdd-main",
     label: "기본 SDD",
-    description: "의도에서 운영 학습까지 이어지는 기본 흐름",
-    version: "1.0.0",
-    entry: "plan",
+    description: "의도에서 배포까지 이어지는 기본 흐름",
+    version: "1.1.0",
+    entry: "intent",
     artifacts: ARTIFACTS.map((role) => ({
       role,
       label: role,
@@ -25,15 +26,21 @@ const previewWorkflows: WorkflowDefinition[] = [
     })),
     nodes: STAGES.map((id, index) => ({
       id,
-      label: ["의도", "설계", "구현", "검증", "배포", "학습"][index],
-      kind: index === 0 || index === 5 ? "artifact" : "agent",
-      artifactRole: index === 0 ? "intent" : index === 5 ? "learning" : null,
-      actionRef: index === 0 || index === 5 ? null : `sdd-${id}`,
+      label: ["의도", "설계", "구현", "검증", "배포"][index],
+      kind: index === 0 ? "artifact" : "agent",
+      artifactRole: index === 0 ? "intent" : null,
+      actionRef: index === 0 ? null : `sdd-${id}`,
       workflowRef: null,
       decision: null,
       inputs: index ? [ARTIFACTS[index - 1]] : [],
       outputs: [ARTIFACTS[index]],
-      allowedRoles: ["research", "planner", "implementer", "verifier", "reviewer"],
+      allowedRoles: [
+        "research",
+        "planner",
+        "implementer",
+        "verifier",
+        "reviewer",
+      ],
       instructions: "현재 노드의 산출물과 근거를 작성합니다.",
       requiresCompletedDependencies: index >= 2,
     })),
@@ -90,8 +97,29 @@ const previewWorkflows: WorkflowDefinition[] = [
       actionRef: index > 0 && index < 5 ? `tdd-${id}` : null,
       workflowRef: null,
       decision: null,
-      inputs: index ? [["test-intent", "red-evidence", "green-evidence", "refactor", "regression"][index - 1]] : [],
-      outputs: index < 5 ? [["test-intent", "red-evidence", "green-evidence", "refactor", "regression"][index]] : [],
+      inputs: index
+        ? [
+            [
+              "test-intent",
+              "red-evidence",
+              "green-evidence",
+              "refactor",
+              "regression",
+            ][index - 1],
+          ]
+        : [],
+      outputs:
+        index < 5
+          ? [
+              [
+                "test-intent",
+                "red-evidence",
+                "green-evidence",
+                "refactor",
+                "regression",
+              ][index],
+            ]
+          : [],
       allowedRoles: ["implementer", "verifier"],
       instructions: "현재 TDD 증거를 실제 실행 결과와 함께 기록합니다.",
       requiresCompletedDependencies: index > 0,
@@ -102,7 +130,13 @@ const previewWorkflows: WorkflowDefinition[] = [
       ["green", "refactor"],
       ["refactor", "verify"],
       ["verify", "done"],
-    ].map(([from, to]) => ({ from, to, on: "approved", condition: null, loopRef: null })),
+    ].map(([from, to]) => ({
+      from,
+      to,
+      on: "approved",
+      condition: null,
+      loopRef: null,
+    })),
     loops: [{ id: "tdd-iteration", maxIterations: 50, onLimit: "pause" }],
   },
 ];
@@ -138,10 +172,25 @@ function work(
     decisions: [],
     artifacts: [...ARTIFACTS],
     workflowId: "sdd-main",
-    workflowVersion: "1.0.0",
-    workflowDigest: "preview-sdd-main-1.0.0",
+    workflowVersion: "1.1.0",
+    workflowDigest: "preview-sdd-main-1.1.0",
     workflowInstanceId: null,
     activeNodes: [],
+    issueType: offset < 2 ? "기능" : "작업",
+    executionType: offset === 1 ? "문서" : "코드",
+    labels: [],
+    assignees: [],
+    milestone: "",
+    approvalRequired: true,
+    approve: status === "running" || status === "done",
+    approved: status === "running" || status === "done" ? date(-1) : "",
+    state: isClosedStatus(status) ? "closed" : "open",
+    closed: status === "done" ? date(-1) : "",
+    githubRepo: "",
+    githubNumber: "",
+    githubUrl: "",
+    githubState: "",
+    githubUpdated: "",
   };
 }
 const seed: WorkspaceSnapshot = {
@@ -161,8 +210,8 @@ const seed: WorkspaceSnapshot = {
       defaultAgent: "codex",
       defaultModel: "",
       workflowId: "sdd-main",
-      workflowVersion: "1.0.0",
-      workflowDigest: "preview-sdd-main-1.0.0",
+      workflowVersion: "1.1.0",
+      workflowDigest: "preview-sdd-main-1.1.0",
     },
     {
       id: "herdr",
@@ -174,8 +223,8 @@ const seed: WorkspaceSnapshot = {
       defaultAgent: "codex",
       defaultModel: "",
       workflowId: "sdd-main",
-      workflowVersion: "1.0.0",
-      workflowDigest: "preview-sdd-main-1.0.0",
+      workflowVersion: "1.1.0",
+      workflowDigest: "preview-sdd-main-1.1.0",
     },
     {
       id: "knowledge",
@@ -187,8 +236,8 @@ const seed: WorkspaceSnapshot = {
       defaultAgent: "claude",
       defaultModel: "",
       workflowId: "sdd-main",
-      workflowVersion: "1.0.0",
-      workflowDigest: "preview-sdd-main-1.0.0",
+      workflowVersion: "1.1.0",
+      workflowDigest: "preview-sdd-main-1.1.0",
     },
   ],
   work: [
@@ -219,7 +268,7 @@ const seed: WorkspaceSnapshot = {
     work(
       "work-search",
       "프로젝트를 넘나드는 지식 검색",
-      "plan",
+      "intent",
       "backlog",
       "knowledge",
       7,
@@ -227,7 +276,7 @@ const seed: WorkspaceSnapshot = {
     work(
       "work-calendar",
       "마일스톤과 개발 일정 연결",
-      "plan",
+      "intent",
       "backlog",
       "sawhorse",
       5,
@@ -243,7 +292,7 @@ const seed: WorkspaceSnapshot = {
     work(
       "work-release",
       "첫 작업대 배포 기록",
-      "maintain",
+      "deploy",
       "done",
       "sawhorse",
       -2,
@@ -294,7 +343,7 @@ function doc(workId: string, artifact: string): Document {
   const key = `${workId}/${artifact}`;
   if (!state.documents[key]) {
     const w = state.snapshot.work.find((w) => w.id === workId);
-    if (!w) throw new Error("작업을 찾을 수 없습니다.");
+    if (!w) throw new Error("개발 항목을 찾을 수 없습니다.");
     state.documents[key] = {
       workId,
       artifact: artifact as Document["artifact"],
@@ -316,12 +365,19 @@ export async function previewInvoke(
     case "sdd_snapshot":
     case "workflow_snapshot":
       return structuredClone(s);
+    // 브라우저 체험에는 레거시 볼트가 없다. 이관할 것이 없다는 사실 자체가 답이다.
+    case "issue_migration_plan":
+      return [];
+    case "issue_migrate":
+      return { migrated: [], skipped: [] };
     case "workflow_catalog":
       return structuredClone(s.workflows);
     case "workflow_validate":
       return { valid: true, issues: [] };
     case "workflow_activate": {
-      const project = s.projects.find((candidate) => candidate.id === id || candidate.id === args.projectId);
+      const project = s.projects.find(
+        (candidate) => candidate.id === id || candidate.id === args.projectId,
+      );
       if (!project) throw new Error("프로젝트를 찾을 수 없습니다.");
       project.workflowId = String(args.workflowId);
       project.workflowVersion = String(args.workflowVersion);
@@ -349,14 +405,16 @@ export async function previewInvoke(
     case "sdd_save_work": {
       const w = structuredClone(args.input) as WorkItem;
       w.id ||= crypto.randomUUID();
-      if (!w.title.trim()) throw new Error("작업 제목을 입력하세요.");
+      if (!w.title.trim()) throw new Error("개발 항목 이름을 입력하세요.");
       const i = s.work.findIndex((v) => v.id === w.id);
       if (i >= 0 && s.work[i].stage !== w.stage)
         throw new Error("단계 전환 버튼을 사용하세요.");
       w.createdAt ||= now();
       w.updatedAt = now();
       if (i < 0) {
-        const project = s.projects.find((project) => project.id === w.projectId);
+        const project = s.projects.find(
+          (project) => project.id === w.projectId,
+        );
         w.workflowId = project?.workflowId ?? "sdd-main";
         w.workflowVersion = project?.workflowVersion ?? "1.0.0";
         w.workflowDigest = `preview-${w.workflowId}-${w.workflowVersion}`;
@@ -367,10 +425,10 @@ export async function previewInvoke(
             candidate.id === w.workflowId &&
             candidate.version === w.workflowVersion,
         );
-        w.stage = definition?.entry ?? "plan";
-        w.artifacts = definition?.artifacts.map((artifact) => artifact.role) ?? [
-          ...ARTIFACTS,
-        ];
+        w.stage = definition?.entry ?? "intent";
+        w.artifacts = definition?.artifacts.map(
+          (artifact) => artifact.role,
+        ) ?? [...ARTIFACTS];
         s.work.unshift(w);
       } else s.work[i] = w;
       save();
@@ -378,14 +436,18 @@ export async function previewInvoke(
     }
     case "sdd_transition": {
       const w = s.work.find((v) => v.id === id);
-      if (!w) throw new Error("작업을 찾을 수 없습니다.");
+      if (!w) throw new Error("개발 항목을 찾을 수 없습니다.");
       const next = args.stage as WorkItem["stage"];
       const definition = s.workflows.find(
         (candidate) =>
           candidate.id === w.workflowId &&
           candidate.version === w.workflowVersion,
       );
-      if (!definition?.edges.some((edge) => edge.from === w.stage && edge.to === next))
+      if (
+        !definition?.edges.some(
+          (edge) => edge.from === w.stage && edge.to === next,
+        )
+      )
         throw new Error("현재 워크플로우에 정의된 전환이 아닙니다.");
       w.stage = next;
       w.updatedAt = now();
@@ -406,7 +468,7 @@ export async function previewInvoke(
         note: string;
       };
       const w = s.work.find((candidate) => candidate.id === input.workId);
-      if (!w) throw new Error("작업을 찾을 수 없습니다.");
+      if (!w) throw new Error("개발 항목을 찾을 수 없습니다.");
       if (w.stage !== input.expectedNodeId)
         throw new Error("워크플로우 노드가 다른 변경으로 이동했습니다.");
       const definition = s.workflows.find(
@@ -469,9 +531,9 @@ export async function previewInvoke(
               candidate.id === w.workflowId &&
               candidate.version === w.workflowVersion,
           );
-          return (definition?.artifacts.map((artifact) => artifact.role) ?? ARTIFACTS).map(
-            (artifact) => doc(w.id, artifact),
-          );
+          return (
+            definition?.artifacts.map((artifact) => artifact.role) ?? ARTIFACTS
+          ).map((artifact) => doc(w.id, artifact));
         })
         .filter((d) => d.markdown.toLowerCase().includes(q))
         .map((d) => ({

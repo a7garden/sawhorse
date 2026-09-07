@@ -180,7 +180,7 @@ export default function OnboardingPage({
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>작업</CardTitle>
+                <CardTitle>실행</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {visibleJobs.map((item) => (

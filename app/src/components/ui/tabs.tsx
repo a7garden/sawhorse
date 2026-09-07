@@ -12,7 +12,12 @@ export function Tabs<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn("inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5", className)}>
+    <div
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-lg bg-muted p-0.5",
+        className,
+      )}
+    >
       {tabs.map((t) => (
         <button
           key={t.value}
@@ -27,7 +32,9 @@ export function Tabs<T extends string>({
         >
           {t.label}
           {t.count != null && (
-            <span className="text-[10px] tabular-nums opacity-70">{t.count}</span>
+            <span className="text-[10px] tabular-nums opacity-70">
+              {t.count}
+            </span>
           )}
         </button>
       ))}

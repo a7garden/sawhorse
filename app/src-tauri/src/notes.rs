@@ -1,7 +1,7 @@
 // notes.rs — 선언형 노트 질의 엔진. 팩의 뷰가 쓰는 유일한 데이터 소스.
 //
 // 호스트는 필드의 **의미를 모른다**. 프론트매터를 그대로 실어 보내고, 무엇을 어떤 라벨로
-// 보여줄지는 뷰가 정한다. 이 무지가 팩 아키텍처의 조건이다 — 호스트가 `status` 나 `사업` 을
+// 보여줄지는 뷰가 정한다. 이 무지가 팩 아키텍처의 조건이다 — 호스트가 `status` 나 `프로젝트` 를
 // 알기 시작하면 그 순간 다시 SI 전용 앱이 된다.
 //
 // 글로브는 `*` 한 단계만 지원한다. `**` 를 허용하면 큰 볼트에서 UI 가 멈추고, 그 비용을
@@ -44,7 +44,7 @@ pub struct Sort {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct NoteQuery {
-    /// 작업공간 기준 폴더 글로브. 예: "일지", "사업/*/이슈"
+    /// 작업공간 기준 폴더 글로브. 예: "일지", "프로젝트/*/이슈"
     pub folders: Vec<String>,
     /// 제외할 파일명 글로브. 예: "*목록.md"
     pub exclude: Vec<String>,
@@ -375,13 +375,13 @@ mod tests {
         let root = tempdir("glob");
         note(
             &root,
-            "사업/알파/이슈/A-1.md",
+            "프로젝트/알파/이슈/A-1.md",
             "---\ntype: 이슈\n---\n# 첫째\n",
         );
-        note(&root, "사업/베타/이슈/B-1.md", "---\ntype: 이슈\n---\n");
-        note(&root, "사업/베타/회의/M-1.md", "---\ntype: 회의\n---\n");
+        note(&root, "프로젝트/베타/이슈/B-1.md", "---\ntype: 이슈\n---\n");
+        note(&root, "프로젝트/베타/회의/M-1.md", "---\ntype: 회의\n---\n");
 
-        let dirs = expand_folders(&root, "사업/*/이슈");
+        let dirs = expand_folders(&root, "프로젝트/*/이슈");
         assert_eq!(dirs.len(), 2);
         assert!(expand_folders(&root, "../바깥").is_empty());
         assert!(expand_folders(&root, "없는폴더").is_empty());
@@ -393,23 +393,23 @@ mod tests {
         let root = tempdir("query");
         note(
             &root,
-            "사업/알파/이슈/A-1.md",
+            "프로젝트/알파/이슈/A-1.md",
             "---\ntype: 이슈\nstatus: 승인대기\n---\n\n# 로그인 오류\n본문",
         );
         note(
             &root,
-            "사업/알파/이슈/A-2.md",
+            "프로젝트/알파/이슈/A-2.md",
             "---\ntype: 이슈\nstatus: 완료\n---\n",
         );
         note(
             &root,
-            "사업/알파/이슈/알파 문제목록.md",
+            "프로젝트/알파/이슈/알파 문제목록.md",
             "---\ntype: 이슈\n---\n",
         );
-        note(&root, "사업/알파/이슈/메모.md", "프론트매터 없음");
+        note(&root, "프로젝트/알파/이슈/메모.md", "프론트매터 없음");
 
         let q = NoteQuery {
-            folders: vec!["사업/*/이슈".into()],
+            folders: vec!["프로젝트/*/이슈".into()],
             exclude: vec!["*목록.md".into()],
             predicates: vec![Predicate {
                 field: "type".into(),
@@ -422,8 +422,8 @@ mod tests {
         assert_eq!(r.rows.len(), 2, "목록 파일과 프론트매터 없는 노트는 빠진다");
         assert_eq!(r.rows[0].title, "로그인 오류");
         assert_eq!(r.rows[1].title, "A-2", "헤딩이 없으면 파일명");
-        assert_eq!(r.rows[0].rel, "사업/알파/이슈/A-1.md");
-        assert_eq!(r.folders, vec!["사업/알파/이슈"]);
+        assert_eq!(r.rows[0].rel, "프로젝트/알파/이슈/A-1.md");
+        assert_eq!(r.folders, vec!["프로젝트/알파/이슈"]);
         fs::remove_dir_all(&root).unwrap();
     }
 

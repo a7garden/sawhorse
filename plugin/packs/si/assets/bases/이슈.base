@@ -8,13 +8,13 @@ filters:
 properties:
   file.name: { displayName: 이슈 }
   id: { displayName: ID }
-  issue_type: { displayName: 유형 }
-  execution_type: { displayName: 실행 유형 }
+  issue_type: { displayName: 요청 유형 }
+  execution_type: { displayName: 처리 유형 }
   labels: { displayName: 레이블 }
   milestone: { displayName: 마일스톤 }
   priority: { displayName: 중요도 }
-  status: { displayName: 워크플로 }
-  state: { displayName: 상태 }
+  status: { displayName: 상태 }
+  state: { displayName: 열림/닫힘 }
   assignees: { displayName: 담당 }
   due: { displayName: 목표일 }
   url: { displayName: 화면 }

@@ -96,7 +96,7 @@ export default function ScheduleCard({ onChange }: { onChange?: () => void }) {
         <p className="text-[11px] text-muted-foreground">
           예약은 확장이 선언하고, 여기서 바꾼 값이 그 위에 덮입니다. 시각이
           지나도 앱이 꺼져 있었다면 자동 실행하지 않고 홈에 알립니다. 에이전트가
-          만든 작업은 예약 페이지에서 다룹니다.
+          만든 자동화 작업는 자동화의 예약과 반복에서 다룹니다.
         </p>
       </CardContent>
     </Card>

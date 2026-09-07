@@ -18,7 +18,7 @@ node ${CLAUDE_PLUGIN_ROOT}/packs/si/skills/improve-excel/scripts/improve-xlsx.mj
   --prev "<직전에 보고한 xlsx>"
 ```
 
-볼트 경로와 기본 사업은 `~/.claude/sawhorse/config.json` 에서 자동으로 읽는다. 다른 사업이면 `--project` 로 바꾼다.
+볼트 경로와 기본 프로젝트는 `~/.claude/sawhorse/config.json` 에서 자동으로 읽는다. 다른 프로젝트면 `--project` 로 바꾼다.
 
 `--prev` 는 **두 번째 회차부터 반드시 붙인다.** 빠뜨리면 지난 회차에 손으로 채운 담당자·요구자가 날아간다.
 스크립트는 몇 칸을 이어받았고 어떤 칸이 비었는지 보고한다. **그 보고를 사용자에게 그대로 전한다.**
@@ -26,7 +26,7 @@ node ${CLAUDE_PLUGIN_ROOT}/packs/si/skills/improve-excel/scripts/improve-xlsx.mj
 | 옵션 | 설명 |
 |---|---|
 | `--vault <경로>` | 생략하면 config 의 `vaultPath` |
-| `--project <이름>` | 생략하면 config 의 `improve.defaultProject`, 그것도 없으면 사업 전체 |
+| `--project <이름>` | 생략하면 config 의 `improve.defaultProject`, 그것도 없으면 프로젝트 전체 |
 | `--out <경로>` | 만들 xlsx (필수) |
 | `--prev <경로>` | 직전 회차 xlsx — 수기 열을 이어받는다 |
 | `--owner <이름>` | 담당자 기본값 (`--prev` 에 값이 없는 행에만) |

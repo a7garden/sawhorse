@@ -23,10 +23,20 @@ function StatusDot({ ok, warn }: { ok: boolean; warn?: boolean }) {
 
 /** https 링크를 기본 브라우저로 연다. 링크를 모르는 항목은 버튼 자체를 내지 않는다 —
  *  엉뚱한 곳으로 보내느니 아무 데도 보내지 않는 편이 낫다. */
-export function InstallButton({ url, label = "설치" }: { url: string; label?: string }) {
+export function InstallButton({
+  url,
+  label = "설치",
+}: {
+  url: string;
+  label?: string;
+}) {
   if (!url) return null;
   return (
-    <Button size="xs" variant="outline" onClick={() => void api.openExternal(url).catch(() => {})}>
+    <Button
+      size="xs"
+      variant="outline"
+      onClick={() => void api.openExternal(url).catch(() => {})}
+    >
       {label} <ExternalLink className="size-3" />
     </Button>
   );
@@ -86,18 +96,29 @@ export default function DetectRow({
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-[13px] font-semibold">{name}</span>
           {badge}
-          {version && <span className="truncate text-[11px] text-muted-foreground">{version}</span>}
+          {version && (
+            <span className="truncate text-[11px] text-muted-foreground">
+              {version}
+            </span>
+          )}
         </div>
         {detail && (
-          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">{detail}</p>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+            {detail}
+          </p>
         )}
         {path && (
-          <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground" title={path}>
+          <p
+            className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground"
+            title={path}
+          >
             {path}
           </p>
         )}
         {hint && (
-          <p className="mt-0.5 font-mono text-[10px] leading-relaxed text-muted-foreground">{hint}</p>
+          <p className="mt-0.5 font-mono text-[10px] leading-relaxed text-muted-foreground">
+            {hint}
+          </p>
         )}
       </div>
     </>
@@ -107,7 +128,8 @@ export default function DetectRow({
     <div
       className={cn(
         "flex items-start gap-2.5 rounded-lg border p-2.5 transition-colors",
-        selectable && (selected ? "border-primary bg-accent/40" : "hover:bg-accent/30"),
+        selectable &&
+          (selected ? "border-primary bg-accent/40" : "hover:bg-accent/30"),
       )}
     >
       {selectable ? (
@@ -122,7 +144,9 @@ export default function DetectRow({
       ) : (
         main
       )}
-      {action && <div className="flex shrink-0 items-center gap-1.5 pl-1">{action}</div>}
+      {action && (
+        <div className="flex shrink-0 items-center gap-1.5 pl-1">{action}</div>
+      )}
     </div>
   );
 }

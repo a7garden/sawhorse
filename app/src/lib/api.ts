@@ -78,6 +78,9 @@ export const api = {
   listImprovements: (project?: string): Promise<IssueNote[]> =>
     invoke("list_improvements", { project: project ?? null }),
   readNote: (path: string): Promise<NoteView> => invoke("read_note", { path }),
+  /** Embedded image in a note, returned as a data: URL (webviews cannot read files). */
+  readNoteAsset: (notePath: string, src: string): Promise<string> =>
+    invoke("read_note_asset", { notePath, src }),
   approveNote: (path: string): Promise<void> =>
     invoke("approve_note", { path }),
   approveIssue: (path: string): Promise<void> =>

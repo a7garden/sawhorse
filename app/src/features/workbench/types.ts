@@ -1,11 +1,4 @@
-export const STAGES = [
-  "plan",
-  "design",
-  "build",
-  "test",
-  "deploy",
-  "maintain",
-] as const;
+export const STAGES = ["intent", "design", "build", "test", "deploy"] as const;
 /** Node IDs are supplied by the pinned workflow; STAGES is the legacy SDD fallback. */
 export type Stage = string;
 export const STATUSES = [
@@ -15,8 +8,24 @@ export const STATUSES = [
   "review",
   "blocked",
   "done",
+  // 반려와 취소는 다른 사건이다. 반려는 요청을 받아들이지 않은 것이고, 취소는
+  // 하기로 정한 뒤 그만둔 것이다. 둘 다 닫힘이지만 함께 세면 안 된다.
+  "rejected",
+  "cancelled",
 ] as const;
 export type WorkStatus = (typeof STATUSES)[number];
+/**
+ * 닫힘을 뜻하는 상태. Rust 의 `CLOSED_STATUSES` 와 같은 목록이며 `state` 와
+ * `closed` 가 여기서 파생한다. 열림 판정을 손으로 나열하지 말고 이 함수를 쓴다 —
+ * 종료 상태를 하나 더할 때 빠뜨리는 곳이 생긴다.
+ */
+export const CLOSED_STATUSES: readonly WorkStatus[] = [
+  "done",
+  "rejected",
+  "cancelled",
+];
+export const isClosedStatus = (status: string) =>
+  (CLOSED_STATUSES as readonly string[]).includes(status);
 export type Priority = "urgent" | "high" | "normal" | "low";
 export const ARTIFACTS = [
   "intent",
@@ -24,27 +33,53 @@ export const ARTIFACTS = [
   "plan",
   "verification",
   "release",
-  "learning",
 ] as const;
 /** Artifact roles are supplied by the pinned workflow; ARTIFACTS is the legacy fallback. */
 export type ArtifactKind = string;
 export type WorkbenchView =
-  "overview" | "board" | "calendar" | "harness" | "knowledge" | "projects";
+  | "overview"
+  | "board"
+  | "calendar"
+  | "harness"
+  | "knowledge"
+  | "projects"
+  // 개발 항목을 요청·승인의 축으로 본 화면. 저장소도 상태 어휘도 board와 같다.
+  | "issues";
+export const ISSUE_TYPES = ["버그", "기능", "작업", "질문"] as const;
+export type IssueType = (typeof ISSUE_TYPES)[number];
+export const EXECUTION_TYPES = [
+  "코드",
+  "문서",
+  "조사",
+  "협의",
+  "결정",
+] as const;
+export type ExecutionType = (typeof EXECUTION_TYPES)[number];
 export const STAGE_LABELS: Record<string, string> = {
-  plan: "의도",
+  intent: "의도",
   design: "설계",
   build: "구현",
   test: "검증",
   deploy: "배포",
+  // 이슈 흐름의 단계. 요청·설계·수행 셋이 실제로 쓰는 어휘다.
+  request: "요청",
+  resolve: "수행",
+  // 옛 판을 고정한 항목이 아직 이 노드 id 를 쓴다.
+  plan: "의도",
+  execute: "수행",
   maintain: "학습",
 };
 export const STATUS_LABELS: Record<WorkStatus, string> = {
   backlog: "백로그",
-  ready: "준비",
-  running: "진행",
+  ready: "예정",
+  running: "진행중",
   review: "검토",
-  blocked: "막힘",
+  // 막힘이 아니라 보류다. 볼트의 이슈·개선·마일스톤·프로젝트 템플릿이 모두
+  // 보류를 쓴다.
+  blocked: "보류",
   done: "완료",
+  rejected: "반려",
+  cancelled: "취소",
 };
 export const PRIORITY_LABELS: Record<Priority, string> = {
   urgent: "긴급",
@@ -55,10 +90,11 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 export const ARTIFACT_LABELS: Record<string, string> = {
   intent: "의도",
   spec: "명세",
-  plan: "실행 계획",
+  plan: "계획",
   verification: "검증 근거",
   release: "배포 기록",
-  learning: "운영·학습",
+  // 옛 판을 고정한 항목이 아직 이 문서를 가질 수 있다.
+  learning: "학습 기록",
 };
 export interface Project {
   id: string;
@@ -100,6 +136,43 @@ export interface WorkItem {
   workflowDigest: string;
   workflowInstanceId: string | null;
   activeNodes: RuntimeActiveNode[];
+  // 이슈 축. 별도 저장소가 아니라 같은 개발 항목의 요청·승인·외부 연결 정보다.
+  issueType: string;
+  executionType: string;
+  labels: string[];
+  assignees: string[];
+  /** 소속 마일스톤. `calendar/<id>.md`의 `kind: milestone` 일정 ID. */
+  milestone: string;
+  approvalRequired: boolean;
+  approve: boolean;
+  approved: string;
+  /** status에서 파생한다. 직접 쓰지 않는다. */
+  state: string;
+  closed: string;
+  githubRepo: string;
+  githubNumber: string;
+  githubUrl: string;
+  githubState: string;
+  githubUpdated: string;
+}
+/** 레거시 이슈 노트 한 건의 이관 계획. `blocked`가 비어 있을 때만 옮길 수 있다. */
+export interface IssueMigrationItem {
+  path: string;
+  project: string;
+  issueId: string;
+  title: string;
+  workId: string;
+  status: string;
+  issueType: string;
+  executionType: string;
+  milestone: string;
+  legacy: boolean;
+  blocked: string;
+  migrated: boolean;
+}
+export interface IssueMigrationReport {
+  migrated: IssueMigrationItem[];
+  skipped: IssueMigrationItem[];
 }
 export interface CalendarEvent {
   id: string;
@@ -176,6 +249,14 @@ export interface HarnessRun {
   createdAt: string;
   updatedAt: string;
   error: string | null;
+  /** 에이전트 자신의 세션 id. 닫힌 화면을 같은 대화로 다시 여는 열쇠다. */
+  agentSession: string | null;
+  /** 실행이 끝나 herdr 화면을 닫은 시각. 비어 있으면 화면이 살아 있다. */
+  tabClosedAt: string | null;
+  /** 화면을 닫기 직전에 갈무리한 에이전트의 마지막 보고. */
+  finalReport: string | null;
+  /** 세션 이어하기가 가능한 실행인지 (세션 id 가 기록된 claude 실행). */
+  resumable: boolean;
 }
 
 export type WorkflowNodeKind =
@@ -312,7 +393,8 @@ export interface WorkflowInstance {
   workflowId: string;
   workflowVersion: string;
   workflowDigest: string;
-  status: "running" | "waiting" | "completed" | "paused" | "failed" | "cancelled";
+  status:
+    "running" | "waiting" | "completed" | "paused" | "failed" | "cancelled";
   inputDigest: string;
   activeNodes: RuntimeActiveNode[];
   nodeRuns: WorkflowNodeRun[];

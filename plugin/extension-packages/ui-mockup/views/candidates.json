@@ -1,0 +1,29 @@
+{
+  "id": "mockup-candidates",
+  "label": "개선 목업",
+  "icon": "panels-top-left",
+  "group": "work",
+  "type": "table",
+  "component": "",
+  "query": {
+    "folders": ["work/*"],
+    "exclude": [],
+    "where": [
+      { "field": "issueType", "op": "in", "value": ["버그", "기능", "작업"] },
+      { "field": "workflowId", "op": "ne", "value": "mockup-review" }
+    ],
+    "sort": { "field": "priority", "source": "", "desc": true },
+    "limit": 2000
+  },
+  "columns": [
+    { "field": "id", "label": "ID", "source": "", "type": "text", "width": 120 },
+    { "field": "title", "label": "기능 제안", "source": "", "type": "text", "width": 0 },
+    { "field": "issueType", "label": "유형", "source": "", "type": "badge", "width": 80 },
+    { "field": "status", "label": "상태", "source": "", "type": "badge", "width": 90 },
+    { "field": "labels", "label": "레이블", "source": "", "type": "list", "width": 180 }
+  ],
+  "groupBy": "status",
+  "selection": "multiple",
+  "actions": ["generate"],
+  "empty": "목업 대상으로 선택할 이슈가 없습니다. 먼저 프로젝트에 기능·버그·작업 이슈를 등록하세요."
+}

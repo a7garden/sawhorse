@@ -28,23 +28,23 @@ description: Use when setting up or troubleshooting sawhorse — "sawhorse 설�
 
 ## 2. 코드 실행 대상 프로젝트 (선택)
 
-`/sawhorse:issues`에서 **코드형 이슈를 실행**할 때만 필요하다. 문서·조사·협의·결정 이슈는 볼트만 있으면 관리할 수 있다. 현재 호환 설정 키는 `improve.projects.<사업명>`이므로 그대로 사용한다. 블록이 없으면 **"코드 실행 이슈를 쓰실 거면 프로젝트 경로를 등록할 수 있습니다"** 라고 한 줄 안내만 하고, 사용자가 원할 때만 아래를 수집한다. 경로는 PC마다 다르므로 반드시 물어보고 추정해서 쓰지 않는다.
+`/sawhorse:issues`에서 **코드형 이슈를 실행**할 때만 필요하다. 문서·조사·협의·결정 이슈는 볼트만 있으면 관리할 수 있다. 현재 호환 설정 키는 `improve.projects.<프로젝트명>`이므로 그대로 사용한다. 블록이 없으면 **"코드 실행 이슈를 쓰실 거면 프로젝트 경로를 등록할 수 있습니다"** 라고 한 줄 안내만 하고, 사용자가 원할 때만 아래를 수집한다. 경로는 PC마다 다르므로 반드시 물어보고 추정해서 쓰지 않는다.
 
 | 항목 | 뜻 | 기본값 |
 |---|---|---|
 | `path` | 코드베이스 절대경로 | (필수, 실존 확인) |
 | `workBranch` | **코드 이슈 작업 전용 단일 브랜치.** 관련 커밋이 여기 쌓인다 | (필수, 반드시 물어본다 — 추정·자동 생성 금지) |
 | `portableBase` | 나중에 이 브랜치를 다른 브랜치로 옮길 때의 기준 (예: `origin/dev`) | 생략 가능 |
-| `idPrefix` | 문제 ID 접두어 (예: `FDR` → `FDR-001`) | 사업명 이니셜로 제안 |
+| `idPrefix` | 문제 ID 접두어 (예: `FDR` → `FDR-001`) | 프로젝트명 이니셜로 제안 |
 | `verify` | 컴파일 검증 명령 | 매니페스트로 추정해 제안 (`pom.xml` → `mvn -o -q compile`, `package.json` → `npm run build`) |
 
 ```json
 {
   "vaultPath": "C:\\Users\\me\\Documents\\WorkVault",
   "improve": {
-    "defaultProject": "<사업명>",
+    "defaultProject": "<프로젝트명>",
     "projects": {
-      "<사업명>": {
+      "<프로젝트명>": {
         "path": "D:\\workspace\\myproj",
         "workBranch": "improve/fdr",
         "portableBase": "origin/dev",
@@ -56,7 +56,7 @@ description: Use when setting up or troubleshooting sawhorse — "sawhorse 설�
 }
 ```
 
-- 사업이 하나뿐이면 `defaultProject` 를 그 값으로 자동 설정한다.
+- 프로젝트가 하나뿐이면 `defaultProject` 를 그 값으로 자동 설정한다.
 - 등록된 프로젝트는 진단 표에 `path` 실존, git 저장소 여부, `.svn` 공존 여부를 함께 보고한다. `.svn` 이 있으면 "SVN 작업복사본입니다 — issues 스킬은 svn 상태 변경 명령을 실행하지 않습니다" 를 덧붙인다.
 - **브랜치를 만들지 않는다.** `git branch --list <workBranch>` 로 존재 여부만 확인한다. 없으면 값은 그대로 기록하되 아래를 안내하고 사용자가 직접 만들게 한다:
   - `workBranch` 는 **남의 변경이 섞이지 않은 지점에서 분기**해 두어야 나중에 통째로 다른 브랜치에 옮길 수 있다.
@@ -81,4 +81,4 @@ description: Use when setting up or troubleshooting sawhorse — "sawhorse 설�
 ## 4. 마무리
 
 - 진단 표와 수행한 설정 변경을 요약 보고한다.
-- vault 구조(`템플릿/`, `일지/`, `사업/`, `개념/`, `첨부/`)가 없으면 `/sawhorse:init-vault` 실행을 제안한다.
+- vault 구조(`템플릿/`, `일지/`, `프로젝트/`, `개념/`, `첨부/`)가 없으면 `/sawhorse:init-vault` 실행을 제안한다.

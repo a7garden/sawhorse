@@ -356,6 +356,26 @@ pub fn run_scheduled_now(
     Err(format!("알 수 없는 예약: {key}"))
 }
 
+/// 이 키로 "지금 실행"하면 만들어질 잡 요청. 화면이 중복 판정 키를 계산할 때 쓴다 —
+/// `run_scheduled_now` 과 같은 순서로 찾아야 버튼 상태와 실제 실행이 어긋나지 않는다.
+pub fn request_for_key(key: &str) -> Option<JobRequest> {
+    let view = config::load_view();
+    if let Some(entry) = entries(&view)
+        .iter()
+        .find(|e| e.key == key || e.action_id == key)
+    {
+        return Some(request_for(entry));
+    }
+    if let Ok(request) = manual_task_request(&crate::tasks::workbench_root(), key) {
+        return Some(request);
+    }
+    LEGACY_ROUTINES.contains(&key).then(|| JobRequest {
+        kind: "routine".into(),
+        routine: Some(key.into()),
+        ..Default::default()
+    })
+}
+
 fn manual_task_request(root: &std::path::Path, id: &str) -> Result<JobRequest, String> {
     crate::tasks::get_task(root, id)?;
     Ok(JobRequest {
@@ -412,6 +432,8 @@ pub struct ScheduleView {
     pub time: String,
     pub enabled: bool,
     pub last_run: Option<String>,
+    /// 지금 실행했을 때 생길 잡의 중복 판정 키 — 화면이 "실행 중" 버튼을 찾는 데 쓴다.
+    pub job_key: String,
 }
 
 /// 설정 화면의 예약 편집기가 실제로 바꿀 수 있는 엔트리인가.
@@ -431,6 +453,7 @@ pub fn list_schedules(state: &AppState) -> Vec<ScheduleView> {
         .filter(editable_in_settings)
         .map(|e| ScheduleView {
             last_run: last_run_of(state, &e),
+            job_key: crate::jobs::dedup_key(&request_for(&e)),
             key: e.key,
             pack_id: e.pack_id,
             action_id: e.action_id,

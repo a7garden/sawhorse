@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject } from "react";
+import { useMemo, useState, type ReactNode, type RefObject } from "react";
 import { GripHorizontal, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import {
   Responsive,
@@ -9,6 +9,7 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { useDashboardLayout } from "./layout-store";
@@ -26,6 +27,21 @@ const BREAKPOINT_LABEL: Record<DashboardBreakpoint, string> = {
   md: "중간 화면",
   sm: "좁은 화면",
 };
+
+/** 카탈로그가 길어졌으므로 카테고리로 묶는다. 등록 순서를 그대로 쓴다. */
+function groupWidgets(query: string) {
+  const needle = query.trim().toLowerCase();
+  const groups: { category: string; widgets: typeof WIDGET_REGISTRY }[] = [];
+  for (const widget of WIDGET_REGISTRY) {
+    const haystack =
+      widget.title + " " + widget.description + " " + widget.category;
+    if (needle && !haystack.toLowerCase().includes(needle)) continue;
+    const group = groups.find((entry) => entry.category === widget.category);
+    if (group) group.widgets.push(widget);
+    else groups.push({ category: widget.category, widgets: [widget] });
+  }
+  return groups;
+}
 
 export function DashboardBoard({
   editing,
@@ -45,6 +61,8 @@ export function DashboardBoard({
     (state) => state.setWidgetEnabled,
   );
   const reset = useDashboardLayout((state) => state.reset);
+  const [query, setQuery] = useState("");
+  const groups = useMemo(() => groupWidgets(query), [query]);
   const { width, containerRef, mounted } = useContainerWidth({
     measureBeforeMount: true,
   });
@@ -178,41 +196,68 @@ export function DashboardBoard({
         className="max-w-xl"
       >
         <p className="mb-3 text-xs text-muted-foreground">
-          대시보드에 표시할 위젯을 선택합니다. 다시 추가한 위젯은 보드의
-          마지막에 배치됩니다.
+          대시보드에 표시할 위젯을 선택합니다. 지표는 카드 한 장이 위젯
+          하나이므로 필요한 숫자만 골라 두고 크기와 자리도 따로 정할 수
+          있습니다. 다시 추가한 위젯은 보드의 마지막에 배치됩니다.
         </p>
-        <div className="space-y-2">
-          {WIDGET_REGISTRY.map((widget) => {
-            const checked = enabled.includes(widget.id);
-            return (
-              <div
-                key={widget.id}
-                className="flex items-center gap-3 rounded-xl border p-3"
-              >
-                <label
-                  className="min-w-0 flex-1 cursor-pointer"
-                  htmlFor={`widget-${widget.id}`}
+        <Input
+          className="mb-3"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="위젯 이름이나 설명으로 찾기"
+          aria-label="위젯 검색"
+        />
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+          {groups.map((group) => (
+            <section key={group.category} className="space-y-2">
+              <h3 className="sticky top-0 z-10 bg-card/95 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground">
+                {group.category}
+                <span className="ml-1.5 font-normal">
+                  {
+                    group.widgets.filter((widget) =>
+                      enabled.includes(widget.id),
+                    ).length
+                  }
+                  /{group.widgets.length}
+                </span>
+              </h3>
+              {group.widgets.map((widget) => (
+                <div
+                  key={widget.id}
+                  className="flex items-center gap-3 rounded-xl border p-3"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold">
-                      {widget.title}
-                    </span>
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
-                      {widget.category}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {widget.description}
-                  </p>
-                </label>
-                <Switch
-                  id={`widget-${widget.id}`}
-                  checked={checked}
-                  onCheckedChange={(next) => setWidgetEnabled(widget.id, next)}
-                />
-              </div>
-            );
-          })}
+                  <label
+                    className="min-w-0 flex-1 cursor-pointer"
+                    htmlFor={`widget-${widget.id}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-[13px] font-semibold">
+                        {widget.title}
+                      </span>
+                      <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
+                        {widget.category}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {widget.description}
+                    </p>
+                  </label>
+                  <Switch
+                    id={`widget-${widget.id}`}
+                    checked={enabled.includes(widget.id)}
+                    onCheckedChange={(next) =>
+                      setWidgetEnabled(widget.id, next)
+                    }
+                  />
+                </div>
+              ))}
+            </section>
+          ))}
+          {groups.length === 0 && (
+            <p className="rounded-xl border border-dashed p-6 text-center text-xs text-muted-foreground">
+              검색어와 맞는 위젯이 없습니다.
+            </p>
+          )}
         </div>
       </Dialog>
     </>

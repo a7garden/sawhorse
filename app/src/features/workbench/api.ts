@@ -4,6 +4,8 @@ import type {
   CalendarEvent,
   Document,
   HarnessRun,
+  IssueMigrationItem,
+  IssueMigrationReport,
   LaunchInput,
   Project,
   SearchHit,
@@ -65,6 +67,9 @@ export const sddApi = {
   refreshRun: (id: string): Promise<HarnessRun> =>
     call("sdd_refresh_run", { id }),
   stopRun: (id: string): Promise<HarnessRun> => call("sdd_stop_run", { id }),
+  /** 닫힌 실행의 에이전트 세션을 herdr 에서 같은 대화로 다시 연다. */
+  resumeRun: (id: string): Promise<HarnessRun> =>
+    call("sdd_resume_run", { id }),
   continueRun: (id: string, instructions: string): Promise<HarnessRun> =>
     call("sdd_continue_run", { id, instructions }),
   runKey: (id: string, key: string): Promise<HarnessRun> =>
@@ -81,6 +86,11 @@ export const sddApi = {
         )[key] ?? key,
     }),
   runOutput: (id: string): Promise<string> => call("sdd_run_output", { id }),
+  /** 아직 개발 항목으로 옮기지 않은 레거시 이슈 노트. 아무것도 쓰지 않는다. */
+  issueMigrationPlan: (): Promise<IssueMigrationItem[]> =>
+    call("issue_migration_plan"),
+  issueMigrate: (paths: string[]): Promise<IssueMigrationReport> =>
+    call("issue_migrate", { paths }),
 };
 
 /** General workflow API. The sddApi methods above remain compatibility wrappers. */

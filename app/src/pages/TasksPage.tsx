@@ -1,10 +1,12 @@
 import ScheduleCard from "./settings/ScheduleCard";
-// TasksPage — 승인대기 요청, 예약 작업(builtin + 사용자), 수동 작업을 관리한다.
+// TasksPage — 자동화의 자동화 작업(TaskDef)를 관리한다: 승인대기 요청, 예약된 정의,
+// 필요할 때 직접 실행하는 정의. 개발 보드의 개발 항목(WorkItem)과는 다른 개념이다.
 import { useCallback, useEffect, useState } from "react";
-import { ClipboardCopy, Pencil, Play, Plus, Trash2 } from "lucide-react";
+import { ClipboardCopy, Pencil, Plus, Trash2 } from "lucide-react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api, EVENTS } from "@/lib/api";
 import { useApp } from "@/lib/store";
+import { RunButton } from "@/components/RunButton";
 import type {
   PackAction,
   PackInfo,
@@ -133,7 +135,7 @@ export default function TasksPage({
 
   return (
     <div>
-      <PageHeader title={mode === "library" ? "실행할 작업" : "예약과 반복"}>
+      <PageHeader title={mode === "library" ? "자동화 작업" : "예약과 반복"}>
         <Button
           size="sm"
           onClick={() => {
@@ -144,7 +146,7 @@ export default function TasksPage({
             }
           }}
         >
-          <Plus /> {mode === "library" ? "작업 추가" : "기존 작업 예약"}
+          <Plus /> {mode === "library" ? "정의 추가" : "기존 정의 예약"}
         </Button>
       </PageHeader>
 
@@ -254,7 +256,7 @@ export default function TasksPage({
         <Card>
           <CardHeader>
             <CardTitle>
-              {mode === "library" ? "등록된 작업" : "실행 일정"}
+              {mode === "library" ? "등록된 자동화 작업" : "실행 일정"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -282,8 +284,8 @@ export default function TasksPage({
             {(mode === "library" ? all : scheduled).length === 0 && (
               <Empty>
                 {mode === "library"
-                  ? "실행할 내용을 작업으로 추가하세요."
-                  : "예약된 작업이 없습니다. 기존 작업을 선택해 실행 시간을 지정하세요."}
+                  ? "실행할 내용을 정의로 추가하세요."
+                  : "예약된 정의가 없습니다. 기존 정의를 선택해 실행 시간을 지정하세요."}
               </Empty>
             )}
           </CardContent>
@@ -291,7 +293,7 @@ export default function TasksPage({
         {mode === "schedules" && (
           <details className="rounded-lg border p-3">
             <summary className="cursor-pointer text-sm">
-              내장 작업의 실행 시간 설정
+              기본 제공 정의의 실행 시간 설정
             </summary>
             <ScheduleCard onChange={() => void refresh()} />
           </details>
@@ -301,10 +303,10 @@ export default function TasksPage({
       <Dialog
         open={choosing}
         onClose={() => setChoosing(false)}
-        title="예약할 작업 선택"
+        title="예약할 자동화 작업 선택"
       >
         <p className="mb-3 text-xs text-muted-foreground">
-          작업 내용은 그대로 두고 실행 시간만 설정합니다.
+          실행 내용은 그대로 두고 시간만 설정합니다.
         </p>
         {view?.tasks.map((row) => (
           <button
@@ -323,7 +325,7 @@ export default function TasksPage({
           </button>
         ))}
         {!view?.tasks.length && (
-          <Empty>먼저 ‘실행할 작업’에서 작업을 추가하세요.</Empty>
+          <Empty>먼저 ‘자동화 작업’에서 정의를 추가하세요.</Empty>
         )}
       </Dialog>
       <TaskDialog
@@ -388,7 +390,7 @@ function TaskLine({
           <span className="truncate text-[13px] font-semibold">{t.title}</span>
           {t.builtin && (
             <Badge variant="outline">
-              {t.source.kind === "pack" || packName ? "확장 작업" : "기본 작업"}
+              {t.source.kind === "pack" || packName ? "확장 정의" : "기본 정의"}
             </Badge>
           )}
           {hasParameters && <Badge variant="secondary">입력 후 실행</Badge>}
@@ -404,21 +406,19 @@ function TaskLine({
         <Switch
           checked={t.enabled}
           disabled={busy}
-          onCheckedChange={(v) =>
-            void guard(() => api.setTaskEnabled(t.id, v))
-          }
+          onCheckedChange={(v) => void guard(() => api.setTaskEnabled(t.id, v))}
         />
       )}
-      <Button
-        size="icon"
+      <RunButton
+        size="xs"
         variant="ghost"
-        aria-label="지금 실행"
+        label=""
+        ariaLabel="지금 실행"
         title="지금 실행"
+        jobKey={row.jobKey}
         disabled={busy}
-        onClick={onRun}
-      >
-        <Play />
-      </Button>
+        onRun={onRun}
+      />
       {onEdit && (
         <Button
           size="icon"
@@ -471,7 +471,7 @@ function PackActionTaskDialog({
     <Dialog
       open={target !== null}
       onClose={onClose}
-      title={target ? `${target.action.label} · 실행` : "작업 실행"}
+      title={target ? `${target.action.label} · 실행` : "정의 실행"}
     >
       {target && (
         <form
@@ -636,7 +636,7 @@ function TaskDialog({
   const askAgent = () => {
     const scheduleText =
       kind === "none"
-        ? "예약 없이 수동 작업으로"
+        ? "예약 없이 직접 실행으로"
         : kind === "once"
           ? `${date} ${time}에 1회 실행`
           : `${kind === "daily" ? "매일" : "평일마다"} ${time}에 실행`;
@@ -650,10 +650,10 @@ function TaskDialog({
       onClose={() => setOpen(false)}
       title={
         scheduleOnly
-          ? `${editing?.title ?? "작업"} · 실행 시간`
+          ? `${editing?.title ?? "자동화 작업"} · 실행 시간`
           : editing
-            ? "작업 편집"
-            : "작업 추가"
+            ? "자동화 작업 편집"
+            : "자동화 작업 추가"
       }
     >
       <div className="space-y-3">
@@ -665,14 +665,14 @@ function TaskDialog({
         {!scheduleOnly && (
           <>
             <Input
-              aria-label="작업 제목"
+              aria-label="자동화 작업 제목"
               placeholder="제목"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
             <Textarea
               className="min-h-40"
-              aria-label="작업 내용"
+              aria-label="실행 내용"
               placeholder="어떤 일을 실행할까요? 필요한 자료와 원하는 결과를 적어 주세요."
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}

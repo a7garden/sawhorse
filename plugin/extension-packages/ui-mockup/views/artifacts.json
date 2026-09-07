@@ -1,0 +1,29 @@
+{
+  "id": "mockup-artifacts",
+  "label": "목업 산출물",
+  "icon": "images",
+  "group": "work",
+  "type": "table",
+  "component": "",
+  "query": {
+    "folders": ["work/*"],
+    "exclude": [],
+    "where": [
+      { "field": "type", "op": "eq", "value": "mockup" }
+    ],
+    "sort": { "field": "createdAt", "source": "", "desc": true },
+    "limit": 500
+  },
+  "columns": [
+    { "field": "title", "label": "목업", "source": "", "type": "text", "width": 0 },
+    { "field": "revision", "label": "Rev", "source": "", "type": "text", "width": 55 },
+    { "field": "screenCount", "label": "화면", "source": "", "type": "text", "width": 70 },
+    { "field": "sourceIssueIds", "label": "대상 이슈", "source": "", "type": "list", "width": 220 },
+    { "field": "parentMockupId", "label": "이전 목업", "source": "", "type": "text", "width": 150 },
+    { "field": "createdAt", "label": "생성", "source": "", "type": "date", "width": 140 }
+  ],
+  "groupBy": "",
+  "selection": "multiple",
+  "actions": ["process-feedback"],
+  "empty": "아직 만든 목업 산출물이 없습니다. 개선 목업 화면에서 이슈를 체크해 생성하세요."
+}

@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "author": "won",
   "icon": "briefcase",
-  "description": "Obsidian 볼트를 지식베이스로 쓰는 SI 업무 방식 전체 — 일과 루틴, 업무일지·보고, 위키(개념 문서), 사업 문서화, 이슈·마일스톤 워크플로, 발주처 보고용 엑셀. 설정은 config.json 의 vaultPath·improve·dashboard 블록을 그대로 쓴다(팩 이전부터 있던 정본이라 packs.settings 로 옮기지 않는다 — 상태가 두 곳에 있으면 반드시 어긋난다).",
+  "description": "Obsidian 볼트를 지식베이스로 쓰는 SI 업무 방식 전체 — 일과 루틴, 업무일지·보고, 위키(개념 문서), 프로젝트 문서화, 이슈·마일스톤 워크플로, 발주처 보고용 엑셀. 설정은 config.json 의 vaultPath·improve·dashboard 블록을 그대로 쓴다(팩 이전부터 있던 정본이라 packs.settings 로 옮기지 않는다 — 상태가 두 곳에 있으면 반드시 어긋난다).",
 
   "skills": [
     "morning", "lunch", "evening",
@@ -18,14 +18,14 @@
     "folders": [
       "템플릿",
       "일지",
-      "사업",
+      "프로젝트",
       "개념",
       "첨부/스크린샷",
       "첨부/다이어그램"
     ],
     "files": [
       { "src": "templates/일지.md", "dest": "템플릿/일지.md" },
-      { "src": "templates/사업.md", "dest": "템플릿/사업.md" },
+      { "src": "templates/프로젝트.md", "dest": "템플릿/프로젝트.md" },
       { "src": "templates/개념.md", "dest": "템플릿/개념.md" },
       { "src": "templates/기능분석.md", "dest": "템플릿/기능분석.md" },
       { "src": "templates/회의.md", "dest": "템플릿/회의.md" },
@@ -34,9 +34,9 @@
       { "src": "templates/개선.md", "dest": "템플릿/개선.md" },
       { "src": "assets/bases/일지.base", "dest": "일지/일지.base" },
       { "src": "assets/bases/개념.base", "dest": "개념/개념.base" },
-      { "src": "assets/bases/사업.base", "dest": "사업/사업.base" },
-      { "src": "assets/bases/이슈.base", "dest": "사업/이슈.base" },
-      { "src": "assets/bases/마일스톤.base", "dest": "사업/마일스톤.base" },
+      { "src": "assets/bases/프로젝트.base", "dest": "프로젝트/프로젝트.base" },
+      { "src": "assets/bases/이슈.base", "dest": "프로젝트/이슈.base" },
+      { "src": "assets/bases/마일스톤.base", "dest": "프로젝트/마일스톤.base" },
       { "src": "assets/대시보드.md", "dest": "대시보드.md" }
     ]
   },
@@ -93,7 +93,7 @@
       "cwd": "project",
       "params": [
         { "key": "ids", "type": "list", "label": "이슈 ID (비우면 전체)" },
-        { "key": "project", "type": "project", "label": "사업" }
+        { "key": "project", "type": "project", "label": "프로젝트" }
       ]
     },
     {
@@ -104,7 +104,7 @@
       "cwd": "project",
       "params": [
         { "key": "ids", "type": "list", "label": "이슈 ID (비우면 승인된 전체)" },
-        { "key": "project", "type": "project", "label": "사업" }
+        { "key": "project", "type": "project", "label": "프로젝트" }
       ]
     },
     {
@@ -125,8 +125,8 @@
     },
     {
       "id": "project-doc",
-      "label": "사업 등록",
-      "description": "제안서(docx)와 코드베이스 경로로 사업 허브 문서를 만든다",
+      "label": "프로젝트 등록",
+      "description": "제안서(docx)와 코드베이스 경로로 프로젝트 허브 문서를 만든다",
       "prompt": "/{{ns}}:project-doc {{source}}",
       "cwd": "workspace",
       "params": [{ "key": "source", "type": "text", "label": "제안서 경로 / 코드베이스 경로" }]
@@ -139,7 +139,7 @@
       "cwd": "project",
       "params": [
         { "key": "target", "type": "text", "label": "문서화할 범위 (선택)" },
-        { "key": "project", "type": "project", "label": "사업" }
+        { "key": "project", "type": "project", "label": "프로젝트" }
       ]
     },
     {

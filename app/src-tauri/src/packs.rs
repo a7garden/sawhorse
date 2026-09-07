@@ -97,6 +97,7 @@ pub const VIEW_KINDS: [&str; 10] = [
     "graph",
     "metrics",
 ];
+pub const VIEW_SELECTION_MODES: [&str; 2] = ["none", "multiple"];
 /// 사이드바 섹션 태그. 호스트가 섹션 목록과 순서를 소유하고, 팩 뷰는 이 중 하나를 고른다.
 /// 빈 값이면 사이드바 맨 아래 「기타」 섹션으로 밀린다.
 pub const VIEW_GROUPS: [&str; 5] = ["work", "execution", "vault", "reading", "automation"];
@@ -174,6 +175,8 @@ pub struct PackView {
     pub query: NoteQuery,
     pub columns: Vec<ViewColumn>,
     pub group_by: String,
+    /// none | multiple. multiple은 table/review-queue에서 체크한 행만 액션에 전달한다.
+    pub selection: String,
     /// 이 뷰에서 실행할 수 있는 액션 id 목록
     pub actions: Vec<String>,
     pub empty: String,
@@ -284,6 +287,18 @@ impl PackManifest {
             }
             if !v.group.is_empty() && !VIEW_GROUPS.contains(&v.group.as_str()) {
                 return Err(format!("알 수 없는 뷰 그룹: {}", v.group));
+            }
+            if v.selection.is_empty() {
+                v.selection = "none".into();
+            }
+            if !VIEW_SELECTION_MODES.contains(&v.selection.as_str()) {
+                return Err(format!("알 수 없는 뷰 선택 방식: {}", v.selection));
+            }
+            if v.selection == "multiple" && !matches!(v.kind.as_str(), "table" | "review-queue") {
+                return Err(format!(
+                    "다중 선택은 table/review-queue 뷰에서만 지원합니다: {}",
+                    v.id
+                ));
             }
             if v.kind == "native" && v.component.trim().is_empty() {
                 return Err(format!("네이티브 뷰 {} 에 component 가 없습니다", v.id));
@@ -767,6 +782,25 @@ mod tests {
     }
 
     #[test]
+    fn multiple_selection_is_limited_to_row_views() {
+        let mut table = PackManifest {
+            id: "ok".into(),
+            views: vec![PackView {
+                id: "issues".into(),
+                kind: "table".into(),
+                selection: "multiple".into(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        table.validate().unwrap();
+        assert_eq!(table.views[0].selection, "multiple");
+
+        table.views[0].kind = "board".into();
+        assert!(table.validate().unwrap_err().contains("table/review-queue"));
+    }
+
+    #[test]
     fn schedule_must_be_hhmm() {
         let mut m = PackManifest {
             id: "ok".into(),
@@ -914,7 +948,7 @@ mod tests {
         assert_eq!(
             resolve_cwd(&proj, &Map::new(), &view).unwrap(),
             "/code/fdr",
-            "기본 사업 폴백"
+            "기본 프로젝트 폴백"
         );
 
         let mut params = Map::new();
@@ -922,7 +956,7 @@ mod tests {
         assert_eq!(
             resolve_cwd(&proj, &params, &view).unwrap(),
             "/vault",
-            "경로 없는 사업은 작업공간으로 떨어진다"
+            "경로 없는 프로젝트는 작업공간으로 떨어진다"
         );
 
         view.vault_path = String::new();

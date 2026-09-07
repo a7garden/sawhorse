@@ -24,11 +24,11 @@ sawhorse가 쓸 Obsidian vault의 폴더 구조를 만들고, 노트 템플릿·
 2. 폴더 생성 (이미 있으면 건너뛰고 목록에 기록)
    - `${user_config.vault_path}/템플릿/`
    - `${user_config.vault_path}/일지/`
-   - `${user_config.vault_path}/사업/`
+   - `${user_config.vault_path}/프로젝트/`
    - `${user_config.vault_path}/개념/`
    - `${user_config.vault_path}/첨부/스크린샷/`
    - `${user_config.vault_path}/첨부/다이어그램/`
-   - 사업별 스크린샷·다이어그램 폴더(`첨부/.../<사업명>/`)는 project-doc, codebase-docs가 필요 시 만든다.
+   - 프로젝트별 스크린샷·다이어그램 폴더(`첨부/.../<프로젝트명>/`)는 project-doc, codebase-docs가 필요 시 만든다.
 3. 템플릿 복사: `${CLAUDE_PLUGIN_ROOT}/packs/si/templates/*.md` → `${user_config.vault_path}/템플릿/`
    - 대상 폴더에 같은 이름의 파일이 있으면 덮어쓰지 않고 skip 목록에 기록한다.
    - 복사한 파일과 스킵한 파일을 각각 목록으로 남긴다.
@@ -40,14 +40,14 @@ sawhorse가 쓸 Obsidian vault의 폴더 구조를 만들고, 노트 템플릿·
    - 파일이 있으면 `folder` 값을 확인한다. `"템플릿"`이면 그대로 통과하고, 다른 값이면 기존 파일을 덮어쓰지 말고 "현재 템플릿 폴더 설정은 X입니다"라고 안내만 한다.
 5. 인덱스 자산 배치 (Bases 뷰 + 대시보드)
    - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/bases/개념.base` → `${user_config.vault_path}/개념/개념.base`
-   - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/bases/사업.base` → `${user_config.vault_path}/사업/사업.base`
-   - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/bases/이슈.base` → `${user_config.vault_path}/사업/이슈.base`
-   - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/bases/마일스톤.base` → `${user_config.vault_path}/사업/마일스톤.base`
+   - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/bases/프로젝트.base` → `${user_config.vault_path}/프로젝트/프로젝트.base`
+   - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/bases/이슈.base` → `${user_config.vault_path}/프로젝트/이슈.base`
+   - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/bases/마일스톤.base` → `${user_config.vault_path}/프로젝트/마일스톤.base`
    - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/bases/일지.base` → `${user_config.vault_path}/일지/일지.base`
    - `${CLAUDE_PLUGIN_ROOT}/packs/si/assets/대시보드.md` → `${user_config.vault_path}/대시보드.md`
    - 같은 이름의 파일이 이미 있으면 덮어쓰지 않고 skip 목록에 기록한다.
    - Bases는 Obsidian 1.9+ 코어 플러그인이다. `.obsidian/core-plugins.json`의 `"bases"`가 `false`면 활성화를 안내한다(설정 파일을 직접 고치지 않는다).
-   - 이슈 워크플로의 **사업 범위 `.base`**(`assets/bases/이슈-사업.base`)는 여기서 배치하지 않는다. 사업명을 알아야 필터를 채울 수 있으므로 `/sawhorse:issues` 또는 `/sawhorse:project-doc`가 만든다. 화면 범위 base 는 존재하지 않는다 — 화면은 `url` 프로퍼티이고 `화면별` 뷰가 묶는다. 기존 `개선.base`는 호환을 위해 그대로 둔다.
+   - 이슈 워크플로의 **프로젝트 범위 `.base`**(`assets/bases/이슈-프로젝트.base`)는 여기서 배치하지 않는다. 프로젝트명을 알아야 필터를 채울 수 있으므로 `/sawhorse:issues` 또는 `/sawhorse:project-doc`가 만든다. 화면 범위 base 는 존재하지 않는다 — 화면은 `url` 프로퍼티이고 `화면별` 뷰가 묶는다. 기존 `개선.base`는 호환을 위해 그대로 둔다.
 6. Obsidian 설정 보정: `${user_config.vault_path}/.obsidian/app.json`
    - 파일이 없으면 `{"attachmentFolderPath":"첨부/스크린샷"}`으로 만든다.
    - 있으면 `attachmentFolderPath` 키만 본다. 없거나 값이 비어 있거나 `/` 또는 `.`(볼트 루트)이면 `첨부/스크린샷`으로 채운다. 다른 폴더가 지정돼 있으면 사용자의 선택이므로 그대로 두고 보고만 한다.

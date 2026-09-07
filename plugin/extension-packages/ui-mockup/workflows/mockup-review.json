@@ -1,0 +1,120 @@
+{
+  "definitionVersion": 1,
+  "id": "mockup-review",
+  "label": "목업 검토",
+  "description": "거친 이슈를 화면별 제안으로 구체화하고, 목업 피드백과 개정본을 승인까지 추적합니다.",
+  "version": "1.1.0",
+  "entry": "review",
+  "artifacts": [
+    {
+      "role": "intent",
+      "label": "대상 이슈",
+      "path": "work/{workId}/intent.md",
+      "template": "# 대상 이슈\n\n선택한 이슈와 목업 범위를 기록합니다.\n"
+    },
+    {
+      "role": "baseline",
+      "label": "현행 분석",
+      "path": "work/{workId}/baseline.md",
+      "template": "# 현행 분석\n\n현재 화면과 근거를 기록합니다.\n"
+    },
+    {
+      "role": "proposal",
+      "label": "개선 제안",
+      "path": "work/{workId}/proposal.md",
+      "template": "# 개선 제안\n\n거친 이슈를 화면별 문제·제안·수용 기준으로 구체화합니다.\n"
+    },
+    {
+      "role": "mockup",
+      "label": "목업",
+      "path": "work/{workId}/mockup.md",
+      "template": "# 목업\n\n화면별 목업과 미리보기를 기록합니다.\n"
+    },
+    {
+      "role": "feedback",
+      "label": "검토 의견",
+      "path": "work/{workId}/feedback.md",
+      "template": "# 검토 의견\n\n## 목업 수정 요청\n\n<!-- - [ ] [화면-ID] 바꿀 내용 -->\n\n## 새 개선 제안\n\n<!-- - [ ] [화면-ID] 새로 발견한 문제 또는 제안 -->\n\n## 처리 이력\n"
+    },
+    {
+      "role": "verification",
+      "label": "검증",
+      "path": "work/{workId}/verification.md",
+      "template": "# 검증\n\n선택 이슈 반영 여부와 렌더링 결과를 기록합니다.\n"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "review",
+      "label": "목업 검토",
+      "kind": "human",
+      "artifactRole": null,
+      "actionRef": null,
+      "workflowRef": null,
+      "decision": "approve-or-revise",
+      "inputs": ["intent", "baseline", "proposal", "mockup", "feedback", "verification"],
+      "outputs": ["feedback"],
+      "allowedRoles": ["reviewer"],
+      "instructions": "현행·제안·목업을 화면별로 대조합니다. 승인하거나 검토 의견에 수정 요청과 새 개선 제안을 남깁니다.",
+      "requiresCompletedDependencies": false
+    },
+    {
+      "id": "revision-requested",
+      "label": "개정 요청",
+      "kind": "human",
+      "artifactRole": null,
+      "actionRef": null,
+      "workflowRef": null,
+      "decision": "revision-complete",
+      "inputs": ["feedback", "proposal", "mockup"],
+      "outputs": ["proposal", "mockup", "verification"],
+      "allowedRoles": ["planner", "reviewer"],
+      "instructions": "검토 의견을 후속 백로그로 승격하거나 새 개정본에 반영한 뒤 재검토를 요청합니다.",
+      "requiresCompletedDependencies": false
+    },
+    {
+      "id": "done",
+      "label": "완료",
+      "kind": "end",
+      "artifactRole": null,
+      "actionRef": null,
+      "workflowRef": null,
+      "decision": null,
+      "inputs": [],
+      "outputs": [],
+      "allowedRoles": [],
+      "instructions": "승인된 목업 산출물입니다.",
+      "requiresCompletedDependencies": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "review",
+      "to": "revision-requested",
+      "on": "changes-requested",
+      "condition": null,
+      "loopRef": null
+    },
+    {
+      "from": "revision-requested",
+      "to": "review",
+      "on": "revised",
+      "condition": null,
+      "loopRef": "mockup-revision"
+    },
+    {
+      "from": "review",
+      "to": "done",
+      "on": "approved",
+      "condition": null,
+      "loopRef": null
+    }
+  ],
+  "loops": [
+    {
+      "id": "mockup-revision",
+      "maxIterations": 20,
+      "onLimit": "pause"
+    }
+  ]
+}

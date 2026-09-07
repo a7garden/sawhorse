@@ -32,8 +32,8 @@ export default function StepAgents({
       <div className="flex items-start justify-between gap-2">
         <p className="text-xs leading-relaxed text-muted-foreground">
           이 PC에서 찾은 에이전트입니다. 하나를 눌러{" "}
-          <b className="text-foreground">기본 에이전트</b> 로 삼으세요 — 확장의 스킬을 설치할
-          기본 대상이 됩니다.
+          <b className="text-foreground">기본 에이전트</b> 로 삼으세요 — 확장의
+          스킬을 설치할 기본 대상이 됩니다.
         </p>
         <Button size="xs" variant="outline" disabled={busy} onClick={onRefresh}>
           <RefreshCw className={busy ? "animate-spin" : undefined} /> 다시 검사
@@ -79,7 +79,11 @@ export default function StepAgents({
                 key={a.id}
                 name={a.name}
                 ok={false}
-                badge={a.custom ? <Badge variant="secondary">직접 등록</Badge> : undefined}
+                badge={
+                  a.custom ? (
+                    <Badge variant="secondary">직접 등록</Badge>
+                  ) : undefined
+                }
                 detail={a.note}
                 hint={a.installHint || undefined}
                 action={<InstallButton url={a.installUrl} />}
@@ -92,11 +96,15 @@ export default function StepAgents({
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         {picked && !picked.runsJobs ? (
           <>
-            <b className="text-foreground">{picked.name}</b> 은 감지와 스킬 설치까지 지원합니다.
-            대시보드가 직접 돌리는 잡은 아직 Claude Code 로만 실행됩니다.
+            <b className="text-foreground">{picked.name}</b> 은 감지와 스킬
+            설치까지 지원합니다. 대시보드가 직접 돌리는 잡은 아직 Claude Code
+            로만 실행됩니다.
           </>
         ) : (
-          <>목록에 없는 CLI 는 설정 파일의 <code>dashboard.customAgents</code> 에 등록하면 여기 함께 뜹니다.</>
+          <>
+            목록에 없는 CLI 는 설정 파일의 <code>dashboard.customAgents</code>{" "}
+            에 등록하면 여기 함께 뜹니다.
+          </>
         )}
       </p>
     </div>

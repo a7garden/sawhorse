@@ -35,15 +35,17 @@ const V = vaultPath.replace(/[\\/]+$/, "");
 
 // ---------- constants ----------
 
-const StdFolders = ["일지", "사업", "개념", "첨부", "템플릿"];
+// 프로젝트 문서 루트. 이름을 바꾸기 전 볼트는 사업/ 만 갖고 있고, 이관은 사용자가 고른다.
+const ProjectRoot = existsSync(join(V, "프로젝트")) ? "프로젝트" : "사업";
+const StdFolders = ["일지", ProjectRoot, "개념", "첨부", "템플릿"];
 const ImageExt = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"];
 const AttachExt = [...ImageExt, ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".zip", ".csv"];
 const IndexAssets = [
   "대시보드.md",
   "개념/개념.base",
-  "사업/사업.base",
-  "사업/이슈.base",
-  "사업/마일스톤.base",
+  `${ProjectRoot}/${ProjectRoot}.base`,
+  `${ProjectRoot}/이슈.base`,
+  `${ProjectRoot}/마일스톤.base`,
   "일지/일지.base",
 ];
 
@@ -206,7 +208,7 @@ if (mode === "quick" || mode === "fix") {
   const bases = walk(V, (name) => name.toLowerCase().endsWith(".base"));
   for (const full of bases) {
     const txt = readFileSync(full, "utf8");
-    // 이미 폴더로 범위를 좁힌 base(개선의 사업 범위)는 템플릿이 섞일 수 없으므로 건드리지 않는다.
+    // 이미 폴더로 범위를 좁힌 base(개선의 프로젝트 범위)는 템플릿이 섞일 수 없으므로 건드리지 않는다.
     const scoped = /file\.inFolder\("[^"]+"\)/.test(txt);
     if (/^[ \t]*-[ \t]*type[ \t]*==/m.test(txt) && !scoped) {
       const ins = '$1    - not:\n        - file.inFolder("템플릿")\n';
@@ -222,7 +224,7 @@ if (mode === "quick" || mode === "fix") {
   }
 
   // 5-b) 이슈(및 레거시 개선) 폴더의 범위별 base 존재 확인 + 파생 표 잔존 탐지
-  const impRoot = join(V, "사업");
+  const impRoot = join(V, ProjectRoot);
   if (existsSync(impRoot)) {
     const impDirs = walkDirs(impRoot).filter(
       (d) => ["이슈", "개선"].includes(basename(d)) && !excluded(d),
@@ -243,7 +245,7 @@ if (mode === "quick" || mode === "fix") {
       const ownBases = readdirSync(d).filter((n) => n.toLowerCase().endsWith(".base"));
       if (ownBases.length === 0) {
         const kind = basename(d) === "이슈" ? "이슈" : "개선(레거시)";
-        say(`[이슈base] ${relOf(d)} — ${kind} 사업 범위 base 없음 (/sawhorse:issues 가 만든다)`);
+        say(`[이슈base] ${relOf(d)} — ${kind} 프로젝트 범위 base 없음 (/sawhorse:issues 가 만든다)`);
       }
       // 이슈 폴더는 평면이다 — 화면·마일스톤은 프로퍼티가 나눈다. 하위 폴더는 보고만 한다.
       for (const sd of walkDirs(d, false)) {
@@ -436,7 +438,7 @@ if (mode === "scan" || mode === "fix") {
       }
     }
   }
-  const typeAlias = { 연구: "사업" };
+  const typeAlias = { 연구: "프로젝트" };
   const issues = [];
   for (const [full, raw] of bodies) {
     const rel = relOf(full);

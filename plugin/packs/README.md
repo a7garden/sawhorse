@@ -60,7 +60,7 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
 ```jsonc
 { "id": "logs", "label": "일지", "icon": "calendar-days", "group": "vault", "type": "notes",
   "query": {
-    "folders": ["기록", "사업/*/이슈"],        // 글로브는 `*` 한 단계만
+    "folders": ["기록", "프로젝트/*/이슈"],        // 글로브는 `*` 한 단계만
     "exclude": ["*목록.md", "*.base"],
     "where": [{ "field": "type", "op": "eq", "value": "이슈" }],
     "sort": { "source": "title", "desc": true },   // source: "" | "title" | "mtime"

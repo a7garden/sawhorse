@@ -18,7 +18,8 @@ function loadStored(): Theme {
 export function resolveTheme(theme: Theme): "light" | "dark" {
   if (theme !== "system") return theme;
   const prefersDark =
-    typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
+    typeof matchMedia === "function" &&
+    matchMedia("(prefers-color-scheme: dark)").matches;
   return prefersDark ? "dark" : "light";
 }
 
@@ -69,9 +70,12 @@ export const useTheme = create<ThemeState>((set, get) => ({
     const theme = get().theme;
     set({ resolved: apply(theme) });
     if (typeof matchMedia === "function") {
-      matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-        if (get().theme === "system") set({ resolved: apply("system") });
-      });
+      matchMedia("(prefers-color-scheme: dark)").addEventListener(
+        "change",
+        () => {
+          if (get().theme === "system") set({ resolved: apply("system") });
+        },
+      );
     }
   },
 }));

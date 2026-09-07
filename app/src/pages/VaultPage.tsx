@@ -2,6 +2,8 @@ import { useState } from "react";
 import { ListChecks, RefreshCw, SquareTerminal, TriangleAlert } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
+import { jobRequestKey } from "@/lib/jobs";
+import { RunButton } from "@/components/RunButton";
 import type { AuditIssue } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,7 +36,11 @@ export default function VaultPage() {
   const [scanning, setScanning] = useState(false);
   const [promoting, setPromoting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [view, setView] = useState<{ title: string; md: string } | null>(null);
+  const [view, setView] = useState<{
+    title: string;
+    md: string;
+    path: string;
+  } | null>(null);
 
   async function scan() {
     setScanning(true);
@@ -49,7 +55,7 @@ export default function VaultPage() {
     try {
       const v = await api.readNote(path);
       const title = path.split("/").pop()?.replace(/\.md$/, "") ?? path;
-      setView({ title, md: v.markdown });
+      setView({ title, md: v.markdown, path });
     } catch {
       setView(null);
     }
@@ -59,7 +65,7 @@ export default function VaultPage() {
   async function openList(rel: string) {
     try {
       const v = await api.readVaultNote(rel);
-      setView({ title: v.title, md: v.markdown });
+      setView({ title: v.title, md: v.markdown, path: rel });
     } catch {
       setView(null);
     }
@@ -85,9 +91,16 @@ export default function VaultPage() {
         <Button size="sm" variant="outline" disabled={scanning} onClick={() => void scan()}>
           <RefreshCw /> 다시 검사
         </Button>
-        <Button size="sm" disabled={promoting} onClick={() => void promote()}>
-          <SquareTerminal /> 인박스 승격 검토
-        </Button>
+        <RunButton
+          size="sm"
+          variant="default"
+          icon={<SquareTerminal />}
+          jobKey={jobRequestKey({ kind: "promote" })}
+          label="인박스 승격 검토"
+          disabled={promoting}
+          onRun={promote}
+          onError={setError}
+        />
       </PageHeader>
 
       {error && (
@@ -169,7 +182,11 @@ export default function VaultPage() {
           </CardHeader>
           <CardContent>
             {view ? (
-              <MarkdownView src={view.md} className="selectable" />
+              <MarkdownView
+                src={view.md}
+                notePath={view.path}
+                className="selectable"
+              />
             ) : (
               <Empty>검사 결과나 목록에서 문서를 열어보세요.</Empty>
             )}

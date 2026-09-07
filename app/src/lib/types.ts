@@ -143,12 +143,7 @@ export interface VaultNode {
 
 export type RoutineName = "morning" | "lunch" | "evening";
 export type JobStatus =
-  | "queued"
-  | "running"
-  | "success"
-  | "failed"
-  | "cancelled"
-  | "interrupted";
+  "queued" | "running" | "success" | "failed" | "cancelled" | "interrupted";
 
 export interface VaultCandidate {
   path: string;
@@ -209,6 +204,8 @@ export interface Job {
   id: string;
   kind: JobKind;
   label: string;
+  /** 중복 실행 판정 키. 같은 키의 잡이 대기·실행 중이면 새 잡을 받지 않는다. */
+  dedupKey: string;
   status: JobStatus;
   project?: string;
   createdAtMs: number;
@@ -296,12 +293,7 @@ export interface PluginBundle {
 // ---------- 확장(pack) ----------
 
 export type SettingFieldType =
-  | "text"
-  | "path"
-  | "number"
-  | "bool"
-  | "select"
-  | "table";
+  "text" | "path" | "number" | "bool" | "select" | "table";
 export type ScheduleKind = "daily" | "weekdays" | "once";
 export type ViewKind =
   | "notes"
@@ -379,6 +371,8 @@ export interface PackView {
   component: string;
   columns: ViewColumn[];
   groupBy: string;
+  /** none | multiple. multiple은 체크한 행만 뷰 액션의 ids로 전달한다. */
+  selection: "none" | "multiple";
   actions: string[];
   empty: string;
 }
@@ -625,6 +619,8 @@ export interface ScheduleView {
   time: string;
   enabled: boolean;
   lastRun?: string;
+  /** 지금 실행하면 생길 잡의 중복 판정 키 (Job.dedupKey 와 맞춰 본다). */
+  jobKey: string;
 }
 
 // ---------- herdr 터미널 ----------
@@ -670,7 +666,8 @@ export interface HerdrSnapshot {
   agents: HerdrAgentRow[];
 }
 
-// ---------- 호스트 내장 작업 (에이전트가 승인 큐로 만드는 예약) ----------
+// ---------- 자동화 작업(TaskDef) — 자동화 화면이 다루는 저장된 실행 내용.
+// 개발 보드의 개발 항목(WorkItem, features/workbench/types.ts)과는 다른 개념이다. ----------
 
 export interface TaskSchedule {
   kind: ScheduleKind;
@@ -701,6 +698,8 @@ export interface TaskDef {
 export interface TaskRow {
   def: TaskDef;
   lastRun: string | null;
+  /** 지금 실행하면 생길 잡의 중복 판정 키 (Job.dedupKey 와 맞춰 본다). */
+  jobKey: string;
 }
 
 export interface PendingTaskRequest {
@@ -727,10 +726,7 @@ export interface TasksView {
 // ---------- 협업(멀티에이전트 통합 레인) ----------
 
 export type CollabSessionStatus =
-  | "active"
-  | "paused"
-  | "readyToFinalize"
-  | "finalized";
+  "active" | "paused" | "readyToFinalize" | "finalized";
 export type CollabSessionMode = "direct" | "isolated";
 export type CollabDriver = "claude" | "codex";
 
@@ -948,8 +944,7 @@ export interface CollabVerifyCheckHttp {
 }
 
 export type CollabVerifyCheck =
-  | CollabVerifyCheckCommand
-  | CollabVerifyCheckHttp;
+  CollabVerifyCheckCommand | CollabVerifyCheckHttp;
 
 export interface CollabVerifyProfile {
   checks: CollabVerifyCheck[];

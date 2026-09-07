@@ -8,6 +8,9 @@ import { cn } from "@/lib/utils";
  * the chevron, padding, focus ring, and dark-mode treatment. Pairing it with
  * `truncate` lets long labels collapse inside the chip without forcing a wider
  * field.
+ *
+ * 배경은 반드시 불투명해야 한다 — Chromium 은 펼침 목록을 컨트롤의 배경색으로
+ * 칠하므로 `bg-transparent` 로 두면 다크 모드에서 흰 팝업이 뜬다.
  */
 export const Select = React.forwardRef<
   HTMLSelectElement,
@@ -17,7 +20,7 @@ export const Select = React.forwardRef<
     <select
       ref={ref}
       className={cn(
-        "h-9 w-full appearance-none rounded-md border border-input bg-transparent pl-2.5 pr-8 text-sm shadow-sm",
+        "h-9 w-full appearance-none rounded-md border border-input bg-card text-card-foreground pl-2.5 pr-8 text-sm shadow-sm",
         "transition-colors",
         "hover:border-foreground/30",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background",

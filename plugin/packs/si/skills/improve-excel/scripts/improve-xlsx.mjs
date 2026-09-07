@@ -5,7 +5,7 @@
 //
 // 옵션
 //   --vault <경로>     생략하면 ~/.claude/sawhorse/config.json 의 vaultPath
-//   --project <이름>   사업 폴더명. 생략하면 config 의 improve.defaultProject, 그것도 없으면 사업/ 아래 전부
+//   --project <이름>   프로젝트 폴더명. 생략하면 config 의 improve.defaultProject, 그것도 없으면 프로젝트/ 아래 전부
 //   --out <경로>       만들 xlsx (필수)
 //   --prev <경로>      기존 체크리스트 xlsx. 손으로 채운 열(요구자·담당자 등)을 문제 ID 로 이어받는다
 //   --owner <이름>     담당자 기본값 (--prev 에 값이 없을 때만)
@@ -30,7 +30,7 @@ const opt = (name, def = null) => {
 };
 const flag = (name) => argv.includes('--' + name);
 
-// 볼트 경로와 기본 사업은 sawhorse 설정에서 가져온다. 인자를 주면 인자가 이긴다.
+// 볼트 경로와 기본 프로젝트는 sawhorse 설정에서 가져온다. 인자를 주면 인자가 이긴다.
 function loadConfig() {
   const home = process.env.USERPROFILE || process.env.HOME || '';
   try { return JSON.parse(fs.readFileSync(path.join(home, '.claude', 'sawhorse', 'config.json'), 'utf8')); }
@@ -106,7 +106,9 @@ for (const p of vaultFiles) {
   if (!attachIndex.has(stem)) attachIndex.set(stem, p);
 }
 
-const projectRoot = PROJECT ? path.join(VAULT, '사업', PROJECT) : path.join(VAULT, '사업');
+// 프로젝트 문서 루트. 이름을 바꾸기 전 볼트에는 사업/ 만 있으므로 둘 다 본다.
+const PROJECT_ROOT = fs.existsSync(path.join(VAULT, '프로젝트')) ? '프로젝트' : '사업';
+const projectRoot = PROJECT ? path.join(VAULT, PROJECT_ROOT, PROJECT) : path.join(VAULT, PROJECT_ROOT);
 
 const notes = [];
 for (const p of vaultFiles) {

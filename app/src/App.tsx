@@ -15,6 +15,8 @@ import {
   CircleDot,
   FileText,
   Github,
+  Repeat,
+  SquareCheckBig,
 } from "lucide-react";
 import { useApp, parseViewPage, viewPageId, type PageId } from "@/lib/store";
 import { icon as packIcon, type IconComponent } from "@/lib/icons";
@@ -25,7 +27,6 @@ import WorkbenchPage from "@/features/workbench/WorkbenchPage";
 import { isWorkbenchPreview } from "@/features/workbench/api";
 import { AppToolbar } from "@/components/AppToolbar";
 import { useCoreExtensions } from "@/lib/core-extensions";
-import ImprovePage from "@/pages/ImprovePage";
 import JobsPage from "@/pages/JobsPage";
 import TasksPage from "@/pages/TasksPage";
 import TodosPage from "@/pages/TodosPage";
@@ -45,6 +46,7 @@ import OnboardingPage from "@/pages/OnboardingPage";
 
 import GitHubExtensionPage from "@/pages/GitHubExtensionPage";
 import { DetailNavigation } from "@/components/DetailNavigation";
+import { Toaster } from "@/components/ui/toast";
 import SetupWizard from "@/pages/SetupWizard";
 
 /** 사이드바 섹션 — 호스트가 섹션 목록·순서를 소유하고, 팩 뷰는 group 태그로 섹션을 고른다. */
@@ -60,23 +62,27 @@ const TOP_NAV: {
   group: string;
 }[] = [
   { id: "overview", label: "작업대", icon: LayoutDashboard, group: "work" },
-  { id: "board", label: "작업", icon: KanbanSquare, group: "work" },
+  // 개발 = intent.md 로 시작하는 SDLC 단위(WorkItem).
+  // 자동화 = 저장해 둔 자동화 작업(TaskDef). 저장 형식도 수명주기도 다르므로 갈라 둔다.
+  { id: "board", label: "개발", icon: KanbanSquare, group: "work" },
+  { id: "task-library", label: "자동화", icon: Repeat, group: "work" },
   { id: "calendar", label: "캘린더", icon: CalendarDays, group: "work" },
   { id: "projects", label: "프로젝트", icon: FolderGit2, group: "work" },
   { id: "issues", label: "이슈", icon: CircleDot, group: "work" },
-  { id: "terminal", label: "실행", icon: Terminal, group: "work" },
+  // `실행` 은 잡·하네스 런 한 가지만 가리킨다. 진입점 이름까지 실행이면 여섯 개가
+  // 같은 낱말을 쓴다.
+  { id: "terminal", label: "에이전트", icon: Terminal, group: "work" },
   { id: "docs", label: "모든 문서", icon: FileText, group: "vault" },
+  { id: "todos", label: "할 일", icon: SquareCheckBig, group: "vault" },
   { id: "reading", label: "읽을거리", icon: Newspaper, group: "reading" },
   { id: "github", label: "GitHub", icon: Github, group: "reading" },
   { id: "packs", label: "확장 관리", icon: Puzzle, group: "reading" },
 ];
 const PAGE_GROUPS = [
   {
-    root: "board",
+    root: "task-library",
     tabs: [
-      { id: "board", label: "작업 보드" },
-      { id: "todos", label: "오늘 할 일" },
-      { id: "task-library", label: "실행할 작업" },
+      { id: "task-library", label: "자동화 작업" },
       { id: "tasks", label: "예약과 반복" },
     ],
   },
@@ -84,7 +90,7 @@ const PAGE_GROUPS = [
     root: "terminal",
     tabs: [
       { id: "terminal", label: "에이전트 터미널" },
-      { id: "harness", label: "작업 실행" },
+      { id: "harness", label: "개발 실행" },
       { id: "sessions", label: "협업 세션" },
       { id: "jobs", label: "실행 기록" },
       { id: "review", label: "검토" },
@@ -98,7 +104,7 @@ const BOTTOM_NAV: { id: PageId; label: string; icon: IconComponent }[] = [
 
 /** 선언형 뷰로 옮기지 않은 화면들. 팩이 `type: native` 로 이 이름을 가리킨다. */
 const NATIVE: Record<string, () => JSX.Element> = {
-  issues: ImprovePage,
+  issues: () => <WorkbenchPage view="issues" />,
   todos: TodosPage,
   docs: DocsPage,
   vault: VaultPage,
@@ -140,6 +146,9 @@ export default function App() {
       case "harness":
       case "knowledge":
       case "projects":
+      // 이슈는 개발 항목과 같은 스냅샷을 다른 축으로 본 화면이다. 별도 페이지가
+      // 아니라 워크벤치의 뷰여야 상세·폼·저장 경로가 하나로 유지된다.
+      case "issues":
         return <WorkbenchPage key={page} view={page} />;
       case "github":
         return <GitHubExtensionPage />;
@@ -164,8 +173,6 @@ export default function App() {
         return <SessionsPage />;
       case "review":
         return <ReviewPage />;
-      case "issues":
-        return <ImprovePage />;
       case "sources":
         return <SourcesPage scope="rss" />;
       case "reading":
@@ -263,7 +270,7 @@ export default function App() {
             );
             if (id === "vault") {
               const order = (label: string) =>
-                ({ 일지: 10, 개념: 20, 점검: 30 } as Record<string, number>)[
+                (({ 일지: 10, 개념: 20, 점검: 30 }) as Record<string, number>)[
                   label
                 ] ?? 50;
               packViews.sort((a, b) => order(a.label) - order(b.label));
@@ -400,6 +407,7 @@ export default function App() {
         </div>
       </main>
       <SetupWizard />
+      <Toaster />
     </div>
   );
 }

@@ -131,6 +131,12 @@ pub fn read_note(path: String) -> Result<NoteView, String> {
 }
 
 #[tauri::command]
+pub fn read_note_asset(note_path: String, src: String) -> Result<String, String> {
+    let view = config::load_view();
+    vault::read_note_asset(Path::new(&view.vault_path), Path::new(&note_path), &src)
+}
+
+#[tauri::command]
 pub fn approve_note(path: String) -> Result<(), String> {
     vault::approve_note(Path::new(&path))
 }
@@ -339,7 +345,7 @@ pub fn list_packs() -> packs::PackRegistryView {
     packs::registry_view(&reg, &view)
 }
 
-/// 사이드바 구성. 코어 페이지(홈·작업·터미널·확장·설정)는 프론트엔드가 갖고 있고,
+/// 사이드바 구성. 코어 페이지(작업대·개발·자동화·실행·확장·설정)는 프론트엔드가 갖고 있고,
 /// 그 사이에 들어가는 팩 기여 화면만 백엔드가 정한다.
 #[tauri::command]
 pub fn list_nav() -> Vec<packs::NavEntry> {
@@ -709,13 +715,56 @@ pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
         .map_err(|e| format!("링크 열기 실패: {e}"))
 }
 
-// ---------- 호스트 내장 작업 (에이전트가 승인 큐로 만드는 예약) ----------
+// ---------- 실행 정의(TaskDef) — 에이전트가 승인 큐로 만드는 자동화 항목.
+// 개발 보드의 개발 항목(WorkItem, sdlc.rs)과는 다른 개념이다. ----------
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskRow {
     pub def: crate::tasks::TaskDef,
     pub last_run: Option<String>,
+    /// 지금 실행했을 때 생길 잡의 중복 판정 키 — 화면이 "실행 중" 버튼을 찾는 데 쓴다.
+    pub job_key: String,
+}
+
+fn promote_request() -> JobRequest {
+    JobRequest {
+        kind: "promote".into(),
+        ..Default::default()
+    }
+}
+
+fn action_request(pack_id: &str, action_id: &str) -> JobRequest {
+    JobRequest {
+        kind: "action".into(),
+        pack_id: Some(pack_id.into()),
+        action_id: Some(action_id.into()),
+        ..Default::default()
+    }
+}
+
+fn task_request(id: &str) -> JobRequest {
+    JobRequest {
+        kind: "task".into(),
+        task_id: Some(id.into()),
+        ..Default::default()
+    }
+}
+
+/// 이 정의를 "지금 실행"하면 만들어질 잡 요청. `run_task_now` 가 타는 분기와 같아야
+/// 버튼의 중복 판정과 실제 실행이 어긋나지 않는다.
+fn task_run_request(id: &str) -> JobRequest {
+    if id == "core.promote" {
+        return promote_request();
+    }
+    if let Some((pack_id, action_id)) = id.split_once('.') {
+        let view = config::load_view();
+        let reg = packs::load_registry(&view.packs.enabled);
+        if reg.action(pack_id, action_id).is_some() {
+            return action_request(pack_id, action_id);
+        }
+    }
+    scheduler::request_for_key(id).unwrap_or_else(|| task_request(id))
 }
 
 #[derive(Serialize)]
@@ -732,6 +781,7 @@ fn builtin_rows(state: &AppState) -> Vec<TaskRow> {
         .into_iter()
         .map(|entry| TaskRow {
             last_run: entry.last_run,
+            job_key: entry.job_key,
             def: crate::tasks::TaskDef {
                 id: entry.key,
                 title: entry.label,
@@ -755,8 +805,8 @@ fn builtin_rows(state: &AppState) -> Vec<TaskRow> {
         })
         .collect();
 
-    // 예약 여부는 작업의 실행 방식일 뿐이다. 활성 팩이 제공하는 수동 액션도
-    // 같은 작업 목록에 넣되, 이미 예약 행으로 들어온 액션은 중복시키지 않는다.
+    // 예약 여부는 같은 정의의 실행 방식일 뿐이다. 활성 팩이 제공하는 수동 액션도
+    // 같은 정의 목록에 넣되, 이미 예약 행으로 들어온 액션은 중복시키지 않는다.
     let existing: std::collections::HashSet<String> =
         rows.iter().map(|row| row.def.id.clone()).collect();
     let view = config::load_view();
@@ -773,6 +823,7 @@ fn builtin_rows(state: &AppState) -> Vec<TaskRow> {
                     .get(&id)
                     .or_else(|| last_run.get(&action.id))
                     .cloned(),
+                job_key: crate::jobs::dedup_key(&action_request(&pack.manifest.id, &action.id)),
                 def: crate::tasks::TaskDef {
                     id,
                     title: action.label.clone(),
@@ -792,6 +843,7 @@ fn builtin_rows(state: &AppState) -> Vec<TaskRow> {
     }
     rows.push(TaskRow {
         last_run: last_run.get("core.promote").cloned(),
+        job_key: crate::jobs::dedup_key(&promote_request()),
         def: crate::tasks::TaskDef {
             id: "core.promote".into(),
             title: "인박스 승격 검토".into(),
@@ -823,6 +875,7 @@ pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
             .into_iter()
             .map(|def| TaskRow {
                 last_run: last_run.get(&def.id).cloned(),
+                job_key: crate::jobs::dedup_key(&task_request(&def.id)),
                 def,
             })
             .collect()
@@ -844,7 +897,7 @@ pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef
         def.id = crate::tasks::new_id();
     }
     if crate::scheduler::LEGACY_ROUTINES.contains(&def.id.as_str()) {
-        return Err("내장 작업 ID는 사용할 수 없습니다".into());
+        return Err("기본 제공 실행 정의의 ID는 사용할 수 없습니다".into());
     }
     def.builtin = false;
     def.skill = None;
@@ -866,7 +919,7 @@ pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef
 #[tauri::command]
 pub fn delete_task(id: String) -> Result<(), String> {
     if scheduler::LEGACY_ROUTINES.contains(&id.as_str()) {
-        return Err("내장 작업은 삭제할 수 없습니다".into());
+        return Err("기본 제공 실행 정의는 삭제할 수 없습니다".into());
     }
     crate::tasks::delete_task(&crate::tasks::workbench_root(), &id)
 }
@@ -901,32 +954,22 @@ pub fn run_task_now(
     mgr: State<'_, Arc<JobManager>>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<Job, String> {
-    if id == "core.promote" {
-        let job = mgr.enqueue(JobRequest {
-            kind: "promote".into(),
-            ..Default::default()
-        })?;
-        state
-            .state
-            .lock()
-            .last_run
-            .insert(id, chrono::Local::now().format("%Y-%m-%d").to_string());
-        state.save_state();
-        return Ok(job);
-    }
-    if let Some((pack_id, action_id)) = id.split_once('.') {
-        let view = config::load_view();
-        let reg = packs::load_registry(&view.packs.enabled);
-        if reg.action(pack_id, action_id).is_some() {
-            return mgr.enqueue(JobRequest {
-                kind: "action".into(),
-                pack_id: Some(pack_id.into()),
-                action_id: Some(action_id.into()),
-                ..Default::default()
-            });
+    let request = task_run_request(&id);
+    match request.kind.as_str() {
+        "promote" => {
+            let job = mgr.enqueue(request)?;
+            state
+                .state
+                .lock()
+                .last_run
+                .insert(id, chrono::Local::now().format("%Y-%m-%d").to_string());
+            state.save_state();
+            Ok(job)
         }
+        "action" => mgr.enqueue(request),
+        // 예약 엔트리·작업 정의는 last_run 기록까지 예약 경로가 맡는다.
+        _ => scheduler::run_scheduled_now(&mgr, &state, &id),
     }
-    scheduler::run_scheduled_now(&mgr, &state, &id)
 }
 
 #[tauri::command]

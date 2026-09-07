@@ -55,11 +55,7 @@ export type CorePage = (typeof CORE_PAGES)[number];
 export type PageId = CorePage | `view:${string}:${string}`;
 
 /** 팩 이전 코드가 부르던 화면 이름 → 그 화면을 가진 네이티브 뷰. */
-const LEGACY_PAGE_ALIASES = [
-  "improve",
-  "issues",
-  "vault",
-] as const;
+const LEGACY_PAGE_ALIASES = ["improve", "issues", "vault"] as const;
 
 function isCore(id: string): id is CorePage {
   return (CORE_PAGES as readonly string[]).includes(id);
@@ -178,11 +174,17 @@ export const useApp = create<AppState>((set, get) => ({
     initialized = true;
     if (!("__TAURI_INTERNALS__" in window)) {
       if (new URLSearchParams(window.location.search).get("preview") === "1") {
-        await Promise.all([
-          get().refreshImprovements(),
-          get().refreshPacks(),
-          get().refreshTree(),
-        ]);
+        // 프리뷰 핸들러가 없는 커맨드는 던진다. 브라우저 체험은 위젯이 비는 것보다
+        // 화면 전체가 죽는 쪽이 훨씬 나쁘므로 개별 실패를 삼킨다.
+        await Promise.all(
+          [
+            get().refreshImprovements(),
+            get().refreshPacks(),
+            get().refreshTree(),
+            get().refreshJobs(),
+            get().refreshTodos(),
+          ].map((task) => task.catch(() => {})),
+        );
       }
       return;
     }

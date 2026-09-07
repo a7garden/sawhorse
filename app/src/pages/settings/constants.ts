@@ -15,11 +15,16 @@ export const HERDR_MODE_OPTIONS: { value: HerdrMode; label: string }[] = [
 export const HERDR_CLEANUP_OPTIONS: { value: HerdrCleanup; label: string }[] = [
   { value: "closeOnSuccess", label: "성공하면 닫기" },
   { value: "keep", label: "항상 남기기" },
-  { value: "closeAlways", label: "항상 닫기" },
+  { value: "closeAlways", label: "항상 닫기 (기본값)" },
 ];
 
 /// Number inputs hand back strings, including "" while the field is being retyped.
-export function clampInt(raw: string, min: number, max: number, fallback: number): number {
+export function clampInt(
+  raw: string,
+  min: number,
+  max: number,
+  fallback: number,
+): number {
   const n = Number.parseInt(raw, 10);
   if (Number.isNaN(n)) return fallback;
   return Math.min(max, Math.max(min, n));

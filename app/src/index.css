@@ -104,6 +104,21 @@
   html.dark {
     color-scheme: dark;
   }
+  /*
+   * 네이티브 select 의 펼침 목록은 컨트롤 자신의 background-color 로 칠해진다.
+   * appearance: none 을 쓰면 색상 스킴만으로는 어두워지지 않아, 배경이 투명한
+   * 셀렉트가 다크 모드에서 흰 팝업으로 뜬다. 컨트롤과 option 양쪽에 불투명
+   * 색을 명시해 두 테마 모두에서 같은 판을 쓰게 한다.
+   */
+  select {
+    background-color: var(--card);
+    color: var(--card-foreground);
+  }
+  select option,
+  select optgroup {
+    background-color: var(--card);
+    color: var(--card-foreground);
+  }
   body {
     @apply bg-background text-foreground antialiased;
     font-family:
@@ -607,19 +622,29 @@
   min-height: 100%;
   margin: 0;
 }
-.dashboard-grid .wb-metric-grid {
-  min-height: 100%;
-  margin: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-@container (min-width: 760px) {
-  .dashboard-grid .wb-metric-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
 .dashboard-grid .wb-stage-tiles {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .widget-host .wb-work-row {
   min-width: 0;
+}
+
+/* 토스트 알림 — 상단 중앙에서 살짝 내려오며 나타난다. */
+.toast-item {
+  animation: toast-in 160ms ease-out;
+}
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast-item {
+    animation: none;
+  }
 }

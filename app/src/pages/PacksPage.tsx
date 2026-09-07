@@ -10,12 +10,13 @@ import {
   FolderOpen,
   HardDriveDownload,
   PencilRuler,
-  Play,
   RefreshCw,
   Trash2,
   Workflow,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { actionJobKey } from "@/lib/jobs";
+import { RunButton } from "@/components/RunButton";
 import { useApp } from "@/lib/store";
 import { icon as packIcon } from "@/lib/icons";
 import type {
@@ -1026,9 +1027,17 @@ export default function PacksPage() {
                               {a.schedule.time}
                             </Badge>
                           )}
-                          <Button
+                          <RunButton
                             size="xs"
                             variant="ghost"
+                            label=""
+                            ariaLabel={`${a.label} 실행`}
+                            jobKey={actionJobKey(
+                              sel.id,
+                              a.id,
+                              {},
+                              sel.id.startsWith("x-") ? extensionProject : null,
+                            )}
                             disabled={
                               busy ||
                               !sel.enabled ||
@@ -1044,10 +1053,9 @@ export default function PacksPage() {
                                       : `sawhorse-${sel.id}`,
                                   )
                             }
-                            onClick={() => void runAction(sel, a.id)}
-                          >
-                            <Play className="size-3" />
-                          </Button>
+                            onRun={() => runAction(sel, a.id)}
+                            onError={setMsg}
+                          />
                         </div>
                       ))}
                     </CardContent>

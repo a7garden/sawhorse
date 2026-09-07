@@ -30,7 +30,10 @@ const SESSION_STATUS_KO: Record<CollabSessionStatus, string> = {
   finalized: "종결",
 };
 
-const SESSION_STATUS_VARIANT: Record<CollabSessionStatus, "default" | "secondary" | "warning" | "outline"> = {
+const SESSION_STATUS_VARIANT: Record<
+  CollabSessionStatus,
+  "default" | "secondary" | "warning" | "outline"
+> = {
   active: "default",
   paused: "warning",
   readyToFinalize: "secondary",
@@ -113,7 +116,9 @@ function topoSort(candidates: CollabChangeSetView[]): CollabChangeSetView[] {
   const out: CollabChangeSetView[] = [];
   let rest = [...candidates];
   while (rest.length > 0) {
-    const ready = rest.filter((c) => c.dependsOn.every((d) => done[d] || !byDigest[d]));
+    const ready = rest.filter((c) =>
+      c.dependsOn.every((d) => done[d] || !byDigest[d]),
+    );
     const pick = ready.length > 0 ? ready : rest.slice(0, 1); // 순환 등 걸리는 묶음은 순서 유지
     for (const c of pick) {
       done[c.digest] = true;
@@ -144,7 +149,10 @@ export default function SessionsPage() {
   const [lanes, setLanes] = useState<LaneDraft[]>([emptyLane()]);
 
   useEffect(() => {
-    void api.collabProjectsView().then(setProjects).catch(() => setProjects(null));
+    void api
+      .collabProjectsView()
+      .then(setProjects)
+      .catch(() => setProjects(null));
   }, [createOpen]);
 
   const loadDetail = useCallback(async (id: string) => {
@@ -217,18 +225,29 @@ export default function SessionsPage() {
   return (
     <div>
       <PageHeader title="세션">
-        <Button size="sm" disabled={(projects?.registered.length ?? 0) === 0} onClick={() => setCreateOpen(true)}>
+        <Button
+          size="sm"
+          disabled={(projects?.registered.length ?? 0) === 0}
+          onClick={() => setCreateOpen(true)}
+        >
           <Plus /> 세션 만들기
         </Button>
       </PageHeader>
 
       <div className="space-y-4 p-4">
         {msg && (
-          <div className={`text-xs ${msg.ok ? "text-success" : "text-destructive"}`}>{msg.text}</div>
+          <div
+            className={`text-xs ${msg.ok ? "text-success" : "text-destructive"}`}
+          >
+            {msg.text}
+          </div>
         )}
 
         {projects && projects.registered.length === 0 && (
-          <Empty>협업 프로젝트가 없습니다. 설정 &gt; 협업에서 저장소를 먼저 등록하세요.</Empty>
+          <Empty>
+            협업 프로젝트가 없습니다. 설정 &gt; 협업에서 저장소를 먼저
+            등록하세요.
+          </Empty>
         )}
 
         <Card>
@@ -237,7 +256,9 @@ export default function SessionsPage() {
             <Badge variant="secondary">{sessions.length}</Badge>
           </CardHeader>
           <CardContent className="space-y-2">
-            {sessions.length === 0 && <Empty className="py-4">아직 세션이 없습니다.</Empty>}
+            {sessions.length === 0 && (
+              <Empty className="py-4">아직 세션이 없습니다.</Empty>
+            )}
             {sessions.map((s) => (
               <button
                 key={s.id}
@@ -250,14 +271,26 @@ export default function SessionsPage() {
                 )}
               >
                 <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={SESSION_STATUS_VARIANT[s.status]}>{SESSION_STATUS_KO[s.status]}</Badge>
-                  <span className="min-w-0 truncate text-[13px] font-semibold">{s.goal || "(목표 없음)"}</span>
-                  <Badge variant="outline">{s.mode === "direct" ? "직접" : "격리"}</Badge>
-                  <span className="text-xs text-muted-foreground">{s.integrationBranch}</span>
-                  <span className="ml-auto text-[10px] text-muted-foreground">{fmtWhen(s.createdAt)}</span>
+                  <Badge variant={SESSION_STATUS_VARIANT[s.status]}>
+                    {SESSION_STATUS_KO[s.status]}
+                  </Badge>
+                  <span className="min-w-0 truncate text-[13px] font-semibold">
+                    {s.goal || "(목표 없음)"}
+                  </span>
+                  <Badge variant="outline">
+                    {s.mode === "direct" ? "직접" : "격리"}
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">
+                    {s.integrationBranch}
+                  </span>
+                  <span className="ml-auto text-[10px] text-muted-foreground">
+                    {fmtWhen(s.createdAt)}
+                  </span>
                 </div>
                 {s.pausedReason && (
-                  <p className="mt-1 text-xs text-warning-foreground">정지 사유: {s.pausedReason}</p>
+                  <p className="mt-1 text-xs text-warning-foreground">
+                    정지 사유: {s.pausedReason}
+                  </p>
                 )}
               </button>
             ))}
@@ -269,24 +302,35 @@ export default function SessionsPage() {
             <Card>
               <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
                 <CardTitle className="text-[13px]">대표 체크아웃</CardTitle>
-                <Badge variant={detail.integrationClean ? "success" : "warning"}>
-                  {detail.integrationClean ? "개발 서버 깨끗함" : "개발 서버에 변경 있음"}
+                <Badge
+                  variant={detail.integrationClean ? "success" : "warning"}
+                >
+                  {detail.integrationClean
+                    ? "개발 서버 깨끗함"
+                    : "개발 서버에 변경 있음"}
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="grid gap-0.5 text-xs text-muted-foreground">
                   <div>경로: {detail.integrationPath || "-"}</div>
                   <div>
-                    브랜치: {detail.integrationBranch || "-"} · HEAD: {short(detail.integrationHead)}
+                    브랜치: {detail.integrationBranch || "-"} · HEAD:{" "}
+                    {short(detail.integrationHead)}
                   </div>
                   <div>
-                    시작 HEAD: {short(detail.targetStartSha)} · 정책 v{detail.policyVersion} · 검증
-                    프로필: {detail.verificationProfile || "기본"}
+                    시작 HEAD: {short(detail.targetStartSha)} · 정책 v
+                    {detail.policyVersion} · 검증 프로필:{" "}
+                    {detail.verificationProfile || "기본"}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {detail.status === "active" && (
-                    <Button size="sm" variant="outline" disabled={busy} onClick={() => setPauseOpen(true)}>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => setPauseOpen(true)}
+                    >
                       일시정지
                     </Button>
                   )}
@@ -295,7 +339,12 @@ export default function SessionsPage() {
                       size="sm"
                       variant="outline"
                       disabled={busy}
-                      onClick={() => void guard(() => api.collabResume(detail.id), "세션을 재개했습니다.")}
+                      onClick={() =>
+                        void guard(
+                          () => api.collabResume(detail.id),
+                          "세션을 재개했습니다.",
+                        )
+                      }
                     >
                       재개
                     </Button>
@@ -304,7 +353,12 @@ export default function SessionsPage() {
                     <Button
                       size="sm"
                       disabled={busy}
-                      onClick={() => void guard(() => api.collabFinalize(detail.id), "세션을 종결했습니다.")}
+                      onClick={() =>
+                        void guard(
+                          () => api.collabFinalize(detail.id),
+                          "세션을 종결했습니다.",
+                        )
+                      }
                     >
                       세션 종결
                     </Button>
@@ -319,20 +373,38 @@ export default function SessionsPage() {
                 <Badge variant="secondary">{detail.agentRuns.length}</Badge>
               </CardHeader>
               <CardContent className="space-y-2">
-                {detail.agentRuns.length === 0 && <Empty className="py-4">레인이 없습니다.</Empty>}
+                {detail.agentRuns.length === 0 && (
+                  <Empty className="py-4">레인이 없습니다.</Empty>
+                )}
                 {detail.agentRuns.map((r) => (
                   <div key={r.id} className="space-y-1 rounded-lg border p-2.5">
                     <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant={r.status === "failed" ? "destructive" : r.status === "running" ? "default" : "outline"}>
+                      <Badge
+                        variant={
+                          r.status === "failed"
+                            ? "destructive"
+                            : r.status === "running"
+                              ? "default"
+                              : "outline"
+                        }
+                      >
                         {runStatusKo(r.status)}
                       </Badge>
-                      <span className="text-[13px] font-semibold">{r.taskId || "자유 작업"}</span>
+                      <span className="text-[13px] font-semibold">
+                        {r.taskId || "자유 실행"}
+                      </span>
                       <Badge variant="outline">{r.driver}</Badge>
-                      <span className="min-w-0 truncate text-xs text-muted-foreground">{r.branch}</span>
+                      <span className="min-w-0 truncate text-xs text-muted-foreground">
+                        {r.branch}
+                      </span>
                     </div>
-                    <div className="min-w-0 truncate text-xs text-muted-foreground">{r.worktreePath}</div>
+                    <div className="min-w-0 truncate text-xs text-muted-foreground">
+                      {r.worktreePath}
+                    </div>
                     {r.driver === "codex" && (
-                      <p className="text-xs text-warning-foreground">{CODEX_NOTE}</p>
+                      <p className="text-xs text-warning-foreground">
+                        {CODEX_NOTE}
+                      </p>
                     )}
                   </div>
                 ))}
@@ -341,12 +413,16 @@ export default function SessionsPage() {
 
             <Card>
               <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-                <CardTitle className="text-[13px]">변경 후보 (의존 순)</CardTitle>
+                <CardTitle className="text-[13px]">
+                  변경 후보 (의존 순)
+                </CardTitle>
                 <Badge variant="secondary">{detail.changeSets.length}</Badge>
               </CardHeader>
               <CardContent className="space-y-2">
                 {orderedCandidates.length === 0 && (
-                  <Empty className="py-4">아직 후보가 없습니다. 레인이 제출하면 여기에 표시됩니다.</Empty>
+                  <Empty className="py-4">
+                    아직 후보가 없습니다. 레인이 제출하면 여기에 표시됩니다.
+                  </Empty>
                 )}
                 {orderedCandidates.map((c, i) => {
                   const deps = c.dependsOn.map((d) => {
@@ -354,14 +430,30 @@ export default function SessionsPage() {
                     return dep ? dep.taskId || short(dep.digest) : short(d);
                   });
                   return (
-                    <div key={c.id} className="space-y-1 rounded-lg border p-2.5">
+                    <div
+                      key={c.id}
+                      className="space-y-1 rounded-lg border p-2.5"
+                    >
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] tabular-nums text-muted-foreground">{i + 1}.</span>
-                        <Badge variant={c.status === "verification_failed" || c.status === "conflicted" ? "destructive" : "outline"}>
+                        <span className="text-[10px] tabular-nums text-muted-foreground">
+                          {i + 1}.
+                        </span>
+                        <Badge
+                          variant={
+                            c.status === "verification_failed" ||
+                            c.status === "conflicted"
+                              ? "destructive"
+                              : "outline"
+                          }
+                        >
                           {changeStatusKo(c.status)}
                         </Badge>
-                        <span className="text-[13px] font-semibold">{c.taskId || "자유 작업"}</span>
-                        <span className="min-w-0 truncate text-xs">{c.summary || "(요약 없음)"}</span>
+                        <span className="text-[13px] font-semibold">
+                          {c.taskId || "자유 실행"}
+                        </span>
+                        <span className="min-w-0 truncate text-xs">
+                          {c.summary || "(요약 없음)"}
+                        </span>
                       </div>
                       <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
                         <span>
@@ -369,7 +461,9 @@ export default function SessionsPage() {
                         </span>
                         <span>파일 {c.manifest.length}개</span>
                         <span>digest {c.digest.slice(0, 12)}</span>
-                        {deps.length > 0 && <span>의존: {deps.join(", ")}</span>}
+                        {deps.length > 0 && (
+                          <span>의존: {deps.join(", ")}</span>
+                        )}
                       </div>
                       {c.overlapPaths.length > 0 && (
                         <p className="text-xs text-warning-foreground">
@@ -388,9 +482,14 @@ export default function SessionsPage() {
                 <Badge variant="secondary">{audit.length}</Badge>
               </CardHeader>
               <CardContent className="space-y-1">
-                {audit.length === 0 && <Empty className="py-4">기록이 없습니다.</Empty>}
+                {audit.length === 0 && (
+                  <Empty className="py-4">기록이 없습니다.</Empty>
+                )}
                 {audit.map((e) => (
-                  <div key={e.id} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <div
+                    key={e.id}
+                    className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground"
+                  >
                     <span className="tabular-nums">{fmtWhen(e.createdAt)}</span>
                     <Badge variant="outline">{e.kind}</Badge>
                     <span className="min-w-0 truncate">{e.payloadJson}</span>
@@ -402,7 +501,11 @@ export default function SessionsPage() {
         )}
       </div>
 
-      <Dialog open={pauseOpen} onClose={() => setPauseOpen(false)} title="세션 일시정지">
+      <Dialog
+        open={pauseOpen}
+        onClose={() => setPauseOpen(false)}
+        title="세션 일시정지"
+      >
         <div className="space-y-3">
           <Label>정지 사유</Label>
           <Input
@@ -421,7 +524,11 @@ export default function SessionsPage() {
               onClick={() => {
                 setPauseOpen(false);
                 void guard(
-                  () => api.collabPause(detail!.id, pauseReason.trim() || "사용자 일시정지"),
+                  () =>
+                    api.collabPause(
+                      detail!.id,
+                      pauseReason.trim() || "사용자 일시정지",
+                    ),
                   "세션을 일시정지했습니다.",
                 );
               }}
@@ -432,11 +539,20 @@ export default function SessionsPage() {
         </div>
       </Dialog>
 
-      <Dialog open={createOpen} onClose={() => setCreateOpen(false)} title="새 협업 세션" wide>
+      <Dialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="새 협업 세션"
+        wide
+      >
         <div className="space-y-3">
           <div className="space-y-1">
             <Label>프로젝트</Label>
-            <Select className="w-full" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            <Select
+              className="w-full"
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+            >
               <option value="">선택…</option>
               {(projects?.registered ?? []).map((p) => (
                 <option key={p.id} value={p.id}>
@@ -457,11 +573,20 @@ export default function SessionsPage() {
           <div className="flex gap-2">
             <div className="flex-1 space-y-1">
               <Label>통합 브랜치 (비우면 등록값)</Label>
-              <Input className="w-full" value={branch} onChange={(e) => setBranch(e.target.value)} />
+              <Input
+                className="w-full"
+                value={branch}
+                onChange={(e) => setBranch(e.target.value)}
+              />
             </div>
             <div className="space-y-1">
               <Label>모드</Label>
-              <Select value={mode} onChange={(e) => setMode(e.target.value as CollabSession["mode"])}>
+              <Select
+                value={mode}
+                onChange={(e) =>
+                  setMode(e.target.value as CollabSession["mode"])
+                }
+              >
                 <option value="direct">직접 (기존 브랜치)</option>
                 <option value="isolated">격리 (세션 전용)</option>
               </Select>
@@ -471,7 +596,11 @@ export default function SessionsPage() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>레인</Label>
-              <Button size="xs" variant="outline" onClick={() => setLanes((ls) => [...ls, emptyLane()])}>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => setLanes((ls) => [...ls, emptyLane()])}
+              >
                 <Plus /> 레인 추가
               </Button>
             </div>
@@ -482,16 +611,24 @@ export default function SessionsPage() {
                     className="flex-1"
                     value={l.taskId}
                     onChange={(e) =>
-                      setLanes((ls) => ls.map((x, j) => (j === i ? { ...x, taskId: e.target.value } : x)))
+                      setLanes((ls) =>
+                        ls.map((x, j) =>
+                          j === i ? { ...x, taskId: e.target.value } : x,
+                        ),
+                      )
                     }
-                    placeholder="작업 ID (비우면 자유 작업)"
-                    aria-label={`레인 ${i + 1} 작업 ID`}
+                    placeholder="자동화 작업 ID (비우면 자유 실행)"
+                    aria-label={`레인 ${i + 1} 자동화 작업 ID`}
                   />
                   <Select
                     value={l.driver}
                     onChange={(e) =>
                       setLanes((ls) =>
-                        ls.map((x, j) => (j === i ? { ...x, driver: e.target.value as CollabDriver } : x)),
+                        ls.map((x, j) =>
+                          j === i
+                            ? { ...x, driver: e.target.value as CollabDriver }
+                            : x,
+                        ),
                       )
                     }
                     aria-label={`레인 ${i + 1} 드라이버`}
@@ -504,7 +641,9 @@ export default function SessionsPage() {
                     variant="ghost"
                     disabled={lanes.length === 1}
                     aria-label={`레인 ${i + 1} 삭제`}
-                    onClick={() => setLanes((ls) => ls.filter((_, j) => j !== i))}
+                    onClick={() =>
+                      setLanes((ls) => ls.filter((_, j) => j !== i))
+                    }
                   >
                     <Trash2 />
                   </Button>
@@ -514,13 +653,19 @@ export default function SessionsPage() {
                   rows={2}
                   value={l.taskPrompt}
                   onChange={(e) =>
-                    setLanes((ls) => ls.map((x, j) => (j === i ? { ...x, taskPrompt: e.target.value } : x)))
+                    setLanes((ls) =>
+                      ls.map((x, j) =>
+                        j === i ? { ...x, taskPrompt: e.target.value } : x,
+                      ),
+                    )
                   }
                   placeholder="이 레인이 할 작업 지시"
                   aria-label={`레인 ${i + 1} 작업 지시`}
                 />
                 {l.driver === "codex" && (
-                  <p className="text-xs text-warning-foreground">{CODEX_NOTE}</p>
+                  <p className="text-xs text-warning-foreground">
+                    {CODEX_NOTE}
+                  </p>
                 )}
               </div>
             ))}

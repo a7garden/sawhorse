@@ -36,7 +36,7 @@ description: Use when the user asks for a daily work report to send — "업무 
 - 인증 모듈 오류 원인 규명 및 수정
 
 [문서 작성]
-- A사업 기능분석 문서 2건 작성
+- A프로젝트 기능분석 문서 2건 작성
 ```
 
 - 분류 이름은 그날 작업에 맞게 새로 판단한다(예: [회의], [테스트], [환경 구축]).

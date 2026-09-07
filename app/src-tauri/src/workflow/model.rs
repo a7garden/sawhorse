@@ -5,7 +5,14 @@ use serde_json::Value;
 
 pub const DEFINITION_VERSION: u32 = 1;
 pub const DEFAULT_WORKFLOW_ID: &str = "sdd-main";
-pub const DEFAULT_WORKFLOW_VERSION: &str = "1.0.0";
+/// 죽어 있던 `maintain`(학습) 노드를 빼고 노드 id `plan` 을 `intent` 로 옮긴 판.
+pub const DEFAULT_WORKFLOW_VERSION: &str = "1.1.0";
+/// 요청·설계·수행 세 단계로 끝내는 기본 흐름. 볼트의 개발 항목이 전부 이 흐름을
+/// 쓴다. 개발 항목과 저장소는 같고 산출물만 가볍다.
+pub const ISSUE_WORKFLOW_ID: &str = "issue-main";
+/// 실사용 섹션에 맞춘 문서 골격과 `resolve` 노드를 담은 판. 앞선 1.0.0 은 이미
+/// 만들어진 항목이 digest 로 고정하고 있어 정의를 그 자리에서 고칠 수 없다.
+pub const ISSUE_WORKFLOW_VERSION: &str = "1.1.0";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default, rename_all = "camelCase")]

@@ -19,10 +19,17 @@ const SECTIONS: { key: TodoSection; title: string }[] = [
 export default function TodosPage() {
   const todos = useApp((s) => s.todos);
   const refreshTodos = useApp((s) => s.refreshTodos);
-  const [drafts, setDrafts] = useState<Record<TodoSection, string>>({ today: "", tomorrow: "" });
+  const [drafts, setDrafts] = useState<Record<TodoSection, string>>({
+    today: "",
+    tomorrow: "",
+  });
   const [pending, setPending] = useState(false);
 
-  async function toggle(section: TodoSection, item: TodoItem, checked: boolean) {
+  async function toggle(
+    section: TodoSection,
+    item: TodoItem,
+    checked: boolean,
+  ) {
     setPending(true);
     try {
       await api.toggleTodo(section, item.index, checked);
@@ -47,9 +54,7 @@ export default function TodosPage() {
 
   return (
     <div>
-      <PageHeader
-        title="할 일"
-      />
+      <PageHeader title="할 일" />
 
       {todos && !todos.fileExists && (
         <div className={`px-4 pt-3 text-xs ${WARN_TEXT}`}>
@@ -70,7 +75,9 @@ export default function TodosPage() {
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-1.5">
-                {items.length === 0 && <Empty className="py-4">항목이 없습니다.</Empty>}
+                {items.length === 0 && (
+                  <Empty className="py-4">항목이 없습니다.</Empty>
+                )}
                 {items.map((it) => (
                   <label
                     key={it.index}
@@ -80,9 +87,16 @@ export default function TodosPage() {
                       className="mt-0.5"
                       checked={it.checked}
                       disabled={pending}
-                      onChange={(e) => void toggle(sec.key, it, e.target.checked)}
+                      onChange={(e) =>
+                        void toggle(sec.key, it, e.target.checked)
+                      }
                     />
-                    <span className={cn("break-words", it.checked && "text-muted-foreground line-through")}>
+                    <span
+                      className={cn(
+                        "break-words",
+                        it.checked && "text-muted-foreground line-through",
+                      )}
+                    >
                       {it.text}
                     </span>
                   </label>
@@ -96,10 +110,16 @@ export default function TodosPage() {
                 >
                   <Input
                     value={drafts[sec.key]}
-                    onChange={(e) => setDrafts((d) => ({ ...d, [sec.key]: e.target.value }))}
+                    onChange={(e) =>
+                      setDrafts((d) => ({ ...d, [sec.key]: e.target.value }))
+                    }
                     placeholder="새 항목을 입력하세요"
                   />
-                  <Button type="submit" size="sm" disabled={pending || drafts[sec.key].trim().length === 0}>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={pending || drafts[sec.key].trim().length === 0}
+                  >
                     <Plus /> 추가
                   </Button>
                 </form>

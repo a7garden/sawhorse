@@ -20,11 +20,15 @@ use serde_json::{json, Map, Value};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::config::{self, ConfigView, HerdrCfg};
-use crate::herdr::Herdr;
+use crate::herdr::{self, Herdr};
 use crate::state::AppState;
 use crate::transcript;
 
 pub const EXCEL_FILENAME: &str = "개선수정사항-체크리스트.xlsx";
+
+/// herdr agent kind for a Claude Code pane — also the executable name herdr
+/// launches, which is why the launch preflight keys off it.
+const CLAUDE_AGENT: &str = "claude";
 
 pub type EmitFn = Arc<dyn Fn(&str, &Value) + Send + Sync>;
 
@@ -69,6 +73,11 @@ pub struct Job {
     pub id: String,
     pub kind: String,
     pub label: String,
+    /// 같은 일을 두 번 시키지 않기 위한 요청 식별자 — `dedup_key()` 참고. 같은 키의
+    /// 잡이 대기·실행 중이면 새 잡을 받지 않고, 화면은 이 키로 "실행 중" 버튼을 찾는다.
+    /// 히스토리에 남은 예전 기록에는 없으므로 기본값을 둔다.
+    #[serde(default)]
+    pub dedup_key: String,
     pub status: JobStatus,
     pub project: Option<String>,
     pub created_at_ms: u64,
@@ -283,6 +292,9 @@ pub struct JobManager {
     running: Mutex<HashMap<String, RunCtl>>,
     cancel_requested: Mutex<std::collections::HashSet<String>>,
     slot_free: tokio::sync::Notify,
+    /// 중복 검사와 큐 등록 사이에 다른 요청이 끼어들지 못하게 하는 문. 버튼 연타는
+    /// 두 요청이 거의 같은 순간에 도착하는 일이라, 검사만으로는 둘 다 통과한다.
+    admit: Mutex<()>,
     emit: EmitFn,
 }
 
@@ -331,6 +343,58 @@ fn id_label(kind: &str, ids: &Option<Vec<String>>) -> String {
     }
 }
 
+/// 중복 실행 판정 키 — "무엇을 대상으로 무엇을 하는가"만 담는다.
+///
+/// 버튼 한 번에 한 실행이 원칙이다. 개념 정리처럼 볼트 한 곳에 쓰는 작업이 겹쳐 돌면
+/// 같은 문서를 두 에이전트가 동시에 고치고, 설계처럼 대상이 있는 작업은 대상별로는
+/// 나란히 돌아도 된다. 그래서 종류·대상(팩 액션/작업 정의/루틴)·프로젝트·ID 목록까지만
+/// 키에 넣고, 자유 입력 파라미터는 넣지 않는다.
+pub fn dedup_key(req: &JobRequest) -> String {
+    let param_str = |k: &str| {
+        req.params
+            .get(k)
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .filter(|s| !s.trim().is_empty())
+    };
+    let target = match req.kind.as_str() {
+        "action" => format!(
+            "{}.{}",
+            req.pack_id.clone().unwrap_or_default(),
+            req.action_id.clone().unwrap_or_default()
+        ),
+        "task" => req.task_id.clone().unwrap_or_default(),
+        "routine" => req.routine.clone().unwrap_or_default(),
+        // 레인은 매 실행이 다른 일이다. 같은 레인을 두 번 던지는 것만 막는다.
+        "collab" => req
+            .collab
+            .as_ref()
+            .map(|l| format!("{}/{}", l.session_id, l.run_id))
+            .unwrap_or_default(),
+        _ => String::new(),
+    };
+    let project = req
+        .project
+        .clone()
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| param_str("project"))
+        .or_else(|| param_str("projectId"))
+        .unwrap_or_default();
+    let mut ids = req.ids.clone().unwrap_or_default();
+    if ids.is_empty() {
+        if let Some(list) = req.params.get("ids").and_then(Value::as_array) {
+            ids = list
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect();
+        }
+    }
+    ids.sort();
+    ids.dedup();
+    format!("{}|{}|{}|{}", req.kind, target, project, ids.join(","))
+}
+
 fn build_job(
     req: JobRequest,
     opts: &SpawnOpts,
@@ -341,6 +405,7 @@ fn build_job(
         id: uuid::Uuid::new_v4().to_string(),
         kind: req.kind.clone(),
         label: String::new(),
+        dedup_key: dedup_key(&req),
         status: JobStatus::Queued,
         project: req.project.clone(),
         created_at_ms: now_ms(),
@@ -372,7 +437,7 @@ fn build_job(
                 .clone()
                 .unwrap_or_else(|| view.default_project.clone());
             if project_name.is_empty() {
-                return Err("실행할 사업이 지정되지 않았습니다".into());
+                return Err("실행할 프로젝트가 지정되지 않았습니다".into());
             }
             // Generic issues (documents, research, coordination, decisions) may
             // have no codebase configuration. Run them from the vault; configured
@@ -385,7 +450,7 @@ fn build_job(
                 .unwrap_or_else(|| view.vault_path.clone());
             if cwd.is_empty() {
                 return Err(format!(
-                    "{project_name} 사업에 작업 경로 또는 볼트 경로가 없습니다"
+                    "{project_name} 프로젝트에 작업 경로 또는 볼트 경로가 없습니다"
                 ));
             }
             let verb = if req.kind == "design" {
@@ -472,10 +537,12 @@ fn build_job(
             if opts.vault_path.is_empty() {
                 return Err("볼트 경로가 설정되지 않았습니다".into());
             }
-            let prompt = "볼트의 모든 사업 이슈목록(사업/<사업명>/이슈/<idPrefix> 이슈목록.md)의 '## 신규 (미승격)' 항목을 검토하라. 레거시 개선/<idPrefix> 문제목록.md는 읽기 전용으로 표시만 하고 자동 이관하지 않는다.\n\
+            // 승격 결과는 개발 항목이다. 이슈 노트를 새로 만들면 정본이 다시 둘로
+            // 갈라지므로, 인박스는 입력으로만 읽고 산출물은 work/ 에 남긴다.
+            let prompt = "볼트의 모든 프로젝트 이슈목록(프로젝트|사업/<프로젝트명>/이슈/<idPrefix> 이슈목록.md)의 '## 신규 (미승격)' 항목을 검토하라. 레거시 개선/<idPrefix> 문제목록.md는 읽기 전용으로 표시만 하고 자동 이관하지 않는다.\n\
                 1. 항목별로 승격 여부를 판단한다. 단순 메모·중복·실행 불가는 승격하지 않고 해당 항목 뒤에 한 줄 사유를 덧붙여 유지한다.\n\
-                2. 승격 건은 이슈 템플릿으로 생성한다: type: 이슈, issue_type: 작업, state: open, status: 제안, approve: false, priority: 보통, id는 해당 사업 이슈 폴더의 기존 id 최댓값+1, 파일명은 '<ID> <제목>.md', 이슈/ 바로 아래 평면 배치.\n\
-                3. 이슈목록 문서는 이슈 base 뷰 임베드 + '## 신규 (미승격)' + '## 승격 이력' 구조로 재작성하고, 승격 건은 '## 승격 이력'에 '<ID> (<날짜>)'로 남긴다.\n\
+                2. 승격 건은 개발 항목으로 만든다 — work/<id>/work.md 에 issueType: 작업, executionType: 적절한 값, status: backlog, approve: false, priority: normal 로 쓰고, 배경과 원하는 결과를 intent.md 에 남긴다. 새 이슈 노트를 이슈/ 폴더에 만들지 않는다.\n\
+                3. 이슈목록 문서는 '## 신규 (미승격)' + '## 승격 이력' 구조로 재작성하고, 승격 건은 '## 승격 이력'에 '<work-id> (<날짜>)'로 남긴다.\n\
                 4. 마지막 출력에 승격 N건 / 유지 M건과 승격된 ID 목록을 보고한다.";
             Ok(Job {
                 label: "인박스 승격 검토".into(),
@@ -615,6 +682,7 @@ impl JobManager {
             running: Mutex::new(HashMap::new()),
             cancel_requested: Mutex::new(std::collections::HashSet::new()),
             slot_free: tokio::sync::Notify::new(),
+            admit: Mutex::new(()),
             emit,
         });
         let mgr2 = mgr.clone();
@@ -622,9 +690,19 @@ impl JobManager {
             // Strict FIFO admission: the head of the queue decides which runner it
             // wants, then waits for a slot that runner can use.
             while let Some(mut job) = rx.recv().await {
+                // 대기 중에 취소된 잡. cancel()이 이미 Cancelled 로 기록했으므로
+                // 여기서는 흔적만 지우고 건너뛴다.
+                if mgr2.take_cancel(&job.id) {
+                    continue;
+                }
                 let runner = mgr2.decide_runner(&mut job).await;
-                mgr2.await_slot(&job.id, runner, job.herdr_cfg.max_parallel)
-                    .await;
+                if !mgr2
+                    .await_slot(&job.id, runner, job.herdr_cfg.max_parallel)
+                    .await
+                {
+                    mgr2.take_cancel(&job.id);
+                    continue;
+                }
                 let mgr3 = mgr2.clone();
                 tauri::async_runtime::spawn(async move {
                     mgr3.run_one(&mut job, runner).await;
@@ -636,21 +714,32 @@ impl JobManager {
     }
 
     /// Pick the runner for one job, honouring `mode` and falling back to headless
-    /// when `auto` cannot reach a herdr server. The reason lands in the job log so
-    /// a surprising fallback is explainable after the fact.
+    /// when `auto` cannot reach a herdr server or cannot launch claude inside one.
+    /// The reason lands in the job log so a surprising fallback is explainable
+    /// after the fact.
     async fn decide_runner(&self, job: &mut Job) -> JobRunner {
         match job.herdr_cfg.mode.as_str() {
             "headless" => JobRunner::Headless,
-            "herdr" => JobRunner::Herdr,
+            "herdr" => {
+                // The setting forbids the fallback, so all we can do is say why
+                // the herdr run is about to fail.
+                if let Some(why) = herdr::windows_launch_block(CLAUDE_AGENT) {
+                    self.log_line(job, &format!("herdr 실행 경고: {why}"));
+                }
+                JobRunner::Herdr
+            }
             _ => {
-                if Herdr::new(&job.herdr_cfg).reachable().await {
-                    JobRunner::Herdr
-                } else {
+                if !Herdr::new(&job.herdr_cfg).reachable().await {
                     self.log_line(
                         job,
                         "herdr 서버에 연결하지 못해 헤드리스로 실행합니다 (mode: auto)",
                     );
                     JobRunner::Headless
+                } else if let Some(why) = herdr::windows_launch_block(CLAUDE_AGENT) {
+                    self.log_line(job, &format!("{why} 헤드리스로 실행합니다 (mode: auto)"));
+                    JobRunner::Headless
+                } else {
+                    JobRunner::Herdr
                 }
             }
         }
@@ -661,8 +750,13 @@ impl JobManager {
     /// A headless job wants the machine to itself (it is the pre-herdr contract and
     /// several job kinds write shared vault state). A herdr job may share with other
     /// herdr jobs up to `max_parallel`, but never with a headless one.
-    async fn await_slot(&self, id: &str, runner: JobRunner, max_parallel: u32) {
+    ///
+    /// 슬롯을 잡으면 true. 기다리는 동안 취소되면 false 를 돌려 실행을 접는다.
+    async fn await_slot(&self, id: &str, runner: JobRunner, max_parallel: u32) -> bool {
         loop {
+            if self.cancelled(id) {
+                return false;
+            }
             {
                 let mut running = self.running.lock();
                 let has_headless = running.values().any(|c| c.runner() == JobRunner::Headless);
@@ -674,7 +768,7 @@ impl JobManager {
                 };
                 if admitted {
                     running.insert(id.to_string(), RunCtl::Starting(runner));
-                    return;
+                    return true;
                 }
             }
             // Poll alongside the notify so a wake-up that lands between the check
@@ -696,6 +790,28 @@ impl JobManager {
 
     fn cancelled(&self, id: &str) -> bool {
         self.cancel_requested.lock().contains(id)
+    }
+
+    /// 취소 표시를 지우면서 있었는지 알려준다 — 시작 전에 접힌 잡의 흔적 정리용.
+    fn take_cancel(&self, id: &str) -> bool {
+        self.cancel_requested.lock().remove(id)
+    }
+
+    fn job_by_id(&self, id: &str) -> Option<Job> {
+        self.state.jobs.lock().iter().find(|j| j.id == id).cloned()
+    }
+
+    /// 같은 키로 이미 대기·실행 중인 잡. 재시작 때 남은 잡은 부팅 시
+    /// `mark_stale_interrupted` 가 정리하므로 상태만 보면 된다.
+    pub fn active_with_key(&self, key: &str) -> Option<Job> {
+        self.state
+            .jobs
+            .lock()
+            .iter()
+            .find(|j| {
+                j.dedup_key == key && matches!(j.status, JobStatus::Queued | JobStatus::Running)
+            })
+            .cloned()
     }
 
     /// Append one operational note to the job's log file (same file the stream /
@@ -723,6 +839,14 @@ impl JobManager {
         opts: SpawnOpts,
         view: &ConfigView,
     ) -> Result<Job, String> {
+        // 같은 일이 이미 큐에 있으면 받지 않는다. 검사부터 등록까지 한 손에 쥐고 한다.
+        let _admit = self.admit.lock();
+        if let Some(active) = self.active_with_key(&dedup_key(&req)) {
+            return Err(format!(
+                "이미 실행 중입니다: {} — 끝나기를 기다리거나 중단한 뒤 다시 실행하세요",
+                active.label
+            ));
+        }
         let job = build_job(req, &opts, view, &self.state)?;
         self.state.record_job(&job);
         self.tx
@@ -732,13 +856,24 @@ impl JobManager {
     }
 
     pub async fn cancel(&self, id: &str) -> Result<(), String> {
-        let herdr_target = {
+        let ctl = {
             let running = self.running.lock();
             match running.get(id) {
-                None => return Err("실행 중인 작업이 아닙니다".into()),
-                Some(RunCtl::Herdr { agent, .. }) => Some(agent.clone()),
-                _ => None,
+                None => None,
+                Some(RunCtl::Herdr { agent, .. }) => Some(Some(agent.clone())),
+                _ => Some(None),
             }
+        };
+        // 아직 시작하지 않은 잡 — 큐에서 바로 접는다. 디스패처가 뒤늦게 꺼내면
+        // 취소 표시를 보고 건너뛴다.
+        let Some(herdr_target) = ctl else {
+            let mut job = self
+                .job_by_id(id)
+                .filter(|j| j.status == JobStatus::Queued)
+                .ok_or_else(|| "실행 중인 작업이 아닙니다".to_string())?;
+            self.cancel_requested.lock().insert(id.to_string());
+            self.finish(&mut job, JobStatus::Cancelled, None, None, None);
+            return Ok(());
         };
         self.cancel_requested.lock().insert(id.to_string());
 
@@ -821,6 +956,12 @@ impl JobManager {
     }
 
     async fn run_one(&self, job: &mut Job, runner: JobRunner) {
+        // 슬롯을 잡은 뒤 시작 직전에 취소된 잡은 아예 띄우지 않는다.
+        if self.take_cancel(&job.id) {
+            job.runner = runner;
+            self.finish(job, JobStatus::Cancelled, None, None, None);
+            return;
+        }
         job.runner = runner;
         job.status = JobStatus::Running;
         job.started_at_ms = Some(now_ms());
@@ -1061,7 +1202,7 @@ impl JobManager {
         ];
         let start_ms = (job.herdr_cfg.start_timeout_sec as u64) * 1000;
         let target = match h
-            .agent_start(&name, "claude", &tab.pane_id, start_ms, &extra)
+            .agent_start(&name, CLAUDE_AGENT, &tab.pane_id, start_ms, &extra)
             .await
         {
             Ok(_) => name.clone(),
@@ -1310,14 +1451,16 @@ impl JobManager {
             "keep" => false,
             _ => status == JobStatus::Success,
         };
-        if !close {
-            if status != JobStatus::Success {
-                h.notify(
-                    "작업 실패",
-                    &format!("{} — herdr 탭에 세션이 남아 있습니다", job.label),
-                )
+        if status != JobStatus::Success {
+            let where_to_look = if close {
+                "기록은 잡 상세에 남습니다"
+            } else {
+                "herdr 탭에 세션이 남아 있습니다"
+            };
+            h.notify("작업 실패", &format!("{} — {where_to_look}", job.label))
                 .await;
-            }
+        }
+        if !close {
             return;
         }
         let _ = h.close_tab(tab).await;
@@ -1438,6 +1581,106 @@ fn track_entry(entry: &Value, report: &mut Option<String>, result_is_error: &mut
             .get("text")
             .and_then(Value::as_str)
             .map(str::to_string);
+    }
+}
+
+/// 중복 실행 방지 — 러너를 띄우지 않으므로 어느 OS 에서나 돈다.
+#[cfg(test)]
+mod dedup_tests {
+    use super::*;
+    use crate::state::AppState;
+
+    fn req(kind: &str) -> JobRequest {
+        JobRequest {
+            kind: kind.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn key_separates_targets_but_ignores_free_params() {
+        let action = |pack: &str, id: &str| JobRequest {
+            pack_id: Some(pack.into()),
+            action_id: Some(id.into()),
+            ..req("action")
+        };
+        assert_eq!(dedup_key(&action("si", "wiki")), "action|si.wiki||");
+        assert_ne!(
+            dedup_key(&action("si", "wiki")),
+            dedup_key(&action("si", "daily-log"))
+        );
+
+        // 자유 입력은 같은 버튼의 같은 실행으로 본다 — 볼트 한 곳에 겹쳐 쓰지 않도록.
+        let mut with_topic = action("si", "wiki");
+        with_topic.params.insert("topic".into(), json!("리트라이"));
+        assert_eq!(dedup_key(&with_topic), dedup_key(&action("si", "wiki")));
+
+        // 대상이 다르면 나란히 돌아도 된다.
+        let issue = |ids: &[&str]| JobRequest {
+            project: Some("포탈".into()),
+            ids: Some(ids.iter().map(|s| s.to_string()).collect()),
+            ..req("design")
+        };
+        assert_eq!(dedup_key(&issue(&["A-1"])), "design||포탈|A-1");
+        assert_ne!(dedup_key(&issue(&["A-1"])), dedup_key(&issue(&["A-2"])));
+        // 순서만 다른 같은 목록은 같은 키다.
+        assert_eq!(
+            dedup_key(&issue(&["A-2", "A-1"])),
+            dedup_key(&issue(&["A-1", "A-2"]))
+        );
+
+        // 종류가 다르면 다른 일이다.
+        assert_ne!(dedup_key(&req("promote")), dedup_key(&req("excel")));
+    }
+
+    #[tokio::test]
+    async fn enqueue_refuses_while_the_same_job_is_in_flight() {
+        let dir = std::env::temp_dir().join(format!("swdash-dedup-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let state = Arc::new(AppState::new_with(dir.join("data"), dir.join("projects")));
+        let emit: EmitFn = Arc::new(|_, _| {});
+        let mgr = JobManager::start(state.clone(), emit);
+        let view = config::view(
+            &serde_json::json!({"vaultPath": dir.to_string_lossy()}),
+            true,
+        );
+        let opts = SpawnOpts {
+            claude_bin: dir.join("no-such-claude").to_string_lossy().to_string(),
+            permission_mode: "bypassPermissions".into(),
+            vault_path: dir.to_string_lossy().to_string(),
+            herdr: HerdrCfg {
+                mode: "headless".into(),
+                ..HerdrCfg::default()
+            },
+        };
+        let request = JobRequest {
+            routine: Some("morning".into()),
+            ..req("routine")
+        };
+
+        // 실행 중인 잡을 손으로 세워 둔다 — 디스패처 타이밍에 기대지 않기 위해서.
+        let mut running = build_job(request.clone(), &opts, &view, &state).unwrap();
+        running.status = JobStatus::Running;
+        state.record_job(&running);
+
+        let err = mgr
+            .enqueue_with(request.clone(), opts.clone(), &view)
+            .unwrap_err();
+        assert!(err.contains("이미 실행 중입니다"), "{err}");
+
+        // 다른 루틴은 막지 않는다.
+        let other = JobRequest {
+            routine: Some("evening".into()),
+            ..req("routine")
+        };
+        assert!(mgr.enqueue_with(other, opts.clone(), &view).is_ok());
+
+        // 끝난 뒤에는 다시 실행할 수 있다.
+        running.status = JobStatus::Success;
+        state.record_job(&running);
+        assert!(mgr.enqueue_with(request, opts, &view).is_ok());
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 
@@ -1774,7 +2017,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         let generic = build_job(
             JobRequest {
                 kind: "design".into(),
-                project: Some("없는사업".into()),
+                project: Some("없는프로젝트".into()),
                 ids: None,
                 routine: None,
                 ..Default::default()

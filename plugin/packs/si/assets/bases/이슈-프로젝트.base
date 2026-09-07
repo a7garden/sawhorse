@@ -3,12 +3,12 @@ formulas:
 filters:
   and:
     - type == "이슈"
-    - file.inFolder("사업/<사업명>/이슈")
+    - file.inFolder("프로젝트/<프로젝트명>/이슈")
 properties:
   file.name: { displayName: 이슈 }
   id: { displayName: ID }
   issue_type: { displayName: 유형 }
-  execution_type: { displayName: 실행 유형 }
+  execution_type: { displayName: 처리 유형 }
   labels: { displayName: 레이블 }
   milestone: { displayName: 마일스톤 }
   priority: { displayName: 중요도 }

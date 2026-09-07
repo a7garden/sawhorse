@@ -284,10 +284,7 @@ export default function SetupWizard() {
                     "확장",
                     "일하는 방식 한 벌. 켜면 화면·예약·스킬이 함께 따라옵니다.",
                   ],
-                  [
-                    "스킬",
-                    "켠 확장의 스킬을 에이전트에 설치합니다.",
-                  ],
+                  ["스킬", "켠 확장의 스킬을 에이전트에 설치합니다."],
                 ].map(([t, d]) => (
                   <div key={t} className="rounded-lg border px-3 py-2">
                     <div className="text-[13px] font-semibold text-foreground">

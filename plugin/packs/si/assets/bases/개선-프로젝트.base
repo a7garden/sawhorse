@@ -3,7 +3,7 @@ formulas:
 filters:
   and:
     - type == "개선"
-    - file.inFolder("사업/<사업명>/개선")
+    - file.inFolder("프로젝트/<프로젝트명>/개선")
 properties:
   file.name:
     displayName: 문제

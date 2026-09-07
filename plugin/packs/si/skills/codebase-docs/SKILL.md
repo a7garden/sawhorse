@@ -6,7 +6,7 @@ description: Use when the user wants to analyze a codebase and document it featu
 # 코드베이스 기능 문서화 (codebase-docs)
 
 코드베이스를 읽기 전용으로 탐색해 사용자 관점 기능(capability) 단위로 분해하고,
-`분석/` 아래 기능당 기능분석 문서 1개씩 만든 뒤 사업 허브(MOC)를 갱신한다.
+`분석/` 아래 기능당 기능분석 문서 1개씩 만든 뒤 프로젝트 허브(MOC)를 갱신한다.
 
 ## 안전 규칙 (최우선)
 
@@ -21,18 +21,18 @@ description: Use when the user wants to analyze a codebase and document it featu
 
 ## 입력
 
-`$ARGUMENTS` = 사업명 [코드베이스 경로]
+`$ARGUMENTS` = 프로젝트명 [코드베이스 경로]
 
-- 코드베이스 경로가 없으면 사업 허브 frontmatter의 `codebase` 필드를 사용한다.
+- 코드베이스 경로가 없으면 프로젝트 허브 frontmatter의 `codebase` 필드를 사용한다.
 - 둘 다 없으면 사용자에게 문의하고 중단한다.
-- 사업명·기능명은 vault 폴더/파일명이 된다. Windows 금지 문자(`\` `/` `:` `*` `?` `"` `<` `>` `|`)는 제거하거나 `-`로 치환한다.
+- 프로젝트명·기능명은 vault 폴더/파일명이 된다. Windows 금지 문자(`\` `/` `:` `*` `?` `"` `<` `>` `|`)는 제거하거나 `-`로 치환한다.
 
 ## 절차
 
-1. **사업 허브 확인**
-   - `${user_config.vault_path}/사업/<사업명>/<사업명>.md`가 있는지 본다. 없으면 `/sawhorse:project-doc`으로 먼저 등록하라고 안내하고 중단한다.
+1. **프로젝트 허브 확인**
+   - `${user_config.vault_path}/프로젝트/<프로젝트명>/<프로젝트명>.md`가 있는지 본다. 없으면 `/sawhorse:project-doc`으로 먼저 등록하라고 안내하고 중단한다.
    - 허브의 `codebase`, `vcs` 필드를 참조한다. `vcs`는 참고용이며 탐색 방식은 동일하다(경로만 본다).
-   - `${user_config.vault_path}/사업/<사업명>/분석/`과 `${user_config.vault_path}/첨부/스크린샷/`, `${user_config.vault_path}/첨부/다이어그램/` 폴더를 준비한다(이미 있으면 유지).
+   - `${user_config.vault_path}/프로젝트/<프로젝트명>/분석/`과 `${user_config.vault_path}/첨부/스크린샷/`, `${user_config.vault_path}/첨부/다이어그램/` 폴더를 준비한다(이미 있으면 유지).
 
 2. **코드베이스 읽기 전용 탐색**
    - 루트 매니페스트(`package.json`, `pom.xml`, `build.gradle`, `*.csproj`, `requirements.txt` 등)로 기술 스택과 엔트리포인트를 식별한다.
@@ -62,12 +62,12 @@ description: Use when the user wants to analyze a codebase and document it featu
    - `sources`에만 실제 파일 경로를 적고, 줄 끼 주석으로 그 파일의 역할을 붙인다. 본문에 파일 경로 나열 금지.
    - 본문은 추상 서술: `## 개요`(이 기능이 사용자에게 무엇을 해주는지), `## 동작 흐름`(처리 단계 설명).
    - 다이어그램 우선: 내용에 맞는 mermaid를 최소 1개 이상 넣는다 — 구조는 `flowchart`/`classDiagram`, 흐름은 `sequenceDiagram`, 상태 전이는 `stateDiagram`, 데이터는 `erDiagram`. 여러 개면 더 좋다.
-   - mermaid로 표현이 복잡한 레이아웃·와이어프레임·전체 아키텍처 그림은 SVG 파일로 직접 그려 `${user_config.vault_path}/첨부/다이어그램/<사업명>/`에 저장하고 `![[<파일명>.svg]]`로 임베드한다.
+   - mermaid로 표현이 복잡한 레이아웃·와이어프레임·전체 아키텍처 그림은 SVG 파일로 직접 그려 `${user_config.vault_path}/첨부/다이어그램/<프로젝트명>/`에 저장하고 `![[<파일명>.svg]]`로 임베드한다.
    - 본문에서 도메인 개념 첫 등장 시 `[[개념명]]` 링크. 노트가 없으면 `템플릿/개념.md`로 생성한다(정의 2-3문장, `sources`에 근거 코드 경로).
    - `related`에 관련 기능분석 문서를 서로 링크한다. `status`는 기본 `초안`.
 
 5. **스크린샷 (선택)**
-   - UI 프로젝트이고 Playwright MCP 도구가 사용 가능하면: 앱을 실행할 수 있으면(사용자 제공 URL 또는 로컬 개발 서버) 핵심 화면 2-4장을 캡처해 `${user_config.vault_path}/첨부/스크린샷/<사업명>/<기능명>-<화면명>.png`로 저장하고 해당 기능 문서에 `![[<파일명>.png]]`로 임베드한다.
+   - UI 프로젝트이고 Playwright MCP 도구가 사용 가능하면: 앱을 실행할 수 있으면(사용자 제공 URL 또는 로컬 개발 서버) 핵심 화면 2-4장을 캡처해 `${user_config.vault_path}/첨부/스크린샷/<프로젝트명>/<기능명>-<화면명>.png`로 저장하고 해당 기능 문서에 `![[<파일명>.png]]`로 임베드한다.
    - MCP 도구가 없거나 앱 실행/캡처가 실패하면 텍스트만으로 진행한다. 중단 금지. 건너뛴 사실만 결과 보고에 남긴다.
 
 6. **허브 MOC 갱신**

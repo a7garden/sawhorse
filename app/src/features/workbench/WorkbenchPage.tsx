@@ -1,11 +1,16 @@
-import { MilestoneIssuePicker } from "@/components/IssueMilestones";
 import {
-  ScheduledTasksWidget,
+  ChecklistWidget,
+  IssuesWidget,
+  JobsWidget,
+  MiniAction,
   ReadingWidget,
+  ScheduledTasksWidget,
+  TodayActivity,
 } from "@/features/dashboard/FeatureWidgets";
 import OnboardingPage from "@/pages/OnboardingPage";
 import { PathInput } from "@/components/ui/path-input";
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -24,8 +29,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
-  CircleDot,
-  Clock3,
   FilePenLine,
   FileText,
   Filter,
@@ -33,36 +36,54 @@ import {
   LayoutDashboard,
   Loader2,
   MoreHorizontal,
+  Play,
   Plus,
   RefreshCw,
   Search,
   Send,
   SquareTerminal,
   StopCircle,
-  X,
   SlidersHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
+import { toast } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/store";
 import { api as vaultApi } from "@/lib/api";
 import { sddApi, workflowApi } from "./api";
+import {
+  acceptWorkspaceSnapshot,
+  ensureWorkspaceSnapshot,
+  refreshWorkspaceSnapshot,
+  useWorkspaceSnapshot,
+  watchWorkspaceSnapshot,
+} from "./snapshot-store";
 import { DashboardBoard } from "@/features/dashboard/DashboardBoard";
 import type { DashboardWidgetId } from "@/features/dashboard/registry";
 import {
+  METRIC_BY_KEY,
+  METRIC_PREFIX,
+  isMetricWidgetId,
+  type MetricKey,
+} from "@/features/dashboard/metrics";
+import {
   ARTIFACTS,
   ARTIFACT_LABELS,
+  EXECUTION_TYPES,
+  ISSUE_TYPES,
   PRIORITY_LABELS,
   STAGES,
   STAGE_LABELS,
   STATUSES,
   STATUS_LABELS,
+  isClosedStatus,
   type AgentRole,
   type ArtifactKind,
   type CalendarEvent,
   type Document,
   type HarnessRun,
+  type IssueMigrationItem,
   type Priority,
   type Project,
   type SearchHit,
@@ -91,6 +112,9 @@ type AgendaEntry =
       title: string;
       workId: string;
     };
+/** 아직 끝나지 않은 harness 실행 상태. 중복 실행 판정과 상태 갱신이 같은 목록을 본다. */
+const ACTIVE_RUN_STATUS = ["starting", "running", "blocked"];
+
 const roleLabels: Record<AgentRole, string> = {
   research: "조사",
   planner: "계획",
@@ -168,6 +192,21 @@ function blankWork(): WorkItem {
     workflowDigest: "",
     workflowInstanceId: null,
     activeNodes: [],
+    issueType: "작업",
+    executionType: "코드",
+    labels: [],
+    assignees: [],
+    milestone: "",
+    approvalRequired: true,
+    approve: false,
+    approved: "",
+    state: "open",
+    closed: "",
+    githubRepo: "",
+    githubNumber: "",
+    githubUrl: "",
+    githubState: "",
+    githubUpdated: "",
   };
 }
 function blankProject(): Project {
@@ -251,6 +290,43 @@ function stageLabel(
     stage
   );
 }
+function transitionActionLabel(event: string, targetLabel: string) {
+  switch (event) {
+    case "approved":
+      return targetLabel === "완료"
+        ? "승인하고 완료"
+        : `검토 후 다음: ${targetLabel}`;
+    case "changes-requested":
+    case "revise":
+      return "수정 요청";
+    case "revised":
+      return `개정 완료: ${targetLabel}`;
+    case "rejected":
+      return "반려";
+    case "cancelled":
+      return "취소";
+    default:
+      return `검토 후 다음: ${targetLabel}`;
+  }
+}
+/** 단계별 기본 역할. 이슈 목록의 바로 실행과 상세의 실행 런처가 같은 값을 쓴다. */
+function defaultRoleForStage(stage: Stage): AgentRole {
+  return stage === "plan"
+    ? "research"
+    : stage === "design"
+      ? "planner"
+      : stage === "build"
+        ? "implementer"
+        : stage === "test"
+          ? "verifier"
+          : "reviewer";
+}
+/** 노드가 허용하는 역할 중 단계에 맞는 것을 고른다. 없으면 노드의 첫 역할이다. */
+function roleForStageNode(stage: Stage, allowedRoles: AgentRole[]): AgentRole {
+  const preferred = defaultRoleForStage(stage);
+  if (!allowedRoles.length) return preferred;
+  return allowedRoles.includes(preferred) ? preferred : allowedRoles[0];
+}
 function artifactLabel(
   workflow: WorkflowDefinition | undefined,
   artifact: string,
@@ -260,27 +336,6 @@ function artifactLabel(
       ?.label ??
     ARTIFACT_LABELS[artifact] ??
     artifact
-  );
-}
-function NoticeBar({
-  notice,
-  onClear,
-}: {
-  notice: Notice;
-  onClear: () => void;
-}) {
-  if (!notice) return null;
-  return (
-    <div
-      className={cx("wb-notice", `is-${notice.tone}`)}
-      role={notice.tone === "error" ? "alert" : "status"}
-    >
-      <AlertCircle size={15} />
-      <span>{notice.text}</span>
-      <button onClick={onClear} aria-label="알림 닫기">
-        <X size={14} />
-      </button>
-    </div>
   );
 }
 function LoadingState() {
@@ -323,10 +378,13 @@ function EmptyState({
   );
 }
 export function WorkbenchPage({ view }: { view: WorkbenchView }) {
-  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<Notice>(null);
+  const snapshot = useWorkspaceSnapshot((state) => state.snapshot);
+  const loading = useWorkspaceSnapshot((state) => state.loading);
+  const error = useWorkspaceSnapshot((state) => state.error);
+  // 알림은 화면 상단 토스트로 띄운다 — 페이지 레이아웃을 밀지 않는다.
+  const setNotice = useCallback((next: Notice) => {
+    if (next) toast(next);
+  }, []);
   const [workModal, setWorkModal] = useState<WorkItem | null | undefined>(
     undefined,
   );
@@ -340,45 +398,13 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
   const [selectedArtifact, setSelectedArtifact] =
     useState<ArtifactKind>("intent");
   const [revealText, setRevealText] = useState<string | null>(null);
-  const reload = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      setSnapshot(await sddApi.snapshot());
-    } catch (err) {
-      setError(errorText(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-  useEffect(() => {
-    void reload();
+  const reload = useCallback(async () => {
+    await refreshWorkspaceSnapshot();
   }, []);
-  // Refresh lists written by agents without interrupting an open draft.
   useEffect(() => {
-    if (
-      selectedWorkId ||
-      workModal !== undefined ||
-      projectModal !== undefined ||
-      eventModal !== undefined
-    )
-      return;
-    let alive = true;
-    const timer = window.setInterval(() => {
-      sddApi
-        .snapshot()
-        .then((next) => {
-          if (alive) setSnapshot(next);
-        })
-        .catch((err) => {
-          if (alive) setError(errorText(err));
-        });
-    }, 10000);
-    return () => {
-      alive = false;
-      window.clearInterval(timer);
-    };
-  }, [selectedWorkId, workModal, projectModal, eventModal]);
+    void ensureWorkspaceSnapshot();
+    return watchWorkspaceSnapshot();
+  }, []);
   const work = snapshot?.work ?? [];
   const projects = snapshot?.projects ?? [];
   const workflows = snapshot?.workflows ?? [];
@@ -414,7 +440,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     return (
       <InitializeView
         onInitialized={(next) => {
-          setSnapshot(next);
+          acceptWorkspaceSnapshot(next);
           setNotice({ tone: "success", text: "SDD 작업공간을 준비했습니다." });
         }}
       />
@@ -428,7 +454,6 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     projects,
     workflows,
     events: snapshot.events,
-    notice,
     setNotice,
     reload,
     onNewWork: () => setWorkModal(null),
@@ -437,7 +462,6 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
   };
   return (
     <div className="wb-page">
-      <NoticeBar notice={notice} onClear={() => setNotice(null)} />
       {error && (
         <div className="wb-inline-error" role="alert">
           {error}
@@ -459,6 +483,23 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
             next.tone === "success"
               ? void afterSave(next.text)
               : setNotice(next)
+          }
+        />
+      )}
+      {view === "issues" && (
+        <IssuesView
+          work={work}
+          projects={projects}
+          workflows={workflows}
+          events={snapshot.events}
+          reload={reload}
+          setNotice={setNotice}
+          // 이슈 화면은 처리 유형·워크플로를 미리 채운 초안을 넘긴다. 클릭
+          // 이벤트가 시드 자리에 들어가지 않도록 보드와 핸들러를 나눠 둔다.
+          onNewWork={(seed) => setWorkModal(seed ?? null)}
+          onSelectWork={selectDocument}
+          onNewMilestone={() =>
+            setEventModal({ ...blankEvent(), kind: "milestone" })
           }
         />
       )}
@@ -542,8 +583,10 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
             ...blankWork(),
             title: `${currentWork.title} 후속 의도`,
             projectId: currentWork.projectId,
+            // 운영 관찰은 단계가 아니라 다음 항목의 입력이다. 끝나지 않는 일을
+            // 단계로 두면 항목이 닫히지 않으므로, 항목 사이의 연결로 잇는다.
             dependsOn: [currentWork.id],
-            description: `“${currentWork.title}”의 운영·학습을 바탕으로 다음 의도를 정리합니다.\n\n연결된 학습 문서: work/${currentWork.id}/learning.md`,
+            description: `“${currentWork.title}”의 회고를 바탕으로 다음 의도를 정리합니다.\n\n앞선 항목: work/${currentWork.id}/`,
           })
         }
       />
@@ -552,12 +595,13 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
         initial={workModal ?? blankWork()}
         projects={projects}
         work={work}
+        events={snapshot.events}
         onClose={() => setWorkModal(undefined)}
         onSaved={(item) => {
           setWorkModal(undefined);
           selectDocument(item.id);
           void afterSave(
-            item.id ? "작업을 저장했습니다." : "작업을 만들었습니다.",
+            item.id ? "개발 항목을 저장했습니다." : "개발 항목을 만들었습니다.",
           );
         }}
       />
@@ -626,6 +670,7 @@ function OverviewView({
   projects,
   workflows,
   events,
+  reload,
   onSelectWork,
   onEditWork,
 }: {
@@ -633,16 +678,19 @@ function OverviewView({
   projects: Project[];
   workflows: WorkflowDefinition[];
   events: CalendarEvent[];
+  reload: () => Promise<void>;
   onNewWork: () => void;
   onSelectWork: (id: string) => void;
   onEditWork: (item: WorkItem) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [busyWork, setBusyWork] = useState<string | null>(null);
   const setPage = useApp((s) => s.setPage);
   const jobs = useApp((s) => s.jobs);
-  const issues = useApp((s) => s.improvements);
   const today = isoToday();
+  // 지표 위젯이 세는 재료. 어떤 카드를 켜 두었든 같은 스냅샷을 본다.
+  const metricSource = { work, jobs, today };
   const open = work.filter((w) => w.status !== "done");
   const next = [...open]
     .sort(
@@ -667,43 +715,62 @@ function OverviewView({
       {label} →
     </button>
   );
+  // 위젯에서 바로 끝내는 한 줄짜리 변경. 상세 화면을 열지 않고 상태·기한만 움직인다.
+  async function patchWork(item: WorkItem, patch: Partial<WorkItem>) {
+    setBusyWork(item.id);
+    try {
+      await sddApi.saveWork({
+        ...item,
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      });
+      await reload();
+    } catch {
+      // 실패하면 다음 스냅샷이 원래 값을 다시 그린다
+    } finally {
+      setBusyWork(null);
+    }
+  }
   function renderWidget(id: DashboardWidgetId) {
+    // 지표는 카드 한 장이 위젯 한 개다. 정의만 보고 그리므로 여기에 분기가 늘지 않는다.
+    if (isMetricWidgetId(id)) {
+      const metric = METRIC_BY_KEY[id.slice(METRIC_PREFIX.length) as MetricKey];
+      const value = metric.count(metricSource);
+      return (
+        <Metric
+          solo
+          label={metric.label}
+          value={value}
+          hint={metric.hint}
+          icon={<metric.icon />}
+          warn={metric.warnWhenPositive === true && value > 0}
+          onClick={() => setPage(metric.page)}
+        />
+      );
+    }
     switch (id) {
-      case "metrics":
+      case "today":
         return (
-          <section className="wb-metric-grid">
-            <Metric
-              label="진행 중"
-              value={open.filter((w) => w.status === "running").length}
-              hint="실행 중인 작업"
-              icon={<CircleDot />}
+          <SlotCard
+            title="오늘 활동"
+            description={today}
+            action={link("calendar", "캘린더 열기")}
+          >
+            <TodayActivity
+              events={events}
+              work={work}
+              onOpenWork={onSelectWork}
+              onOpenEvent={() => setPage("calendar")}
+              onOpenJobs={() => setPage("jobs")}
             />
-            <Metric
-              label="준비됨"
-              value={open.filter((w) => w.status === "ready").length}
-              hint="바로 시작할 작업"
-              icon={<ArrowRight />}
-            />
-            <Metric
-              label="기한 주의"
-              value={open.filter((w) => w.dueDate && w.dueDate <= today).length}
-              hint="오늘 마감 또는 지연"
-              icon={<Clock3 />}
-            />
-            <Metric
-              label="완료"
-              value={work.filter((w) => w.status === "done").length}
-              hint="축적된 결과"
-              icon={<Check />}
-            />
-          </section>
+          </SlotCard>
         );
       case "next":
         return (
           <SlotCard
-            title="다음에 할 일"
+            title="다음 개발 항목"
             description="기한과 우선순위순"
-            action={link("board", "작업 관리")}
+            action={link("board", "개발 보드")}
           >
             {next.length ? (
               next.map((item) => (
@@ -712,20 +779,22 @@ function OverviewView({
                   item={item}
                   project={projects.find((p) => p.id === item.projectId)}
                   workflows={workflows}
+                  busy={busyWork === item.id}
                   onClick={() => onSelectWork(item.id)}
                   onEdit={() => onEditWork(item)}
+                  onStatus={(status) => void patchWork(item, { status })}
                 />
               ))
             ) : (
               <div className="wb-slot-empty">
-                작업 관리에서 첫 작업을 추가하세요.
+                개발 보드에서 첫 항목을 추가하세요.
               </div>
             )}
           </SlotCard>
         );
       case "stages":
         return (
-          <SlotCard title="단계별 맥락" action={link("board", "작업 보기")}>
+          <SlotCard title="단계별 맥락" action={link("board", "개발 보드")}>
             <div className="wb-stage-tiles">
               {(
                 workflows[0]?.nodes ??
@@ -756,12 +825,19 @@ function OverviewView({
                 <DueRow
                   key={item.id}
                   item={item}
+                  busy={busyWork === item.id}
                   onClick={() => onSelectWork(item.id)}
+                  onDefer={() =>
+                    void patchWork(item, {
+                      dueDate: plusDays(item.dueDate!, 1),
+                    })
+                  }
+                  onDone={() => void patchWork(item, { status: "done" })}
                 />
               ))
             ) : (
               <div className="wb-slot-empty">
-                기한이 임박한 작업이 없습니다.
+                기한이 임박한 개발 항목이 없습니다.
               </div>
             )}
           </SlotCard>
@@ -794,21 +870,16 @@ function OverviewView({
                 />
               ))
             ) : (
-              <div className="wb-slot-empty">아직 완료한 작업이 없습니다.</div>
+              <div className="wb-slot-empty">
+                아직 완료한 개발 항목이 없습니다.
+              </div>
             )}
           </SlotCard>
         );
       case "jobs":
         return (
           <SlotCard title="실행 현황" action={link("jobs", "실행 기록")}>
-            {jobs.slice(0, 8).map((job) => (
-              <div key={job.id} className="wb-slot-empty">
-                {job.label} · {job.status}
-              </div>
-            ))}
-            {!jobs.length && (
-              <div className="wb-slot-empty">아직 실행 기록이 없습니다.</div>
-            )}
+            <JobsWidget onOpen={() => setPage("jobs")} />
           </SlotCard>
         );
       case "schedules":
@@ -817,23 +888,30 @@ function OverviewView({
             <ScheduledTasksWidget />
           </SlotCard>
         );
+      case "checklist":
+        return (
+          <SlotCard title="할 일" action={link("todos", "일지 열기")}>
+            <ChecklistWidget onOpen={() => setPage("todos")} />
+          </SlotCard>
+        );
       case "reading":
         return (
           <SlotCard title="읽을거리" action={link("reading", "읽을거리 열기")}>
-            <ReadingWidget />
+            <ReadingWidget onOpen={() => setPage("reading")} />
           </SlotCard>
         );
       case "issues":
         return (
-          <SlotCard title="이슈" action={link("issues", "이슈 열기")}>
-            {issues.slice(0, 8).map((i) => (
-              <div key={i.path} className="wb-slot-empty">
-                {i.title} · {i.status}
-              </div>
-            ))}
-            {!issues.length && (
-              <div className="wb-slot-empty">등록된 이슈가 없습니다.</div>
-            )}
+          <SlotCard
+            title="이슈"
+            description="막대를 눌러 상태별로 좁힐 수 있습니다"
+            action={link("issues", "이슈 열기")}
+          >
+            <IssuesWidget
+              work={work}
+              onOpen={() => setPage("issues")}
+              onChanged={reload}
+            />
           </SlotCard>
         );
     }
@@ -890,16 +968,45 @@ function SlotCard({
     </div>
   );
 }
-function DueRow({ item, onClick }: { item: WorkItem; onClick: () => void }) {
+function DueRow({
+  item,
+  busy,
+  onClick,
+  onDefer,
+  onDone,
+}: {
+  item: WorkItem;
+  busy: boolean;
+  onClick: () => void;
+  onDefer: () => void;
+  onDone: () => void;
+}) {
   const days = item.dueDate ? daysUntil(item.dueDate) : 0;
   return (
-    <button className="wb-dense-row" onClick={onClick} title={item.title}>
-      <span className={cx("wb-date-chip", days < 0 && "is-overdue")}>
-        {dueChip(days)}
-      </span>
-      <span className="wb-dense-title">{item.title}</span>
-      <span className="wb-dense-meta">{formatDate(item.dueDate)}</span>
-    </button>
+    <div className="wb-dense-row">
+      <button className="wb-dense-open" onClick={onClick} title={item.title}>
+        <span className={cx("wb-date-chip", days < 0 && "is-overdue")}>
+          {dueChip(days)}
+        </span>
+        <span className="wb-dense-title">{item.title}</span>
+        <span className="wb-dense-meta">{formatDate(item.dueDate)}</span>
+      </button>
+      <div className="wb-action-buttons">
+        <MiniAction
+          label="하루 미루기"
+          icon={<CalendarDays size={13} />}
+          busy={busy}
+          onClick={onDefer}
+        />
+        <MiniAction
+          label="완료"
+          primary
+          icon={<Check size={13} />}
+          busy={busy}
+          onClick={onDone}
+        />
+      </div>
+    </div>
   );
 }
 function EventRow({
@@ -936,34 +1043,54 @@ function Metric({
   hint,
   icon,
   warn,
+  solo,
+  onClick,
 }: {
   label: string;
   value: number;
   hint: string;
   icon: React.ReactNode;
   warn?: boolean;
+  /** 대시보드에서 카드 한 장이 위젯 한 칸을 통째로 채울 때. */
+  solo?: boolean;
+  onClick?: () => void;
 }) {
-  return (
-    <div className={cx("wb-metric", warn && "is-warn")}>
+  const shell = cx("wb-metric", solo && "is-solo", warn && "is-warn");
+  const body = (
+    <>
       <div className="wb-metric-icon">{icon}</div>
       <span>{label}</span>
       <strong>{value}</strong>
       <small>{hint}</small>
-    </div>
+    </>
+  );
+  if (!onClick) return <div className={shell}>{body}</div>;
+  return (
+    <button
+      type="button"
+      className={cx(shell, "is-clickable")}
+      onClick={onClick}
+    >
+      {body}
+    </button>
   );
 }
 function WorkRow({
   item,
   project,
   workflows,
+  busy,
   onClick,
   onEdit,
+  onStatus,
 }: {
   item: WorkItem;
   project?: Project;
   workflows: WorkflowDefinition[];
+  busy: boolean;
   onClick: () => void;
   onEdit: () => void;
+  onStatus: (status: WorkStatus) => void;
 }) {
   return (
     <div className="wb-work-row">
@@ -986,9 +1113,26 @@ function WorkRow({
       </button>
       <div className="wb-row-meta">
         {item.dueDate && <span>{formatDate(item.dueDate)}</span>}
+        {item.status !== "running" && item.status !== "done" && (
+          <MiniAction
+            label="시작"
+            icon={<Play size={13} />}
+            busy={busy}
+            onClick={() => onStatus("running")}
+          />
+        )}
+        {item.status !== "done" && (
+          <MiniAction
+            label="완료"
+            primary
+            icon={<Check size={13} />}
+            busy={busy}
+            onClick={() => onStatus("done")}
+          />
+        )}
         <button
           className="wb-icon-button"
-          aria-label="작업 편집"
+          aria-label="개발 항목 편집"
           onClick={onEdit}
         >
           <MoreHorizontal size={17} />
@@ -1061,15 +1205,15 @@ function BoardView({
   };
   return (
     <>
-      <PageHeader title="작업">
+      <PageHeader title="개발">
         <div className="wb-filter">
           <Filter size={15} />
           <select
             value={filter}
             onChange={(event) => setFilter(event.target.value as typeof filter)}
-            aria-label="작업 필터"
+            aria-label="개발 항목 필터"
           >
-            <option value="all">모든 작업</option>
+            <option value="all">모든 항목</option>
             <option value="mine">담당자 있음</option>
             {(["urgent", "high", "normal", "low"] as Priority[]).map(
               (priority) => (
@@ -1114,7 +1258,7 @@ function BoardView({
           </select>
         </div>
         <Button onClick={onNewWork}>
-          <Plus /> 새 작업
+          <Plus /> 새 개발 항목
         </Button>
       </PageHeader>
       <div className="wb-board">
@@ -1173,7 +1317,7 @@ function BoardView({
                       {item.dueDate && <time>{formatDate(item.dueDate)}</time>}
                       <button
                         onClick={() => onEditWork(item)}
-                        aria-label="작업 편집"
+                        aria-label="개발 항목 편집"
                       >
                         <MoreHorizontal size={15} />
                       </button>
@@ -1206,6 +1350,7 @@ function CalendarView({
   onEditEvent: (event: CalendarEvent) => void;
   onSelectWork: (id: string) => void;
 }) {
+  const setPage = useApp((s) => s.setPage);
   const [cursor, setCursor] = useState(() => new Date());
   const [agenda, setAgenda] = useState(false);
   const year = cursor.getFullYear();
@@ -1275,7 +1420,9 @@ function CalendarView({
                   <div>
                     <strong>{entry.title}</strong>
                     <small>
-                      {isEvent ? eventLabels[entry.event.kind] : "작업 기한"}
+                      {isEvent
+                        ? eventLabels[entry.event.kind]
+                        : "개발 항목 기한"}
                       {isEvent && entry.event.projectId
                         ? ` · ${projects.find((p) => p.id === entry.event.projectId)?.name ?? "프로젝트"}`
                         : ""}
@@ -1300,6 +1447,14 @@ function CalendarView({
         </div>
       ) : (
         <div className="wb-calendar">
+          <TodayActivity
+            compact
+            events={events}
+            work={work}
+            onOpenWork={onSelectWork}
+            onOpenEvent={onEditEvent}
+            onOpenJobs={() => setPage("jobs")}
+          />
           <div className="wb-calendar-toolbar">
             <div>
               <button
@@ -1366,6 +1521,18 @@ function CalendarView({
                   ))}
                   {dayEvents.length + dayDue.length > 2 && (
                     <small>+{dayEvents.length + dayDue.length - 2}개</small>
+                  )}
+                  {dayEvents.length + dayDue.length > 0 && (
+                    <div
+                      className="wb-day-load"
+                      aria-label={`${dayEvents.length + dayDue.length}건`}
+                    >
+                      {Array.from({
+                        length: Math.min(4, dayEvents.length + dayDue.length),
+                      }).map((_, index) => (
+                        <span key={index} />
+                      ))}
+                    </div>
                   )}
                 </div>
               );
@@ -1465,7 +1632,7 @@ function KnowledgeView({
         <input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="문서와 작업을 검색하세요"
+          placeholder="문서와 개발 항목을 검색하세요"
           autoFocus
         />
         <Button type="submit" disabled={busy}>
@@ -1482,7 +1649,7 @@ function KnowledgeView({
                 onClick={() => onSelectWork(item.id)}
               >
                 <div>
-                  <span>작업</span>
+                  <span>개발 항목</span>
                   <strong>{item.title}</strong>
                   <p>{item.description}</p>
                 </div>
@@ -1516,7 +1683,7 @@ function KnowledgeView({
                 }
               >
                 <div>
-                  <span>실행할 작업</span>
+                  <span>자동화 작업</span>
                   <strong>{task.title}</strong>
                   <p>{task.prompt.slice(0, 160)}</p>
                 </div>
@@ -1640,7 +1807,7 @@ function ProjectsView({
               <div className="wb-project-card-meta">
                 <span>
                   {work.filter((item) => item.projectId === project.id).length}
-                  개 작업
+                  개 항목
                 </span>
                 <span>{project.dependsOn.length}개 선행</span>
                 <span>
@@ -1675,7 +1842,7 @@ function ProjectsView({
       ) : (
         <EmptyState
           title="첫 프로젝트를 등록하세요"
-          description="작업을 저장소·검증 절차와 함께 관리할 수 있습니다."
+          description="개발 항목을 저장소·검증 절차와 함께 관리할 수 있습니다."
           action={
             <Button onClick={onNew}>
               <Plus /> 프로젝트 추가
@@ -1686,11 +1853,710 @@ function ProjectsView({
     </>
   );
 }
+/** 마일스톤에 넣을 개발 항목을 고른다. 소속은 항목의 `milestone` 필드에 적힌다. */
+function MilestoneWorkPicker({
+  work,
+  selected,
+  onChange,
+}: {
+  work: WorkItem[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const visible = work.filter((item) =>
+    `${item.id} ${item.title}`.toLowerCase().includes(query.toLowerCase()),
+  );
+  return (
+    <div className="wb-milestone-picker">
+      <div className="wb-milestone-picker-head">
+        <span>포함할 이슈</span>
+        <span>{selected.length}개 선택</span>
+      </div>
+      <Input
+        aria-label="마일스톤 이슈 검색"
+        placeholder="이슈 검색"
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+      />
+      <div className="wb-milestone-picker-list">
+        {visible.map((item) => (
+          <label key={item.id}>
+            <input
+              type="checkbox"
+              aria-label={`${item.id} ${item.title}`}
+              checked={selected.includes(item.id)}
+              onChange={(event) =>
+                onChange(
+                  event.target.checked
+                    ? [...selected, item.id]
+                    : selected.filter((id) => id !== item.id),
+                )
+              }
+            />
+            <span>
+              <strong>{item.title}</strong>
+              <small>
+                {item.id} · {item.executionType}
+                {item.milestone && !selected.includes(item.id)
+                  ? " · 다른 마일스톤 소속"
+                  : ""}
+              </small>
+            </span>
+          </label>
+        ))}
+        {visible.length === 0 && (
+          <p className="wb-muted">조건에 맞는 개발 항목이 없습니다.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+/**
+ * 이슈 화면. 개발 칸반과 **같은 개발 항목 목록**을 요청·승인의 축으로 본다.
+ * 별도의 이슈 저장소는 없다 — 여기서 승인한 값이 곧 `work/<id>/work.md` 의
+ * `approve` 이고, 칸반에서 옮긴 상태가 곧 여기의 상태다.
+ */
+function IssuesView({
+  work,
+  projects,
+  workflows,
+  events,
+  reload,
+  setNotice,
+  onNewWork,
+  onSelectWork,
+  onNewMilestone,
+}: {
+  work: WorkItem[];
+  projects: Project[];
+  workflows: WorkflowDefinition[];
+  events: CalendarEvent[];
+  reload: () => Promise<void>;
+  setNotice: (notice: Notice) => void;
+  onNewWork: (seed?: WorkItem) => void;
+  onSelectWork: (id: string) => void;
+  onNewMilestone: () => void;
+}) {
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [stateFilter, setStateFilter] = useState<"open" | "closed" | "all">(
+    "open",
+  );
+  const [executionFilter, setExecutionFilter] = useState("all");
+  const [milestoneFilter, setMilestoneFilter] = useState("all");
+  const [tagFilter, setTagFilter] = useState("all");
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [launchTargets, setLaunchTargets] = useState<WorkItem[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [legacy, setLegacy] = useState<IssueMigrationItem[] | null>(null);
+  const [legacyError, setLegacyError] = useState<string | null>(null);
+  const milestones = events.filter((event) => event.kind === "milestone");
+  const milestoneName = (id: string) =>
+    milestones.find((event) => event.id === id)?.title ?? id;
+
+  const loadLegacy = async () => {
+    try {
+      setLegacy(await sddApi.issueMigrationPlan());
+      setLegacyError(null);
+    } catch (e) {
+      setLegacy([]);
+      setLegacyError(errorText(e));
+    }
+  };
+  useEffect(() => {
+    void loadLegacy();
+  }, []);
+
+  // 이슈 축의 labels 와 개발 축의 tags 는 둘 다 문서에 적힌 분류다. 한 필터로 묶어 본다.
+  const tagsOf = (item: WorkItem) => [
+    ...new Set([...(item.labels ?? []), ...(item.tags ?? [])]),
+  ];
+  // 태그 후보는 태그를 뺀 나머지 조건까지 걸린 범위에서 뽑는다 — 고른 태그로 목록이 비지 않게.
+  const tagPool = work.filter(
+    (item) =>
+      (projectFilter === "all" || item.projectId === projectFilter) &&
+      (stateFilter === "all" || (item.state || "open") === stateFilter) &&
+      (executionFilter === "all" || item.executionType === executionFilter) &&
+      (milestoneFilter === "all" ||
+        (milestoneFilter === "none"
+          ? !item.milestone
+          : item.milestone === milestoneFilter)),
+  );
+  const tagOptions = [...new Set(tagPool.flatMap(tagsOf))].sort();
+  const rows = tagPool
+    .filter((item) => tagFilter === "all" || tagsOf(item).includes(tagFilter))
+    .sort(
+      (a, b) =>
+        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
+        a.id.localeCompare(b.id),
+    );
+
+  // 고른 태그가 다른 필터 때문에 사라지면 태그 필터를 풀어 준다.
+  const tagKey = tagOptions.join("\n");
+  useEffect(() => {
+    if (tagFilter !== "all" && !tagKey.split("\n").includes(tagFilter))
+      setTagFilter("all");
+  }, [tagFilter, tagKey]);
+
+  // 선택은 언제나 지금 보이는 행에만 걸린다. 필터를 좁히면 가려진 선택은 버린다.
+  const visibleKey = rows.map((item) => item.id).join("\n");
+  useEffect(() => {
+    const visible = new Set(visibleKey.split("\n"));
+    setSelectedIds((prev) => prev.filter((id) => visible.has(id)));
+  }, [visibleKey]);
+  const selectedSet = new Set(selectedIds);
+  const selectedRows = rows.filter((item) => selectedSet.has(item.id));
+  const allChecked = rows.length > 0 && selectedRows.length === rows.length;
+
+  const workflowForWork = (item: WorkItem) =>
+    workflows.find(
+      (definition) =>
+        definition.id === item.workflowId &&
+        definition.version === item.workflowVersion,
+    );
+  const stageOf = (item: WorkItem) => activeNodeForWork(item);
+  const stageNameOf = (item: WorkItem) =>
+    stageLabel(workflows, stageOf(item), item.workflowId, item.workflowVersion);
+  const roleOf = (item: WorkItem) => {
+    const node = workflowForWork(item)?.nodes.find(
+      (candidate) => candidate.id === stageOf(item),
+    );
+    return roleForStageNode(stageOf(item), node?.allowedRoles ?? []);
+  };
+  const agentOf = (item: WorkItem) =>
+    projects.find((project) => project.id === item.projectId)?.defaultAgent ===
+    "claude"
+      ? "claude"
+      : "codex";
+  // 끝난 항목에는 더 밟을 단계가 없다.
+  const runnable = (item: WorkItem) => !isClosedStatus(item.status);
+
+  const approve = async (item: WorkItem) => {
+    setBusy(item.id);
+    try {
+      await sddApi.saveWork({
+        ...item,
+        approve: !item.approve,
+        updatedAt: new Date().toISOString(),
+      });
+      await reload();
+      setNotice({
+        tone: "success",
+        text: item.approve
+          ? `“${item.title}” 승인을 해제했습니다.`
+          : `“${item.title}”을(를) 승인했습니다.`,
+      });
+    } catch (e) {
+      setNotice({ tone: "error", text: errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** 선택분 일괄 승인. 이미 승인된 건은 건드리지 않는다. */
+  const approveMany = async (items: WorkItem[]) => {
+    const targets = items.filter((item) => !item.approve);
+    if (!targets.length) return;
+    setBusy("approve-many");
+    try {
+      for (const item of targets) {
+        await sddApi.saveWork({
+          ...item,
+          approve: true,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      await reload();
+      setNotice({
+        tone: "success",
+        text: `${targets.length}건을 승인했습니다.`,
+      });
+    } catch (e) {
+      setNotice({ tone: "error", text: errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  /** 항목의 현재 단계를 프로젝트 기본 역할·에이전트로 실행한다. */
+  const launch = async (items: WorkItem[]) => {
+    setBusy("launch");
+    const failed: string[] = [];
+    let done = 0;
+    for (const item of items) {
+      const project =
+        projects.find((candidate) => candidate.id === item.projectId) ?? null;
+      try {
+        await sddApi.launch({
+          workId: item.id,
+          projectId: item.projectId,
+          role: roleOf(item),
+          agent: agentOf(item),
+          model: project?.defaultModel ?? "",
+          instructions: "",
+          parentRunId: null,
+        });
+        done += 1;
+      } catch (e) {
+        failed.push(`${item.id} ${errorText(e)}`);
+      }
+    }
+    setLaunchTargets(null);
+    setBusy(null);
+    setNotice(
+      failed.length
+        ? {
+            tone: "error",
+            text: `${done}건 실행, ${failed.length}건 실패: ${failed.join(" · ")}`,
+          }
+        : {
+            tone: "success",
+            text: `${done}건을 실행 큐에 추가했습니다. 실행 화면에서 상태를 확인하세요.`,
+          },
+    );
+  };
+
+  const migrate = async (paths: string[]) => {
+    setBusy("migrate");
+    try {
+      const report = await sddApi.issueMigrate(paths);
+      await reload();
+      await loadLegacy();
+      setNotice(
+        report.skipped.length
+          ? {
+              tone: "error",
+              text: `${report.migrated.length}건 이관, ${report.skipped.length}건 보류: ${report.skipped
+                .map((entry) => `${entry.issueId} ${entry.blocked}`)
+                .join(" · ")}`,
+            }
+          : {
+              tone: "success",
+              text: `이슈 노트 ${report.migrated.length}건을 개발 항목으로 옮겼습니다.`,
+            },
+      );
+    } catch (e) {
+      setNotice({ tone: "error", text: errorText(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const pending = (legacy ?? []).filter((entry) => !entry.migrated);
+  const movable = pending.filter((entry) => !entry.blocked);
+
+  return (
+    <>
+      <PageHeader title="이슈">
+        <div className="wb-filter">
+          <Filter size={15} />
+          <select
+            value={stateFilter}
+            onChange={(event) =>
+              setStateFilter(event.target.value as typeof stateFilter)
+            }
+            aria-label="열림 상태"
+          >
+            <option value="open">열린 이슈</option>
+            <option value="closed">닫힌 이슈</option>
+            <option value="all">전체</option>
+          </select>
+        </div>
+        <div className="wb-filter">
+          <select
+            value={projectFilter}
+            onChange={(event) => setProjectFilter(event.target.value)}
+            aria-label="프로젝트 필터"
+          >
+            <option value="all">모든 프로젝트</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="wb-filter">
+          <select
+            value={executionFilter}
+            onChange={(event) => setExecutionFilter(event.target.value)}
+            aria-label="처리 유형 필터"
+          >
+            <option value="all">모든 처리 유형</option>
+            {EXECUTION_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </div>
+        {tagOptions.length > 0 && (
+          <div className="wb-filter">
+            <select
+              value={tagFilter}
+              onChange={(event) => setTagFilter(event.target.value)}
+              aria-label="태그 필터"
+            >
+              <option value="all">모든 태그</option>
+              {tagOptions.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <Button
+          onClick={() =>
+            onNewWork({
+              ...blankWork(),
+              executionType: "문서",
+              workflowId: "issue-main",
+              workflowVersion: "1.0.0",
+            })
+          }
+        >
+          <Plus /> 이슈 등록
+        </Button>
+      </PageHeader>
+
+      <div className="wb-issue-layout">
+        <aside className="wb-milestone-rail">
+          <div className="wb-panel-title">
+            <h2>마일스톤</h2>
+            <Button size="sm" variant="outline" onClick={onNewMilestone}>
+              마일스톤 추가
+            </Button>
+          </div>
+          <button
+            type="button"
+            className={cx(
+              "wb-milestone-row",
+              milestoneFilter === "all" && "is-active",
+            )}
+            onClick={() => setMilestoneFilter("all")}
+          >
+            <strong>전체 이슈</strong>
+            <small>{work.length}건</small>
+          </button>
+          <button
+            type="button"
+            className={cx(
+              "wb-milestone-row",
+              milestoneFilter === "none" && "is-active",
+            )}
+            onClick={() => setMilestoneFilter("none")}
+          >
+            <strong>소속 없음</strong>
+            <small>{work.filter((item) => !item.milestone).length}건</small>
+          </button>
+          {milestones.map((event) => {
+            const members = work.filter((item) => item.milestone === event.id);
+            const closed = members.filter(
+              (item) => (item.state || "open") === "closed",
+            ).length;
+            // 진행률은 구성 항목의 닫힘 비율이다. 손으로 적는 값이 아니다.
+            const percent = members.length
+              ? Math.round((closed / members.length) * 100)
+              : 0;
+            return (
+              <button
+                key={event.id}
+                type="button"
+                className={cx(
+                  "wb-milestone-row",
+                  milestoneFilter === event.id && "is-active",
+                )}
+                onClick={() => setMilestoneFilter(event.id)}
+              >
+                <strong>{event.title}</strong>
+                <small>
+                  {closed}/{members.length} 완료
+                </small>
+                <span
+                  className="wb-milestone-bar"
+                  role="progressbar"
+                  aria-label={`${event.title} 진행률`}
+                  aria-valuenow={percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                >
+                  <i style={{ width: `${percent}%` }} />
+                </span>
+              </button>
+            );
+          })}
+        </aside>
+        <div className="wb-issue-main">
+          {selectedRows.length > 0 && (
+            <div className="wb-bulk-bar">
+              <strong>{selectedRows.length}건 선택</strong>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy !== null || !selectedRows.some(runnable)}
+                onClick={() => setLaunchTargets(selectedRows.filter(runnable))}
+              >
+                <Play size={14} /> 선택 실행
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={
+                  busy !== null || selectedRows.every((item) => item.approve)
+                }
+                onClick={() => void approveMany(selectedRows)}
+              >
+                {busy === "approve-many" && <Loader2 className="wb-spin" />}
+                선택 승인
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => setSelectedIds([])}
+              >
+                선택 해제
+              </Button>
+            </div>
+          )}
+          {rows.length ? (
+            <table className="wb-issue-table">
+              <thead>
+                <tr>
+                  <th className="wb-issue-check">
+                    <input
+                      type="checkbox"
+                      checked={allChecked}
+                      ref={(element) => {
+                        if (element)
+                          element.indeterminate =
+                            !allChecked && selectedRows.length > 0;
+                      }}
+                      onChange={(event) =>
+                        setSelectedIds(
+                          event.target.checked
+                            ? rows.map((item) => item.id)
+                            : [],
+                        )
+                      }
+                      aria-label="전체 선택"
+                    />
+                  </th>
+                  <th>ID</th>
+                  <th>제목</th>
+                  <th>유형</th>
+                  <th>실행</th>
+                  <th>마일스톤</th>
+                  <th>중요도</th>
+                  <th>상태</th>
+                  <th>단계 실행</th>
+                  <th>승인</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((item) => (
+                  <tr key={item.id} onClick={() => onSelectWork(item.id)}>
+                    <td
+                      className="wb-issue-check"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedSet.has(item.id)}
+                        onChange={(event) =>
+                          setSelectedIds((prev) =>
+                            event.target.checked
+                              ? [...prev, item.id]
+                              : prev.filter((id) => id !== item.id),
+                          )
+                        }
+                        aria-label={`${item.id} ${item.title} 선택`}
+                      />
+                    </td>
+                    <td className="wb-issue-id">{item.id}</td>
+                    <td>
+                      <strong>{item.title}</strong>
+                      {item.labels.length > 0 && (
+                        <small> {item.labels.join(" · ")}</small>
+                      )}
+                    </td>
+                    <td>{item.issueType}</td>
+                    <td>{item.executionType}</td>
+                    <td>
+                      {item.milestone ? milestoneName(item.milestone) : "-"}
+                    </td>
+                    <td>
+                      <span className={`wb-priority is-${item.priority}`}>
+                        {PRIORITY_LABELS[item.priority]}
+                      </span>
+                    </td>
+                    <td>
+                      <span className={statusClass(item.status)}>
+                        {STATUS_LABELS[item.status]}
+                      </span>
+                    </td>
+                    <td onClick={(event) => event.stopPropagation()}>
+                      {runnable(item) ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy !== null}
+                          onClick={() => setLaunchTargets([item])}
+                          title={`${stageNameOf(item)} 단계를 ${roleLabels[roleOf(item)]} 역할로 실행합니다.`}
+                        >
+                          <Play size={14} /> {stageNameOf(item)}
+                        </Button>
+                      ) : (
+                        <span className="wb-muted">-</span>
+                      )}
+                    </td>
+                    <td onClick={(event) => event.stopPropagation()}>
+                      <Button
+                        size="sm"
+                        variant={item.approve ? "success" : "outline"}
+                        disabled={busy !== null}
+                        onClick={() => void approve(item)}
+                        title={
+                          item.approve
+                            ? `승인일 ${item.approved || "기록 없음"}`
+                            : "설계를 검토한 뒤 실행을 승인합니다."
+                        }
+                      >
+                        {item.approve ? "승인됨" : "승인"}
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <EmptyState
+              title="조건에 맞는 이슈가 없습니다"
+              description="이슈와 개발 항목은 같은 목록입니다. 필터를 넓히거나 새 이슈를 등록해 보세요."
+              action={
+                <Button onClick={() => onNewWork()}>
+                  <Plus /> 이슈 등록
+                </Button>
+              }
+            />
+          )}
+        </div>
+      </div>
+
+      {(pending.length > 0 || legacyError) && (
+        <section className="wb-panel wb-legacy-issues">
+          <div className="wb-panel-title">
+            <h2>이관하지 않은 이슈 노트 {pending.length}건</h2>
+            {movable.length > 0 && (
+              <Button
+                size="sm"
+                disabled={busy !== null}
+                onClick={() => void migrate(movable.map((entry) => entry.path))}
+              >
+                {busy === "migrate" && <Loader2 className="wb-spin" />}
+                {movable.length}건 모두 이관
+              </Button>
+            )}
+          </div>
+          {legacyError ? (
+            <p className="wb-muted">{legacyError}</p>
+          ) : (
+            <>
+              <p className="wb-muted">
+                이름을 바꾸기 전 볼트에 남은 이슈 노트입니다. 이관해도 원본
+                파일은 지우지 않고 <code>migrated_to</code> 표시만 남깁니다.
+              </p>
+              <ul className="wb-legacy-list">
+                {pending.map((entry) => (
+                  <li key={entry.path}>
+                    <div>
+                      <strong>
+                        {entry.issueId} {entry.title}
+                      </strong>
+                      <small>
+                        {entry.project} · {entry.executionType}
+                        {entry.blocked ? ` · ${entry.blocked}` : ""}
+                      </small>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy !== null || Boolean(entry.blocked)}
+                      onClick={() => void migrate([entry.path])}
+                    >
+                      이관
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </section>
+      )}
+
+      <Dialog
+        open={launchTargets !== null}
+        onClose={() => setLaunchTargets(null)}
+        title={
+          launchTargets?.length === 1
+            ? `${stageNameOf(launchTargets[0])} 단계를 실행할까요?`
+            : `${launchTargets?.length ?? 0}건을 실행할까요?`
+        }
+      >
+        <div className="wb-launch-confirm">
+          <ul className="wb-launch-list">
+            {(launchTargets ?? []).map((item) => (
+              <li key={item.id}>
+                <strong>
+                  {item.id} {item.title}
+                </strong>
+                <small>
+                  {stageNameOf(item)} · {roleLabels[roleOf(item)]} ·{" "}
+                  {agentOf(item) === "claude" ? "Claude" : "Codex"}
+                  {projects.find((candidate) => candidate.id === item.projectId)
+                    ?.defaultModel
+                    ? ` · ${
+                        projects.find(
+                          (candidate) => candidate.id === item.projectId,
+                        )?.defaultModel
+                      }`
+                    : ""}
+                </small>
+              </li>
+            ))}
+          </ul>
+          <p className="wb-muted">
+            프로젝트 기본 역할·에이전트로 실행합니다. 역할이나 지시문을 바꾸려면
+            항목을 열어 실행 런처를 쓰세요.
+          </p>
+          <div className="wb-form-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setLaunchTargets(null)}
+            >
+              취소
+            </Button>
+            <Button
+              type="button"
+              disabled={busy !== null}
+              onClick={() => void launch(launchTargets ?? [])}
+            >
+              {busy === "launch" && <Loader2 className="wb-spin" />}
+              실행
+            </Button>
+          </div>
+        </div>
+      </Dialog>
+    </>
+  );
+}
 function WorkFormDialog({
   open,
   initial,
   projects,
   work,
+  events,
   onClose,
   onSaved,
 }: {
@@ -1698,6 +2564,7 @@ function WorkFormDialog({
   initial: WorkItem;
   projects: Project[];
   work: WorkItem[];
+  events: CalendarEvent[];
   onClose: () => void;
   onSaved: (item: WorkItem) => void;
 }) {
@@ -1726,7 +2593,7 @@ function WorkFormDialog({
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!draft.title.trim()) {
-      setError("작업 이름을 입력해 주세요.");
+      setError("개발 항목 이름을 입력해 주세요.");
       return;
     }
     setBusy(true);
@@ -1749,12 +2616,12 @@ function WorkFormDialog({
     <Dialog
       open={open}
       onClose={onClose}
-      title={draft.id ? "작업 편집" : "새 작업"}
+      title={draft.id ? "개발 항목 편집" : "새 개발 항목"}
       wide
     >
       <form className="wb-form" onSubmit={(event) => void save(event)}>
         <label className="wb-field is-wide">
-          작업 이름
+          개발 항목 이름
           <Input
             value={draft.title}
             onChange={(event) => set("title", event.target.value)}
@@ -1828,6 +2695,51 @@ function WorkFormDialog({
           </select>
         </label>
         <label className="wb-field">
+          유형
+          <select
+            aria-label="유형"
+            value={draft.issueType}
+            onChange={(event) => set("issueType", event.target.value)}
+          >
+            {ISSUE_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="wb-field">
+          처리 유형
+          <select
+            aria-label="처리 유형"
+            value={draft.executionType}
+            onChange={(event) => set("executionType", event.target.value)}
+          >
+            {EXECUTION_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="wb-field">
+          마일스톤
+          <select
+            aria-label="마일스톤"
+            value={draft.milestone}
+            onChange={(event) => set("milestone", event.target.value)}
+          >
+            <option value="">소속 없음</option>
+            {events
+              .filter((event) => event.kind === "milestone")
+              .map((event) => (
+                <option key={event.id} value={event.id}>
+                  {event.title}
+                </option>
+              ))}
+          </select>
+        </label>
+        <label className="wb-field">
           시작일
           <Input
             type="date"
@@ -1858,7 +2770,7 @@ function WorkFormDialog({
         </label>
         {work.filter((item) => item.id !== draft.id).length > 0 && (
           <fieldset className="wb-check-field is-wide">
-            <legend>선행 작업</legend>
+            <legend>선행 항목</legend>
             <div>
               {work
                 .filter((item) => item.id !== draft.id)
@@ -1882,7 +2794,7 @@ function WorkFormDialog({
           </Button>
           <Button type="submit" disabled={busy}>
             {busy && <Loader2 className="wb-spin" />}
-            {draft.id ? "변경 저장" : "작업 만들기"}
+            {draft.id ? "변경 저장" : "개발 항목 만들기"}
           </Button>
         </div>
       </form>
@@ -1988,7 +2900,7 @@ function ProjectFormDialog({
           />
         </label>
         <label className="wb-field is-wide">
-          새 작업의 워크플로우
+          새 개발 항목의 워크플로우
           <select
             aria-label="프로젝트 워크플로우"
             value={`${draft.workflowId}@${draft.workflowVersion}`}
@@ -2016,7 +2928,7 @@ function ProjectFormDialog({
             ))}
           </select>
           <small className="wb-muted">
-            변경해도 기존 작업은 시작 당시 버전을 유지합니다.
+            변경해도 기존 항목은 시작 당시 버전을 유지합니다.
           </small>
         </label>
         <label className="wb-field is-wide">
@@ -2090,17 +3002,19 @@ function EventFormDialog({
   onSaved: () => void;
   onDeleted: () => void;
 }) {
-  const issues = useApp((s) => s.improvements);
-  const refreshIssues = useApp((s) => s.refreshImprovements);
-  const [issuePaths, setIssuePaths] = useState<string[]>([]);
+  // 마일스톤 구성원은 개발 항목의 milestone 필드가 정본이다. 이슈 노트를 따로
+  // 뒤지지 않는다 — 두 곳에 소속이 적히던 것이 이 화면이 갈라져 보이던 이유였다.
+  const [memberIds, setMemberIds] = useState<string[]>([]);
   useEffect(() => {
     if (open)
-      setIssuePaths(
-        issues
-          .filter((n) => n.milestone === initial.id && initial.id)
-          .map((n) => n.path),
+      setMemberIds(
+        initial.id
+          ? work
+              .filter((item) => item.milestone === initial.id)
+              .map((item) => item.id)
+          : [],
       );
-  }, [open, initial]);
+  }, [open, initial, work]);
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -2124,7 +3038,7 @@ function EventFormDialog({
     try {
       if (
         draft.kind !== "milestone" &&
-        issues.some((n) => n.milestone === draft.id)
+        work.some((item) => item.milestone === draft.id)
       )
         throw new Error("연결된 이슈를 먼저 마일스톤에서 제거해 주세요.");
       const saved = await sddApi.saveEvent({
@@ -2134,14 +3048,16 @@ function EventFormDialog({
       });
       setDraft(saved);
       if (draft.kind === "milestone") {
-        await vaultApi.setIssueMilestone(issuePaths, saved.id);
-        const removed = issues
-          .filter(
-            (n) => n.milestone === saved.id && !issuePaths.includes(n.path),
-          )
-          .map((n) => n.path);
-        if (removed.length) await vaultApi.setIssueMilestone(removed, "");
-        await refreshIssues();
+        // 각 항목을 원자적으로 저장한다. 볼트 전체를 감싸는 트랜잭션은 아니다.
+        for (const item of work) {
+          const belongs = memberIds.includes(item.id);
+          if (belongs === (item.milestone === saved.id)) continue;
+          await sddApi.saveWork({
+            ...item,
+            milestone: belongs ? saved.id : "",
+            updatedAt: new Date().toISOString(),
+          });
+        }
       }
       onSaved();
     } catch (e) {
@@ -2154,7 +3070,7 @@ function EventFormDialog({
     if (!draft.id) return;
     setBusy(true);
     try {
-      if (issues.some((n) => n.milestone === draft.id))
+      if (work.some((item) => item.milestone === draft.id))
         throw new Error(
           "마일스톤에 포함된 이슈를 먼저 제거하고 저장해 주세요.",
         );
@@ -2231,17 +3147,17 @@ function EventFormDialog({
         </label>
         {draft.kind === "milestone" ? (
           <div className="wb-field is-wide">
-            <MilestoneIssuePicker
-              issues={issues}
-              selected={issuePaths}
-              onChange={setIssuePaths}
+            <MilestoneWorkPicker
+              work={work}
+              selected={memberIds}
+              onChange={setMemberIds}
             />
           </div>
         ) : (
           <label className="wb-field is-wide">
-            작업 연결
+            개발 항목 연결
             <select
-              aria-label="작업 연결"
+              aria-label="개발 항목 연결"
               value={draft.workId ?? ""}
               onChange={(event) => set("workId", event.target.value || null)}
             >
@@ -2416,7 +3332,7 @@ function WorkDetailDialog({
             <h2>{work.title}</h2>
             <p>
               {work.description ||
-                "설명이 아직 없습니다. 작업 편집에서 의도와 배경을 남겨 주세요."}
+                "설명이 아직 없습니다. 개발 항목 편집에서 의도와 배경을 남겨 주세요."}
             </p>
           </div>
           <div className="wb-detail-actions">
@@ -2530,7 +3446,7 @@ function WorkDetailDialog({
           />
         </label>
         <div className="wb-step-actions">
-          {previous && (
+          {!workflow && previous && (
             <Button
               variant="outline"
               size="sm"
@@ -2542,7 +3458,34 @@ function WorkDetailDialog({
             </Button>
           )}
           <span />
-          {next && (
+          {workflow &&
+            outgoing?.map((edge) => {
+              const targetLabel = stageLabel(
+                [workflow],
+                edge.to,
+                workflow.id,
+                workflow.version,
+              );
+              return (
+                <Button
+                  key={`${edge.on}:${edge.to}`}
+                  variant={edge.on === "approved" ? "default" : "outline"}
+                  size="sm"
+                  disabled={transitioning}
+                  onClick={() => void transition(edge.to)}
+                >
+                  {transitioning ? (
+                    <Loader2 className="wb-spin" />
+                  ) : edge.on === "approved" ? (
+                    <CircleCheck />
+                  ) : (
+                    <ArrowLeft />
+                  )}
+                  {transitionActionLabel(edge.on, targetLabel)}
+                </Button>
+              );
+            })}
+          {!workflow && next && (
             <Button
               size="sm"
               disabled={transitioning}
@@ -2876,16 +3819,6 @@ function RunLauncher({
   workflow?: WorkflowDefinition;
   onNotice: (notice: Notice) => void;
 }) {
-  const defaultRole = (stage: Stage): AgentRole =>
-    stage === "plan"
-      ? "research"
-      : stage === "design"
-        ? "planner"
-        : stage === "build"
-          ? "implementer"
-          : stage === "test"
-            ? "verifier"
-            : "reviewer";
   const currentNodeId = activeNodeForWork(work);
   const node = workflow?.nodes.find(
     (candidate) => candidate.id === currentNodeId,
@@ -2893,7 +3826,7 @@ function RunLauncher({
   const availableRoles = node?.allowedRoles.length
     ? node.allowedRoles
     : (Object.keys(roleLabels) as AgentRole[]);
-  const roleForNode = () => availableRoles[0] ?? defaultRole(currentNodeId);
+  const roleForNode = () => roleForStageNode(currentNodeId, availableRoles);
   const [role, setRole] = useState<AgentRole>(roleForNode);
   const [agent, setAgent] = useState<"codex" | "claude">(
     project?.defaultAgent === "claude" ? "claude" : "codex",
@@ -2906,6 +3839,31 @@ function RunLauncher({
     setAgent(project?.defaultAgent === "claude" ? "claude" : "codex");
     setModel(project?.defaultModel ?? "");
   }, [project?.id, currentNodeId, workflow?.id, workflow?.version]);
+  // 같은 항목·같은 역할로 이미 돌고 있는 실행. 호스트도 중복 실행을 거절하지만,
+  // 버튼이 먼저 알려 줘야 사람이 두 번 누르지 않는다.
+  const [active, setActive] = useState<HarnessRun | null>(null);
+  const syncActive = useCallback(async () => {
+    try {
+      const rows = await sddApi.runs();
+      setActive(
+        rows.find(
+          (run) =>
+            run.workId === work.id &&
+            run.role === role &&
+            !run.parentRunId &&
+            ACTIVE_RUN_STATUS.includes(run.status),
+        ) ?? null,
+      );
+    } catch {
+      setActive(null);
+    }
+  }, [work.id, role]);
+  useEffect(() => {
+    void syncActive();
+    const timer = window.setInterval(() => void syncActive(), 10000);
+    return () => window.clearInterval(timer);
+  }, [syncActive]);
+
   const launch = async () => {
     setBusy(true);
     try {
@@ -2925,6 +3883,21 @@ function RunLauncher({
     } catch (e) {
       onNotice({ tone: "error", text: errorText(e) });
     } finally {
+      await syncActive();
+      setBusy(false);
+    }
+  };
+
+  const stop = async () => {
+    if (!active) return;
+    setBusy(true);
+    try {
+      await sddApi.stopRun(active.id);
+      onNotice({ tone: "success", text: "실행을 중단했습니다." });
+    } catch (e) {
+      onNotice({ tone: "error", text: errorText(e) });
+    } finally {
+      await syncActive();
       setBusy(false);
     }
   };
@@ -2932,7 +3905,7 @@ function RunLauncher({
     <aside className="wb-run-launcher">
       <div>
         <h3>맥락을 넘겨 실행</h3>
-        <p>단계, 선행 작업, 저장소와 검증 명령이 프롬프트에 포함됩니다.</p>
+        <p>단계, 선행 항목, 저장소와 검증 명령이 프롬프트에 포함됩니다.</p>
       </div>
       <label>
         역할
@@ -2979,10 +3952,23 @@ function RunLauncher({
       </label>
       <Button
         size="sm"
-        onClick={() => void launch()}
-        disabled={busy || !work.projectId}
+        variant={active ? "secondary" : "default"}
+        title={
+          active
+            ? "이 역할의 실행이 진행 중입니다. 누르면 중단합니다."
+            : undefined
+        }
+        onClick={() => void (active ? stop() : launch())}
+        disabled={busy || (!active && !work.projectId)}
       >
-        {busy ? <Loader2 className="wb-spin" /> : <Bot />} 실행 시작
+        {busy ? (
+          <Loader2 className="wb-spin" />
+        ) : active ? (
+          <StopCircle />
+        ) : (
+          <Bot />
+        )}{" "}
+        {active ? "실행 중 · 중단" : "실행 시작"}
       </Button>
       {!work.projectId && <small>실행하려면 프로젝트를 연결해 주세요.</small>}
     </aside>
@@ -3027,18 +4013,11 @@ function HarnessView({
     void load();
   }, []);
   useEffect(() => {
-    if (
-      !runs.some((run) =>
-        ["starting", "running", "blocked"].includes(run.status),
-      )
-    )
-      return;
+    if (!runs.some((run) => ACTIVE_RUN_STATUS.includes(run.status))) return;
     const timer = window.setInterval(() => {
       void Promise.all(
         runs
-          .filter((run) =>
-            ["starting", "running", "blocked"].includes(run.status),
-          )
+          .filter((run) => ACTIVE_RUN_STATUS.includes(run.status))
           .map((run) => sddApi.refreshRun(run.id)),
       )
         .then((fresh) => {
@@ -3119,6 +4098,25 @@ function HarnessView({
       setBusy(false);
     }
   };
+  const resume = async () => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const next = await sddApi.resumeRun(selected.id);
+      setSelected(next);
+      setRuns((previous) =>
+        previous.map((run) => (run.id === next.id ? next : run)),
+      );
+      onNotice({
+        tone: "success",
+        text: "herdr 에서 이 실행의 세션을 다시 열었습니다.",
+      });
+    } catch (e) {
+      onNotice({ tone: "error", text: errorText(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
   const sendKey = async (key: string) => {
     if (!selected) return;
     setBusy(true);
@@ -3139,7 +4137,7 @@ function HarnessView({
     setBusy(true);
     try {
       const item = work.find((candidate) => candidate.id === selected.workId);
-      if (!item) throw new Error("연결된 작업을 찾을 수 없습니다.");
+      if (!item) throw new Error("연결된 개발 항목을 찾을 수 없습니다.");
       const run = await sddApi.launch({
         workId: item.id,
         projectId: item.projectId,
@@ -3159,7 +4157,7 @@ function HarnessView({
   };
   return (
     <>
-      <PageHeader title="작업 실행">
+      <PageHeader title="개발 실행">
         <Button
           variant="outline"
           onClick={() => void load()}
@@ -3174,7 +4172,7 @@ function HarnessView({
         <EmptyState
           icon={SquareTerminal}
           title="아직 실행 기록이 없습니다"
-          description="작업 상세에서 역할과 모델을 선택해 실행을 시작하세요."
+          description="개발 항목 상세에서 역할과 모델을 선택해 실행을 시작하세요."
         />
       ) : (
         <div className="wb-harness">
@@ -3225,7 +4223,7 @@ function HarnessView({
                     size="sm"
                     onClick={() => onSelectWork(selected.workId)}
                   >
-                    <FileText /> 작업
+                    <FileText /> 개발 항목
                   </Button>
                   <Button
                     variant="outline"
@@ -3235,6 +4233,16 @@ function HarnessView({
                   >
                     <RefreshCw />
                   </Button>
+                  {selected.tabClosedAt && selected.resumable && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void resume()}
+                      disabled={busy}
+                    >
+                      <SquareTerminal /> herdr 에서 이어하기
+                    </Button>
+                  )}
                   {["starting", "running", "blocked"].includes(
                     selected.status,
                   ) && (
@@ -3262,12 +4270,31 @@ function HarnessView({
                     {dateTimeText.format(new Date(selected.createdAt))}
                   </strong>
                 </span>
+                {selected.agentSession && (
+                  <span>
+                    에이전트 세션 <strong>{selected.agentSession}</strong>
+                  </span>
+                )}
+                {selected.tabClosedAt && (
+                  <span>
+                    화면 닫힘{" "}
+                    <strong>
+                      {dateTimeText.format(new Date(selected.tabClosedAt))}
+                    </strong>
+                  </span>
+                )}
                 {selected.parentRunId && (
                   <span>
                     상위 실행 <strong>{selected.parentRunId}</strong>
                   </span>
                 )}
               </div>
+              {selected.finalReport && (
+                <div className="wb-run-report">
+                  <strong>최종 보고</strong>
+                  <pre>{selected.finalReport}</pre>
+                </div>
+              )}
               <div className="wb-run-prompt">
                 <strong>실행 프롬프트</strong>
                 <pre>{selected.prompt}</pre>
@@ -3307,6 +4334,12 @@ function HarnessView({
                   >
                     <Send /> 후속 지시 보내기
                   </Button>
+                  {selected.tabClosedAt && (
+                    <small>
+                      끝난 herdr 화면은 닫혀 있습니다. 후속 지시를 보내면 기록된
+                      세션을 같은 대화로 다시 엽니다.
+                    </small>
+                  )}
                 </div>
               )}
               {selected.status === "blocked" && (

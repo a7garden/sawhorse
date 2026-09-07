@@ -1219,6 +1219,55 @@ mod tests {
     }
 
     #[test]
+    fn bundled_ui_mockup_package_and_contributions_are_valid() {
+        let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../plugin/extension-packages/ui-mockup");
+        let (manifest, _) = verify_directory(&package_root).unwrap();
+        let workflow: crate::workflow::WorkflowDefinition =
+            read_json(&package_root, &manifest.contributions.workflows[0]).unwrap();
+        let report = crate::workflow::validation::validate(&workflow);
+        assert!(report.valid, "깨진 목업 workflow: {:?}", report.issues);
+        assert_eq!(workflow.version, "1.1.0");
+        assert!(workflow
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.role == "feedback"));
+        assert!(workflow
+            .artifacts
+            .iter()
+            .any(|artifact| artifact.role == "proposal"));
+        assert!(workflow
+            .edges
+            .iter()
+            .any(|edge| edge.on == "changes-requested"));
+        assert!(workflow
+            .edges
+            .iter()
+            .any(|edge| edge.on == "revised" && edge.loop_ref.is_some()));
+
+        let mut adapter = crate::packs::PackManifest {
+            id: format!("x-{}", manifest.id),
+            name: manifest.name,
+            actions: manifest
+                .contributions
+                .actions
+                .iter()
+                .map(|path| read_json(&package_root, path).unwrap())
+                .collect(),
+            views: manifest
+                .contributions
+                .views
+                .iter()
+                .map(|path| read_json(&package_root, path).unwrap())
+                .collect(),
+            ..Default::default()
+        };
+        adapter.validate().unwrap();
+        assert_eq!(adapter.views[0].selection, "multiple");
+        assert_eq!(adapter.views[1].selection, "multiple");
+    }
+
+    #[test]
     fn permission_scope_must_be_explicit_and_known() {
         let mut manifest = ExtensionPackageManifest {
             manifest_version: 2,

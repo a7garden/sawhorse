@@ -36,7 +36,10 @@ function draftToCheck(d: CheckDraft): CollabVerifyCheck | null {
   if (d.kind === "http") {
     return d.url.trim() ? { kind: "http", url: d.url.trim() } : null;
   }
-  const argv = d.argv.split(",").map((s) => s.trim()).filter(Boolean);
+  const argv = d.argv
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   if (argv.length === 0) return null;
   return { kind: "command", cwd: d.cwd.trim(), argv };
 }
@@ -97,7 +100,9 @@ export default function CollaborationSection({
       setMsg({ ok: false, text: "프로필 이름을 입력하세요." });
       return;
     }
-    const built = checks.map(draftToCheck).filter((c): c is CollabVerifyCheck => c != null);
+    const built = checks
+      .map(draftToCheck)
+      .filter((c): c is CollabVerifyCheck => c != null);
     const manualList = manual.map((m) => m.trim()).filter(Boolean);
     setBusy(true);
     setMsg(null);
@@ -106,7 +111,10 @@ export default function CollaborationSection({
         checks: built,
         manual: manualList,
       });
-      setMsg({ ok: true, text: `검증 프로필 "${profileName.trim()}"을 저장했습니다.` });
+      setMsg({
+        ok: true,
+        text: `검증 프로필 "${profileName.trim()}"을 저장했습니다.`,
+      });
       reload();
     } catch (e) {
       setMsg({ ok: false, text: `검증 프로필 저장 실패: ${String(e)}` });
@@ -115,7 +123,12 @@ export default function CollaborationSection({
     }
   }
 
-  async function register(name: string, path: string, branch: string, verifyProfile: string) {
+  async function register(
+    name: string,
+    path: string,
+    branch: string,
+    verifyProfile: string,
+  ) {
     setBusy(true);
     setMsg(null);
     try {
@@ -129,12 +142,18 @@ export default function CollaborationSection({
     }
   }
 
-  const registeredPaths = new Set((projects?.registered ?? []).map((r) => r.path));
+  const registeredPaths = new Set(
+    (projects?.registered ?? []).map((r) => r.path),
+  );
 
   return (
     <div className="space-y-4 p-4">
       {msg && (
-        <div className={`text-xs ${msg.ok ? "text-success" : "text-destructive"}`}>{msg.text}</div>
+        <div
+          className={`text-xs ${msg.ok ? "text-success" : "text-destructive"}`}
+        >
+          {msg.text}
+        </div>
       )}
 
       <Card>
@@ -144,7 +163,9 @@ export default function CollaborationSection({
         <CardContent className="space-y-2">
           <Select
             value={draft.dashboard.collaboration.localIntegrationApproval}
-            onChange={(e) => void setApproval(e.target.value as LocalIntegrationApproval)}
+            onChange={(e) =>
+              void setApproval(e.target.value as LocalIntegrationApproval)
+            }
             aria-label="로컬 통합 승인 정책"
           >
             {APPROVAL_OPTIONS.map((o) => (
@@ -154,7 +175,8 @@ export default function CollaborationSection({
             ))}
           </Select>
           <p className="text-xs text-muted-foreground">
-            새 세션의 초기값으로만 쓰입니다. 이미 시작한 세션은 시작 때의 정책 스냅샷을 따릅니다.
+            새 세션의 초기값으로만 쓰입니다. 이미 시작한 세션은 시작 때의 정책
+            스냅샷을 따릅니다.
           </p>
         </CardContent>
       </Card>
@@ -163,7 +185,9 @@ export default function CollaborationSection({
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
           <CardTitle className="text-[13px]">등록 프로젝트</CardTitle>
           {(projects?.registered.length ?? 0) > 0 && (
-            <span className="text-xs text-muted-foreground">{projects?.registered.length}개</span>
+            <span className="text-xs text-muted-foreground">
+              {projects?.registered.length}개
+            </span>
           )}
         </CardHeader>
         <CardContent className="space-y-2">
@@ -171,11 +195,15 @@ export default function CollaborationSection({
             <Empty className="py-3">등록된 협업 프로젝트가 없습니다.</Empty>
           )}
           {(projects?.registered ?? []).map((p) => (
-            <div key={p.id} className="space-y-0.5 rounded-lg border p-2.5 text-xs">
+            <div
+              key={p.id}
+              className="space-y-0.5 rounded-lg border p-2.5 text-xs"
+            >
               <div className="font-medium">{p.name}</div>
               <div className="text-muted-foreground">경로: {p.path}</div>
               <div className="text-muted-foreground">
-                통합: {p.integration.path || p.path} · {p.integration.branch || "기본 브랜치"} · 프로필:{" "}
+                통합: {p.integration.path || p.path} ·{" "}
+                {p.integration.branch || "기본 브랜치"} · 프로필:{" "}
                 {p.integration.verifyProfile || "기본"}
               </div>
             </div>
@@ -229,15 +257,27 @@ export default function CollaborationSection({
             <div className="flex items-center justify-between">
               <Label>자동 검사</Label>
               <div className="flex gap-1">
-                <Button size="xs" variant="outline" onClick={() => setChecks((cs) => [...cs, emptyCheck("command")])}>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() =>
+                    setChecks((cs) => [...cs, emptyCheck("command")])
+                  }
+                >
                   <Plus /> 명령
                 </Button>
-                <Button size="xs" variant="outline" onClick={() => setChecks((cs) => [...cs, emptyCheck("http")])}>
+                <Button
+                  size="xs"
+                  variant="outline"
+                  onClick={() => setChecks((cs) => [...cs, emptyCheck("http")])}
+                >
                   <Plus /> HTTP
                 </Button>
               </div>
             </div>
-            {checks.length === 0 && <Empty className="py-2">자동 검사가 없습니다.</Empty>}
+            {checks.length === 0 && (
+              <Empty className="py-2">자동 검사가 없습니다.</Empty>
+            )}
             {checks.map((c, i) => (
               <div key={i} className="space-y-1 rounded-lg border p-2.5">
                 <div className="flex items-center gap-2">
@@ -245,7 +285,14 @@ export default function CollaborationSection({
                     value={c.kind}
                     onChange={(e) =>
                       setChecks((cs) =>
-                        cs.map((x, j) => (j === i ? { ...x, kind: e.target.value as "command" | "http" } : x)),
+                        cs.map((x, j) =>
+                          j === i
+                            ? {
+                                ...x,
+                                kind: e.target.value as "command" | "http",
+                              }
+                            : x,
+                        ),
                       )
                     }
                     aria-label={`검사 ${i + 1} 종류`}
@@ -257,7 +304,9 @@ export default function CollaborationSection({
                     size="icon"
                     variant="ghost"
                     aria-label={`검사 ${i + 1} 삭제`}
-                    onClick={() => setChecks((cs) => cs.filter((_, j) => j !== i))}
+                    onClick={() =>
+                      setChecks((cs) => cs.filter((_, j) => j !== i))
+                    }
                   >
                     <Trash2 />
                   </Button>
@@ -267,14 +316,26 @@ export default function CollaborationSection({
                     <Input
                       className="h-7"
                       value={c.cwd}
-                      onChange={(e) => setChecks((cs) => cs.map((x, j) => (j === i ? { ...x, cwd: e.target.value } : x)))}
+                      onChange={(e) =>
+                        setChecks((cs) =>
+                          cs.map((x, j) =>
+                            j === i ? { ...x, cwd: e.target.value } : x,
+                          ),
+                        )
+                      }
                       placeholder="작업 디렉터리 (비면 저장소 루트)"
                       aria-label={`검사 ${i + 1} 작업 디렉터리`}
                     />
                     <Input
                       className="h-7"
                       value={c.argv}
-                      onChange={(e) => setChecks((cs) => cs.map((x, j) => (j === i ? { ...x, argv: e.target.value } : x)))}
+                      onChange={(e) =>
+                        setChecks((cs) =>
+                          cs.map((x, j) =>
+                            j === i ? { ...x, argv: e.target.value } : x,
+                          ),
+                        )
+                      }
                       placeholder="명령 (쉼표 구분, 예: npm, run, build)"
                       aria-label={`검사 ${i + 1} 명령`}
                     />
@@ -283,7 +344,13 @@ export default function CollaborationSection({
                   <Input
                     className="h-7"
                     value={c.url}
-                    onChange={(e) => setChecks((cs) => cs.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))}
+                    onChange={(e) =>
+                      setChecks((cs) =>
+                        cs.map((x, j) =>
+                          j === i ? { ...x, url: e.target.value } : x,
+                        ),
+                      )
+                    }
                     placeholder="http://localhost:5173"
                     aria-label={`검사 ${i + 1} URL`}
                   />
@@ -295,18 +362,30 @@ export default function CollaborationSection({
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label>수동 확인 항목</Label>
-              <Button size="xs" variant="outline" onClick={() => setManual((ms) => [...ms, ""])}>
+              <Button
+                size="xs"
+                variant="outline"
+                onClick={() => setManual((ms) => [...ms, ""])}
+              >
                 <Plus /> 항목 추가
               </Button>
             </div>
-            {manual.length === 0 && <Empty className="py-2">수동 확인이 없으면 자동 검사 통과 뒤 곧바로 검증 완료가 됩니다.</Empty>}
+            {manual.length === 0 && (
+              <Empty className="py-2">
+                수동 확인이 없으면 자동 검사 통과 뒤 곧바로 검증 완료가 됩니다.
+              </Empty>
+            )}
             {manual.map((m, i) => (
               <div key={i} className="flex items-center gap-2">
                 <Textarea
                   className="min-h-[36px] flex-1"
                   rows={1}
                   value={m}
-                  onChange={(e) => setManual((ms) => ms.map((x, j) => (j === i ? e.target.value : x)))}
+                  onChange={(e) =>
+                    setManual((ms) =>
+                      ms.map((x, j) => (j === i ? e.target.value : x)),
+                    )
+                  }
                   placeholder="예: 개발 서버에서 홈 화면이 그려지는지 확인"
                   aria-label={`수동 확인 ${i + 1}`}
                 />
@@ -314,7 +393,9 @@ export default function CollaborationSection({
                   size="icon"
                   variant="ghost"
                   aria-label={`수동 확인 ${i + 1} 삭제`}
-                  onClick={() => setManual((ms) => ms.filter((_, j) => j !== i))}
+                  onClick={() =>
+                    setManual((ms) => ms.filter((_, j) => j !== i))
+                  }
                 >
                   <Trash2 />
                 </Button>
@@ -323,7 +404,11 @@ export default function CollaborationSection({
           </div>
 
           <div className="flex justify-end">
-            <Button size="sm" disabled={busy} onClick={() => void saveProfile()}>
+            <Button
+              size="sm"
+              disabled={busy}
+              onClick={() => void saveProfile()}
+            >
               프로필 저장
             </Button>
           </div>
@@ -332,25 +417,35 @@ export default function CollaborationSection({
 
       <Card>
         <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">프로젝트 등록 (기존 목록)</CardTitle>
+          <CardTitle className="text-[13px]">
+            프로젝트 등록 (기존 목록)
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           {projects && projects.legacy.length === 0 && (
-            <Empty className="py-3">기존 프로젝트 목록이 없습니다. 설정 &gt; 프로젝트에서 추가하세요.</Empty>
+            <Empty className="py-3">
+              기존 프로젝트 목록이 없습니다. 설정 &gt; 프로젝트에서 추가하세요.
+            </Empty>
           )}
           {(projects?.legacy ?? []).map((p) => (
-            <div key={p.name} className="flex items-center gap-2 rounded-lg border p-2.5 text-xs">
+            <div
+              key={p.name}
+              className="flex items-center gap-2 rounded-lg border p-2.5 text-xs"
+            >
               <div className="min-w-0 flex-1">
                 <div className="font-medium">{p.name}</div>
                 <div className="text-muted-foreground">
-                  {p.path} · {p.workBranch || "기본 브랜치"} · 검증: {p.verify || "없음"}
+                  {p.path} · {p.workBranch || "기본 브랜치"} · 검증:{" "}
+                  {p.verify || "없음"}
                 </div>
               </div>
               <Button
                 size="xs"
                 variant="outline"
                 disabled={busy || registeredPaths.has(p.path)}
-                onClick={() => void register(p.name, p.path, p.workBranch, p.verify)}
+                onClick={() =>
+                  void register(p.name, p.path, p.workBranch, p.verify)
+                }
               >
                 등록
               </Button>

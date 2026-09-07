@@ -6,6 +6,34 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator(".wb-header")).toBeVisible();
 });
 
+test("workbench tabs reuse the shared snapshot without returning to a loading screen", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const observedWindow = window as Window & {
+      __sawhorseLoadingObserved?: boolean;
+    };
+    observedWindow.__sawhorseLoadingObserved = false;
+    new MutationObserver(() => {
+      if (document.querySelector(".wb-loading"))
+        observedWindow.__sawhorseLoadingObserved = true;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
+
+  await nav(page, "개발");
+  await expect(page.locator(".wb-board")).toBeVisible();
+  await nav(page, "캘린더");
+  await expect(page.locator(".wb-calendar")).toBeVisible();
+
+  expect(
+    await page.evaluate(
+      () =>
+        (window as Window & { __sawhorseLoadingObserved?: boolean })
+          .__sawhorseLoadingObserved,
+    ),
+  ).toBe(false);
+});
+
 test("project and task creation persist and work can move across the board", async ({
   page,
 }) => {
@@ -25,16 +53,18 @@ test("project and task creation persist and work can move across the board", asy
   await expect(
     page.locator(".wb-project-card").filter({ hasText: "검증 프로젝트" }),
   ).toBeVisible();
-  await nav(page, "작업");
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
+  await nav(page, "개발");
+  await page.getByRole("button", { name: "새 개발 항목", exact: true }).click();
   await page
-    .getByLabel("작업 이름", { exact: true })
+    .getByLabel("개발 항목 이름", { exact: true })
     .fill("브라우저 흐름 검증");
   await page
     .getByLabel("프로젝트", { exact: true })
     .selectOption({ label: "검증 프로젝트" });
   await page.getByLabel("기한", { exact: true }).fill("2026-09-15");
-  await page.getByRole("button", { name: "작업 만들기", exact: true }).click();
+  await page
+    .getByRole("button", { name: "개발 항목 만들기", exact: true })
+    .click();
   await expect(page.locator(".wb-detail h2")).toHaveText("브라우저 흐름 검증");
   await page
     .locator(".wb-detail-dialog")
@@ -44,19 +74,19 @@ test("project and task creation persist and work can move across the board", asy
     .locator(".wb-board-card")
     .filter({ hasText: "브라우저 흐름 검증" });
   const target = page.locator(".wb-board-column").filter({
-    has: page.locator(".wb-column-head").filter({ hasText: "준비" }),
+    has: page.locator(".wb-column-head").filter({ hasText: "예정" }),
   });
   await card.dragTo(target);
   await expect(
     target.locator(".wb-board-card").filter({ hasText: "브라우저 흐름 검증" }),
   ).toBeVisible();
   await page.reload();
-  await nav(page, "작업");
+  await nav(page, "개발");
   await expect(
     page
       .locator(".wb-board-column")
       .filter({
-        has: page.locator(".wb-column-head").filter({ hasText: "준비" }),
+        has: page.locator(".wb-column-head").filter({ hasText: "예정" }),
       })
       .getByText("브라우저 흐름 검증", { exact: true }),
   ).toBeVisible();
@@ -72,7 +102,9 @@ test("editing metadata from a task detail is reachable", async ({ page }) => {
     .locator(".wb-detail-head")
     .getByRole("button", { name: "편집", exact: true })
     .click();
-  await page.getByLabel("작업 이름", { exact: true }).fill("수정된 개발 흐름");
+  await page
+    .getByLabel("개발 항목 이름", { exact: true })
+    .fill("수정된 개발 흐름");
   await page.getByRole("button", { name: "변경 저장", exact: true }).click();
   await expect(page.locator(".wb-detail h2")).toHaveText("수정된 개발 흐름");
 });
@@ -225,6 +257,7 @@ test("forward stage transitions require and retain a review decision", async ({
       name: "검토 의도에서 시작하는 개발 흐름 Sawhorse · 설계",
     })
     .click();
+  await expect(page.getByRole("button", { name: "수정 요청" })).toBeVisible();
   await page.getByRole("button", { name: "검토 후 다음: 구현" }).click();
   await expect(page.getByRole("alert")).toContainText("검토 근거");
   await page
@@ -238,7 +271,7 @@ test("forward stage transitions require and retain a review decision", async ({
 test("project and stage filters combine and search opens an artifact", async ({
   page,
 }) => {
-  await nav(page, "작업");
+  await nav(page, "개발");
   await page.getByLabel("프로젝트 필터").selectOption("herdr");
   await page.getByLabel("단계 필터").selectOption("build");
   await expect(page.locator(".wb-board-card")).toHaveCount(1);
@@ -246,7 +279,9 @@ test("project and stage filters combine and search opens an artifact", async ({
     "Herdr 실행과 기록 연결",
   );
   await page.getByRole("button", { name: /전체 검색/ }).click();
-  await page.getByPlaceholder("문서와 작업을 검색하세요").fill("원하는 결과");
+  await page
+    .getByPlaceholder("문서와 개발 항목을 검색하세요")
+    .fill("원하는 결과");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await page.locator(".wb-search-hit").first().click();
   await expect(page.locator(".cm-content")).toContainText("원하는 결과");
@@ -270,11 +305,11 @@ test("a project switches to TDD without changing existing SDD work", async ({
     page.locator(".wb-project-card").filter({ hasText: "Sawhorse" }),
   ).toContainText("TDD 사이클");
 
-  await nav(page, "작업");
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
-  await page.getByLabel("작업 이름").fill("TDD로 만든 새 작업");
+  await nav(page, "개발");
+  await page.getByRole("button", { name: "새 개발 항목", exact: true }).click();
+  await page.getByLabel("개발 항목 이름").fill("TDD로 만든 새 항목");
   await page.getByLabel("프로젝트", { exact: true }).selectOption("sawhorse");
-  await page.getByRole("button", { name: "작업 만들기" }).click();
+  await page.getByRole("button", { name: "개발 항목 만들기" }).click();
   await expect(page.locator(".wb-stepper .is-current")).toContainText(
     "테스트 의도",
   );
@@ -318,9 +353,7 @@ test("workflow studio and resumable project ingestion are reachable", async ({
 }) => {
   await nav(page, "확장 관리");
   await page.getByRole("button", { name: "워크플로", exact: false }).click();
-  await page
-    .getByRole("button", { name: "새 워크플로", exact: true })
-    .click();
+  await page.getByRole("button", { name: "새 워크플로", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "워크플로 스튜디오" }),
   ).toBeVisible();

@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, FileText, Folder, FolderOpen, RefreshCw } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  FileText,
+  Folder,
+  FolderOpen,
+  RefreshCw,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import type { VaultNode } from "@/lib/types";
@@ -25,7 +32,12 @@ function buildTree(nodes: VaultNode[]): TreeNode[] {
       const rel = parts.slice(0, i + 1).join("/");
       let next = cur.children.find((c) => c.name === parts[i]);
       if (!next) {
-        next = { name: parts[i], rel, dir: isLast ? n.dir : true, children: [] };
+        next = {
+          name: parts[i],
+          rel,
+          dir: isLast ? n.dir : true,
+          children: [],
+        };
         cur.children.push(next);
       }
       cur = next;
@@ -48,7 +60,12 @@ export default function DocsPage() {
   const tree = useMemo(() => buildTree(vaultTree), [vaultTree]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [sel, setSel] = useState<string | null>(null);
-  const [view, setView] = useState<{ title: string; md: string; isBase: boolean } | null>(null);
+  const [view, setView] = useState<{
+    title: string;
+    md: string;
+    path: string;
+    isBase: boolean;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -74,7 +91,12 @@ export default function DocsPage() {
     setErr(null);
     try {
       const v = await api.readVaultNote(node.rel);
-      setView({ title: v.title, md: v.markdown, isBase: node.rel.endsWith(".base") });
+      setView({
+        title: v.title,
+        md: v.markdown,
+        path: node.rel,
+        isBase: node.rel.endsWith(".base"),
+      });
     } catch (e) {
       setErr(String(e));
       setView(null);
@@ -132,7 +154,12 @@ export default function DocsPage() {
       <aside className="flex w-60 shrink-0 flex-col border-r">
         <div className="flex items-center justify-between border-b px-3 py-2">
           <span className="text-xs font-semibold">볼트 문서</span>
-          <Button size="xs" variant="ghost" onClick={() => void refreshTree()} aria-label="트리 새로고침">
+          <Button
+            size="xs"
+            variant="ghost"
+            onClick={() => void refreshTree()}
+            aria-label="트리 새로고침"
+          >
             <RefreshCw />
           </Button>
         </div>
@@ -154,13 +181,21 @@ export default function DocsPage() {
           <>
             <div className="sticky top-0 z-10 border-b bg-background/95 px-4 py-2 backdrop-blur">
               <div className="text-sm font-bold">{view.title}</div>
-              {sel && <div className="text-[11px] text-muted-foreground">{sel}</div>}
+              {sel && (
+                <div className="text-[11px] text-muted-foreground">{sel}</div>
+              )}
             </div>
             <div className="px-4 py-3">
               {view.isBase ? (
-                <pre className="whitespace-pre-wrap text-xs leading-relaxed selectable">{view.md}</pre>
+                <pre className="whitespace-pre-wrap text-xs leading-relaxed selectable">
+                  {view.md}
+                </pre>
               ) : (
-                <MarkdownView src={view.md} className="selectable" />
+                <MarkdownView
+                  src={view.md}
+                  notePath={view.path}
+                  className="selectable"
+                />
               )}
             </div>
           </>

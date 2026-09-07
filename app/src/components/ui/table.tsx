@@ -1,10 +1,16 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 
-export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTableElement>) {
+export function Table({
+  className,
+  ...props
+}: React.TableHTMLAttributes<HTMLTableElement>) {
   return (
     <div className="relative w-full overflow-auto">
-      <table className={cn("w-full caption-bottom text-sm", className)} {...props} />
+      <table
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
     </div>
   );
 }
@@ -21,7 +27,11 @@ export const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
 >(({ className, ...props }, ref) => (
-  <tbody ref={ref} className={cn("[&_tr:last-child]:border-0", className)} {...props} />
+  <tbody
+    ref={ref}
+    className={cn("[&_tr:last-child]:border-0", className)}
+    {...props}
+  />
 ));
 TableBody.displayName = "TableBody";
 
@@ -59,6 +69,10 @@ export const TableCell = React.forwardRef<
   HTMLTableCellElement,
   React.TdHTMLAttributes<HTMLTableCellElement>
 >(({ className, ...props }, ref) => (
-  <td ref={ref} className={cn("px-2 py-1.5 align-middle", className)} {...props} />
+  <td
+    ref={ref}
+    className={cn("px-2 py-1.5 align-middle", className)}
+    {...props}
+  />
 ));
 TableCell.displayName = "TableCell";

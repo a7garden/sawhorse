@@ -85,7 +85,7 @@ export function AppToolbar() {
     ...pending.map((p) => ({
       id: `pending:${p.id}`,
       title: p.targetTitle,
-      text: "작업 변경 요청을 검토해 주세요.",
+      text: "자동화 작업 변경 요청을 검토해 주세요.",
       page: "task-library",
     })),
     ...runs

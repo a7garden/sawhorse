@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Github,
   FolderGit2,
@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog } from "@/components/ui/dialog";
 import { PathInput } from "@/components/ui/path-input";
+import { toast } from "@/components/ui/toast";
 import { PageHeader } from "./common";
 import SourcesPage from "./SourcesPage";
 import OnboardingPage from "./OnboardingPage";
@@ -38,7 +39,10 @@ export default function GitHubExtensionPage() {
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  // 액션 결과는 상단 토스트로 알린다.
+  const setNotice = useCallback((text: string) => {
+    if (text) toast({ tone: "info", text });
+  }, []);
   const [sync, setSync] = useState(false);
   const [selected, setSelected] = useState<GitHubRepository | null>(null);
   const [parentPath, setParentPath] = useState("");
@@ -100,20 +104,14 @@ export default function GitHubExtensionPage() {
           }
           return;
         }
-        timer = window.setTimeout(
-          poll,
-          Math.max(1, result.retryAfter) * 1000,
-        );
+        timer = window.setTimeout(poll, Math.max(1, result.retryAfter) * 1000);
       } catch (e) {
         if (!active) return;
         setOAuthFlow(null);
         setError(String(e));
       }
     };
-    timer = window.setTimeout(
-      poll,
-      Math.max(1, oauthFlow.interval) * 1000,
-    );
+    timer = window.setTimeout(poll, Math.max(1, oauthFlow.interval) * 1000);
     return () => {
       active = false;
       if (timer !== undefined) window.clearTimeout(timer);
@@ -169,11 +167,6 @@ export default function GitHubExtensionPage() {
             {error}
           </p>
         )}
-        {notice && (
-          <p role="status" className="rounded-lg bg-secondary p-3 text-sm">
-            {notice}
-          </p>
-        )}
         {!core.github ? (
           <div className="rounded-xl border bg-card p-6">
             <Github className="mb-3 size-7" />
@@ -220,8 +213,8 @@ export default function GitHubExtensionPage() {
                   <h2 className="font-semibold">계정 연결</h2>
                   <p className="text-sm text-muted-foreground">
                     브라우저에서 GitHub OAuth로 로그인합니다. 비공개 저장소를
-                    가져오기 위해 repo 범위를 요청하지만, Sawhorse는 현재 저장소와
-                    이슈를 읽는 작업에만 사용합니다.
+                    가져오기 위해 repo 범위를 요청하지만, Sawhorse는 현재
+                    저장소와 이슈를 읽는 작업에만 사용합니다.
                   </p>
                   {oauthFlow ? (
                     <div
@@ -229,15 +222,15 @@ export default function GitHubExtensionPage() {
                       aria-label="GitHub OAuth 승인"
                     >
                       <p className="text-sm">
-                        브라우저의 GitHub 페이지에 아래 코드를 입력하고 승인하세요.
+                        브라우저의 GitHub 페이지에 아래 코드를 입력하고
+                        승인하세요.
                       </p>
                       <p className="font-mono text-2xl font-semibold tracking-widest">
                         {oauthFlow.userCode}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         승인 완료를 기다리는 중… 코드는 약{" "}
-                        {Math.ceil(oauthFlow.expiresIn / 60)}분 동안
-                        유효합니다.
+                        {Math.ceil(oauthFlow.expiresIn / 60)}분 동안 유효합니다.
                       </p>
                       <div className="flex flex-wrap gap-2">
                         <Button
@@ -288,8 +281,8 @@ export default function GitHubExtensionPage() {
                     </Button>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    OAuth 토큰은 이 Mac의 키체인에만 저장됩니다. 개인 액세스 토큰을
-                    직접 만들거나 붙여넣을 필요가 없습니다.
+                    OAuth 토큰은 이 Mac의 키체인에만 저장됩니다. 개인 액세스
+                    토큰을 직접 만들거나 붙여넣을 필요가 없습니다.
                   </p>
                 </div>
               )}

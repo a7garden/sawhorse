@@ -638,7 +638,7 @@ export default function WorkflowStudioPage() {
                         updateNode({ requiresCompletedDependencies: value })
                       }
                     />{" "}
-                    선행 작업 완료 필요
+                    선행 항목 완료 필요
                   </label>
                   <Button
                     variant="destructive"

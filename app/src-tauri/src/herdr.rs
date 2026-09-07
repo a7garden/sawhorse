@@ -6,6 +6,7 @@
 // Every control command answers with `{"result": ...}` on stdout; failures print
 // `{"error":{"code","message"}}` on stderr with exit status 1 (status 2 = syntax).
 
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use serde::Serialize;
@@ -289,6 +290,12 @@ impl Herdr {
         self.call(&["tab", "close", tab_id]).await
     }
 
+    /// Runs that own a workspace of their own must close it too: closing the last
+    /// tab leaves an empty workspace sitting in herdr's switcher forever.
+    pub async fn close_workspace(&self, workspace_id: &str) -> HerdrResult<Value> {
+        self.call(&["workspace", "close", workspace_id]).await
+    }
+
     pub async fn focus_tab(&self, tab_id: &str) -> HerdrResult<Value> {
         self.call(&["tab", "focus", tab_id]).await
     }
@@ -557,6 +564,84 @@ pub struct HerdrSnapshot {
     pub agents: Vec<HerdrAgentRow>,
 }
 
+/// Can herdr actually launch `agent` on this machine?
+///
+/// `herdr agent start` types a PowerShell `Start-Process -FilePath <agent>` into
+/// the pane, and `Start-Process` walks PATH itself: the first directory holding
+/// any candidate wins, and inside it the extension-less file beats its `.exe` /
+/// `.cmd` sibling. npm's global prefix holds both — `claude`, a `/bin/sh` shim
+/// for Git Bash, next to `claude.cmd` — so the sh script is what reaches
+/// CreateProcess, which rejects it ("%1 is not a valid Win32 application") and
+/// the pane never gets an agent. Returns why when that lookup cannot produce a
+/// runnable image, so callers can explain themselves instead of waiting out the
+/// start timeout. Always `None` off Windows.
+///
+/// The PATH read here is sawhorse's own, which is the best proxy available: the
+/// pane inherits the herdr *server's* PATH, so a server still running from before
+/// a PATH fix keeps failing and restarting it is part of the remedy.
+pub fn windows_launch_block(agent: &str) -> Option<String> {
+    #[cfg(windows)]
+    {
+        let path = std::env::var_os("PATH")?;
+        let exts: Vec<String> = std::env::var("PATHEXT")
+            .unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into())
+            .split(';')
+            .filter(|e| e.starts_with('.'))
+            .map(str::to_ascii_lowercase)
+            .collect();
+        let dirs: Vec<PathBuf> = std::env::split_paths(&path).collect();
+        launch_block_in(&dirs, &exts, agent)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = agent;
+        None
+    }
+}
+
+/// The `Start-Process` PATH walk, split out so it can be exercised off Windows.
+fn launch_block_in(dirs: &[PathBuf], exts: &[String], agent: &str) -> Option<String> {
+    for dir in dirs {
+        let bare = dir.join(agent);
+        if bare.is_file() {
+            if is_windows_image(&bare) {
+                return None;
+            }
+            let usable = exts
+                .iter()
+                .map(|e| dir.join(format!("{agent}{e}")))
+                .find(|p| p.is_file());
+            let fix = match usable {
+                Some(p) => format!("옆에 있는 {} 처럼 실행 파일만 든 디렉터리를", p.display()),
+                None => format!("`{agent}.exe` 나 `{agent}.cmd` 가 든 디렉터리를"),
+            };
+            return Some(format!(
+                "herdr 는 Windows 에서 `{agent}` 를 Start-Process 로 띄우는데, PATH 에서 먼저 잡히는 {} 는 \
+실행 이미지가 아닙니다 (Git Bash 용 sh 스크립트). {fix} PATH 앞쪽에 두세요.",
+                bare.display()
+            ));
+        }
+        if exts
+            .iter()
+            .any(|e| dir.join(format!("{agent}{e}")).is_file())
+        {
+            return None;
+        }
+    }
+    Some(format!("PATH 에서 `{agent}` 실행 파일을 찾지 못했습니다."))
+}
+
+/// A PE image starts with `MZ`. CreateProcess refuses anything else outright —
+/// there is no shell fallback the way a shell's own PATH lookup would have.
+fn is_windows_image(path: &Path) -> bool {
+    use std::io::Read;
+    let mut head = [0u8; 2];
+    std::fs::File::open(path)
+        .and_then(|mut f| f.read_exact(&mut head))
+        .is_ok()
+        && &head == b"MZ"
+}
+
 fn parse_list<T: serde::de::DeserializeOwned>(v: &Value, key: &str) -> Vec<T> {
     v.get(key)
         .and_then(Value::as_array)
@@ -571,6 +656,47 @@ fn parse_list<T: serde::de::DeserializeOwned>(v: &Value, key: &str) -> Vec<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The failure this guards: npm's global prefix ships `claude` (a sh shim for
+    /// Git Bash) beside `claude.cmd`, and `Start-Process` picks the shim.
+    #[test]
+    fn launch_block_follows_start_process_lookup() {
+        let root = std::env::temp_dir().join(format!("swdash-herdr-{}", uuid::Uuid::new_v4()));
+        let npm = root.join("npm");
+        let bin = root.join("bin");
+        let empty = root.join("empty");
+        for d in [&npm, &bin, &empty] {
+            std::fs::create_dir_all(d).unwrap();
+        }
+        std::fs::write(npm.join("claude"), b"#!/bin/sh\nexec claude.exe \"$@\"\n").unwrap();
+        std::fs::write(npm.join("claude.cmd"), b"@echo off\n").unwrap();
+        std::fs::write(bin.join("claude.exe"), b"MZ\x90\x00rest-of-a-pe-image").unwrap();
+        let exts = vec![".exe".to_string(), ".cmd".to_string()];
+
+        // shim first: blocked, and the message points at both files
+        let why = launch_block_in(&[empty.clone(), npm.clone(), bin.clone()], &exts, "claude")
+            .expect("sh shim shadows claude.cmd");
+        assert!(why.contains("claude.cmd"), "{why}");
+
+        // a directory holding only the image, ahead of npm: fine
+        assert_eq!(
+            launch_block_in(&[bin.clone(), npm.clone()], &exts, "claude"),
+            None
+        );
+        // only the .cmd is on PATH, no bare shim to shadow it: fine
+        assert_eq!(
+            launch_block_in(std::slice::from_ref(&empty), &exts, "claude.cmd"),
+            Some("PATH 에서 `claude.cmd` 실행 파일을 찾지 못했습니다.".to_string())
+        );
+        // an extension-less file that really is a PE image is launchable
+        std::fs::write(empty.join("codex"), b"MZ\x90\x00").unwrap();
+        assert_eq!(
+            launch_block_in(std::slice::from_ref(&empty), &exts, "codex"),
+            None
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
 
     #[test]
     fn snapshot_rows_parse_from_real_socket_shapes() {

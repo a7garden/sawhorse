@@ -12,12 +12,15 @@ test("dashboard widgets resize, move, hide and persist an intentionally empty bo
   page,
 }) => {
   await expect(
-    page.getByRole("button", { name: "새 작업", exact: true }),
+    page.getByRole("button", { name: "새 개발 항목", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "배치 편집", exact: true }).click();
   const widget = page.locator(".widget-grid-item").filter({
-    has: page.getByRole("heading", { name: "다음에 할 일", exact: true }),
+    has: page.getByRole("heading", { name: "다음 개발 항목", exact: true }),
   });
+  // 보드에 전체폭 위젯이 늘면 이 위젯은 첫 화면 아래로 밀린다. 마우스 좌표는
+  // 뷰포트 기준이므로 손잡이를 화면 안으로 가져온 뒤에 재야 한다.
+  await widget.scrollIntoViewIfNeeded();
   const before = (await widget.boundingBox())!;
   const handle = (await widget
     .locator(".react-resizable-handle")
@@ -37,15 +40,18 @@ test("dashboard widgets resize, move, hide and persist an intentionally empty bo
     .poll(async () => Math.round((await widget.boundingBox())!.height))
     .toBeGreaterThan(Math.round(before.height));
   const resized = Math.round((await widget.boundingBox())!.height);
-  const grip = (await page
-    .getByRole("button", { name: "다음에 할 일 위젯 이동" })
-    .boundingBox())!;
+  const gripHandle = page.getByRole("button", {
+    name: "다음 개발 항목 위젯 이동",
+  });
+  await gripHandle.scrollIntoViewIfNeeded();
+  const grip = (await gripHandle.boundingBox())!;
   await page.mouse.move(grip.x + 20, grip.y + 10);
   await page.mouse.down();
   await page.mouse.move(grip.x + 180, grip.y + 100, { steps: 12 });
   await page.mouse.up();
   await page.reload();
   await page.getByRole("button", { name: "배치 편집", exact: true }).click();
+  await widget.scrollIntoViewIfNeeded();
   await expect
     .poll(async () => Math.round((await widget.boundingBox())!.height))
     .toBe(resized);
@@ -57,7 +63,9 @@ test("dashboard widgets resize, move, hide and persist an intentionally empty bo
   await page.reload();
   await expect(page.getByText("표시할 위젯이 없습니다.")).toBeVisible();
   await page.getByRole("button", { name: "위젯 추가", exact: true }).click();
-  await page.getByLabel("핵심 지표", { exact: false }).check();
+  // 지표는 카드 한 장이 위젯 하나다. 하나만 켜서 보드가 그 한 칸으로 돌아오는지 본다.
+  await page.getByLabel("위젯 검색").fill("승인 대기");
+  await page.getByLabel("승인 대기", { exact: false }).check();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "닫기", exact: true })
@@ -69,16 +77,16 @@ test("dashboard widgets resize, move, hide and persist an intentionally empty bo
 test("tasks are defined once and scheduled by reference without duplicating content", async ({
   page,
 }) => {
-  await nav(page, "작업");
-  await page.getByRole("button", { name: "실행할 작업", exact: true }).click();
+  await nav(page, "자동화");
+  await page.getByRole("button", { name: "자동화 작업", exact: true }).click();
   await expect(page.getByText("마일스톤 계획", { exact: true })).toBeVisible();
   await expect(
     page.getByText("인박스 승격 검토", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "작업 추가", exact: true }).click();
-  await page.getByLabel("작업 제목").fill("매일 자료 정리");
+  await page.getByRole("button", { name: "정의 추가", exact: true }).click();
+  await page.getByLabel("자동화 작업 제목").fill("매일 자료 정리");
   await page
-    .getByLabel("작업 내용")
+    .getByLabel("실행 내용")
     .fill("새 문서를 읽고 오늘의 요약을 작성하세요.");
   await page
     .getByRole("dialog")
@@ -86,13 +94,13 @@ test("tasks are defined once and scheduled by reference without duplicating cont
     .click();
   await page.getByRole("button", { name: "예약과 반복", exact: true }).click();
   await page
-    .getByRole("button", { name: "기존 작업 예약", exact: true })
+    .getByRole("button", { name: "기존 정의 예약", exact: true })
     .click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: /매일 자료 정리/ })
     .click();
-  await expect(page.getByLabel("작업 내용")).toHaveCount(0);
+  await expect(page.getByLabel("실행 내용")).toHaveCount(0);
   await page.getByLabel("실행 주기").selectOption("daily");
   await page
     .getByRole("dialog")
@@ -106,18 +114,55 @@ test("tasks are defined once and scheduled by reference without duplicating cont
   await page.getByRole("button", { name: "반복 실행", exact: true }).click();
   await expect(page.getByText("매일 자료 정리", { exact: true })).toBeVisible();
   await page.reload();
-  await nav(page, "작업");
-  await page.getByRole("button", { name: "실행할 작업", exact: true }).click();
+  await nav(page, "자동화");
+  await page.getByRole("button", { name: "자동화 작업", exact: true }).click();
   await expect(page.getByText("매일 자료 정리", { exact: true })).toHaveCount(
     1,
   );
 });
 
+test("the SDLC board and the automation library are separate entry points", async ({
+  page,
+}) => {
+  // 개발 = intent.md 로 시작하는 개발 항목, 자동화 = 저장해 둔 자동화 작업.
+  // 같은 그룹에 섞이면 다시 같은 말로 읽히므로 진입점 자체가 갈라져 있어야 한다.
+  await nav(page, "개발");
+  await expect(
+    page.getByRole("heading", { name: "개발", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "새 개발 항목", exact: true }),
+  ).toBeVisible();
+  for (const gone of ["자동화 작업", "예약과 반복", "할 일"])
+    await expect(
+      page.locator("main").getByRole("button", { name: gone, exact: true }),
+    ).toHaveCount(0);
+
+  await nav(page, "자동화");
+  await expect(
+    page.getByRole("heading", { name: "자동화 작업", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "정의 추가", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page
+      .locator("main")
+      .getByRole("button", { name: "새 개발 항목", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "예약과 반복", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "예약과 반복", exact: true }),
+  ).toBeVisible();
+});
+
 test("all document views stay grouped under one vault sidebar category", async ({
   page,
 }) => {
-  await expect(page.locator("aside nav").getByText("볼트", { exact: true })).toHaveCount(1);
-  for (const child of ["모든 문서", "일지", "개념", "점검"]) {
+  await expect(
+    page.locator("aside nav").getByText("볼트", { exact: true }),
+  ).toHaveCount(1);
+  for (const child of ["모든 문서", "할 일", "일지", "개념", "점검"]) {
     await expect(
       page
         .locator("aside nav")
@@ -128,11 +173,17 @@ test("all document views stay grouped under one vault sidebar category", async (
   await nav(page, "모든 문서");
   await expect(page.getByText("볼트 문서", { exact: true })).toBeVisible();
   await nav(page, "일지");
-  await expect(page.getByRole("heading", { name: "일지", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "일지", exact: true }),
+  ).toBeVisible();
   await nav(page, "개념");
-  await expect(page.getByRole("heading", { name: "개념", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "개념", exact: true }),
+  ).toBeVisible();
   await nav(page, "점검");
-  await expect(page.getByRole("heading", { name: "볼트", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "볼트", exact: true }),
+  ).toBeVisible();
 });
 
 test("installed GitHub gets an extension page and RSS stays inside reading", async ({
@@ -197,9 +248,7 @@ test("workflow edges are editable without JSON and schema is nested under settin
 }) => {
   await nav(page, "확장 관리");
   await page.getByRole("button", { name: "워크플로", exact: false }).click();
-  await page
-    .getByRole("button", { name: "새 워크플로", exact: true })
-    .click();
+  await page.getByRole("button", { name: "새 워크플로", exact: true }).click();
   await expect(page.getByLabel("워크플로 캔버스")).toBeVisible();
   await page.getByLabel("연결 1 다음 단계").selectOption("start");
   await expect(page.getByLabel("연결 1 다음 단계")).toHaveValue("start");
@@ -235,7 +284,7 @@ test("global search and notifications remain available from every primary page",
 }) => {
   await nav(page, "프로젝트");
   await page.getByRole("button", { name: /전체 검색/ }).click();
-  await page.getByPlaceholder("문서와 작업을 검색하세요").fill("Herdr");
+  await page.getByPlaceholder("문서와 개발 항목을 검색하세요").fill("Herdr");
   await page.getByRole("button", { name: "검색", exact: true }).click();
   await expect(
     page
@@ -275,9 +324,9 @@ test("installed GitHub stays manageable when disabled and repositories provide c
     page.getByRole("heading", { name: "preview-user/docs" }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "이슈 연결", exact: true }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "workspace 이슈 연결을 추가했습니다",
-  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "이슈 연결을 추가했습니다" }),
+  ).toBeVisible();
   await page
     .getByRole("button", { name: "프로젝트로 가져오기", exact: true })
     .click();
@@ -296,43 +345,20 @@ test("installed GitHub stays manageable when disabled and repositories provide c
   ).toBeVisible();
 });
 
-test("milestones group real issues and share membership with calendar editing", async ({
+// 이슈와 개발 항목은 한 저장소다. 마일스톤 소속도 개발 항목의 milestone 필드
+// 한 곳에만 적히고, 이슈 화면과 캘린더가 같은 편집기를 쓴다.
+test("milestones group work items and share membership with calendar editing", async ({
   page,
 }) => {
-  await page.evaluate(() =>
-    localStorage.setItem(
-      "sawhorse.preview-issues",
-      JSON.stringify(
-        [1, 2].map((id) => ({
-          id: `ISS-${id}`,
-          title: id === 1 ? "로그인 개선" : "검색 개선",
-          path: `/preview/ISS-${id}.md`,
-          project: "Sawhorse",
-          milestone: "",
-          status: id === 1 ? "완료" : "제안",
-          state: id === 1 ? "closed" : "open",
-          mtimeMs: id,
-          approve: false,
-          legacy: false,
-          dependsOn: [],
-          dependents: [],
-          commits: [],
-          labels: [],
-          assignees: [],
-          priority: "보통",
-          executionType: "코드",
-        })),
-      ),
-    ),
-  );
-  await page.reload();
+  const closed = "work-release 첫 작업대 배포 기록";
+  const open = "work-search 프로젝트를 넘나드는 지식 검색";
   await nav(page, "이슈");
   await page
     .getByRole("button", { name: "마일스톤 추가", exact: true })
     .click();
-  await page.getByLabel("마일스톤 이름").fill("9월 개선");
-  await page.getByLabel("ISS-1 로그인 개선", { exact: true }).check();
-  await page.getByLabel("ISS-2 검색 개선", { exact: true }).check();
+  await page.getByLabel("일정 이름").fill("9월 개선");
+  await page.getByLabel(closed, { exact: true }).check();
+  await page.getByLabel(open, { exact: true }).check();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "저장", exact: true })
@@ -343,10 +369,8 @@ test("milestones group real issues and share membership with calendar editing", 
   await page.reload();
   await nav(page, "캘린더");
   await page.getByRole("button", { name: "9월 개선", exact: true }).click();
-  await expect(
-    page.getByLabel("ISS-1 로그인 개선", { exact: true }),
-  ).toBeChecked();
-  await page.getByLabel("ISS-1 로그인 개선", { exact: true }).uncheck();
+  await expect(page.getByLabel(closed, { exact: true })).toBeChecked();
+  await page.getByLabel(closed, { exact: true }).uncheck();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "저장", exact: true })
@@ -356,8 +380,12 @@ test("milestones group real issues and share membership with calendar editing", 
     page.getByRole("progressbar", { name: "9월 개선 진행률" }),
   ).toHaveAttribute("aria-valuenow", "0");
   await page.getByRole("button", { name: /9월 개선.*0\/1 완료/ }).click();
-  await expect(page.locator("table").getByText("검색 개선")).toBeVisible();
-  await expect(page.locator("table").getByText("로그인 개선")).toHaveCount(0);
+  await expect(
+    page.locator("table").getByText("프로젝트를 넘나드는 지식 검색"),
+  ).toBeVisible();
+  await expect(
+    page.locator("table").getByText("첫 작업대 배포 기록"),
+  ).toHaveCount(0);
   await page.screenshot({
     path: "test-results/issue-milestones.png",
     fullPage: true,
@@ -398,8 +426,185 @@ test("opening a workflow from its extension card edits the selected definition",
     .getByRole("button", { name: "스튜디오에서 열기", exact: true })
     .nth(1)
     .click();
-  await expect(
-    page.getByLabel("워크플로 이름", { exact: true }),
-  ).toHaveValue("TDD 사이클");
+  await expect(page.getByLabel("워크플로 이름", { exact: true })).toHaveValue(
+    "TDD 사이클",
+  );
   await expect(page.getByLabel("워크플로 캔버스")).toBeVisible();
+});
+
+// 이슈와 개발은 같은 저장소의 두 축이다. 이슈 화면에서 승인한 값이 개발 칸반의
+// 같은 항목에 그대로 있어야 "분리된 시스템이 아니다"가 화면에서도 성립한다.
+test("issues and the development board are two views of the same work item", async ({
+  page,
+}) => {
+  await nav(page, "이슈");
+  const row = page
+    .locator(".wb-issue-table tbody tr")
+    .filter({ hasText: "의도에서 시작하는 개발 흐름" });
+  await expect(row).toBeVisible();
+  await expect(
+    row.getByRole("button", { name: "승인", exact: true }),
+  ).toBeVisible();
+  await row.getByRole("button", { name: "승인", exact: true }).click();
+  await expect(
+    row.getByRole("button", { name: "승인됨", exact: true }),
+  ).toBeVisible();
+
+  // 닫힌 항목은 기본 필터에서 빠지고, 전체로 넓히면 다시 보인다.
+  await expect(
+    page.locator(".wb-issue-table").getByText("첫 작업대 배포 기록"),
+  ).toHaveCount(0);
+  await page.getByLabel("열림 상태").selectOption("all");
+  await expect(
+    page.locator(".wb-issue-table").getByText("첫 작업대 배포 기록"),
+  ).toBeVisible();
+
+  await nav(page, "개발");
+  await expect(
+    page
+      .locator(".wb-board-card")
+      .filter({ hasText: "의도에서 시작하는 개발 흐름" }),
+  ).toBeVisible();
+
+  await nav(page, "이슈");
+  await page.getByRole("button", { name: "이슈 등록", exact: true }).click();
+  await expect(page.getByLabel("처리 유형", { exact: true })).toHaveValue(
+    "문서",
+  );
+  await expect(page.getByLabel("유형", { exact: true })).toHaveValue("작업");
+});
+
+test("issue rows run their own stage, select in bulk and filter by tag", async ({
+  page,
+}) => {
+  await nav(page, "이슈");
+  const row = (title: string) =>
+    page.locator(".wb-issue-table tbody tr").filter({ hasText: title });
+
+  // 행마다 지금 밟을 단계가 그대로 버튼이 된다.
+  await expect(
+    row("의도에서 시작하는 개발 흐름").getByRole("button", {
+      name: "설계",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    row("Herdr 실행과 기록 연결").getByRole("button", {
+      name: "구현",
+      exact: true,
+    }),
+  ).toBeVisible();
+
+  // 끝난 항목에는 더 밟을 단계가 없다. 이 항목은 배포에서 완료되었다.
+  await page.getByLabel("열림 상태").selectOption("all");
+  await expect(
+    row("첫 작업대 배포 기록").getByRole("button", {
+      name: "배포",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page.getByLabel("열림 상태").selectOption("open");
+
+  // 실행은 확인창을 거친다. 체험 모드는 실행을 거절하므로 실패가 그대로 보인다.
+  await row("의도에서 시작하는 개발 흐름")
+    .getByRole("button", { name: "설계", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    "설계 단계를 실행할까요?",
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "실행", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("실패");
+
+  // 헤더 체크박스로 보이는 행을 한 번에 고르고 일괄 승인한다.
+  const visible = await page.locator(".wb-issue-table tbody tr").count();
+  await page.getByLabel("전체 선택").check();
+  await expect(page.locator(".wb-bulk-bar")).toContainText(`${visible}건 선택`);
+  await page.getByRole("button", { name: "선택 승인", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "선택 승인", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page
+      .locator(".wb-issue-table")
+      .getByRole("button", { name: "승인", exact: true }),
+  ).toHaveCount(0);
+
+  // 문서에 적힌 태그로도 거를 수 있다.
+  await page.getByRole("button", { name: "이슈 등록", exact: true }).click();
+  await page
+    .getByLabel("개발 항목 이름", { exact: true })
+    .fill("태그 필터 확인");
+  await page.getByLabel("태그", { exact: true }).fill("챗봇");
+  await page
+    .getByRole("button", { name: "개발 항목 만들기", exact: true })
+    .click();
+  await page
+    .locator(".wb-detail-dialog")
+    .getByRole("button", { name: "닫기", exact: true })
+    .click();
+  await nav(page, "이슈");
+  await page.getByLabel("태그 필터", { exact: true }).selectOption("챗봇");
+  await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".wb-issue-table")).toContainText("태그 필터 확인");
+});
+
+test("the bundled metric strip becomes four cards a user can rearrange one by one", async ({
+  page,
+}) => {
+  // v3 까지 쓰던 묶음 위젯. 이관은 같은 자리에서 낱개 카드 넉 장으로 펼쳐야 한다.
+  await page.evaluate(() => {
+    localStorage.setItem(
+      "sawhorse.dashboard-layout",
+      JSON.stringify({
+        version: 3,
+        enabled: ["metrics", "next"],
+        layouts: {
+          lg: [
+            { i: "metrics", x: 0, y: 0, w: 12, h: 4 },
+            { i: "next", x: 0, y: 4, w: 6, h: 8 },
+          ],
+          md: [
+            { i: "metrics", x: 0, y: 0, w: 8, h: 5 },
+            { i: "next", x: 0, y: 5, w: 8, h: 8 },
+          ],
+          sm: [
+            { i: "metrics", x: 0, y: 0, w: 4, h: 8 },
+            { i: "next", x: 0, y: 8, w: 4, h: 8 },
+          ],
+        },
+      }),
+    );
+  });
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "작업대", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".wb-metric.is-solo")).toHaveCount(4);
+  await expect(page.locator(".widget-grid-item")).toHaveCount(5);
+  const stored = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem("sawhorse.dashboard-layout")!),
+  );
+  expect(stored.version).toBe(4);
+  expect(stored.enabled).toEqual([
+    "metric:running",
+    "metric:ready",
+    "metric:overdue",
+    "metric:done",
+    "next",
+  ]);
+
+  // 이제 카드 하나가 위젯 하나이므로 원하는 숫자만 따로 켤 수 있다.
+  await page.getByRole("button", { name: "위젯 추가", exact: true }).click();
+  await page.getByLabel("위젯 검색").fill("제안");
+  await page.getByLabel("제안", { exact: false }).check();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "닫기", exact: true })
+    .click();
+  await expect(page.locator(".wb-metric.is-solo")).toHaveCount(5);
+  await page.reload();
+  await expect(page.locator(".wb-metric.is-solo")).toHaveCount(5);
 });

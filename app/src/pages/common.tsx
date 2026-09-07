@@ -3,6 +3,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
+import { api } from "@/lib/api";
 import { preprocessObsidianMd } from "@/lib/markdown";
 import { cn } from "@/lib/utils";
 import type {
@@ -42,12 +43,7 @@ export function fmtDur(ms: number): string {
 
 export const WARN_TEXT = "text-warning-foreground";
 export type BadgeVariant =
-  | "default"
-  | "secondary"
-  | "outline"
-  | "destructive"
-  | "success"
-  | "warning";
+  "default" | "secondary" | "outline" | "destructive" | "success" | "warning";
 
 export const JOB_STATUS_KO: Record<JobStatus, string> = {
   queued: "대기",
@@ -62,7 +58,7 @@ export const JOB_KIND_KO: Record<Job["kind"], string> = {
   design: "설계",
   implement: "구현",
   routine: "루틴",
-  task: "작업",
+  task: "자동 실행",
   excel: "엑셀",
   promote: "승격 검토",
   initVault: "init-vault",
@@ -262,11 +258,83 @@ const MD_CLASSES = [
   "[&_a]:text-primary [&_a]:underline",
 ].join(" ");
 
+// Images live on disk (vault attachments); the webview cannot read files, so each
+// one is fetched through the backend and inlined as a data URL. `notePath` anchors
+// relative and Obsidian shortest-path references to the note being displayed.
+function MarkdownImage({
+  notePath,
+  src,
+  alt,
+  title,
+}: {
+  notePath?: string;
+  src?: string;
+  alt?: string;
+  title?: string;
+}) {
+  const [resolved, setResolved] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const raw = (src ?? "").trim();
+    setError(null);
+    if (!raw || /^(https?:|data:|blob:)/i.test(raw)) {
+      setResolved(raw || null);
+      return;
+    }
+    if (!notePath) {
+      setResolved(null);
+      setError("문서 경로를 알 수 없어 이미지를 찾지 못했습니다");
+      return;
+    }
+    let alive = true;
+    setResolved(null);
+    api
+      .readNoteAsset(notePath, raw)
+      .then((url) => {
+        if (alive) setResolved(url);
+      })
+      .catch((e) => {
+        if (alive) setError(String(e));
+      });
+    return () => {
+      alive = false;
+    };
+  }, [notePath, src]);
+
+  if (error) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded bg-muted px-1 py-0.5 text-[12px] text-muted-foreground">
+        [이미지] {alt || src} — {error}
+      </span>
+    );
+  }
+  if (!resolved) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded bg-muted px-1 py-0.5 text-[12px] text-muted-foreground">
+        [이미지] {alt || src} 불러오는 중…
+      </span>
+    );
+  }
+  return (
+    <img
+      src={resolved}
+      alt={alt ?? ""}
+      title={title}
+      loading="lazy"
+      className="my-2 block max-w-full rounded-md border bg-background"
+    />
+  );
+}
+
 export function MarkdownView({
   src,
+  notePath,
   className,
 }: {
   src: string;
+  /** Path of the note the markdown came from — required to resolve embedded images. */
+  notePath?: string;
   className?: string;
 }) {
   return (
@@ -277,7 +345,19 @@ export function MarkdownView({
         className,
       )}
     >
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          img: ({ src: imgSrc, alt, title }) => (
+            <MarkdownImage
+              notePath={notePath}
+              src={typeof imgSrc === "string" ? imgSrc : undefined}
+              alt={typeof alt === "string" ? alt : undefined}
+              title={typeof title === "string" ? title : undefined}
+            />
+          ),
+        }}
+      >
         {preprocessObsidianMd(src)}
       </ReactMarkdown>
     </div>

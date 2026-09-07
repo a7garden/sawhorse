@@ -49,12 +49,27 @@ function statusKo(s: string): string {
   return STATUS_KO[s] ?? s;
 }
 
-function statusVariant(s: string): "default" | "secondary" | "warning" | "destructive" | "success" | "outline" {
-  if (s === "review_pending" || s === "manual_verification_pending") return "warning";
-  if (["verification_failed", "conflicted", "recovery_required", "revert_conflicted", "rejected"].includes(s))
+function statusVariant(
+  s: string,
+): "default" | "secondary" | "warning" | "destructive" | "success" | "outline" {
+  if (s === "review_pending" || s === "manual_verification_pending")
+    return "warning";
+  if (
+    [
+      "verification_failed",
+      "conflicted",
+      "recovery_required",
+      "revert_conflicted",
+      "rejected",
+    ].includes(s)
+  )
     return "destructive";
-  if (["verified", "integrated", "reverted", "resolved_with_repair"].includes(s)) return "success";
-  if (["superseded", "redundant", "stale_context"].includes(s)) return "outline";
+  if (
+    ["verified", "integrated", "reverted", "resolved_with_repair"].includes(s)
+  )
+    return "success";
+  if (["superseded", "redundant", "stale_context"].includes(s))
+    return "outline";
   return "secondary";
 }
 
@@ -66,7 +81,12 @@ function entryAction(e: CollabManifestEntry): "A" | "M" | "D" | "R" {
   return "M";
 }
 
-const ACTION_KO: Record<string, string> = { A: "추가", M: "수정", D: "삭제", R: "이름 변경" };
+const ACTION_KO: Record<string, string> = {
+  A: "추가",
+  M: "수정",
+  D: "삭제",
+  R: "이름 변경",
+};
 
 function short(sha: string): string {
   return sha ? sha.slice(0, 8) : "-";
@@ -82,7 +102,11 @@ function fmtWhen(iso: string): string {
 const CODEX_NOTE = "수동 제출 전용 — 앱이 시작·취소·재연결을 보장하지 않는다";
 
 /// 큐가 멈춘 판정. 이 상태 후보가 하나라도 있으면 배너를 띄운다.
-const STALLED_STATUSES = ["verification_failed", "conflicted", "recovery_required"];
+const STALLED_STATUSES = [
+  "verification_failed",
+  "conflicted",
+  "recovery_required",
+];
 
 interface Candidate {
   cs: CollabChangeSetView;
@@ -91,7 +115,8 @@ interface Candidate {
 }
 
 /// 확인·수정·거부 사유를 묻는 대화상자 모드.
-type PromptMode = "request_changes" | "reject" | "manual_fail" | "repair" | null;
+type PromptMode =
+  "request_changes" | "reject" | "manual_fail" | "repair" | null;
 
 const PROMPT_TITLE: Record<Exclude<PromptMode, null>, string> = {
   request_changes: "수정 요청",
@@ -142,7 +167,9 @@ export default function ReviewPage() {
     const out: Candidate[] = [];
     for (const view of Object.values(details)) {
       for (const cs of view.changeSets) {
-        const run = view.agentRuns.find((r) => r.taskId && r.taskId === cs.taskId) ?? null;
+        const run =
+          view.agentRuns.find((r) => r.taskId && r.taskId === cs.taskId) ??
+          null;
         out.push({ cs, session: view, run });
       }
     }
@@ -153,9 +180,15 @@ export default function ReviewPage() {
   const integrating = candidates.filter(
     (c) => c.cs.status !== "working" && c.cs.status !== "review_pending",
   );
-  const stalled = candidates.filter((c) => STALLED_STATUSES.includes(c.cs.status));
+  const stalled = candidates.filter((c) =>
+    STALLED_STATUSES.includes(c.cs.status),
+  );
 
-  async function act<T>(id: string, fn: () => Promise<T>, okText: (r: T) => string) {
+  async function act<T>(
+    id: string,
+    fn: () => Promise<T>,
+    okText: (r: T) => string,
+  ) {
     setBusy(id);
     setMsg(null);
     try {
@@ -193,7 +226,11 @@ export default function ReviewPage() {
     }
     setPromptMode(null);
     if (promptMode === "request_changes") {
-      void act(cs.id, () => api.collabRequestChanges(cs.id, text), () => "수정을 요청했습니다.");
+      void act(
+        cs.id,
+        () => api.collabRequestChanges(cs.id, text),
+        () => "수정을 요청했습니다.",
+      );
     } else if (promptMode === "reject") {
       void act(
         cs.id,
@@ -220,7 +257,8 @@ export default function ReviewPage() {
             void act(
               "queue",
               () => api.collabRunQueue(),
-              (r) => (r ? `큐 진행: ${statusKo(r)}` : "진행할 대기 후보가 없습니다."),
+              (r) =>
+                r ? `큐 진행: ${statusKo(r)}` : "진행할 대기 후보가 없습니다.",
             )
           }
         >
@@ -231,12 +269,16 @@ export default function ReviewPage() {
           variant="outline"
           disabled={busy != null}
           onClick={() => {
-            void act("inbox", () => api.collabInboxTick(), (list) => {
-              const ok = list.filter((x) => x.accepted).length;
-              return list.length === 0
-                ? "인박스에 새 제출이 없습니다."
-                : `인박스 ${list.length}건 중 ${ok}건 수용`;
-            });
+            void act(
+              "inbox",
+              () => api.collabInboxTick(),
+              (list) => {
+                const ok = list.filter((x) => x.accepted).length;
+                return list.length === 0
+                  ? "인박스에 새 제출이 없습니다."
+                  : `인박스 ${list.length}건 중 ${ok}건 수용`;
+              },
+            );
           }}
         >
           인박스 확인
@@ -245,28 +287,41 @@ export default function ReviewPage() {
 
       <div className="space-y-4 p-4">
         {msg && (
-          <div className={`text-xs ${msg.ok ? "text-success" : "text-destructive"}`}>{msg.text}</div>
+          <div
+            className={`text-xs ${msg.ok ? "text-success" : "text-destructive"}`}
+          >
+            {msg.text}
+          </div>
         )}
 
         {stalled.length > 0 && (
           <div className="rounded-lg border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
-            큐가 멈췄습니다 — 검증 실패·충돌·복구 필요 후보 {stalled.length}건을 아래에서 처리하세요.
+            큐가 멈췄습니다 — 검증 실패·충돌·복구 필요 후보 {stalled.length}건을
+            아래에서 처리하세요.
           </div>
         )}
 
-        {sessions.length === 0 && <Empty>세션이 없습니다. 세션 화면에서 먼저 만드세요.</Empty>}
+        {sessions.length === 0 && (
+          <Empty>세션이 없습니다. 세션 화면에서 먼저 만드세요.</Empty>
+        )}
 
         <section className="space-y-2">
           <h2 className="text-[13px] font-semibold">승인대기</h2>
-          {pending.length === 0 && <Empty className="py-3">승인대기 후보가 없습니다.</Empty>}
+          {pending.length === 0 && (
+            <Empty className="py-3">승인대기 후보가 없습니다.</Empty>
+          )}
           {pending.map(({ cs, session, run }) => (
             <Card key={cs.id}>
               <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
                 <CardTitle className="text-[13px]">
-                  {cs.taskId || "자유 작업"}
-                  <span className="ml-2 font-normal text-muted-foreground">{session.goal}</span>
+                  {cs.taskId || "자유 실행"}
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {session.goal}
+                  </span>
                 </CardTitle>
-                <Badge variant={statusVariant(cs.status)}>{statusKo(cs.status)}</Badge>
+                <Badge variant={statusVariant(cs.status)}>
+                  {statusKo(cs.status)}
+                </Badge>
               </CardHeader>
               <CardContent className="space-y-2">
                 <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -278,7 +333,9 @@ export default function ReviewPage() {
                     {short(cs.baseSha)} → {short(cs.sourceSha)}
                   </span>
                   <span>파일 {cs.manifest.length}개</span>
-                  {cs.expectedHead && <span>예상 HEAD: {short(cs.expectedHead)}</span>}
+                  {cs.expectedHead && (
+                    <span>예상 HEAD: {short(cs.expectedHead)}</span>
+                  )}
                 </div>
                 {cs.summary && <p className="text-xs">{cs.summary}</p>}
                 {cs.overlapPaths.length > 0 && (
@@ -287,10 +344,16 @@ export default function ReviewPage() {
                   </p>
                 )}
                 {run?.driver === "codex" && (
-                  <p className="text-xs text-warning-foreground">{CODEX_NOTE}</p>
+                  <p className="text-xs text-warning-foreground">
+                    {CODEX_NOTE}
+                  </p>
                 )}
                 <div className="flex flex-wrap gap-2">
-                  <Button size="xs" variant="outline" onClick={() => setDiffFor(cs)}>
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    onClick={() => setDiffFor(cs)}
+                  >
                     Diff 보기
                   </Button>
                   <Button
@@ -341,21 +404,33 @@ export default function ReviewPage() {
 
         <section className="space-y-2">
           <h2 className="text-[13px] font-semibold">통합</h2>
-          {integrating.length === 0 && <Empty className="py-3">통합 진행·완료 후보가 없습니다.</Empty>}
+          {integrating.length === 0 && (
+            <Empty className="py-3">통합 진행·완료 후보가 없습니다.</Empty>
+          )}
           {integrating.map(({ cs, session, run }) => {
             const logs = audits[session.id] ?? [];
             const manual = cs.status === "manual_verification_pending";
-            const actionable = !["integrated", "verified", "reverted", "superseded", "rejected", "redundant", "resolved_with_repair"].includes(
-              cs.status,
-            );
+            const actionable = ![
+              "integrated",
+              "verified",
+              "reverted",
+              "superseded",
+              "rejected",
+              "redundant",
+              "resolved_with_repair",
+            ].includes(cs.status);
             return (
               <Card key={cs.id}>
                 <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
                   <CardTitle className="text-[13px]">
-                    {cs.taskId || "자유 작업"}
-                    <span className="ml-2 font-normal text-muted-foreground">{session.goal}</span>
+                    {cs.taskId || "자유 실행"}
+                    <span className="ml-2 font-normal text-muted-foreground">
+                      {session.goal}
+                    </span>
                   </CardTitle>
-                  <Badge variant={statusVariant(cs.status)}>{statusKo(cs.status)}</Badge>
+                  <Badge variant={statusVariant(cs.status)}>
+                    {statusKo(cs.status)}
+                  </Badge>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
@@ -363,17 +438,28 @@ export default function ReviewPage() {
                       {short(cs.baseSha)} → {short(cs.sourceSha)}
                     </span>
                     <span>파일 {cs.manifest.length}개</span>
-                    {cs.expectedHead && <span>예상 HEAD: {short(cs.expectedHead)}</span>}
-                    {cs.remediatedBy && <span>수정: {short(cs.remediatedBy)}</span>}
+                    {cs.expectedHead && (
+                      <span>예상 HEAD: {short(cs.expectedHead)}</span>
+                    )}
+                    {cs.remediatedBy && (
+                      <span>수정: {short(cs.remediatedBy)}</span>
+                    )}
                   </div>
 
                   {logs.length > 0 && (
                     <div className="space-y-0.5 rounded-md border bg-muted/15 p-2">
                       {logs.slice(-6).map((e) => (
-                        <div key={e.id} className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                          <span className="tabular-nums">{fmtWhen(e.createdAt)}</span>
+                        <div
+                          key={e.id}
+                          className="flex items-center gap-2 text-[11px] text-muted-foreground"
+                        >
+                          <span className="tabular-nums">
+                            {fmtWhen(e.createdAt)}
+                          </span>
                           <Badge variant="outline">{e.kind}</Badge>
-                          <span className="min-w-0 truncate">{e.payloadJson}</span>
+                          <span className="min-w-0 truncate">
+                            {e.payloadJson}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -382,7 +468,8 @@ export default function ReviewPage() {
                   {manual && (
                     <div className="space-y-1.5">
                       <p className="text-xs">
-                        수동 확인이 필요합니다. 검증 프로필: {session.verificationProfile || "기본"}
+                        수동 확인이 필요합니다. 검증 프로필:{" "}
+                        {session.verificationProfile || "기본"}
                       </p>
                       <div className="flex gap-2">
                         <Button
@@ -416,7 +503,9 @@ export default function ReviewPage() {
                   )}
 
                   {run?.driver === "codex" && (
-                    <p className="text-xs text-warning-foreground">{CODEX_NOTE}</p>
+                    <p className="text-xs text-warning-foreground">
+                      {CODEX_NOTE}
+                    </p>
                   )}
 
                   {actionable && !manual && (
@@ -450,15 +539,31 @@ export default function ReviewPage() {
         </section>
       </div>
 
-      <Dialog open={diffFor != null} onClose={() => setDiffFor(null)} title={`Diff — ${diffFor?.taskId || "자유 작업"}`} wide>
+      <Dialog
+        open={diffFor != null}
+        onClose={() => setDiffFor(null)}
+        title={`Diff — ${diffFor?.taskId || "자유 실행"}`}
+        wide
+      >
         <div className="space-y-1">
-          {(diffFor?.manifest ?? []).length === 0 && <Empty>항목이 없습니다.</Empty>}
+          {(diffFor?.manifest ?? []).length === 0 && (
+            <Empty>항목이 없습니다.</Empty>
+          )}
           {(diffFor?.manifest ?? []).map((e) => (
-            <div key={`${e.path}-${e.newBlob}-${e.oldBlob}`} className="flex items-center gap-2 text-xs">
-              <Badge variant={e.path ? "outline" : "outline"}>{ACTION_KO[entryAction(e)]}</Badge>
+            <div
+              key={`${e.path}-${e.newBlob}-${e.oldBlob}`}
+              className="flex items-center gap-2 text-xs"
+            >
+              <Badge variant={e.path ? "outline" : "outline"}>
+                {ACTION_KO[entryAction(e)]}
+              </Badge>
               <span className="min-w-0 truncate">{e.path}</span>
-              {e.renameFrom && <span className="text-muted-foreground">← {e.renameFrom}</span>}
-              {e.binary && <span className="text-muted-foreground">(바이너리)</span>}
+              {e.renameFrom && (
+                <span className="text-muted-foreground">← {e.renameFrom}</span>
+              )}
+              {e.binary && (
+                <span className="text-muted-foreground">(바이너리)</span>
+              )}
             </div>
           ))}
         </div>
@@ -500,10 +605,15 @@ export default function ReviewPage() {
         </div>
       </Dialog>
 
-      <Dialog open={revertFor != null} onClose={() => setRevertFor(null)} title="변경 제거">
+      <Dialog
+        open={revertFor != null}
+        onClose={() => setRevertFor(null)}
+        title="변경 제거"
+      >
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
-            이 후보의 통합 변경을 되돌립니다. 되돌리기는 병합 커밋을 되돌리는 revert 커밋으로 기록됩니다.
+            이 후보의 통합 변경을 되돌립니다. 되돌리기는 병합 커밋을 되돌리는
+            revert 커밋으로 기록됩니다.
           </p>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setRevertFor(null)}>

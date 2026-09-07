@@ -288,9 +288,9 @@ mod tests {
 
         // SI 팩
         assert!(vault.join("일지").is_dir());
-        assert!(vault.join("사업").is_dir());
+        assert!(vault.join("프로젝트").is_dir());
         assert!(vault.join("템플릿/이슈.md").is_file());
-        assert!(vault.join("사업/이슈.base").is_file());
+        assert!(vault.join("프로젝트/이슈.base").is_file());
         assert!(vault.join("대시보드.md").is_file());
         // starter 팩
         assert!(vault.join("문서").is_dir());

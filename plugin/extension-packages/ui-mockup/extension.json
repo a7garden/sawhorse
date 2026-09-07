@@ -1,0 +1,34 @@
+{
+  "manifestVersion": 2,
+  "id": "ui-mockup",
+  "publisher": "sawhorse",
+  "name": "Issue-driven UI Mockup",
+  "version": "1.1.0",
+  "engineApi": "^1.0",
+  "dependencies": [],
+  "provides": ["generator:ui-mockup", "artifact:mockup"],
+  "contributions": {
+    "workflows": ["workflows/mockup-review.json"],
+    "schemas": [],
+    "templates": [],
+    "views": ["views/candidates.json", "views/artifacts.json"],
+    "actions": ["actions/generate.json", "actions/process-feedback.json"],
+    "skills": ["skills/mockup-generator"],
+    "analyzers": [],
+    "exporters": []
+  },
+  "permissions": ["vault:read", "vault:write", "adapter:ui-mockup"],
+  "fileDigests": {
+    "actions/generate.json": "c2ef02fac91aa528c99f6a26e382b677ad38ebc0a71fb6676a9939311e976120",
+    "actions/process-feedback.json": "a8a955b574654bcc4eb81df69dccb14d70e2a0668e187f7fda9a86d63c516781",
+    "skills/mockup-generator/SKILL.md": "f20b9d19b9aa2c8c3f79d0efcdd68db7c11e7fc2fca4d394ffddf061e8a1d5d2",
+    "skills/mockup-generator/references/artifact-contract.md": "93e461415dbbd22dd37f456f02ac54771c3e38c4800718e7c0c2071971e73145",
+    "skills/mockup-generator/scripts/process-feedback.mjs": "219543645c98c507e46d3b863b65c15411ff9b44816d237840b63a244f67a911",
+    "skills/mockup-generator/scripts/process-feedback.test.mjs": "b6f41a52c51a77315f88633f1581956aa5088c92a1b40e44caf10fc3d8bab0a2",
+    "skills/mockup-generator/scripts/register-mockup.mjs": "5eb78358412b88fd9d356305d0c37c0d66481f75a17de67ddae4cc2a92ecd5b6",
+    "skills/mockup-generator/scripts/register-mockup.test.mjs": "a8ca44850e0977d7f0c5375cd0c57c28c68ef5ce5c6c3f45efab64e422febfa3",
+    "views/artifacts.json": "69349ae0de6cf3d8694c4c1c367f870dbb8d84b39e8431f8b6322dc7e4d878b4",
+    "views/candidates.json": "8a0e213cd84ec7e5c4724ba533bca2583bb006a77cee7256e7771111d6c99296",
+    "workflows/mockup-review.json": "5fba497cbd5fa1b9020daa84c7bb444696cc10a0a25840b7e3bcdea6a3ff31de"
+  }
+}

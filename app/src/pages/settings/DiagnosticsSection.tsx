@@ -1,5 +1,9 @@
 import { RefreshCw } from "lucide-react";
-import type { AgentPresence, Diagnostics, RequirementStatus } from "@/lib/types";
+import type {
+  AgentPresence,
+  Diagnostics,
+  RequirementStatus,
+} from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,7 +50,10 @@ export default function DiagnosticsSection({
                 <Badge variant={diag.vaultPathOk ? "success" : "destructive"}>
                   {diag.vaultPathOk ? "정상" : "문제"}
                 </Badge>
-                <span className="truncate text-[11px] text-muted-foreground" title={vaultPath}>
+                <span
+                  className="truncate text-[11px] text-muted-foreground"
+                  title={vaultPath}
+                >
                   {vaultPath}
                 </span>
               </div>
@@ -81,20 +88,37 @@ export default function DiagnosticsSection({
                         : "미설치"}
                 </Badge>
                 <span className="truncate text-[11px] text-muted-foreground">
-                  다음 잡: {diag.herdr.effectiveRunner === "herdr" ? "herdr 세션" : "백그라운드"}
+                  다음 잡:{" "}
+                  {diag.herdr.effectiveRunner === "herdr"
+                    ? "herdr 세션"
+                    : "백그라운드"}
                   {diag.herdr.version ? ` · ${diag.herdr.version}` : ""}
                 </span>
               </div>
               {diag.projects.map((p) => (
-                <div key={p.name} className="flex items-center gap-2 rounded border px-2 py-1">
-                  <span className="w-24 truncate text-xs font-medium" title={p.name}>
+                <div
+                  key={p.name}
+                  className="flex items-center gap-2 rounded border px-2 py-1"
+                >
+                  <span
+                    className="w-24 truncate text-xs font-medium"
+                    title={p.name}
+                  >
                     {p.name}
                   </span>
-                  <Badge variant={p.pathOk ? "success" : "destructive"}>경로</Badge>
-                  <Badge variant={p.gitOk ? "success" : "destructive"}>git</Badge>
+                  <Badge variant={p.pathOk ? "success" : "destructive"}>
+                    경로
+                  </Badge>
+                  <Badge variant={p.gitOk ? "success" : "destructive"}>
+                    git
+                  </Badge>
                   <Badge
                     variant={
-                      p.branchOk == null ? "secondary" : p.branchOk ? "success" : "warning"
+                      p.branchOk == null
+                        ? "secondary"
+                        : p.branchOk
+                          ? "success"
+                          : "warning"
                     }
                   >
                     브랜치
@@ -128,7 +152,9 @@ export default function DiagnosticsSection({
                 path={r.detected ? r.path : undefined}
                 hint={!r.detected ? r.installHint || undefined : undefined}
                 action={
-                  r.detected && !r.outdated ? undefined : <InstallButton url={r.installUrl} />
+                  r.detected && !r.outdated ? undefined : (
+                    <InstallButton url={r.installUrl} />
+                  )
                 }
               />
             ))
@@ -153,8 +179,12 @@ export default function DiagnosticsSection({
                   ok
                   badge={
                     <>
-                      {a.id === defaultAgent && <Badge variant="success">기본</Badge>}
-                      {a.installable && <Badge variant="outline">스킬 설치 가능</Badge>}
+                      {a.id === defaultAgent && (
+                        <Badge variant="success">기본</Badge>
+                      )}
+                      {a.installable && (
+                        <Badge variant="outline">스킬 설치 가능</Badge>
+                      )}
                       {a.runsJobs && <Badge variant="outline">잡 실행</Badge>}
                     </>
                   }
@@ -164,7 +194,8 @@ export default function DiagnosticsSection({
               ))
           )}
           <p className="text-[11px] text-muted-foreground">
-            기본 에이전트는 마법사(설정 상단의 「마법사 다시 열기」)에서 바꿉니다.
+            기본 에이전트는 마법사(설정 상단의 「마법사 다시 열기」)에서
+            바꿉니다.
           </p>
         </CardContent>
       </Card>

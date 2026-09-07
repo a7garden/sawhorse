@@ -51,7 +51,7 @@ export default function ProjectsSection({
                   onChange={(e) =>
                     patchDraft((d) => (d.projects[i].name = e.target.value))
                   }
-                  placeholder="사업명"
+                  placeholder="프로젝트명"
                   aria-label="프로젝트 이름"
                 />
                 <Button

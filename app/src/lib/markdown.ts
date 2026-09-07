@@ -1,14 +1,29 @@
 // Pre-process Obsidian-flavored markdown for react-markdown rendering:
-// - ![[embed]] → chip placeholder
+// - ![[image.png]] → real image node (MarkdownView resolves the file)
+// - ![[embed]] of anything else → chip placeholder
 // - [[wikilink]] → styled span (no navigation in v1)
+export const IMAGE_EXT_RE = /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i;
+
 export function preprocessObsidianMd(src: string): string {
   const embed = src.replace(/!\[\[([^\]]+)\]\]/g, (_m, inner: string) => {
+    const [target, ...rest] = inner.split("|");
+    const file = target.trim();
+    if (IMAGE_EXT_RE.test(file.split("#")[0].trim())) {
+      // `|300` is Obsidian's display width, not alt text.
+      const alias = rest.join("|").trim();
+      const alt = /^\d+(x\d+)?$/.test(alias) ? "" : alias;
+      // An angle-bracket destination keeps spaces and parens in file names intact.
+      return `![${alt}](<${file.replace(/[<>]/g, "")}>)`;
+    }
     return `\`[임베드] ${inner}\``;
   });
-  return embed.replace(/\[\[([^\]|]+)(\|[^\]]+)?\]\]/g, (_m, target: string, alias?: string) => {
-    const label = (alias ? alias.slice(1) : target).trim();
-    return `\`[[${label}]]\``;
-  });
+  return embed.replace(
+    /\[\[([^\]|]+)(\|[^\]]+)?\]\]/g,
+    (_m, target: string, alias?: string) => {
+      const label = (alias ? alias.slice(1) : target).trim();
+      return `\`[[${label}]]\``;
+    },
+  );
 }
 
 export function extractSection(markdown: string, heading: string): string {

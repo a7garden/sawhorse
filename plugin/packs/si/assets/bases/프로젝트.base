@@ -3,11 +3,13 @@ filters:
     - not:
         - file.inFolder("템플릿")
     - or:
-        - type == "사업"
+        - type == "프로젝트"
         - type == "연구"
+        # 이름을 바꾸기 전 만든 허브 노트. 이관 전까지 목록에서 사라지지 않게 한다.
+        - type == "사업"
 properties:
   file.name:
-    displayName: 사업
+    displayName: 프로젝트
   status:
     displayName: 상태
   client:

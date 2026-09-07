@@ -4,6 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
+use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
+
 use serde::Serialize;
 use serde_json::{Map as JsonMap, Value as Json};
 use serde_yaml::{Mapping, Value as Yaml};
@@ -117,6 +119,30 @@ pub(crate) fn mtime_ms(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
+// ---------- 프로젝트 폴더 ----------
+
+/// 프로젝트 문서가 사는 볼트 루트. 새로 쓰는 경로는 항상 이 이름이다.
+pub const PROJECT_ROOT: &str = "프로젝트";
+/// SI 업무 전용이던 시절의 이름. 읽기만 호환하며 새로 만들지 않는다.
+pub const LEGACY_PROJECT_ROOT: &str = "사업";
+
+/// 한 프로젝트의 문서 폴더. 정본 위치가 있으면 그것만 쓰고, 없을 때만 예전
+/// `사업/`을 읽는다. 마이그레이션 도중 같은 이슈가 두 루트에서 두 번 잡히는
+/// 것을 막으려는 것이다. 둘 다 없으면 정본 경로를 돌려준다 — 진단 메시지가
+/// 사용자에게 안내할 경로는 새 위치여야 한다.
+pub(crate) fn project_dir(vault: &Path, project: &str) -> PathBuf {
+    let canonical = vault.join(PROJECT_ROOT).join(project);
+    if canonical.is_dir() {
+        return canonical;
+    }
+    let legacy = vault.join(LEGACY_PROJECT_ROOT).join(project);
+    if legacy.is_dir() {
+        legacy
+    } else {
+        canonical
+    }
+}
+
 // ---------- issue notes ----------
 
 #[derive(Serialize, Clone, Debug)]
@@ -155,6 +181,8 @@ pub struct ImprovementNote {
     pub github_updated: String,
     pub closed: String,
     pub legacy: bool,
+    /// 이 노트를 옮겨 만든 개발 항목 ID. 비어 있으면 아직 이관 전이다.
+    pub migrated_to: String,
     pub mtime_ms: u64,
 }
 
@@ -240,16 +268,21 @@ fn note_from_file(project: &str, path: &Path, map: &Mapping, legacy: bool) -> Im
         github_updated: fm_str(map, "github_updated"),
         closed: fm_str(map, "closed"),
         legacy,
+        migrated_to: fm_str(map, "migrated_to"),
         mtime_ms: mtime_ms(path),
     }
 }
 
-/// Merge configured projects with every first-level 사업 directory in the vault.
+/// Merge configured projects with every first-level project directory in the
+/// vault. Both the canonical `프로젝트/` root and the legacy `사업/` root count,
+/// so a half-migrated vault still lists each project exactly once.
 /// A project without a codebase config can still own and display generic issues.
 pub fn project_pairs(vault: &Path, configured: &[(String, String)]) -> Vec<(String, String)> {
     let mut out = configured.to_vec();
-    let business = vault.join("사업");
-    if let Ok(entries) = std::fs::read_dir(business) {
+    for root in [PROJECT_ROOT, LEGACY_PROJECT_ROOT] {
+        let Ok(entries) = std::fs::read_dir(vault.join(root)) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
@@ -280,7 +313,7 @@ pub fn scan_issues(
         }
         for (dir_name, note_type, legacy) in [("이슈", "이슈", false), ("개선", "개선", true)]
         {
-            let dir = vault.join("사업").join(project).join(dir_name);
+            let dir = project_dir(vault, project).join(dir_name);
             let Ok(entries) = std::fs::read_dir(&dir) else {
                 continue;
             };
@@ -385,7 +418,7 @@ fn problem_list_paths(
     let mut out = Vec::new();
     for (name, id_prefix) in projects {
         for (dir_name, suffix) in [("이슈", "이슈목록.md"), ("개선", "문제목록.md")] {
-            let dir = vault.join("사업").join(name).join(dir_name);
+            let dir = project_dir(vault, name).join(dir_name);
             let Ok(entries) = std::fs::read_dir(&dir) else {
                 continue;
             };
@@ -528,7 +561,7 @@ fn milestone_ids(vault: &Path, project: &str) -> std::collections::HashSet<Strin
             }
         }
     }
-    let dir = vault.join("사업").join(project).join("마일스톤");
+    let dir = project_dir(vault, project).join("마일스톤");
     let Ok(entries) = std::fs::read_dir(dir) else {
         return ids;
     };
@@ -665,11 +698,12 @@ pub fn audit_vault(vault: &Path, projects: &[(String, String)]) -> VaultAudit {
         });
     }
 
-    // 구조 (5): 이슈/개선 폴더 + 사업별 인박스 목록 존재 여부
+    // 구조 (5): 이슈/개선 폴더 + 프로젝트별 인박스 목록 존재 여부
     let lists = problem_list_paths(vault, projects);
     for (project, id_prefix) in projects {
-        let dir = vault.join("사업").join(project).join("이슈");
-        let legacy_dir = vault.join("사업").join(project).join("개선");
+        let base = project_dir(vault, project);
+        let dir = base.join("이슈");
+        let legacy_dir = base.join("개선");
         if !dir.is_dir() && !legacy_dir.is_dir() {
             issues.push(AuditIssue {
                 severity: "info".into(),
@@ -679,7 +713,7 @@ pub fn audit_vault(vault: &Path, projects: &[(String, String)]) -> VaultAudit {
             continue;
         }
         if id_prefix.is_empty() {
-            continue; // 접두사 없는 사업은 목록 파일명을 특정할 수 없어 생략
+            continue; // 접두사 없는 프로젝트는 목록 파일명을 특정할 수 없어 생략
         }
         let has_list = lists.iter().any(|(p, _, _)| p == project);
         if !has_list {
@@ -1036,6 +1070,168 @@ pub fn read_vault_note(vault: &Path, rel: &str) -> Result<(String, String), Stri
     Ok((title, text))
 }
 
+// ---------- embedded note assets (images) ----------
+
+/// Notes embed screenshots; the webview cannot read the filesystem, so images
+/// come back as data URLs. Anything larger is a note-authoring mistake.
+const ASSET_MAX_BYTES: u64 = 16 * 1024 * 1024;
+
+fn image_mime(path: &Path) -> Option<&'static str> {
+    let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+    Some(match ext.as_str() {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        "svg" => "image/svg+xml",
+        "bmp" => "image/bmp",
+        "avif" => "image/avif",
+        "ico" => "image/x-icon",
+        _ => return None,
+    })
+}
+
+/// Markdown link destinations arrive percent-encoded (`%20`); Obsidian embeds do not.
+fn percent_decode(src: &str) -> String {
+    let bytes = src.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hi = (bytes[i + 1] as char).to_digit(16);
+            let lo = (bytes[i + 2] as char).to_digit(16);
+            if let (Some(hi), Some(lo)) = (hi, lo) {
+                out.push((hi * 16 + lo) as u8);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| src.to_string())
+}
+
+/// Obsidian's "shortest path" embeds carry only the file name, so fall back to a
+/// bounded search of the vault (첨부/ included — vault_tree skips it, we must not).
+fn find_by_name(dir: &Path, name: &str, depth: usize, budget: &mut u32) -> Option<PathBuf> {
+    if depth > 8 || *budget == 0 {
+        return None;
+    }
+    let entries = std::fs::read_dir(dir).ok()?;
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    for entry in entries.flatten() {
+        if *budget == 0 {
+            return None;
+        }
+        *budget -= 1;
+        let path = entry.path();
+        let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if path.is_dir() {
+            if !file_name.starts_with('.') && file_name != "node_modules" {
+                dirs.push(path);
+            }
+        } else if file_name.eq_ignore_ascii_case(name) {
+            return Some(path);
+        }
+    }
+    for sub in dirs {
+        if let Some(hit) = find_by_name(&sub, name, depth + 1, budget) {
+            return Some(hit);
+        }
+    }
+    None
+}
+
+/// Resolve an image reference found in `note` the way Obsidian does: relative to
+/// the note, then to the vault root, then by file name anywhere in the vault.
+pub fn resolve_note_asset(vault: &Path, note: &Path, src: &str) -> Option<PathBuf> {
+    let raw = src.split('#').next().unwrap_or(src).trim();
+    let raw = raw.trim_start_matches("./");
+    if raw.is_empty() {
+        return None;
+    }
+    let decoded = percent_decode(raw);
+    let note_dir = note.parent().filter(|p| !p.as_os_str().is_empty());
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    for form in [raw, decoded.as_str()] {
+        let rel = Path::new(form);
+        if rel.is_absolute() {
+            candidates.push(rel.to_path_buf());
+        }
+        if let Some(dir) = note_dir {
+            candidates.push(dir.join(rel));
+        }
+        if !vault.as_os_str().is_empty() {
+            candidates.push(vault.join(rel));
+        }
+    }
+    for candidate in candidates {
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+    let name = Path::new(decoded.as_str())
+        .file_name()
+        .and_then(|s| s.to_str())?;
+    let root = if vault.as_os_str().is_empty() {
+        note_dir?
+    } else {
+        vault
+    };
+    let mut budget = 20_000u32;
+    find_by_name(root, name, 0, &mut budget)
+}
+
+/// Read an image embedded in a note and hand it back as a `data:` URL. Reads stay
+/// inside the vault (or, for notes outside it, the note's own folder).
+pub fn read_note_asset(vault: &Path, note: &Path, src: &str) -> Result<String, String> {
+    // Some views address notes by vault-relative path, others by absolute path.
+    let note = if note.is_file() || vault.as_os_str().is_empty() {
+        note.to_path_buf()
+    } else {
+        let joined = vault.join(note);
+        if joined.is_file() {
+            joined
+        } else {
+            note.to_path_buf()
+        }
+    };
+    let path = resolve_note_asset(vault, &note, src)
+        .ok_or_else(|| format!("이미지를 찾지 못했습니다: {src}"))?;
+    let mime = image_mime(&path).ok_or_else(|| format!("이미지 형식이 아닙니다: {src}"))?;
+    let canonical = path
+        .canonicalize()
+        .map_err(|e| format!("이미지 경로 오류: {e}"))?;
+    let mut roots: Vec<PathBuf> = Vec::new();
+    if !vault.as_os_str().is_empty() {
+        if let Ok(root) = vault.canonicalize() {
+            roots.push(root);
+        }
+    }
+    if let Some(dir) = note.parent().filter(|p| !p.as_os_str().is_empty()) {
+        if let Ok(root) = dir.canonicalize() {
+            roots.push(root);
+        }
+    }
+    if !roots.iter().any(|root| canonical.starts_with(root)) {
+        return Err("볼트 밖 이미지는 열 수 없습니다".into());
+    }
+    let size = std::fs::metadata(&canonical)
+        .map_err(|e| format!("이미지 정보를 읽지 못했습니다: {e}"))?
+        .len();
+    if size > ASSET_MAX_BYTES {
+        return Err(format!(
+            "이미지가 너무 큽니다 ({}MB 초과)",
+            ASSET_MAX_BYTES / 1024 / 1024
+        ));
+    }
+    let bytes = std::fs::read(&canonical).map_err(|e| format!("이미지 읽기 실패: {e}"))?;
+    Ok(format!("data:{mime};base64,{}", BASE64.encode(bytes)))
+}
+
 // ---------- Obsidian vault detection (first-run wizard helper) ----------
 
 #[derive(Serialize, Clone, Debug)]
@@ -1089,7 +1285,7 @@ mod tests {
     fn fixture_vault(tag: &str) -> PathBuf {
         let root =
             std::env::temp_dir().join(format!("swdash-vault-{}-{}", tag, uuid::Uuid::new_v4()));
-        let improve = root.join("사업").join("FDR").join("개선");
+        let improve = root.join("프로젝트").join("FDR").join("개선");
         std::fs::create_dir_all(&improve).unwrap();
         std::fs::create_dir_all(root.join(".obsidian")).unwrap();
         std::fs::create_dir_all(root.join("첨부").join("스크린샷")).unwrap();
@@ -1114,6 +1310,54 @@ mod tests {
         root
     }
 
+    /// 이름을 바꾸기 전 만든 볼트는 `사업/` 밖에 없다. 이관하지 않아도 프로젝트
+    /// 목록과 이슈 스캔이 그대로 동작해야 한다 — 마이그레이션은 사용자가 고르는
+    /// 별도 작업이지 앱 실행의 전제 조건이 아니다.
+    #[test]
+    fn legacy_business_root_still_lists_projects_and_issues() {
+        let root =
+            std::env::temp_dir().join(format!("swdash-vault-legacy-{}", uuid::Uuid::new_v4()));
+        let issues = root.join("사업").join("FDR").join("이슈");
+        std::fs::create_dir_all(&issues).unwrap();
+        std::fs::write(
+            issues.join("FDR-001 레거시 이슈.md"),
+            "---\ntype: 이슈\nid: FDR-001\nstatus: 제안\nstate: open\n---\n\n본문\n",
+        )
+        .unwrap();
+
+        let pairs = project_pairs(&root, &[]);
+        assert_eq!(pairs, vec![("FDR".to_string(), String::new())]);
+
+        let notes = scan_issues(&root, None, &["FDR".to_string()]);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].id, "FDR-001");
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// 두 루트가 함께 있으면 정본만 읽는다. 이관 도중 같은 이슈가 두 번 나오면
+    /// 승인·집계가 전부 어긋나므로 중복이 없다는 것이 이 폴백의 핵심 조건이다.
+    #[test]
+    fn canonical_project_root_wins_over_legacy_during_migration() {
+        let root = std::env::temp_dir().join(format!("swdash-vault-both-{}", uuid::Uuid::new_v4()));
+        for target in ["사업", "프로젝트"] {
+            let dir = root.join(target).join("FDR").join("이슈");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(
+                dir.join("FDR-001 같은 이슈.md"),
+                "---\ntype: 이슈\nid: FDR-001\nstatus: 제안\nstate: open\n---\n\n본문\n",
+            )
+            .unwrap();
+        }
+
+        assert_eq!(project_pairs(&root, &[]).len(), 1);
+        let notes = scan_issues(&root, None, &["FDR".to_string()]);
+        assert_eq!(notes.len(), 1, "정본 루트의 이슈 하나만 잡혀야 한다");
+        assert!(notes[0].path.contains("프로젝트"));
+
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
     #[test]
     fn scan_excludes_non_problem_notes() {
         let vault = fixture_vault("scan");
@@ -1133,7 +1377,7 @@ mod tests {
     #[test]
     fn scan_reads_new_issue_fields_and_marks_legacy_notes() {
         let vault = fixture_vault("issue-scan");
-        let issues = vault.join("사업").join("FDR").join("이슈");
+        let issues = vault.join("프로젝트").join("FDR").join("이슈");
         std::fs::create_dir_all(&issues).unwrap();
         std::fs::write(
             issues.join("FDR-003 GitHub 연동 설계.md"),
@@ -1154,7 +1398,7 @@ mod tests {
     fn approve_updates_three_keys_and_preserves_body() {
         let vault = fixture_vault("approve");
         let path = vault
-            .join("사업")
+            .join("프로젝트")
             .join("FDR")
             .join("개선")
             .join("FDR-001 검색 버튼 오류.md");
@@ -1181,7 +1425,7 @@ mod tests {
         // idempotence / gate: second approval and non-대기 status both fail
         assert!(approve_note(&path).is_err());
         let path2 = vault
-            .join("사업")
+            .join("프로젝트")
             .join("FDR")
             .join("개선")
             .join("FDR-002 페이징 개선.md");
@@ -1191,7 +1435,7 @@ mod tests {
     #[test]
     fn approve_requires_design_section() {
         let vault = fixture_vault("nogate");
-        let improve = vault.join("사업").join("FDR").join("개선");
+        let improve = vault.join("프로젝트").join("FDR").join("개선");
         let path = improve.join("FDR-003 설계없음.md");
         std::fs::write(&path, "---\nid: FDR-003\nstatus: 승인대기\napprove: false\n---\n\n## 문제상황\n본문만 있다.\n").unwrap();
         let err = approve_note(&path).unwrap_err();
@@ -1216,7 +1460,7 @@ mod tests {
     }
 
     fn audit_write_note(vault: &Path, name: &str, yaml: &str) {
-        let p = vault.join("사업").join("FDR").join("개선").join(name);
+        let p = vault.join("프로젝트").join("FDR").join("개선").join(name);
         std::fs::write(p, format!("---\n{yaml}---\n\n본문.\n")).unwrap();
     }
 
@@ -1286,7 +1530,7 @@ mod tests {
     #[test]
     fn audit_checks_new_issue_closing_and_milestone_integrity() {
         let vault = fixture_vault("audit-new-issue");
-        let dir = vault.join("사업").join("FDR").join("이슈");
+        let dir = vault.join("프로젝트").join("FDR").join("이슈");
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("FDR-101 일반 이슈.md"),
@@ -1319,9 +1563,9 @@ mod tests {
     fn audit_flags_missing_inbox_list_but_skips_empty_prefix() {
         let vault = fixture_vault("audit-list");
         // FDR: 폴더 + FDR 문제목록 모두 있음 → 구조 이슈 없음
-        let no_list = vault.join("사업").join("ABC").join("개선");
+        let no_list = vault.join("프로젝트").join("ABC").join("개선");
         std::fs::create_dir_all(&no_list).unwrap();
-        let no_prefix = vault.join("사업").join("XYZ").join("이슈");
+        let no_prefix = vault.join("프로젝트").join("XYZ").join("이슈");
         std::fs::create_dir_all(&no_prefix).unwrap();
         let audit = audit_vault(
             &vault,
@@ -1441,7 +1685,7 @@ mod tests {
     fn read_note_splits_frontmatter() {
         let vault = fixture_vault("read");
         let path = vault
-            .join("사업")
+            .join("프로젝트")
             .join("FDR")
             .join("개선")
             .join("FDR-001 검색 버튼 오류.md");
@@ -1449,6 +1693,38 @@ mod tests {
         assert_eq!(fm["id"], "FDR-001");
         assert!(body.contains("## 문제상황"));
         assert!(!body.starts_with("---"));
+    }
+
+    #[test]
+    fn note_asset_resolves_relative_and_shortest_path() {
+        let vault = fixture_vault("asset");
+        let note = vault
+            .join("프로젝트")
+            .join("FDR")
+            .join("개선")
+            .join("FDR-001 검색 버튼 오류.md");
+        let png = [0x89u8, b'P', b'N', b'G'];
+        std::fs::write(
+            vault.join("첨부").join("스크린샷").join("검색 오류.png"),
+            png,
+        )
+        .unwrap();
+        std::fs::write(note.parent().unwrap().join("옆.png"), png).unwrap();
+
+        // note-relative, vault-relative, and Obsidian shortest-path (file name only)
+        assert!(resolve_note_asset(&vault, &note, "옆.png").is_some());
+        assert!(resolve_note_asset(&vault, &note, "첨부/스크린샷/검색 오류.png").is_some());
+        assert!(resolve_note_asset(&vault, &note, "검색 오류.png").is_some());
+        // markdown links arrive percent-encoded
+        assert!(resolve_note_asset(&vault, &note, "%EC%98%86.png").is_some());
+        assert!(resolve_note_asset(&vault, &note, "없는파일.png").is_none());
+
+        let url = read_note_asset(&vault, &note, "옆.png").unwrap();
+        assert!(url.starts_with("data:image/png;base64,"));
+        // non-images and traversal stay closed
+        assert!(read_note_asset(&vault, &note, "개선.md").is_err());
+        assert!(read_note_asset(&vault, &note, "../../../../outside.png").is_err());
+        std::fs::remove_dir_all(&vault).ok();
     }
 
     #[test]

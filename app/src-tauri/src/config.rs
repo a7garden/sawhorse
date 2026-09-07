@@ -96,7 +96,7 @@ impl Default for HerdrCfg {
             bin: "herdr".into(),
             session: String::new(),
             workspace_label: "sawhorse".into(),
-            cleanup: "closeOnSuccess".into(),
+            cleanup: "closeAlways".into(),
             max_parallel: 1,
             start_timeout_sec: 60,
             job_timeout_min: 120,
@@ -116,7 +116,7 @@ impl HerdrCfg {
             c.mode = "auto".into();
         }
         if !HERDR_CLEANUPS.contains(&c.cleanup.as_str()) {
-            c.cleanup = "closeOnSuccess".into();
+            c.cleanup = "closeAlways".into();
         }
         if c.bin.trim().is_empty() {
             c.bin = "herdr".into();
@@ -442,7 +442,7 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
             let p: ProjectCfg = serde_json::from_value(pv.clone())
                 .map_err(|e| format!("프로젝트 항목 파싱 실패: {e}"))?;
             if p.name.trim().is_empty() {
-                return Err("사업명이 빈 프로젝트 항목이 있습니다".into());
+                return Err("프로젝트명이 빈 프로젝트 항목이 있습니다".into());
             }
             map.insert(
                 p.name.clone(),

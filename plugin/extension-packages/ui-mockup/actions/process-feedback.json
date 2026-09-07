@@ -1,0 +1,11 @@
+{
+  "id": "process-feedback",
+  "label": "검토 의견 처리",
+  "description": "체크한 목업의 새 개선 제안은 백로그로 승격하고, 수정 요청은 연결된 개정본으로 만듭니다.",
+  "prompt": "/{{ns}}:mockup-generator feedback --project {{projectId}} --ids {{ids}}",
+  "cwd": "workspace",
+  "params": [
+    { "key": "ids", "type": "list", "label": "대상 목업", "required": true }
+  ],
+  "featured": false
+}

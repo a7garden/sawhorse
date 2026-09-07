@@ -507,7 +507,7 @@ mod tests {
             &registry,
             WorkflowInstanceStartInput {
                 workflow_id: "sdd-with-tdd".into(),
-                workflow_version: "1.0.0".into(),
+                workflow_version: "1.1.0".into(),
                 input_digest: "input-a".into(),
                 ..Default::default()
             },

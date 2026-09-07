@@ -17,11 +17,7 @@ import ProjectsSection from "./settings/ProjectsSection";
 import { Empty, PageHeader } from "./common";
 
 type SectionId =
-  | "general"
-  | "projects"
-  | "collaboration"
-  | "execution"
-  | "diagnostics";
+  "general" | "projects" | "collaboration" | "execution" | "diagnostics";
 
 const SECTIONS: { value: SectionId; label: string }[] = [
   { value: "general", label: "일반" },

@@ -20,7 +20,7 @@ use uuid::Uuid;
 
 use crate::{
     config,
-    herdr::{AgentInfo, Herdr},
+    herdr::{self, AgentInfo, Herdr},
     sdlc::{self, HarnessRun, LaunchInput},
     workflow::{self, WorkflowDefinition, WorkflowNode},
 };
@@ -28,6 +28,9 @@ use crate::{
 const RUN_SCHEMA: u32 = 1;
 const MAX_INBOX_PER_TICK: usize = 8;
 const MAX_OUTPUT_SNAPSHOT: usize = 24_000;
+/// The closing report is read in a panel, not a terminal: keep it short enough
+/// to scan and leave the full history to the transcript.
+const MAX_FINAL_REPORT: usize = 6_000;
 /// A root, child, and grandchild are enough to retain useful decomposition
 /// without allowing a run tree to fan out indefinitely.
 const MAX_PARENT_DEPTH: usize = 2;
@@ -76,6 +79,17 @@ struct RunRecord {
     inbox_request_id: Option<String>,
     #[serde(default)]
     cancel_requested: bool,
+    /// When the pane was closed after the run settled. The record, the transcript,
+    /// and the final report survive; only the terminal screen is gone.
+    #[serde(default)]
+    tab_closed_at: Option<String>,
+    /// The last agent output captured immediately before closing the pane, so the
+    /// human can read the agent's closing report without a live terminal.
+    #[serde(default)]
+    final_report: Option<String>,
+    /// Last time the recorded session was reopened in herdr from the dashboard.
+    #[serde(default)]
+    resumed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,7 +190,17 @@ impl RunRecord {
             created_at: self.created_at.clone(),
             updated_at: self.updated_at.clone(),
             error: self.error.clone(),
+            agent_session: self.agent_session.clone(),
+            tab_closed_at: self.tab_closed_at.clone(),
+            final_report: self.final_report.clone(),
+            resumable: self.resumable(),
         }
+    }
+
+    /// Only `claude` is started with an id we minted (`--session-id`), so it is
+    /// the only kind we can hand back to its CLI as `--resume`.
+    fn resumable(&self) -> bool {
+        self.agent == "claude" && self.agent_session.is_some()
     }
 }
 
@@ -582,6 +606,22 @@ fn launch_gate(root: &Path, input: &LaunchInput) -> Result<LaunchContext, String
         .iter()
         .find(|project| project.id == input.project_id)
         .ok_or_else(|| "프로젝트를 찾을 수 없습니다".to_string())?;
+    // 같은 작업의 같은 역할이 이미 돌고 있으면 하나 더 띄우지 않는다 — 버튼을 두 번
+    // 눌렀거나 다른 화면에서 이미 시작한 경우이고, 두 에이전트가 같은 산출물을 동시에
+    // 고치게 된다. 자식 실행은 부모가 활성인 채로 시작하는 것이 정상이라 걸지 않는다.
+    if input.parent_run_id.is_none() {
+        if let Some(running) = list_records(root)?.into_iter().find(|record| {
+            record.work_id == input.work_id
+                && record.role == input.role
+                && record.parent_run_id.is_none()
+                && active_status(&record.status)
+        }) {
+            return Err(format!(
+                "{}의 {} 실행이 이미 진행 중입니다. 끝나기를 기다리거나 중단한 뒤 다시 시작하세요 (실행 {})",
+                input.work_id, input.role, running.id
+            ));
+        }
+    }
     let runtime_instance = work
         .workflow_instance_id
         .as_deref()
@@ -816,6 +856,9 @@ fn record_launch_with_request(
         owned: true,
         inbox_request_id: inbox_request_id.map(str::to_string),
         cancel_requested: false,
+        tab_closed_at: None,
+        final_report: None,
+        resumed_at: None,
     };
     save_record(root, &record)?;
     if let (Some(instance_id), Some(node_run_id)) = (
@@ -961,9 +1004,186 @@ async fn settle_cancel(
         record,
         "[user requested cancellation before prompt completion]",
     )?;
+    if let Some(h) = h {
+        settle_pane(root, record, h, None).await;
+    }
     save_record(root, record)?;
     clear_cancel(root, &record.id)?;
     Ok(true)
+}
+
+/// Does the configured cleanup policy retire the pane at this status?
+///
+/// The dashboard-wide `herdr.cleanup` setting decides, with a settled turn
+/// (`review`) counting as the harness equivalent of a successful job.
+fn closes_pane_at(cleanup: &str, status: &str) -> bool {
+    match cleanup {
+        "keep" => false,
+        "closeAlways" => matches!(status, "review" | "failed" | "stopped"),
+        _ => status == "review",
+    }
+}
+
+fn tail_chars(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    let tail: String = text
+        .chars()
+        .rev()
+        .take(max)
+        .collect::<String>()
+        .chars()
+        .rev()
+        .collect();
+    format!("…\n{tail}")
+}
+
+/// Retire the herdr screen of a run that is done working.
+///
+/// The agent's closing output is captured into the record and the transcript
+/// first, so nothing a human would have read in the pane is lost with it. The
+/// run keeps its recorded session id, which is what makes reopening possible.
+/// `captured` is the output the caller has already read this tick, so a refresh
+/// does not read the same pane twice.
+async fn close_pane(root: &Path, record: &mut RunRecord, h: &Herdr, captured: Option<&str>) {
+    if record.tab_closed_at.is_some() {
+        return;
+    }
+    let Some(tab) = record.tab_id.clone() else {
+        return;
+    };
+    let output = match captured {
+        Some(text) => Some(text.to_string()),
+        None => h.agent_read(&record.agent_name, 200).await.ok(),
+    };
+    if let Some(text) = output.as_deref() {
+        let _ = append_output(root, record, text);
+        if !text.trim().is_empty() {
+            record.final_report = Some(tail_chars(text.trim(), MAX_FINAL_REPORT));
+        }
+    }
+    // A pane that refuses to close is still on screen: leave the record pointing
+    // at it rather than claiming a screen was retired that the human still sees.
+    if h.close_tab(&tab).await.is_err() {
+        return;
+    }
+    // Every run gets its own workspace at launch; closing only the tab would
+    // leave an empty one behind in herdr's switcher.
+    if let Some(workspace) = record.workspace_id.clone() {
+        let _ = h.close_workspace(&workspace).await;
+    }
+    record.tab_closed_at = Some(now());
+    record.updated_at = now();
+}
+
+/// Close the pane when the policy says this status is finished. Callers have
+/// already written the status; this only settles the terminal side of it.
+async fn settle_pane(root: &Path, record: &mut RunRecord, h: &Herdr, captured: Option<&str>) {
+    let cleanup = config::load_view().dashboard.herdr.sanitized().cleanup;
+    if closes_pane_at(&cleanup, &record.status) {
+        close_pane(root, record, h, captured).await;
+    }
+}
+
+/// Reopen a closed run's agent session in herdr as the same conversation.
+///
+/// `claude --resume <id>` restores the transcript the run was recorded with, so
+/// the new pane is the old session — not a fresh agent that happens to share a
+/// work item. The record is rebound to the new workspace/tab/pane, which is what
+/// every later ownership check compares against.
+async fn reopen_session(
+    root: &Path,
+    record: &mut RunRecord,
+    h: &Herdr,
+    focus: bool,
+) -> Result<(), String> {
+    if !record.resumable() {
+        return Err("이 실행에는 이어할 세션 id가 없습니다 (claude 실행만 지원합니다)".into());
+    }
+    let session = record.agent_session.clone().unwrap_or_default();
+    if let Some(why) = herdr::windows_launch_block(&record.agent) {
+        return Err(why);
+    }
+    let label = format!("sdd-{}", &record.id[..8]);
+    let workspace = match record.workspace_id.clone() {
+        Some(id) if h.workspace_exists(&id).await => id,
+        _ => h
+            .create_workspace(&label)
+            .await
+            .map_err(|error| format!("Herdr workspace 생성 실패: {error}"))?,
+    };
+    let tab = h
+        .create_tab(
+            &workspace,
+            &format!("{}-{}", record.role, &record.id[..8]),
+            &record.repo_path,
+        )
+        .await
+        .map_err(|error| format!("Herdr tab 생성 실패: {error}"))?;
+    let mut extra = vec!["--resume".to_string(), session.clone()];
+    if let Ok(vault) = root.canonicalize() {
+        extra.extend(["--add-dir".to_string(), vault.display().to_string()]);
+    }
+    if !record.model.is_empty() {
+        extra.extend(["--model".to_string(), record.model.clone()]);
+    }
+    let timeout = (config::load_view()
+        .dashboard
+        .herdr
+        .sanitized()
+        .start_timeout_sec as u64)
+        * 1000;
+    let started = h
+        .agent_start(
+            &record.agent_name,
+            &record.agent,
+            &tab.pane_id,
+            timeout,
+            &extra,
+        )
+        .await;
+    let previous = (
+        record.workspace_id.clone(),
+        record.tab_id.clone(),
+        record.pane_id.clone(),
+    );
+    record.workspace_id = Some(workspace.clone());
+    record.tab_id = Some(tab.tab_id.clone());
+    record.pane_id = Some(tab.pane_id.clone());
+    if let Err(error) = started {
+        // `agent start` can report failure while the agent is in fact already up.
+        if owned_agent(h, record).await.is_err() {
+            let _ = h.close_tab(&tab.tab_id).await;
+            (record.workspace_id, record.tab_id, record.pane_id) = previous;
+            return Err(format!("Herdr agent 이어하기 실패: {error}"));
+        }
+    }
+    // A resumed CLI may report a different session id than the one we minted.
+    // Record what herdr actually sees, or later ownership checks reject our pane.
+    if let Ok(info) = h.agent_get(&record.agent_name).await {
+        if let Some((kind, value)) = info.session_ref {
+            if kind == "id" && value != session {
+                record.agent_session = Some(value);
+            }
+        }
+    }
+    record.tab_closed_at = None;
+    record.resumed_at = Some(now());
+    // Reopening clears the recorded error, so keep what it said in the transcript.
+    let carried = match record.error.as_deref() {
+        Some(error) => format!("session {session} (직전 오류: {error})"),
+        None => format!("session {session}"),
+    };
+    // The run is live again and waiting on the human, exactly like a settled turn.
+    update(record, "review", None);
+    append_audit(root, record, "resume", &carried)?;
+    save_record(root, record)?;
+    if focus {
+        let _ = h.focus_workspace(&workspace).await;
+        let _ = h.focus_tab(&tab.tab_id).await;
+    }
+    Ok(())
 }
 
 fn startup_expired(record: &RunRecord) -> bool {
@@ -989,6 +1209,14 @@ async fn start_record(root: PathBuf, id: String) {
     }
     let cfg = config::load_view().dashboard.herdr.sanitized();
     let h = herdr_for(&record);
+    // Herdr types a PowerShell `Start-Process` to launch the agent; a PATH that
+    // resolves the agent name to a shell shim fails there, minutes later and with
+    // nothing readable in the pane. Say so before a workspace and tab exist.
+    if let Some(why) = herdr::windows_launch_block(&record.agent) {
+        update(&mut record, "failed", Some(why));
+        let _ = save_record(&root, &record);
+        return;
+    }
     if settle_cancel(&root, &mut record, Some(&h))
         .await
         .unwrap_or(false)
@@ -1098,6 +1326,7 @@ async fn start_record(root: PathBuf, id: String) {
                     "failed",
                     Some(format!("Herdr agent 시작 실패: {error}")),
                 );
+                settle_pane(&root, &mut record, &h, None).await;
                 let _ = save_record(&root, &record);
                 return;
             }
@@ -1120,6 +1349,7 @@ async fn start_record(root: PathBuf, id: String) {
     }
     if let Err(error) = prompt_agent(&h, &record.agent_name, &record.prompt).await {
         update(&mut record, "failed", Some(error));
+        settle_pane(&root, &mut record, &h, None).await;
         let _ = save_record(&root, &record);
         return;
     }
@@ -1181,16 +1411,21 @@ async fn refresh_record_with(
             return Ok(record);
         }
     };
-    match h.agent_read(&record.agent_name, 200).await {
+    let captured = match h.agent_read(&record.agent_name, 200).await {
         Ok(output) => {
             append_output(root, &record, &output)?;
+            Some(output)
         }
         Err(error) => {
             append_output(root, &record, &format!("[output read failed: {error}]"))?;
+            None
         }
-    }
+    };
     let status = status_for_agent(&info.status);
     update(&mut record, status, None);
+    // A settled turn has nothing left to show in a terminal. Keep the closing
+    // report on the record and retire the pane.
+    settle_pane(root, &mut record, h, captured.as_deref()).await;
     save_record(root, &record)?;
     Ok(record)
 }
@@ -1217,6 +1452,7 @@ async fn stop_record_with(
         &record,
         "[user requested stop; ctrl+c sent to recorded owned agent]",
     )?;
+    settle_pane(root, &mut record, h, None).await;
     save_record(root, &record)?;
     Ok(record)
 }
@@ -1407,6 +1643,14 @@ pub async fn sdd_continue_run(id: String, instructions: String) -> Result<Harnes
     let _run_guard = run_lock(&id).lock().await;
     let mut record = load_record(&root, &id)?;
     let h = herdr_for(&record);
+    if record.status != "review" {
+        return Err("review 상태의 실행에만 후속 지시를 보낼 수 있습니다".into());
+    }
+    // The pane of a settled run is closed on purpose. A follow-up reopens the
+    // recorded session first, so the human never has to think about the terminal.
+    if record.tab_closed_at.is_some() {
+        reopen_session(&root, &mut record, &h, false).await?;
+    }
     let info = owned_agent(&h, &record).await?;
     if !can_continue(&record.status, &info.status) {
         return Err("review 상태의 idle/done 실행에만 후속 지시를 보낼 수 있습니다".into());
@@ -1416,6 +1660,33 @@ pub async fn sdd_continue_run(id: String, instructions: String) -> Result<Harnes
     record.prompt = format!("{}\n\n[Human follow-up]\n{}", record.prompt, instructions);
     update(&mut record, "running", None);
     save_record(&root, &record)?;
+    Ok(record.public())
+}
+
+/// Reopen a finished run's agent session in herdr and focus it.
+///
+/// One click for the human: the closed pane comes back as the same conversation,
+/// ready for a follow-up typed either here or in the terminal itself.
+#[tauri::command]
+pub async fn sdd_resume_run(id: String) -> Result<HarnessRun, String> {
+    let root = sdlc::vault_root()?;
+    let _run_guard = run_lock(&id).lock().await;
+    let mut record = load_record(&root, &id)?;
+    if active_status(&record.status) && record.tab_closed_at.is_none() {
+        return Err("아직 실행 중인 세션입니다".into());
+    }
+    let h = herdr_for(&record);
+    if record.tab_closed_at.is_none() {
+        // Nothing was closed: just bring the existing screen forward.
+        if let Some(workspace) = record.workspace_id.as_deref() {
+            let _ = h.focus_workspace(workspace).await;
+        }
+        if let Some(tab) = record.tab_id.as_deref() {
+            let _ = h.focus_tab(tab).await;
+        }
+        return Ok(record.public());
+    }
+    reopen_session(&root, &mut record, &h, true).await?;
     Ok(record.public())
 }
 
@@ -1514,6 +1785,9 @@ mod tests {
             owned: true,
             inbox_request_id: None,
             cancel_requested: false,
+            tab_closed_at: None,
+            final_report: None,
+            resumed_at: None,
         }
     }
 
@@ -1711,6 +1985,7 @@ case "$1 $2" in
   "workspace create") echo '{"result":{"workspace":{"workspace_id":"w1"}}}' ;;
   "tab create") echo '{"result":{"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}' ;;
   "agent start"|"agent prompt"|"agent send-keys") echo '{"result":{}}' ;;
+  "tab close"|"workspace close") echo '{"result":{}}' ;;
   "agent get") echo '{"result":{"agent":{"name":"sdd_test","agent":"codex","pane_id":"w1:p1","workspace_id":"w1","tab_id":"w1:t1","agent_status":"working"}}}' ;;
   "workspace list") echo '{"result":{"workspaces":[]}}' ;;
   "tab list") echo '{"result":{"tabs":[]}}' ;;
@@ -1755,6 +2030,60 @@ esac
         let stopped = stop_record_with(&root, refreshed, &h).await.unwrap();
         assert_eq!(stopped.status, "stopped");
         fs::remove_dir_all(root).unwrap();
+    }
+
+    /// The pane is the disposable part: what a human still needs after a settled
+    /// turn is the closing report and the session id, both on the record.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn settled_run_closes_its_pane_and_keeps_the_closing_report() {
+        let root = tempdir("settle-pane");
+        let cfg = crate::config::HerdrCfg {
+            bin: fake_herdr(&root),
+            ..Default::default()
+        };
+        let h = Herdr::new(&cfg);
+        let mut run = record(Uuid::new_v4().to_string(), None, "review");
+        run.workspace_id = Some("w1".into());
+        run.tab_id = Some("w1:t1".into());
+        run.pane_id = Some("w1:p1".into());
+        save_record(&root, &run).unwrap();
+        close_pane(&root, &mut run, &h, Some("final agent report")).await;
+        assert!(run.tab_closed_at.is_some(), "the pane is retired");
+        assert_eq!(run.final_report.as_deref(), Some("final agent report"));
+        assert!(sdd_output_for_test(&root, &run.id).contains("final agent report"));
+        // Closing twice must not run a second time against a reused tab id.
+        let closed_at = run.tab_closed_at.clone();
+        close_pane(&root, &mut run, &h, Some("later noise")).await;
+        assert_eq!(run.tab_closed_at, closed_at);
+        assert_eq!(run.final_report.as_deref(), Some("final agent report"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn cleanup_policy_decides_which_finished_panes_close() {
+        // A settled turn is the harness equivalent of a successful job.
+        assert!(closes_pane_at("closeOnSuccess", "review"));
+        assert!(!closes_pane_at("closeOnSuccess", "failed"));
+        assert!(!closes_pane_at("closeOnSuccess", "stopped"));
+        assert!(closes_pane_at("closeAlways", "failed"));
+        assert!(closes_pane_at("closeAlways", "stopped"));
+        assert!(!closes_pane_at("keep", "review"));
+        // Live runs are never touched, whatever the policy says.
+        for status in ["starting", "running", "blocked"] {
+            for cleanup in ["closeOnSuccess", "closeAlways", "keep"] {
+                assert!(!closes_pane_at(cleanup, status), "{cleanup}/{status}");
+            }
+        }
+    }
+
+    #[test]
+    fn closing_report_keeps_the_end_of_a_long_output() {
+        assert_eq!(tail_chars("짧은 보고", 32), "짧은 보고");
+        let long: String = std::iter::repeat_n('가', MAX_FINAL_REPORT + 10).collect();
+        let clipped = tail_chars(&long, MAX_FINAL_REPORT);
+        assert!(clipped.starts_with("…\n"));
+        assert_eq!(clipped.chars().count(), MAX_FINAL_REPORT + 2);
     }
 
     fn sdd_output_for_test(root: &Path, id: &str) -> String {
