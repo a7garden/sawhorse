@@ -7,6 +7,7 @@ import { PathInput } from "@/components/ui/path-input";
 // 앞의 두 단계(프로그램·에이전트)는 아무것도 바꾸지 않는 읽기 전용 점검이다. 무엇이
 // 없는지 먼저 보여 주고 나서 설정을 받아야, 나중에 "왜 안 되지" 로 되돌아오지 않는다.
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Check, FolderOpen, Sparkles, SquareTerminal } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
@@ -21,14 +22,14 @@ import StepAgents from "./setup/StepAgents";
 import StepPrograms, { programSummary } from "./setup/StepPrograms";
 
 const STEPS = [
-  "시작",
-  "프로그램",
-  "에이전트",
-  "작업공간",
-  "확장",
-  "스킬",
-  "완료",
-];
+  "intro",
+  "programs",
+  "agents",
+  "vault",
+  "packs",
+  "skills",
+  "done",
+] as const;
 /// 단계를 숫자로 넘기면 하나를 끼워 넣을 때 이동 코드가 조용히 어긋난다.
 const S = {
   intro: 0,
@@ -47,6 +48,7 @@ function isAbsolutePath(p: string): boolean {
 }
 
 export default function SetupWizard() {
+  const { t } = useTranslation("packs");
   const open = useApp((s) => s.wizardOpen);
   const close = useApp((s) => s.closeWizard);
   const setPage = useApp((s) => s.setPage);
@@ -146,11 +148,11 @@ export default function SetupWizard() {
   async function saveVault() {
     const path = vaultPath.trim();
     if (path.length === 0) {
-      setErr("작업공간 경로를 입력하세요.");
+      setErr(t("wizard.errPathRequired"));
       return;
     }
     if (!isAbsolutePath(path)) {
-      setErr("절대 경로로 적어 주세요 (예: /Users/me/Documents/sawhorse).");
+      setErr(t("wizard.errAbsolutePath"));
       return;
     }
     setBusy(true);
@@ -179,7 +181,9 @@ export default function SetupWizard() {
       const report = await api.provisionWorkspace();
       setCreated(report.created);
       if (report.failed.length > 0)
-        setErr(`일부 항목 실패: ${report.failed.join("; ")}`);
+        setErr(
+          t("wizard.partialFailure", { list: report.failed.join("; ") }),
+        );
       await refreshTree();
       setStep(S.skills);
     } catch (e) {
@@ -203,7 +207,9 @@ export default function SetupWizard() {
       setInstalled({
         ...installed,
         [agent.id]:
-          failed > 0 ? `${ok}건 설치, ${failed}건 실패` : `${ok}건 설치`,
+          failed > 0
+            ? t("wizard.installReport.fail", { n: ok, failed })
+            : t("wizard.installReport.ok", { n: ok }),
       });
     } catch (e) {
       setErr(String(e));
@@ -229,7 +235,7 @@ export default function SetupWizard() {
       <div className="relative z-10 flex max-h-[88vh] w-full max-w-xl flex-col overflow-hidden rounded-xl border bg-card shadow-lg">
         <div className="border-b px-5 py-3">
           <div className="flex items-center gap-2 text-sm font-semibold">
-            <Sparkles className="size-4" /> sawhorse 워크벤치 시작
+            <Sparkles className="size-4" /> {t("wizard.title")}
           </div>
           <div className="mt-2 flex items-center gap-1">
             {STEPS.map((label, i) => (
@@ -238,7 +244,7 @@ export default function SetupWizard() {
                   type="button"
                   disabled={i >= step || busy}
                   onClick={() => setStep(i)}
-                  title={label}
+                  title={t(`steps.${label}`)}
                   className={cn(
                     "inline-flex h-4 w-4 items-center justify-center rounded-full text-[10px] font-bold transition-colors",
                     i <= step
@@ -250,7 +256,9 @@ export default function SetupWizard() {
                   {i + 1}
                 </button>
                 {i === step && (
-                  <span className="text-[11px] font-semibold">{label}</span>
+                  <span className="text-[11px] font-semibold">
+                    {t(`steps.${label}`)}
+                  </span>
                 )}
                 {i < LAST && <span className="mx-0.5 h-px w-2.5 bg-border" />}
               </div>
@@ -262,41 +270,31 @@ export default function SetupWizard() {
           {step === S.intro && (
             <div className="space-y-3 text-xs leading-relaxed text-muted-foreground">
               <p>
-                <b className="text-foreground">이 앱이 주인입니다.</b> 터미널
-                에이전트와 필요한 프로그램은 이 앱이 이 PC에서 찾아내고, 없으면
-                받는 곳을 알려 줍니다. 따로 플러그인을 먼저 깔 필요가 없습니다.
+                <b className="text-foreground">{t("wizard.intro.lead")}</b>{" "}
+                {t("wizard.intro.rest")}
               </p>
               <div className="space-y-1.5">
-                {[
+                {(
                   [
-                    "프로그램",
-                    "제품이 실제로 부르는 외부 도구가 갖춰졌는지 봅니다. 바꾸는 것은 없습니다.",
-                  ],
-                  [
-                    "에이전트",
-                    "이 PC의 터미널 에이전트를 훑고 그중 기본으로 쓸 하나를 고릅니다.",
-                  ],
-                  [
-                    "작업공간",
-                    "문서가 쌓일 폴더 하나. Obsidian 볼트를 그대로 써도 됩니다.",
-                  ],
-                  [
-                    "확장",
-                    "일하는 방식 한 벌. 켜면 화면·예약·스킬이 함께 따라옵니다.",
-                  ],
-                  ["스킬", "켠 확장의 스킬을 에이전트에 설치합니다."],
-                ].map(([t, d]) => (
-                  <div key={t} className="rounded-lg border px-3 py-2">
+                    "programs",
+                    "agents",
+                    "vault",
+                    "packs",
+                    "skills",
+                  ] as const
+                ).map((key) => (
+                  <div key={key} className="rounded-lg border px-3 py-2">
                     <div className="text-[13px] font-semibold text-foreground">
-                      {t}
+                      {t(`steps.${key}`)}
                     </div>
-                    <div className="text-[11px]">{d}</div>
+                    <div className="text-[11px]">
+                      {t(`wizard.intro.${key}`)}
+                    </div>
                   </div>
                 ))}
               </div>
               <p>
-                차례로 정하면 끝입니다. 나중에 설정과 확장 탭에서 언제든 바꿀 수
-                있습니다.
+                {t("wizard.intro.outro")}
               </p>
             </div>
           )}
@@ -322,14 +320,13 @@ export default function SetupWizard() {
           {step === S.vault && (
             <div className="space-y-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                문서가 쌓일 폴더의 절대 경로입니다. 없는 폴더를 적으면 앱이
-                만듭니다. Obsidian 을 쓰고 있으면 그 볼트를 그대로 지정하세요.
+                {t("wizard.vault.hint")}
               </p>
               <div>
-                <Label>작업공간 절대 경로</Label>
+                <Label>{t("wizard.vault.label")}</Label>
                 <PathInput
                   autoFocus
-                  placeholder={suggested || "예: /Users/me/Documents/sawhorse"}
+                  placeholder={suggested || t("wizard.vault.placeholder")}
                   value={vaultPath}
                   onValueChange={(value) => setVaultPath(value)}
                   className="mt-1"
@@ -337,7 +334,7 @@ export default function SetupWizard() {
               </div>
               {candidates != null && candidates.length > 0 && (
                 <div className="space-y-1">
-                  <Label>Obsidian 에서 쓰던 볼트</Label>
+                  <Label>{t("wizard.vault.existing")}</Label>
                   {candidates.map((c) => (
                     <button
                       key={c.path}
@@ -352,14 +349,18 @@ export default function SetupWizard() {
                     >
                       <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
                       <span className="min-w-0 flex-1 truncate">{c.path}</span>
-                      {c.open && <Badge variant="success">열림</Badge>}
+                      {c.open && (
+                        <Badge variant="success">
+                          {t("wizard.vault.open")}
+                        </Badge>
+                      )}
                     </button>
                   ))}
                 </div>
               )}
               {candidates != null && candidates.length === 0 && (
                 <p className="text-[11px] text-muted-foreground">
-                  Obsidian 볼트 기록을 찾지 못했습니다. 직접 입력하면 됩니다.
+                  {t("wizard.vault.noRecords")}
                 </p>
               )}
               {suggested && vaultPath.trim() !== suggested && (
@@ -370,7 +371,7 @@ export default function SetupWizard() {
                 >
                   <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1 truncate">
-                    새로 만들기: {suggested}
+                    {t("wizard.vault.createNew", { path: suggested })}
                   </span>
                 </button>
               )}
@@ -380,12 +381,11 @@ export default function SetupWizard() {
           {step === S.packs && (
             <div className="space-y-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                켠 확장이 곧 이 앱의 기능입니다. 끄면 그 확장의 화면·예약·액션이
-                사라집니다 (문서는 그대로 남습니다).
+                {t("wizard.packs.hint")}
               </p>
               {list.length === 0 && (
                 <p className="text-xs text-destructive">
-                  설치된 확장을 찾지 못했습니다.
+                  {t("wizard.packs.noneFound")}
                 </p>
               )}
               {list.map((p) => {
@@ -420,8 +420,10 @@ export default function SetupWizard() {
               })}
               {plan.length > 0 && (
                 <p className="text-[11px] text-muted-foreground">
-                  작업공간에 새로 만들 것 {plan.length}개:{" "}
-                  {plan.slice(0, 6).join(", ")}
+                  {t("wizard.packs.plan", {
+                    n: plan.length,
+                    items: plan.slice(0, 6).join(", "),
+                  })}
                   {plan.length > 6 && " …"}
                 </p>
               )}
@@ -431,13 +433,11 @@ export default function SetupWizard() {
           {step === S.skills && (
             <div className="space-y-3">
               <p className="text-xs leading-relaxed text-muted-foreground">
-                켠 확장({enabledIds.length}개)의 스킬을 에이전트에 설치합니다.
-                이미 있는 파일을 손으로 고쳤다면 덮지 않고 남겨 둡니다.
+                {t("wizard.skills.hint", { n: enabledIds.length })}
               </p>
               {installTargets.length === 0 && (
                 <p className="text-xs text-warning-foreground">
-                  스킬을 설치할 수 있는 에이전트가 없습니다 — Claude Code 나
-                  Codex 를 설치한 뒤 확장 탭에서 다시 설치하세요.
+                  {t("wizard.skills.noTargets")}
                 </p>
               )}
               {installTargets.map((a) => (
@@ -457,7 +457,7 @@ export default function SetupWizard() {
                         {a.name}
                       </span>
                       {a.id === defaultAgent && (
-                        <Badge variant="success">기본</Badge>
+                        <Badge variant="success">{t("defaultBadge")}</Badge>
                       )}
                       {a.version && (
                         <span className="text-[11px] font-normal text-muted-foreground">
@@ -468,7 +468,7 @@ export default function SetupWizard() {
                     <p className="text-[11px] text-muted-foreground">
                       {a.detected
                         ? a.note
-                        : "감지되지 않았습니다 — 설치 후 다시 열면 잡힙니다."}
+                        : t("wizard.skills.notDetected")}
                     </p>
                   </div>
                   <Button
@@ -478,12 +478,12 @@ export default function SetupWizard() {
                     onClick={() => void installAll(a)}
                   >
                     {installed[a.id] ? <Check className="size-3" /> : null}
-                    {installed[a.id] ?? "설치"}
+                    {installed[a.id] ?? t("actions.install")}
                   </Button>
                 </div>
               ))}
               <p className="text-[11px] text-muted-foreground">
-                지금 건너뛰어도 됩니다 — 확장 탭에서 언제든 설치할 수 있습니다.
+                {t("wizard.skills.skipHint")}
               </p>
             </div>
           )}
@@ -492,23 +492,32 @@ export default function SetupWizard() {
             <div className="space-y-3">
               <div className="space-y-1 rounded-lg border p-3 text-[11px] text-muted-foreground">
                 <div className="text-[13px] font-semibold text-foreground">
-                  이렇게 정했습니다
+                  {t("wizard.done.summaryTitle")}
                 </div>
                 <p className="truncate" title={vaultPath}>
-                  작업공간 · {vaultPath || "(지정 안 함)"}
+                  {t("wizard.done.workspace", {
+                    path: vaultPath || t("unset"),
+                  })}
                 </p>
-                <p>기본 에이전트 · {pickedAgent?.name ?? defaultAgent}</p>
-                <p>켠 확장 · {enabledIds.length}개</p>
-                <p>프로그램 · {programSummary(requirements)}</p>
+                <p>
+                  {t("wizard.done.agent", {
+                    agent: pickedAgent?.name ?? defaultAgent,
+                  })}
+                </p>
+                <p>{t("wizard.done.extensions", { n: enabledIds.length })}</p>
+                <p>
+                  {t("wizard.done.programs", {
+                    summary: programSummary(requirements),
+                  })}
+                </p>
                 <p>
                   {created && created.length > 0
-                    ? `작업공간에 ${created.length}개 항목을 만들었습니다.`
-                    : "작업공간은 이미 갖춰져 있었습니다."}
+                    ? t("wizard.done.created", { n: created.length })
+                    : t("wizard.done.alreadyReady")}
                 </p>
               </div>
               <p className="text-xs leading-relaxed text-muted-foreground">
-                아래 두 가지는 에이전트가 대신 점검해 줍니다. 지금 눌러도 되고
-                나중에 해도 됩니다.
+                {t("wizard.done.outro")}
               </p>
               <div className="space-y-1.5">
                 <button
@@ -519,11 +528,10 @@ export default function SetupWizard() {
                   <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[13px] font-semibold">
-                      Obsidian 설정 맞추기 (init-vault)
+                      {t("wizard.done.initVaultTitle")}
                     </span>
                     <span className="block text-[11px] text-muted-foreground">
-                      템플릿 폴더·첨부 경로·프로퍼티 타입·시작 화면을 에이전트가
-                      점검합니다.
+                      {t("wizard.done.initVaultDesc")}
                     </span>
                   </span>
                 </button>
@@ -535,11 +543,10 @@ export default function SetupWizard() {
                   <SquareTerminal className="size-4 shrink-0 text-muted-foreground" />
                   <span className="min-w-0 flex-1">
                     <span className="block text-[13px] font-semibold">
-                      환경 진단 (setup)
+                      {t("wizard.done.setupTitle")}
                     </span>
                     <span className="block text-[11px] text-muted-foreground">
-                      훅·MCP 설정까지 포함해 한 번 더 점검하고 결과를
-                      보고합니다.
+                      {t("wizard.done.setupDesc")}
                     </span>
                   </span>
                 </button>
@@ -552,7 +559,7 @@ export default function SetupWizard() {
 
         <div className="flex items-center justify-between border-t px-5 py-3">
           <Button size="sm" variant="ghost" onClick={close}>
-            나중에
+            {t("wizard.later")}
           </Button>
           <div className="flex items-center gap-2">
             {step > S.intro && step < LAST && (
@@ -562,7 +569,7 @@ export default function SetupWizard() {
                 disabled={busy}
                 onClick={() => setStep(step - 1)}
               >
-                이전
+                {t("wizard.back")}
               </Button>
             )}
             {step < S.vault && (
@@ -571,7 +578,7 @@ export default function SetupWizard() {
                 disabled={busy}
                 onClick={() => setStep(step + 1)}
               >
-                {step === S.intro ? "시작하기" : "다음"}
+                {step === S.intro ? t("wizard.start") : t("wizard.next")}
               </Button>
             )}
             {step === S.vault && (
@@ -580,7 +587,7 @@ export default function SetupWizard() {
                 disabled={busy || vaultPath.trim().length === 0}
                 onClick={() => void saveVault()}
               >
-                {busy ? "저장 중…" : "다음"}
+                {busy ? t("wizard.saving") : t("wizard.next")}
               </Button>
             )}
             {step === S.packs && (
@@ -589,7 +596,7 @@ export default function SetupWizard() {
                 disabled={busy}
                 onClick={() => void applyPacks()}
               >
-                {busy ? "적용 중…" : "적용하고 다음"}
+                {busy ? t("wizard.applying") : t("wizard.applyAndNext")}
               </Button>
             )}
             {step === S.skills && (
@@ -601,12 +608,12 @@ export default function SetupWizard() {
                   setStep(LAST);
                 }}
               >
-                다음
+                {t("wizard.next")}
               </Button>
             )}
             {step === LAST && (
               <Button size="sm" variant="success" onClick={close}>
-                대시보드 시작
+                {t("wizard.openDashboard")}
               </Button>
             )}
           </div>

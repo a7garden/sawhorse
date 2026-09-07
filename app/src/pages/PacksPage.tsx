@@ -19,6 +19,8 @@ import { actionJobKey } from "@/lib/jobs";
 import { RunButton } from "@/components/RunButton";
 import { useApp } from "@/lib/store";
 import { icon as packIcon } from "@/lib/icons";
+import { useTranslation } from "react-i18next";
+import i18n from "@/i18n";
 import type {
   InstallReport,
   PackAgentStatus,
@@ -42,11 +44,11 @@ import type { WorkflowDefinition } from "@/features/workbench/types";
 
 type CatalogCategory = "installed" | "marketplace" | "workflow" | "skill";
 
-const CATALOG_TABS: { id: CatalogCategory; label: string }[] = [
-  { id: "installed", label: "설치됨" },
-  { id: "marketplace", label: "마켓플레이스" },
-  { id: "skill", label: "스킬" },
-  { id: "workflow", label: "워크플로" },
+const CATALOG_TABS: CatalogCategory[] = [
+  "installed",
+  "marketplace",
+  "skill",
+  "workflow",
 ];
 
 function WorkflowCard({
@@ -56,6 +58,7 @@ function WorkflowCard({
   wf: WorkflowDefinition;
   onOpenStudio: () => void;
 }) {
+  const { t } = useTranslation("packs");
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -74,22 +77,19 @@ function WorkflowCard({
           </p>
         )}
         <p className="text-[11px] text-muted-foreground">
-          단계 {wf.nodes.length} · 전이 {wf.edges.length} · 앱에서 발행
+          {t("workflow.card.meta", {
+            nodes: wf.nodes.length,
+            edges: wf.edges.length,
+          })}
         </p>
         <Button size="xs" variant="outline" onClick={onOpenStudio}>
-          <PencilRuler className="size-3" /> 스튜디오에서 열기
+          <PencilRuler className="size-3" /> {t("workflow.card.openStudio")}
         </Button>
       </CardContent>
     </Card>
   );
 }
 
-const SKILL_STATE_KO: Record<SkillState, string> = {
-  installed: "설치됨",
-  modified: "수정됨",
-  missing: "미설치",
-  noSource: "본문 없음",
-};
 
 function skillVariant(s: SkillState) {
   return s === "installed"
@@ -101,18 +101,28 @@ function skillVariant(s: SkillState) {
 
 function summarize(list: SkillStatus[]): string {
   const n = (s: SkillState) => list.filter((x) => x.state === s).length;
-  return `설치 ${n("installed")} · 수정 ${n("modified")} · 미설치 ${n("missing")}`;
+  return i18n.t("packs:skill.summary", {
+    installed: n("installed"),
+    modified: n("modified"),
+    missing: n("missing"),
+  });
 }
 
 function reportText(r: InstallReport): string {
   const parts: string[] = [];
-  if (r.installed.length > 0) parts.push(`처리 ${r.installed.length}건`);
-  if (r.skipped.length > 0) parts.push(`건너뜀 ${r.skipped.length}건`);
-  if (r.failed.length > 0) parts.push(`실패: ${r.failed.join(", ")}`);
-  return parts.join(" · ") || "변경 없음";
+  if (r.installed.length > 0)
+    parts.push(i18n.t("packs:report.processed", { n: r.installed.length }));
+  if (r.skipped.length > 0)
+    parts.push(i18n.t("packs:report.skipped", { n: r.skipped.length }));
+  if (r.failed.length > 0)
+    parts.push(
+      i18n.t("packs:report.failed", { list: r.failed.join(", ") }),
+    );
+  return parts.join(" · ") || i18n.t("packs:report.none");
 }
 
 export default function PacksPage() {
+  const { t } = useTranslation("packs");
   const [installOpen, setInstallOpen] = useState(false);
   const core = useCoreExtensions();
   const packs = useApp((s) => s.packs);
@@ -197,7 +207,10 @@ export default function PacksPage() {
       });
       await refreshExtensionPackages();
       setMsg(
-        `${installedPackage.manifest.name} ${installedPackage.manifest.version}을 검증해 설치했습니다.`,
+        t("msg.installVerified", {
+          name: installedPackage.manifest.name,
+          version: installedPackage.manifest.version,
+        }),
       );
     } catch (error) {
       setMsg(String(error));
@@ -228,7 +241,10 @@ export default function PacksPage() {
       setExtensionLock(lock);
       await refreshPacks();
       setMsg(
-        `${extension.manifest.name}을 ${extensionProject} 프로젝트에 정확한 digest로 고정했습니다.`,
+        t("msg.activated", {
+          name: extension.manifest.name,
+          project: extensionProject,
+        }),
       );
     } catch (error) {
       setMsg(String(error));
@@ -255,9 +271,7 @@ export default function PacksPage() {
       anchor.download = `${extension.manifest.id}-${extension.manifest.version}.sawhorse-package.json`;
       anchor.click();
       URL.revokeObjectURL(href);
-      setMsg(
-        `${extension.manifest.name}의 검증 가능한 portable package를 내보냈습니다.`,
-      );
+      setMsg(t("msg.exported", { name: extension.manifest.name }));
     } catch (error) {
       setMsg(String(error));
     } finally {
@@ -288,8 +302,8 @@ export default function PacksPage() {
       await Promise.all([refreshPacks(), refreshConfig(), refreshSchedules()]);
       setMsg(
         on
-          ? `${pack.name} 을 켰습니다.`
-          : `${pack.name} 을 껐습니다 — 이 팩의 화면과 예약이 사라집니다.`,
+          ? t("msg.enabled", { name: pack.name })
+          : t("msg.disabled", { name: pack.name }),
       );
     } catch (e) {
       setMsg(String(e));
@@ -304,7 +318,7 @@ export default function PacksPage() {
     try {
       const r = await api.installPackSkills(pack.id, agent, force);
       await loadStatus(pack.id);
-      setMsg(`${agent}: ${reportText(r)}`);
+      setMsg(t("msg.agentReport", { agent, report: reportText(r) }));
     } catch (e) {
       setMsg(String(e));
     } finally {
@@ -318,7 +332,7 @@ export default function PacksPage() {
     try {
       const r = await api.uninstallPackSkills(pack.id, agent);
       await loadStatus(pack.id);
-      setMsg(`${agent}: ${reportText(r)}`);
+      setMsg(t("msg.agentReport", { agent, report: reportText(r) }));
     } catch (e) {
       setMsg(String(e));
     } finally {
@@ -332,9 +346,15 @@ export default function PacksPage() {
     try {
       const r = await api.provisionWorkspace();
       setMsg(
-        `작업공간 반영 — 생성 ${r.created.length}건, 기존 유지 ${r.skipped.length}건` +
+        t("msg.provisioned", {
+          created: r.created.length,
+          skipped: r.skipped.length,
+        }) +
           (r.failed.length > 0
-            ? `, 실패 ${r.failed.length}건 (${r.failed.join("; ")})`
+            ? t("msg.provisionFailed", {
+                n: r.failed.length,
+                list: r.failed.join("; "),
+              })
             : ""),
       );
     } catch (e) {
@@ -351,7 +371,7 @@ export default function PacksPage() {
     try {
       await api.savePackSettings(pack.id, draft);
       await Promise.all([refreshPacks(), refreshConfig()]);
-      setMsg("설정을 저장했습니다.");
+      setMsg(t("msg.settingsSaved"));
     } catch (e) {
       setMsg(String(e));
     } finally {
@@ -388,7 +408,7 @@ export default function PacksPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title="확장 관리">
+      <PageHeader title={t("header.title")}>
         {category === "workflow" && (
           <Button
             size="sm"
@@ -398,7 +418,7 @@ export default function PacksPage() {
               useApp.getState().setPage("workflows");
             }}
           >
-            새 워크플로
+            {t("actions.newWorkflow")}
           </Button>
         )}
         {category === "installed" && (
@@ -408,26 +428,26 @@ export default function PacksPage() {
             disabled={busy}
             onClick={() => void provision()}
           >
-            <HardDriveDownload /> 작업공간에 반영
+            <HardDriveDownload /> {t("actions.applyWorkspace")}
           </Button>
         )}
         <Button size="sm" variant="ghost" onClick={() => void refreshPacks()}>
-          <RefreshCw className="size-3" /> 새로고침
+          <RefreshCw className="size-3" /> {t("actions.refresh")}
         </Button>
       </PageHeader>
 
       <div className="flex gap-1 border-b px-4 py-2">
-        {CATALOG_TABS.map((t) => (
+        {CATALOG_TABS.map((tab) => (
           <button
-            key={t.id}
-            onClick={() => setCategory(t.id)}
+            key={tab}
+            onClick={() => setCategory(tab)}
             className={cn(
               "rounded-md px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent",
-              category === t.id && "bg-secondary",
+              category === tab && "bg-secondary",
             )}
           >
-            {t.label}
-            {t.id === "workflow" && workflows.length > 0
+            {t(`catalog.tabs.${tab}`)}
+            {tab === "workflow" && workflows.length > 0
               ? ` ${workflows.length}`
               : ""}
           </button>
@@ -441,8 +461,8 @@ export default function PacksPage() {
       {(packs?.broken ?? []).length > 0 && (
         <div className="border-b border-warning/40 bg-warning/10 px-4 py-2">
           <div className="flex items-center gap-2 text-[13px] font-semibold text-warning-foreground">
-            <CircleAlert className="size-4" /> 읽지 못한 확장{" "}
-            {(packs?.broken ?? []).length}건
+            <CircleAlert className="size-4" />{" "}
+            {t("broken.count", { n: (packs?.broken ?? []).length })}
           </div>
           <ul className="mt-1 space-y-0.5 pl-6 text-xs text-muted-foreground">
             {(packs?.broken ?? []).map((b) => (
@@ -457,9 +477,9 @@ export default function PacksPage() {
       {category === "installed" && (
         <div className="border-b p-4">
           <div className="mb-3">
-            <h2 className="text-sm font-semibold">연결된 기능</h2>
+            <h2 className="text-sm font-semibold">{t("core.title")}</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              기능별 화면과 연결 상태를 관리합니다.
+              {t("core.subtitle")}
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
@@ -467,14 +487,14 @@ export default function PacksPage() {
             [
               {
                 id: "feeds",
-                name: "읽을거리",
-                desc: "RSS 구독 · 읽기 목록 · 기사 보관",
+                name: t("core.feeds.name"),
+                desc: t("core.feeds.desc"),
                 enabled: core.feeds,
               },
               {
                 id: "github",
                 name: "GitHub",
-                desc: "저장소 탐색 · 프로젝트 가져오기 · 이슈 동기화",
+                desc: t("core.github.desc"),
                 enabled: core.github,
               },
             ] as const
@@ -493,12 +513,17 @@ export default function PacksPage() {
                 <div className="mb-3 flex gap-2 text-xs text-muted-foreground">
                   <span>
                     {extension.id === "feeds"
-                      ? "코어 확장"
+                      ? t("core.coreExtension")
                       : core.githubInstalled
-                        ? "설치됨"
-                        : "설치 가능"}
+                        ? t("core.installed")
+                        : t("core.available")}
                   </span>
-                  <span>· {extension.enabled ? "사용 중" : "사용 중지"}</span>
+                  <span>
+                    ·{" "}
+                    {extension.enabled
+                      ? t("status.inUse")
+                      : t("status.disabled")}
+                  </span>
                 </div>
                 {(extension.id === "feeds" || core.githubInstalled) && (
                   <Button
@@ -513,7 +538,7 @@ export default function PacksPage() {
                         )
                     }
                   >
-                    관리
+                    {t("core.manage")}
                   </Button>
                 )}
                 <Button
@@ -526,7 +551,12 @@ export default function PacksPage() {
                     try {
                       await core.setEnabled(extension.id, !extension.enabled);
                       setMsg(
-                        `${extension.name} ${extension.enabled ? "사용 중지" : "사용 시작"}`,
+                        t("msg.extensionToggled", {
+                          name: extension.name,
+                          action: extension.enabled
+                            ? t("toggle.disable")
+                            : t("toggle.enable"),
+                        }),
                       );
                     } catch (error) {
                       setMsg(String(error));
@@ -536,10 +566,10 @@ export default function PacksPage() {
                   }}
                 >
                   {extension.enabled
-                    ? "사용 중지"
+                    ? t("toggle.disable")
                     : extension.id === "github" && !core.githubInstalled
-                      ? "확장 설치·사용"
-                      : "사용 시작"}
+                      ? t("toggle.installAndUse")
+                      : t("toggle.enable")}
                 </Button>
               </CardContent>
             </Card>
@@ -563,12 +593,14 @@ export default function PacksPage() {
             className="border-b p-4"
           >
         <summary className="cursor-pointer text-sm font-medium">
-          외부 확장 설치
-          {installed.length > 0 ? ` · ${installed.length}개 설치됨` : ""}
+          {t("install.title")}
+          {installed.length > 0
+            ? t("install.countSuffix", { n: installed.length })
+            : ""}
         </summary>
         <Card className="mt-3">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">확장 패키지 설치</CardTitle>
+            <CardTitle className="text-sm">{t("install.cardTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <div className="grid gap-2 md:grid-cols-[150px_1fr_220px_auto]">
@@ -578,8 +610,10 @@ export default function PacksPage() {
                   setSourceKind(event.target.value as typeof sourceKind)
                 }
               >
-                <option value="local-directory">로컬 폴더</option>
-                <option value="local-file">패키지 파일</option>
+                <option value="local-directory">
+                  {t("install.localDirectory")}
+                </option>
+                <option value="local-file">{t("install.localFile")}</option>
                 <option value="git">Git commit</option>
                 <option value="https">HTTPS</option>
               </Select>
@@ -588,20 +622,20 @@ export default function PacksPage() {
                   directory={sourceKind === "local-directory"}
                   value={sourceLocation}
                   onValueChange={setSourceLocation}
-                  placeholder="확장 패키지 경로"
+                  placeholder={t("install.pathPlaceholder")}
                 />
               ) : (
                 <Input
                   value={sourceLocation}
                   onChange={(event) => setSourceLocation(event.target.value)}
-                  placeholder="Git 또는 HTTPS 주소"
+                  placeholder={t("install.urlPlaceholder")}
                 />
               )}
               {sourceKind === "git" ? (
                 <Input
                   value={sourceCommit}
                   onChange={(event) => setSourceCommit(event.target.value)}
-                  placeholder="40자리 commit"
+                  placeholder={t("install.commitPlaceholder")}
                 />
               ) : (
                 <span />
@@ -610,12 +644,12 @@ export default function PacksPage() {
                 disabled={busy || !sourceLocation.trim()}
                 onClick={() => void installExtensionPackage()}
               >
-                <HardDriveDownload /> 검증·설치
+                <HardDriveDownload /> {t("install.verifyInstall")}
               </Button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">
-                적용 프로젝트
+                {t("install.project")}
               </span>
               <Input
                 className="h-8 w-44"
@@ -625,7 +659,7 @@ export default function PacksPage() {
             </div>
             {installed.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                설치할 패키지 파일이나 주소를 선택하세요.
+                {t("install.emptyHint")}
               </p>
             ) : (
               <div className="grid gap-2 lg:grid-cols-2">
@@ -645,7 +679,9 @@ export default function PacksPage() {
                       <div className="flex items-center gap-2">
                         <strong>{item.manifest.name}</strong>
                         <Badge variant="outline">{item.manifest.version}</Badge>
-                        {locked && <Badge variant="success">고정됨</Badge>}
+                        {locked && (
+                          <Badge variant="success">{t("install.pinned")}</Badge>
+                        )}
                         <Button
                           className="ml-auto"
                           size="xs"
@@ -653,15 +689,19 @@ export default function PacksPage() {
                           disabled={busy}
                           onClick={() => void exportExtensionPackage(item)}
                         >
-                          <Download className="size-3" /> 내보내기
+                          <Download className="size-3" /> {t("install.export")}
                         </Button>
                         <Button
                           size="xs"
                           disabled={busy || locked}
-                          title={`요청 권한: ${item.manifest.permissions.join(", ") || "없음"}`}
+                          title={t("install.permissionsTitle", {
+                            permissions:
+                              item.manifest.permissions.join(", ") ||
+                              t("install.noPermissions"),
+                          })}
                           onClick={() => void activateExtensionPackage(item)}
                         >
-                          권한 승인 및 적용
+                          {t("install.approveApply")}
                         </Button>
                       </div>
                       <p className="mt-1 font-mono text-[10px] text-muted-foreground">
@@ -669,7 +709,9 @@ export default function PacksPage() {
                       </p>
                       {item.manifest.permissions.length > 0 && (
                         <p className="mt-1">
-                          권한: {item.manifest.permissions.join(", ")}
+                          {t("install.permissions", {
+                            permissions: item.manifest.permissions.join(", "),
+                          })}
                         </p>
                       )}
                     </div>
@@ -687,8 +729,7 @@ export default function PacksPage() {
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
           {workflows.length === 0 && (
             <Empty className="pt-16">
-              발행된 워크플로우가 없습니다. 워크플로 스튜디오에서 만들거나 확장
-              패키지로 가져올 수 있습니다.
+              {t("workflow.empty")}
             </Empty>
           )}
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -713,7 +754,10 @@ export default function PacksPage() {
               <Card key={pack.id}>
                 <CardHeader>
                   <CardTitle>
-                    {pack.name} · 스킬 {pack.skills.length}개
+                    {t("skill.tabCardTitle", {
+                      name: pack.name,
+                      n: pack.skills.length,
+                    })}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
@@ -738,14 +782,14 @@ export default function PacksPage() {
                       disabled={busy}
                       onClick={() => void install(pack, agent.id, false)}
                     >
-                      {agent.id}에 설치
+                      {t("skill.installTo", { agent: agent.id })}
                     </Button>
                   ))}
                 </CardContent>
               </Card>
             ))}
           {!list.some((p) => p.skills.length) && (
-            <Empty>마켓플레이스나 확장 패키지에서 스킬을 설치하세요.</Empty>
+            <Empty>{t("skill.empty")}</Empty>
           )}
           {skillDoc && (
             <Card className="md:col-span-2">
@@ -762,7 +806,7 @@ export default function PacksPage() {
       {category === "installed" && list.length > 0 && (
         <div className="flex min-h-0 flex-1">
           <div className="w-56 shrink-0 overflow-y-auto border-r p-2">
-            {list.length === 0 && <Empty>설치된 확장이 없습니다.</Empty>}
+            {list.length === 0 && <Empty>{t("list.empty")}</Empty>}
             {list.map((p) => {
               const Icon = packIcon(p.icon);
               return (
@@ -794,21 +838,28 @@ export default function PacksPage() {
                     </span>
                     <span className="block truncate text-[10px] text-muted-foreground">
                       v{p.version} ·{" "}
-                      {p.source === "builtin" ? "내장" : "사용자"}
+                      {p.source === "builtin"
+                        ? t("source.builtin")
+                        : t("source.user")}
                     </span>
                     <span className="block truncate text-[10px] text-muted-foreground">
-                      화면 {p.views.length} · 액션 {p.actions.length} · 스킬{" "}
-                      {p.skills.length}
+                      {t("list.counts", {
+                        views: p.views.length,
+                        actions: p.actions.length,
+                        skills: p.skills.length,
+                      })}
                     </span>
                   </span>
-                  {!p.enabled && <Badge variant="outline">꺼짐</Badge>}
+                  {!p.enabled && (
+                    <Badge variant="outline">{t("status.off")}</Badge>
+                  )}
                 </button>
               );
             })}
             {agents.length > 0 && (
               <div className="mt-3 border-t pt-2">
                 <div className="px-2 pb-1 text-[10px] font-semibold text-muted-foreground">
-                  에이전트
+                  {t("packAgents.label")}
                 </div>
                 {agents.map((a) => (
                   <div
@@ -824,7 +875,9 @@ export default function PacksPage() {
                     />
                     <span className="min-w-0 flex-1 truncate">{a.name}</span>
                     <span className="shrink-0 text-muted-foreground">
-                      {a.detected ? "감지됨" : "없음"}
+                      {a.detected
+                        ? t("packAgents.detected")
+                        : t("packAgents.none")}
                     </span>
                   </div>
                 ))}
@@ -844,7 +897,7 @@ export default function PacksPage() {
                 />
               </div>
             )}
-            {!selWf && !sel && <Empty>왼쪽에서 확장을 선택하세요.</Empty>}
+            {!selWf && !sel && <Empty>{t("list.selectHint")}</Empty>}
             {!selWf && sel && (
               <div className="space-y-3">
                 <Card>
@@ -854,7 +907,9 @@ export default function PacksPage() {
                         {sel.name}
                         <Badge variant="secondary">v{sel.version}</Badge>
                         <Badge variant="outline">
-                          {sel.source === "builtin" ? "내장" : "사용자"}
+                          {sel.source === "builtin"
+                            ? t("source.builtin")
+                            : t("source.user")}
                         </Badge>
                       </CardTitle>
                       <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
@@ -863,7 +918,7 @@ export default function PacksPage() {
                     </div>
                     <div className="flex shrink-0 items-center gap-2 pl-3">
                       <span className="text-[11px] text-muted-foreground">
-                        {sel.enabled ? "켜짐" : "꺼짐"}
+                        {sel.enabled ? t("status.on") : t("status.off")}
                       </span>
                       <Switch
                         checked={sel.enabled}
@@ -882,7 +937,7 @@ export default function PacksPage() {
                       variant="ghost"
                       onClick={() => void api.openPath(sel.dir)}
                     >
-                      <FolderOpen className="size-3" /> 폴더 열기
+                      <FolderOpen className="size-3" /> {t("actions.openFolder")}
                     </Button>
                   </CardContent>
                 </Card>
@@ -890,26 +945,23 @@ export default function PacksPage() {
                 <Card>
                   <CardHeader className="pb-1">
                     <CardTitle className="text-[13px]">
-                      에이전트에 설치
+                      {t("installToAgent.title")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-2">
                     <p className="text-[11px] leading-relaxed text-muted-foreground">
-                      Claude Code 에는 번들 플러그인을 ~/.claude/skills/sawhorse
-                      로 통째로 펼칩니다 (skills-dir 플러그인 — 설치 단계 없이
-                      자동 적재). 손으로 고친 파일은 덮지 않고
-                      <b> 수정됨</b>으로 표시합니다 — 덮어쓰려면 「강제 설치」를
-                      쓰세요.
+                      {t("installToAgent.explain1")}
+                      <b> {t("installToAgent.modifiedTag")}</b>
+                      {t("installToAgent.explain2")}
                     </p>
                     {status?.pluginInstalls &&
                       status.pluginInstalls.length > 0 && (
                         <div className="rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px]">
-                          마켓플레이스 플러그인이 이미 설치되어 있습니다 (
-                          {status.pluginInstalls
-                            .map((p) => `${p.key} v${p.version}`)
-                            .join(", ")}
-                          ). 같은 내용이므로 앱은 사본을 만들지 않습니다 —
-                          스킬은 그 플러그인이 제공합니다.
+                          {t("installToAgent.marketplaceExists", {
+                            plugins: status.pluginInstalls
+                              .map((p) => `${p.key} v${p.version}`)
+                              .join(", "),
+                          })}
                         </div>
                       )}
                     {(["claude", "codex"] as const).map((agent) => {
@@ -923,7 +975,9 @@ export default function PacksPage() {
                               {agent === "claude" ? "Claude Code" : "Codex"}
                             </span>
                             {!present && (
-                              <Badge variant="outline">감지 안 됨</Badge>
+                              <Badge variant="outline">
+                                {t("packAgents.undetected")}
+                              </Badge>
                             )}
                             <span className="text-[11px] text-muted-foreground">
                               {summarize(rows)}
@@ -934,7 +988,8 @@ export default function PacksPage() {
                                 disabled={busy}
                                 onClick={() => void install(sel, agent, false)}
                               >
-                                <Download className="size-3" /> 설치
+                                <Download className="size-3" />{" "}
+                                {t("actions.install")}
                               </Button>
                               <Button
                                 size="xs"
@@ -942,7 +997,7 @@ export default function PacksPage() {
                                 disabled={busy}
                                 onClick={() => void install(sel, agent, true)}
                               >
-                                강제 설치
+                                {t("actions.forceInstall")}
                               </Button>
                               <Button
                                 size="xs"
@@ -950,7 +1005,8 @@ export default function PacksPage() {
                                 disabled={busy}
                                 onClick={() => void uninstall(sel, agent)}
                               >
-                                <Trash2 className="size-3" /> 제거
+                                <Trash2 className="size-3" />{" "}
+                                {t("actions.uninstall")}
                               </Button>
                             </span>
                           </div>
@@ -965,7 +1021,7 @@ export default function PacksPage() {
                                 >
                                   {r.skill}
                                   <Badge variant={skillVariant(r.state)}>
-                                    {SKILL_STATE_KO[r.state]}
+                                    {t(`skill.state.${r.state}`)}
                                   </Badge>
                                 </button>
                               ))}
@@ -981,12 +1037,12 @@ export default function PacksPage() {
                   <Card>
                     <CardHeader className="pb-1">
                       <CardTitle className="text-[13px]">
-                        화면 {sel.views.length}개
+                      {t("views.count", { n: sel.views.length })}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1">
                       {sel.views.length === 0 && (
-                        <Empty>이 확장은 화면을 추가하지 않습니다.</Empty>
+                        <Empty>{t("views.empty")}</Empty>
                       )}
                       {sel.views.map((v) => (
                         <div
@@ -997,7 +1053,9 @@ export default function PacksPage() {
                             {v.label}
                           </span>
                           <Badge variant="outline">
-                            {v.type === "native" ? "내장 화면" : "선언형"}
+                            {v.type === "native"
+                              ? t("views.native")
+                              : t("views.declarative")}
                           </Badge>
                         </div>
                       ))}
@@ -1006,7 +1064,7 @@ export default function PacksPage() {
                   <Card>
                     <CardHeader className="pb-1">
                       <CardTitle className="text-[13px]">
-                        액션 {sel.actions.length}개
+                        {t("actionsList.count", { n: sel.actions.length })}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1">
@@ -1023,7 +1081,9 @@ export default function PacksPage() {
                           </span>
                           {a.schedule && (
                             <Badge variant="outline">
-                              {a.schedule.kind === "weekdays" ? "평일" : "매일"}{" "}
+                              {a.schedule.kind === "weekdays"
+                                ? t("schedule.weekdays")
+                                : t("schedule.daily")}{" "}
                               {a.schedule.time}
                             </Badge>
                           )}
@@ -1031,7 +1091,7 @@ export default function PacksPage() {
                             size="xs"
                             variant="ghost"
                             label=""
-                            ariaLabel={`${a.label} 실행`}
+                            ariaLabel={t("actions.runAria", { label: a.label })}
                             jobKey={actionJobKey(
                               sel.id,
                               a.id,
@@ -1045,7 +1105,7 @@ export default function PacksPage() {
                             }
                             title={
                               a.params.some((p) => p.required)
-                                ? "필수 입력이 있는 액션은 해당 화면에서 실행하세요"
+                                ? t("actions.requiredParamsTitle")
                                 : a.prompt.replace(
                                     "{{ns}}",
                                     sel.source === "builtin"
@@ -1065,13 +1125,15 @@ export default function PacksPage() {
                 {sel.settings.length > 0 && draft && (
                   <Card>
                     <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-                      <CardTitle className="text-[13px]">확장 설정</CardTitle>
+                      <CardTitle className="text-[13px]">
+                        {t("settings.title")}
+                      </CardTitle>
                       <Button
                         size="xs"
                         disabled={busy}
                         onClick={() => void saveSettings(sel)}
                       >
-                        저장
+                        {t("actions.save")}
                       </Button>
                     </CardHeader>
                     <CardContent className="grid gap-3 sm:grid-cols-2">
@@ -1092,7 +1154,7 @@ export default function PacksPage() {
                   <Card>
                     <CardHeader className="pb-1">
                       <CardTitle className="text-[13px]">
-                        작업공간에 만드는 것
+                        {t("workspace.creates")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="flex flex-wrap gap-1 text-[11px]">
@@ -1121,7 +1183,7 @@ export default function PacksPage() {
                         variant="ghost"
                         onClick={() => setSkillDoc(null)}
                       >
-                        닫기
+                        {t("actions.close")}
                       </Button>
                     </CardHeader>
                     <CardContent>
@@ -1147,6 +1209,7 @@ function SettingInput({
   value: unknown;
   onChange: (v: unknown) => void;
 }) {
+  const { t } = useTranslation("packs");
   const common = (
     <>
       <Label>{field.label}</Label>
@@ -1175,7 +1238,7 @@ function SettingInput({
           value={typeof value === "string" ? value : ""}
           onChange={(e) => onChange(e.target.value)}
         >
-          <option value="">(지정 안 함)</option>
+          <option value="">{t("unset")}</option>
           {field.options.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label || o.value}
@@ -1213,7 +1276,7 @@ function SettingInput({
               <Button
                 size="icon"
                 variant="ghost"
-                aria-label="삭제"
+                aria-label={t("settings.deleteRow")}
                 onClick={() => onChange(rows.filter((_, j) => j !== i))}
               >
                 <Trash2 />
@@ -1225,7 +1288,7 @@ function SettingInput({
             variant="outline"
             onClick={() => onChange([...rows, {}])}
           >
-            줄 추가
+            {t("settings.addRow")}
           </Button>
         </div>
       </div>

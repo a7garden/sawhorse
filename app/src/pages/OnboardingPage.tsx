@@ -3,6 +3,7 @@ import { sddApi } from "@/features/workbench/api";
 import { Select } from "@/components/ui/select";
 import { BrowseButton } from "@/components/ui/path-input";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   FileInput,
@@ -27,6 +28,7 @@ export default function OnboardingPage({
   project?: Project;
   onBack?: () => void;
 }) {
+  const { t } = useTranslation("packs");
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState(project?.id ?? "");
   const [paths, setPaths] = useState(project?.repoPath ?? "");
@@ -76,25 +78,29 @@ export default function OnboardingPage({
       {onBack && (
         <div className="border-b px-5 py-2">
           <Button size="sm" variant="ghost" onClick={onBack}>
-            ← {project?.name ?? "프로젝트"}
+            ← {project?.name ?? t("onboarding.backFallback")}
           </Button>
         </div>
       )}
       <PageHeader
-        title={project ? `${project.name} · 문서 만들기` : "자료로 문서 만들기"}
+        title={
+          project
+            ? t("onboarding.titleWithProject", { name: project.name })
+            : t("onboarding.title")
+        }
       />
       <div className="min-h-0 flex-1 overflow-auto p-5">
         <div className="mx-auto grid max-w-7xl gap-4 lg:grid-cols-[360px_1fr]">
           <div className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>새 가져오기</CardTitle>
+                <CardTitle>{t("onboarding.newImport")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <label className="text-xs">
-                  프로젝트
+                  {t("onboarding.project")}
                   <Select
-                    aria-label="문서를 만들 프로젝트"
+                    aria-label={t("onboarding.projectAria")}
                     value={projectId}
                     disabled={!!project}
                     onChange={(event) => {
@@ -102,7 +108,7 @@ export default function OnboardingPage({
                       setSelected(null);
                     }}
                   >
-                    <option value="">프로젝트 선택</option>
+                    <option value="">{t("select.project")}</option>
                     {(project ? [project] : projects).map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
@@ -111,7 +117,7 @@ export default function OnboardingPage({
                   </Select>
                 </label>
                 <label className="text-xs">
-                  입력 경로(한 줄에 하나)
+                  {t("onboarding.inputPaths")}
                   <Textarea
                     className="min-h-28"
                     value={paths}
@@ -139,7 +145,7 @@ export default function OnboardingPage({
                   ))}
                 </div>
                 <label className="text-xs">
-                  프로젝트 안의 저장 폴더
+                  {t("onboarding.outputFolder")}
                   <Input
                     value={outputPrefix}
                     onChange={(event) => setOutputPrefix(event.target.value)}
@@ -151,7 +157,7 @@ export default function OnboardingPage({
                     checked={autoApply}
                     onChange={(event) => setAutoApply(event.target.checked)}
                   />{" "}
-                  충돌 없는 새 문서 자동 적용
+                  {t("onboarding.autoApply")}
                 </label>
                 <Button
                   disabled={busy || !projectId || !paths.trim()}
@@ -174,13 +180,13 @@ export default function OnboardingPage({
                     })
                   }
                 >
-                  <FileInput /> 문서 초안 만들기
+                  <FileInput /> {t("onboarding.createDrafts")}
                 </Button>
               </CardContent>
             </Card>
             <Card>
               <CardHeader>
-                <CardTitle>실행</CardTitle>
+                <CardTitle>{t("onboarding.runs")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2">
                 {visibleJobs.map((item) => (
@@ -213,7 +219,7 @@ export default function OnboardingPage({
           </div>
           <Card>
             <CardHeader>
-              <CardTitle>진행과 초안</CardTitle>
+              <CardTitle>{t("onboarding.progress")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {message && (
@@ -224,7 +230,7 @@ export default function OnboardingPage({
               )}
               {!job ? (
                 <p className="text-sm text-muted-foreground">
-                  왼쪽에서 가져오기를 시작하거나 선택하세요.
+                  {t("onboarding.pickHint")}
                 </p>
               ) : (
                 <>
@@ -233,13 +239,13 @@ export default function OnboardingPage({
                       <strong className="block text-xl">
                         {job.processedFiles}
                       </strong>
-                      처리
+                      {t("onboarding.processed")}
                     </div>
                     <div className="rounded-md bg-muted p-3">
                       <strong className="block text-xl">
                         {job.totalFiles}
                       </strong>
-                      전체
+                      {t("onboarding.total")}
                     </div>
                     <div className="rounded-md bg-muted p-3">
                       <strong className="block text-xl">
@@ -258,7 +264,7 @@ export default function OnboardingPage({
                         void action(() => api.ingestionResume(job.id))
                       }
                     >
-                      <Play /> 이어서 처리
+                      <Play /> {t("onboarding.resume")}
                     </Button>
                     <Button
                       size="sm"
@@ -268,7 +274,7 @@ export default function OnboardingPage({
                         void action(() => api.ingestionPause(job.id))
                       }
                     >
-                      <Pause /> 일시정지
+                      <Pause /> {t("onboarding.pause")}
                     </Button>
                     <Button
                       size="sm"
@@ -280,7 +286,7 @@ export default function OnboardingPage({
                         void action(() => api.ingestionCancel(job.id))
                       }
                     >
-                      <StopCircle /> 취소
+                      <StopCircle /> {t("onboarding.cancel")}
                     </Button>
                     <Button
                       size="sm"
@@ -293,14 +299,14 @@ export default function OnboardingPage({
                         void action(() => api.ingestionApply(job.id))
                       }
                     >
-                      <ShieldCheck /> 검토한 문서 적용
+                      <ShieldCheck /> {t("onboarding.applyReviewed")}
                     </Button>
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => void action(load)}
                     >
-                      <RotateCw /> 새로고침
+                      <RotateCw /> {t("actions.refresh")}
                     </Button>
                   </div>
                   {job.error && (
@@ -316,7 +322,7 @@ export default function OnboardingPage({
                           <code className="text-xs">{draft.path}</code>
                           {draft.conflict && (
                             <Badge variant="destructive">
-                              사용자 수정 충돌
+                              {t("onboarding.conflict")}
                             </Badge>
                           )}
                         </div>
@@ -326,12 +332,14 @@ export default function OnboardingPage({
                           </p>
                         )}
                         <p className="mt-2 text-xs text-muted-foreground">
-                          근거 {draft.provenance.length}개 ·{" "}
-                          {draft.content.length}자
+                          {t("onboarding.draftMeta", {
+                            provenance: draft.provenance.length,
+                            chars: draft.content.length,
+                          })}
                         </p>
                         <details className="mt-2">
                           <summary className="cursor-pointer text-xs">
-                            초안 보기
+                            {t("onboarding.viewDraft")}
                           </summary>
                           <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-muted p-3 text-[11px]">
                             {draft.content}

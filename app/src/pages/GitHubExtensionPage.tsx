@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Github,
   FolderGit2,
@@ -22,6 +23,7 @@ import OnboardingPage from "./OnboardingPage";
 
 export default function GitHubExtensionPage() {
   const core = useCoreExtensions();
+  const { t } = useTranslation("packs");
   const [account, setAccount] = useState<{
     login: string;
     name: string | null;
@@ -96,7 +98,9 @@ export default function GitHubExtensionPage() {
         if (result.status === "complete") {
           setAccount(result.account);
           setOAuthFlow(null);
-          setNotice(`${result.account.login} 계정으로 로그인했습니다.`);
+          setNotice(
+            t("github.loggedInAs", { login: result.account.login }),
+          );
           try {
             await loadRepositories();
           } catch (e) {
@@ -127,7 +131,7 @@ export default function GitHubExtensionPage() {
       <>
         <Button variant="ghost" className="m-4" onClick={() => setSync(false)}>
           <ArrowLeft />
-          GitHub 관리
+          {t("github.manage")}
         </Button>
         <SourcesPage scope="github" />
       </>
@@ -136,11 +140,13 @@ export default function GitHubExtensionPage() {
     <div>
       <PageHeader title="GitHub">
         <span className="mr-auto text-xs text-muted-foreground">
-          {core.githubInstalled ? "설치됨 · v0.1.0" : "설치 가능"}
+          {core.githubInstalled
+            ? t("github.installedBadge", { version: "0.1.0" })
+            : t("github.available")}
         </span>
         {core.github && (
           <Button size="sm" variant="outline" onClick={() => setSync(true)}>
-            이슈 동기화 관리
+            {t("github.manageSync")}
           </Button>
         )}
         <Button
@@ -152,10 +158,10 @@ export default function GitHubExtensionPage() {
           }
         >
           {core.github
-            ? "사용 중지"
+            ? t("toggle.disable")
             : core.githubInstalled
-              ? "사용 시작"
-              : "확장 설치·사용"}
+              ? t("toggle.enable")
+              : t("toggle.installAndUse")}
         </Button>
       </PageHeader>
       <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -170,17 +176,16 @@ export default function GitHubExtensionPage() {
         {!core.github ? (
           <div className="rounded-xl border bg-card p-6">
             <Github className="mb-3 size-7" />
-            <h2 className="font-semibold">GitHub 확장</h2>
+            <h2 className="font-semibold">{t("github.extensionTitle")}</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              계정을 연결하면 저장소를 탐색하고 프로젝트와 이슈를 가져올 수
-              있습니다. 사용을 중지해도 계정과 연결 설정은 유지됩니다.
+              {t("github.extensionDesc")}
             </p>
           </div>
         ) : (
           <>
             <section
               className="rounded-xl border bg-card p-5"
-              aria-label="GitHub 계정"
+              aria-label={t("github.accountAria")}
             >
               {account ? (
                 <div className="flex flex-wrap items-center gap-3">
@@ -190,7 +195,7 @@ export default function GitHubExtensionPage() {
                       {account.name || account.login}
                     </h2>
                     <p className="text-xs text-muted-foreground">
-                      @{account.login} · 연결됨
+                      {t("github.connected", { login: account.login })}
                     </p>
                   </div>
                   <Button
@@ -205,32 +210,30 @@ export default function GitHubExtensionPage() {
                       })
                     }
                   >
-                    계정 연결 해제
+                    {t("github.disconnect")}
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <h2 className="font-semibold">계정 연결</h2>
+                  <h2 className="font-semibold">{t("github.connectTitle")}</h2>
                   <p className="text-sm text-muted-foreground">
-                    브라우저에서 GitHub OAuth로 로그인합니다. 비공개 저장소를
-                    가져오기 위해 repo 범위를 요청하지만, Sawhorse는 현재
-                    저장소와 이슈를 읽는 작업에만 사용합니다.
+                    {t("github.oauthDesc")}
                   </p>
                   {oauthFlow ? (
                     <div
                       className="space-y-3 rounded-lg border bg-secondary/40 p-4"
-                      aria-label="GitHub OAuth 승인"
+                      aria-label={t("github.oauthAria")}
                     >
                       <p className="text-sm">
-                        브라우저의 GitHub 페이지에 아래 코드를 입력하고
-                        승인하세요.
+                        {t("github.codeHint")}
                       </p>
                       <p className="font-mono text-2xl font-semibold tracking-widest">
                         {oauthFlow.userCode}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        승인 완료를 기다리는 중… 코드는 약{" "}
-                        {Math.ceil(oauthFlow.expiresIn / 60)}분 동안 유효합니다.
+                        {t("github.waiting", {
+                          minutes: Math.ceil(oauthFlow.expiresIn / 60),
+                        })}
                       </p>
                       <div className="flex flex-wrap gap-2">
                         <Button
@@ -242,7 +245,7 @@ export default function GitHubExtensionPage() {
                             )
                           }
                         >
-                          GitHub 인증 페이지 다시 열기
+                          {t("github.reopenAuth")}
                         </Button>
                         <Button
                           size="sm"
@@ -254,7 +257,7 @@ export default function GitHubExtensionPage() {
                             void run(() => api.githubOAuthCancel(flowId));
                           }}
                         >
-                          로그인 취소
+                          {t("github.cancelLogin")}
                         </Button>
                       </div>
                     </div>
@@ -270,19 +273,18 @@ export default function GitHubExtensionPage() {
                             await api.openExternal(flow.verificationUri);
                           } catch {
                             setNotice(
-                              "브라우저를 자동으로 열지 못했습니다. 아래 버튼으로 GitHub 인증 페이지를 여세요.",
+                              t("github.openFailed"),
                             );
                           }
                         })
                       }
                     >
                       <Github />
-                      GitHub로 로그인
+                      {t("github.signIn")}
                     </Button>
                   )}
                   <p className="text-xs text-muted-foreground">
-                    OAuth 토큰은 이 Mac의 키체인에만 저장됩니다. 개인 액세스
-                    토큰을 직접 만들거나 붙여넣을 필요가 없습니다.
+                    {t("github.keychainNote")}
                   </p>
                 </div>
               )}
@@ -292,25 +294,25 @@ export default function GitHubExtensionPage() {
                 <FolderGit2 />
                 <div className="mr-auto">
                   <h2 className="text-sm font-semibold">
-                    {imported.name} 가져오기 완료
+                    {t("github.imported", { name: imported.name })}
                   </h2>
                   <p className="text-xs text-muted-foreground">
                     {imported.repoPath}
                   </p>
                 </div>
                 <Button size="sm" onClick={() => setDocuments(true)}>
-                  프로젝트 문서 만들기
+                  {t("github.createProjectDocs")}
                 </Button>
               </section>
             )}
             {account && (
               <section
-                aria-label="내 GitHub 저장소"
+                aria-label={t("github.reposAria")}
                 className="overflow-hidden rounded-xl border bg-card"
               >
                 <div className="flex flex-wrap items-center gap-3 border-b p-4">
                   <h2 className="mr-auto font-semibold">
-                    내 저장소{" "}
+                    {t("github.myRepos")}{" "}
                     <span className="ml-1 text-xs font-normal text-muted-foreground">
                       {repositories.length}
                     </span>
@@ -319,8 +321,8 @@ export default function GitHubExtensionPage() {
                     <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
                     <Input
                       className="pl-8"
-                      aria-label="저장소 검색"
-                      placeholder="불러온 저장소 검색"
+                      aria-label={t("github.searchReposAria")}
+                      placeholder={t("github.searchRepos")}
                       value={query}
                       onChange={(e) => setQuery(e.target.value)}
                     />
@@ -329,7 +331,7 @@ export default function GitHubExtensionPage() {
                     size="sm"
                     variant="ghost"
                     disabled={busy}
-                    aria-label="저장소 새로고침"
+                    aria-label={t("github.refreshReposAria")}
                     onClick={() => void run(() => loadRepositories())}
                   >
                     <RefreshCw />
@@ -352,11 +354,14 @@ export default function GitHubExtensionPage() {
                           <h3 className="flex items-center gap-2 text-sm font-semibold">
                             {repo.fullName}
                             {repo.private && (
-                              <LockKeyhole size={12} aria-label="비공개" />
+                              <LockKeyhole
+                                size={12}
+                                aria-label={t("github.private")}
+                              />
                             )}
                             {repo.archived && (
                               <span className="text-xs font-normal text-muted-foreground">
-                                보관됨
+                                {t("github.archived")}
                               </span>
                             )}
                           </h3>
@@ -367,8 +372,11 @@ export default function GitHubExtensionPage() {
                           )}
                           <p className="mt-2 text-[11px] text-muted-foreground">
                             {repo.language ?? ""} ·{" "}
-                            {new Date(repo.updatedAt).toLocaleDateString()}{" "}
-                            업데이트
+                            {t("github.updatedSuffix", {
+                              date: new Date(
+                                repo.updatedAt,
+                              ).toLocaleDateString(),
+                            })}
                           </p>
                         </div>
                         <Button
@@ -390,12 +398,14 @@ export default function GitHubExtensionPage() {
                                 network: ["api.github.com"],
                               });
                               setNotice(
-                                `${repo.fullName} 이슈 연결을 추가했습니다. 이슈 동기화 관리에서 가져올 이슈를 확인하세요.`,
+                                t("github.issueLinked", {
+                                  repo: repo.fullName,
+                                }),
                               );
                             })
                           }
                         >
-                          이슈 연결
+                          {t("github.linkIssues")}
                         </Button>
                         <Button
                           size="sm"
@@ -405,7 +415,7 @@ export default function GitHubExtensionPage() {
                             setSelected(repo);
                           }}
                         >
-                          프로젝트로 가져오기
+                          {t("github.importProject")}
                         </Button>
                       </article>
                     ))}
@@ -416,7 +426,7 @@ export default function GitHubExtensionPage() {
                     .includes(query.toLowerCase()),
                 ) && (
                   <p className="p-8 text-center text-sm text-muted-foreground">
-                    {busy ? "저장소 불러오는 중…" : "표시할 저장소가 없습니다."}
+                    {busy ? t("github.loading") : t("github.noRepos")}
                   </p>
                 )}
                 {hasMore && (
@@ -427,7 +437,7 @@ export default function GitHubExtensionPage() {
                       disabled={busy}
                       onClick={() => void run(() => loadRepositories(page + 1))}
                     >
-                      저장소 더 보기
+                      {t("github.more")}
                     </Button>
                   </div>
                 )}
@@ -444,23 +454,23 @@ export default function GitHubExtensionPage() {
             setError("");
           }
         }}
-        title="프로젝트로 가져오기"
+        title={t("github.importProject")}
       >
         <div className="space-y-4">
           <p className="font-medium">{selected?.fullName}</p>
           <label className="block space-y-2 text-sm">
-            저장할 상위 폴더
+            {t("github.parentFolder")}
             <PathInput
               directory
               value={parentPath}
               onValueChange={setParentPath}
-              placeholder="폴더를 선택하세요"
+              placeholder={t("github.chooseFolder")}
             />
           </label>
           <p className="break-all text-xs text-muted-foreground">
             {parentPath
               ? `${parentPath}/${selected?.name}`
-              : "선택한 폴더 안에 저장소 이름으로 새 폴더를 만듭니다."}
+              : t("github.importHint")}
           </p>
           {error && (
             <p role="alert" className="text-sm text-destructive">
@@ -480,7 +490,7 @@ export default function GitHubExtensionPage() {
               })
             }
           >
-            {busy ? "저장소 가져오는 중…" : "가져오기"}
+            {busy ? t("github.importing") : t("github.import")}
           </Button>
         </div>
       </Dialog>

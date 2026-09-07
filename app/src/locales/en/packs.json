@@ -1,1 +1,325 @@
-{}
+{
+  "catalog": {
+    "tabs": {
+      "installed": "Installed",
+      "marketplace": "Marketplace",
+      "skill": "Skills",
+      "workflow": "Workflows"
+    }
+  },
+  "header": { "title": "Extension manager" },
+  "actions": {
+    "newWorkflow": "New workflow",
+    "applyWorkspace": "Apply to workspace",
+    "refresh": "Refresh",
+    "openFolder": "Open folder",
+    "install": "Install",
+    "forceInstall": "Force install",
+    "uninstall": "Uninstall",
+    "save": "Save",
+    "close": "Close",
+    "runAria": "Run {{label}}",
+    "requiredParamsTitle": "Actions with required inputs must be run from their view"
+  },
+  "broken": { "count": "{{n}} unreadable extension(s)" },
+  "core": {
+    "title": "Connected features",
+    "subtitle": "Manage each feature's screens and connection status.",
+    "feeds": { "name": "Reading", "desc": "RSS feeds · read list · article archive" },
+    "github": { "desc": "Browse repositories · import projects · sync issues" },
+    "coreExtension": "Core extension",
+    "installed": "Installed",
+    "available": "Available",
+    "manage": "Manage"
+  },
+  "status": {
+    "on": "on",
+    "off": "off",
+    "inUse": "in use",
+    "disabled": "disabled"
+  },
+  "toggle": {
+    "disable": "Stop using",
+    "enable": "Start using",
+    "installAndUse": "Install & enable"
+  },
+  "msg": {
+    "installVerified": "Verified and installed {{name}} {{version}}.",
+    "activated": "Pinned {{name}} to project {{project}} with an exact digest.",
+    "exported": "Exported a verifiable portable package of {{name}}.",
+    "enabled": "Enabled {{name}}.",
+    "disabled": "Disabled {{name}} — this pack's views and schedules disappear.",
+    "agentReport": "{{agent}}: {{report}}",
+    "provisioned": "Workspace applied — {{created}} created, {{skipped}} kept",
+    "provisionFailed": ", {{n}} failed ({{list}})",
+    "settingsSaved": "Settings saved.",
+    "extensionToggled": "{{name}} {{action}}"
+  },
+  "install": {
+    "title": "Install external extensions",
+    "countSuffix": " · {{n}} installed",
+    "cardTitle": "Install extension package",
+    "localDirectory": "Local folder",
+    "localFile": "Package file",
+    "pathPlaceholder": "Extension package path",
+    "urlPlaceholder": "Git or HTTPS URL",
+    "commitPlaceholder": "40-character commit",
+    "verifyInstall": "Verify & install",
+    "project": "Target project",
+    "emptyHint": "Choose a package file or URL to install.",
+    "pinned": "Pinned",
+    "export": "Export",
+    "permissionsTitle": "Requested permissions: {{permissions}}",
+    "noPermissions": "none",
+    "approveApply": "Approve & apply",
+    "permissions": "Permissions: {{permissions}}"
+  },
+  "workflow": {
+    "empty": "No published workflows. Create one in the workflow studio or import an extension package.",
+    "card": {
+      "meta": "{{nodes}} nodes · {{edges}} transitions · published in app",
+      "openStudio": "Open in Studio"
+    }
+  },
+  "skill": {
+    "summary": "{{installed}} installed · {{modified}} modified · {{missing}} missing",
+    "tabCardTitle": "{{name}} · {{n}} skills",
+    "installTo": "Install to {{agent}}",
+    "empty": "Install skills from the marketplace or an extension package.",
+    "state": {
+      "installed": "installed",
+      "modified": "modified",
+      "missing": "missing",
+      "noSource": "no source"
+    }
+  },
+  "list": {
+    "empty": "No extensions installed.",
+    "selectHint": "Select an extension on the left.",
+    "counts": "{{views}} views · {{actions}} actions · {{skills}} skills"
+  },
+  "views": {
+    "count": "{{n}} views",
+    "empty": "This extension adds no views.",
+    "native": "Native view",
+    "declarative": "Declarative"
+  },
+  "actionsList": { "count": "{{n}} actions" },
+  "schedule": { "weekdays": "Weekdays", "daily": "Daily" },
+  "source": { "builtin": "built-in", "user": "user" },
+  "packAgents": {
+    "label": "Agents",
+    "detected": "detected",
+    "none": "none",
+    "undetected": "Not detected"
+  },
+  "installToAgent": {
+    "title": "Install to agents",
+    "explain1": "For Claude Code, bundled plugins are unpacked wholesale into ~/.claude/skills/sawhorse (skills-dir plugin — loaded automatically, no install step). Hand-edited files are not overwritten; they appear as",
+    "modifiedTag": "Modified",
+    "explain2": " — to overwrite them, use \"Force install\".",
+    "marketplaceExists": "A marketplace plugin is already installed ({{plugins}}). Since the content is identical, the app does not create a copy — that plugin provides the skills."
+  },
+  "settings": { "title": "Extension settings", "deleteRow": "Delete", "addRow": "Add row" },
+  "workspace": { "creates": "Created in the workspace" },
+  "report": {
+    "processed": "{{n}} processed",
+    "skipped": "{{n}} skipped",
+    "failed": "failed: {{list}}",
+    "none": "no changes"
+  },
+  "unset": "(not set)",
+  "view": {
+    "all": "All",
+    "ungrouped": "Ungrouped",
+    "select": "Select",
+    "selectRowAria": "Select {{title}}",
+    "readFailed": "> Failed to read the document: {{error}}",
+    "viewNotFound": "View definition not found. Check the pack status in the Extensions tab.",
+    "colTitle": "Title",
+    "colModified": "Modified",
+    "projectAria": "Extension project",
+    "noActiveProject": "No project has activated this extension and approved its permissions.",
+    "selectAllVisible": "Select all visible items",
+    "selectedCount": "{{n}} selected",
+    "chooseTargets": "Select targets",
+    "search": "Search",
+    "folderCount": "{{n}} folders",
+    "truncated": " · partially shown",
+    "noDocuments": "No documents to show.",
+    "noResults": "No search results.",
+    "open": "Open",
+    "loadingDoc": "Reading document…"
+  },
+  "select": { "project": "Select project" },
+  "steps": {
+    "intro": "Start",
+    "programs": "Programs",
+    "agents": "Agents",
+    "vault": "Workspace",
+    "packs": "Extensions",
+    "skills": "Skills",
+    "done": "Done"
+  },
+  "defaultBadge": "Default",
+  "wizard": {
+    "title": "Get started with the sawhorse workbench",
+    "intro": {
+      "lead": "This app is in charge.",
+      "rest": "It finds terminal agents and required programs on this PC, and tells you where to get them if missing. No need to install plugins separately.",
+      "programs": "Checks that the external tools the product actually calls are present. Nothing is changed.",
+      "agents": "Scans this PC's terminal agents and picks one to use as the default.",
+      "vault": "One folder where documents live. An existing Obsidian vault works as is.",
+      "packs": "A bundle of ways of working. Turning one on brings views, schedules, and skills along.",
+      "skills": "Installs the skills of enabled extensions into the agents.",
+      "outro": "Set things in order and you're done. You can change everything later in Settings and the Extensions tab."
+    },
+    "errPathRequired": "Enter a workspace path.",
+    "errAbsolutePath": "Use an absolute path (e.g. /Users/me/Documents/sawhorse).",
+    "partialFailure": "Some items failed: {{list}}",
+    "installReport": {
+      "ok": "installed {{n}}",
+      "fail": "installed {{n}}, {{failed}} failed"
+    },
+    "vault": {
+      "hint": "Absolute path of the folder where documents live. If it doesn't exist, the app creates it. If you use Obsidian, point it at your existing vault.",
+      "label": "Workspace absolute path",
+      "placeholder": "e.g. /Users/me/Documents/sawhorse",
+      "existing": "Vaults previously used with Obsidian",
+      "open": "open",
+      "noRecords": "No Obsidian vault records found. Type a path yourself.",
+      "createNew": "Create new: {{path}}"
+    },
+    "packs": {
+      "hint": "Enabled extensions are this app's features. Turning one off removes its views, schedules, and actions (documents are kept).",
+      "noneFound": "No installed extensions found.",
+      "plan": "{{n}} items to create in the workspace: {{items}}"
+    },
+    "skills": {
+      "hint": "Installs the skills of your {{n}} enabled extensions into the agents. Files you've already edited by hand are left untouched.",
+      "noTargets": "No agent can install skills — install Claude Code or Codex, then install again from the Extensions tab.",
+      "notDetected": "Not detected — reopen after installing and it will show up.",
+      "skipHint": "You can skip this — you can install anytime from the Extensions tab."
+    },
+    "done": {
+      "summaryTitle": "Here's what you chose",
+      "workspace": "Workspace · {{path}}",
+      "agent": "Default agent · {{agent}}",
+      "extensions": "{{n}} extensions enabled",
+      "programs": "Programs · {{summary}}",
+      "created": "Created {{n}} items in the workspace.",
+      "alreadyReady": "The workspace was already in place.",
+      "outro": "The agent can run these two checks for you — now or later.",
+      "initVaultTitle": "Align Obsidian settings (init-vault)",
+      "initVaultDesc": "The agent checks template folders, attachment paths, property types, and the start screen.",
+      "setupTitle": "Environment diagnostics (setup)",
+      "setupDesc": "One more check covering hooks and MCP settings, with a report of the results."
+    },
+    "later": "Later",
+    "back": "Back",
+    "start": "Get started",
+    "next": "Next",
+    "saving": "Saving…",
+    "applyAndNext": "Apply & next",
+    "applying": "Applying…",
+    "openDashboard": "Open dashboard"
+  },
+  "programs": {
+    "summary": {
+      "checking": "Checking…",
+      "allReady": "All {{n}} ready.",
+      "missing": "{{n}} missing",
+      "outdated": "{{n}} outdated"
+    },
+    "introA": "Only what was found on this PC is shown. For a missing item, press",
+    "installLabel": "Install",
+    "introB": " to open its download page in your browser. After installing,",
+    "recheckLabel": "re-check",
+    "introC": ".",
+    "recheck": "Re-check",
+    "minVersion": "{{version}}+ required",
+    "get": "Get",
+    "blocking": "Required items are missing ({{list}}). You can continue for now; after installing, re-check in Settings → Diagnostics.",
+    "need": { "required": "Required", "recommended": "Recommended", "optional": "Optional" }
+  },
+  "agentStep": {
+    "introA": "These are the agents found on this PC. Press one to make it your",
+    "introDefault": "default agent",
+    "introB": " — it becomes the default target for installing extension skills.",
+    "noneFound": "No agents detected. Install one below, then re-check.",
+    "canInstallSkills": "Skill install",
+    "runsJobs": "Job runner",
+    "custom": "Custom",
+    "missingSummary": "{{n}} agents not detected — show where to install",
+    "jobsFootnote": "supports detection and skill installation. Jobs the dashboard runs itself still execute only through Claude Code.",
+    "customFootnoteA": "CLIs that aren't listed appear here too when registered under",
+    "customFootnoteB": "in the settings file."
+  },
+  "github": {
+    "installedBadge": "Installed · v{{version}}",
+    "available": "Available",
+    "manageSync": "Manage issue sync",
+    "extensionTitle": "GitHub extension",
+    "extensionDesc": "Connect an account to browse repositories and import projects and issues. Disabling the extension keeps your account and connection settings.",
+    "accountAria": "GitHub account",
+    "connected": "@{{login}} · connected",
+    "disconnect": "Disconnect account",
+    "connectTitle": "Connect account",
+    "oauthDesc": "Signs in with GitHub OAuth in your browser. It requests the repo scope to import private repositories, but Sawhorse only uses it to read repositories and issues.",
+    "oauthAria": "GitHub OAuth approval",
+    "codeHint": "Enter the code below on the GitHub page in your browser and approve.",
+    "waiting": "Waiting for approval… The code is valid for about {{minutes}} minutes.",
+    "reopenAuth": "Reopen the GitHub auth page",
+    "cancelLogin": "Cancel sign-in",
+    "signIn": "Sign in with GitHub",
+    "openFailed": "Couldn't open your browser automatically. Use the button below to open the GitHub auth page.",
+    "keychainNote": "The OAuth token is stored only in this Mac's keychain. No need to create or paste a personal access token.",
+    "imported": "{{name}} import complete",
+    "createProjectDocs": "Create project documents",
+    "reposAria": "My GitHub repositories",
+    "myRepos": "My repositories",
+    "searchReposAria": "Search repositories",
+    "searchRepos": "Filter loaded repositories",
+    "refreshReposAria": "Refresh repositories",
+    "private": "Private",
+    "archived": "Archived",
+    "updatedSuffix": "{{date}} updated",
+    "loggedInAs": "Signed in as {{login}}.",
+    "issueLinked": "Added an issue connection for {{repo}}. Check which issues to import in Manage issue sync.",
+    "linkIssues": "Link issues",
+    "importProject": "Import as project",
+    "loading": "Loading repositories…",
+    "noRepos": "No repositories to show.",
+    "more": "Load more repositories",
+    "parentFolder": "Parent folder to save into",
+    "chooseFolder": "Choose a folder",
+    "importHint": "Creates a new folder named after the repository inside the selected folder.",
+    "importing": "Importing repository…",
+    "import": "Import",
+    "manage": "GitHub management"
+  },
+  "onboarding": {
+    "backFallback": "Project",
+    "title": "Create documents from sources",
+    "titleWithProject": "{{name}} · Create documents",
+    "newImport": "New import",
+    "project": "Project",
+    "projectAria": "Project to create documents for",
+    "inputPaths": "Input paths (one per line)",
+    "outputFolder": "Output folder inside the project",
+    "autoApply": "Auto-apply conflict-free new documents",
+    "createDrafts": "Create document drafts",
+    "runs": "Runs",
+    "progress": "Progress & drafts",
+    "pickHint": "Start or select an import on the left.",
+    "processed": "Processed",
+    "total": "Total",
+    "resume": "Resume",
+    "pause": "Pause",
+    "cancel": "Cancel",
+    "applyReviewed": "Apply reviewed documents",
+    "conflict": "User-edit conflict",
+    "draftMeta": "{{provenance}} sources · {{chars}} chars",
+    "viewDraft": "View draft"
+  }
+}

@@ -1,6 +1,7 @@
 // 선언형 뷰 렌더러. 팩이 `type: "notes"` 로 선언한 화면 전부가 이 한 컴포넌트로 그려진다.
 // 호스트는 필드의 뜻을 모르고, 라벨·순서·묶는 기준은 매니페스트가 정한다.
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { actionJobKey } from "@/lib/jobs";
@@ -109,10 +110,11 @@ function DeclarativeRows({
   onCheck: (row: NoteRow, on: boolean) => void;
   onOpen: (row: NoteRow) => void;
 }) {
+  const { t } = useTranslation("packs");
   if (kind === "board") {
     const groups = new Map<string, NoteRow[]>();
     for (const row of rows) {
-      const key = asList(row.fields[groupBy]).join(", ") || "미분류";
+      const key = asList(row.fields[groupBy]).join(", ") || t("view.ungrouped");
       groups.set(key, [...(groups.get(key) ?? []), row]);
     }
     return (
@@ -148,8 +150,8 @@ function DeclarativeRows({
     const grouped = new Map<string, number>();
     for (const row of rows) {
       const value = groupBy
-        ? asList(row.fields[groupBy]).join(", ") || "미분류"
-        : "전체";
+        ? asList(row.fields[groupBy]).join(", ") || t("view.ungrouped")
+        : ALL;
       grouped.set(value, (grouped.get(value) ?? 0) + 1);
     }
     return (
@@ -158,7 +160,9 @@ function DeclarativeRows({
           <Card key={label}>
             <CardContent className="p-5">
               <strong className="block text-3xl">{value}</strong>
-              <span className="text-xs text-muted-foreground">{label}</span>
+              <span className="text-xs text-muted-foreground">
+                {label === ALL ? t("view.all") : label}
+              </span>
             </CardContent>
           </Card>
         ))}
@@ -205,7 +209,7 @@ function DeclarativeRows({
         <TableRow>
           {selection === "multiple" && (
             <TableHead className="w-10">
-              <span className="sr-only">선택</span>
+              <span className="sr-only">{t("view.select")}</span>
             </TableHead>
           )}
           {columns.map((column, index) => (
@@ -232,7 +236,9 @@ function DeclarativeRows({
               <TableCell>
                 <input
                   type="checkbox"
-                  aria-label={`${asList(row.fields.title)[0] || row.title} 선택`}
+                  aria-label={t("view.selectRowAria", {
+                    title: asList(row.fields.title)[0] || row.title,
+                  })}
                   checked={checked.has(row.path)}
                   onClick={(event) => event.stopPropagation()}
                   onChange={(event) => onCheck(row, event.target.checked)}
@@ -258,6 +264,7 @@ export default function PackViewPage({
   packId: string;
   viewId: string;
 }) {
+  const { t } = useTranslation("packs");
   const packs = useApp((s) => s.packs);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const setPage = useApp((s) => s.setPage);
@@ -394,7 +401,7 @@ export default function PackViewPage({
       const note = await api.readNote(row.path);
       setBody(note.markdown);
     } catch (e) {
-      setBody(`> 문서를 읽지 못했습니다: ${String(e)}`);
+      setBody(`> ${t("view.readFailed", { error: String(e) })}`);
     }
   }
 
@@ -432,7 +439,7 @@ export default function PackViewPage({
   if (!pack || !view) {
     return (
       <Empty className="pt-16">
-        화면 정의를 찾지 못했습니다. 확장 탭에서 팩 상태를 확인하세요.
+        {t("view.viewNotFound")}
       </Empty>
     );
   }
@@ -441,10 +448,10 @@ export default function PackViewPage({
     view.columns.length > 0
       ? view.columns
       : [
-          { field: "", label: "제목", source: "title", type: "text", width: 0 },
+          { field: "", label: t("view.colTitle"), source: "title", type: "text", width: 0 },
           {
             field: "",
-            label: "수정",
+            label: t("view.colModified"),
             source: "mtime",
             type: "date",
             width: 110,
@@ -456,12 +463,12 @@ export default function PackViewPage({
       <PageHeader title={view.label}>
         {extensionPackageId && (
           <Select
-            aria-label="확장 프로젝트"
+            aria-label={t("view.projectAria")}
             className="h-8 w-40"
             value={projectId ?? ""}
             onChange={(event) => setProjectId(event.target.value || null)}
           >
-            <option value="">프로젝트 선택</option>
+            <option value="">{t("select.project")}</option>
             {extensionProjects.map((id) => (
               <option key={id} value={id}>
                 {id}
@@ -492,13 +499,13 @@ export default function PackViewPage({
         ))}
         <Button size="sm" variant="ghost" onClick={() => void load()}>
           <RefreshCw className={cn("size-3", loading && "animate-spin")} />{" "}
-          새로고침
+          {t("actions.refresh")}
         </Button>
       </PageHeader>
 
       {extensionPackageId && extensionProjects.length === 0 && (
         <div className="border-b bg-warning/10 px-4 py-2 text-xs">
-          이 확장을 활성화하고 권한을 승인한 프로젝트가 없습니다.
+          {t("view.noActiveProject")}
         </div>
       )}
 
@@ -507,13 +514,13 @@ export default function PackViewPage({
           <label className="flex items-center gap-1.5 text-xs">
             <input
               type="checkbox"
-              aria-label="보이는 항목 모두 선택"
+              aria-label={t("view.selectAllVisible")}
               checked={allVisibleChecked}
               onChange={(event) => checkVisible(event.target.checked)}
             />
             {selectedRows.length > 0
-              ? `${selectedRows.length}건 선택`
-              : "대상 선택"}
+              ? t("view.selectedCount", { n: selectedRows.length })
+              : t("view.chooseTargets")}
           </label>
         )}
         <div className="relative">
@@ -521,7 +528,7 @@ export default function PackViewPage({
           <Input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="검색"
+            placeholder={t("view.search")}
             className="h-7 w-48 pl-6 text-xs"
           />
         </div>
@@ -548,8 +555,8 @@ export default function PackViewPage({
             className="ml-auto truncate text-[11px] text-muted-foreground"
             title={result.folders.join(", ")}
           >
-            {result.folders.length}개 폴더
-            {result.truncated && " · 일부만 표시"}
+            {t("view.folderCount", { n: result.folders.length })}
+            {result.truncated && t("view.truncated")}
           </span>
         )}
       </div>
@@ -566,8 +573,8 @@ export default function PackViewPage({
           {!err && visible.length === 0 && (
             <Empty className="px-8">
               {rows.length === 0
-                ? view.empty || "표시할 문서가 없습니다."
-                : "검색 결과가 없습니다."}
+                ? view.empty || t("view.noDocuments")
+                : t("view.noResults")}
             </Empty>
           )}
           {visible.length > 0 && (
@@ -597,7 +604,7 @@ export default function PackViewPage({
                 onClick={() => void api.openPath(sel.path)}
                 title={sel.path}
               >
-                <ExternalLink className="size-3" /> 열기
+                <ExternalLink className="size-3" /> {t("view.open")}
               </Button>
             </div>
             {actions.length > 0 && (
@@ -634,7 +641,7 @@ export default function PackViewPage({
                 </dl>
               )}
               {body == null ? (
-                <Empty>문서를 읽는 중…</Empty>
+                <Empty>{t("view.loadingDoc")}</Empty>
               ) : (
                 <MarkdownView src={body} notePath={sel.path} />
               )}

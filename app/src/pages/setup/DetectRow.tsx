@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { Check, ExternalLink, X } from "lucide-react";
 import { api } from "@/lib/api";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -25,11 +26,12 @@ function StatusDot({ ok, warn }: { ok: boolean; warn?: boolean }) {
  *  엉뚱한 곳으로 보내느니 아무 데도 보내지 않는 편이 낫다. */
 export function InstallButton({
   url,
-  label = "설치",
+  label,
 }: {
   url: string;
   label?: string;
 }) {
+  const { t } = useTranslation("packs");
   if (!url) return null;
   return (
     <Button
@@ -37,19 +39,15 @@ export function InstallButton({
       variant="outline"
       onClick={() => void api.openExternal(url).catch(() => {})}
     >
-      {label} <ExternalLink className="size-3" />
+      {label ?? t("actions.install")} <ExternalLink className="size-3" />
     </Button>
   );
 }
 
-const NEED_LABEL: Record<Need, string> = {
-  required: "필수",
-  recommended: "권장",
-  optional: "선택",
-};
 
 /** 없을 때만 시급함을 색으로 말한다. 갖춰져 있으면 분류 표시로만 남는다. */
 export function NeedBadge({ need, missing }: { need: Need; missing: boolean }) {
+  const { t } = useTranslation("packs");
   const variant = !missing
     ? "outline"
     : need === "required"
@@ -57,7 +55,7 @@ export function NeedBadge({ need, missing }: { need: Need; missing: boolean }) {
       : need === "recommended"
         ? "warning"
         : "outline";
-  return <Badge variant={variant}>{NEED_LABEL[need]}</Badge>;
+  return <Badge variant={variant}>{t(`programs.need.${need}`)}</Badge>;
 }
 
 export default function DetectRow({
