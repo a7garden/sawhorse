@@ -43,16 +43,19 @@ npm run tauri build
 
 ## GitHub OAuth 설정
 
-GitHub 확장의 계정 연결은 OAuth Device Flow를 사용한다. GitHub에서 OAuth App을 등록하고
-`Enable Device Flow`를 켠 뒤, 공개 Client ID를 빌드 또는 실행 환경에 지정한다. Client Secret은
-사용하지 않는다.
+GitHub 확장의 계정 연결은 OAuth Device Flow를 사용한다. 기본 빌드에는 등록된 SawHorse
+OAuth App의 공개 Client ID가 포함되어 있어 별도 설정 없이 로그인할 수 있다. Client Secret은
+사용하지 않는다. 앱 등록에서 `Enable Device Flow`와 토큰 만료를 활성화했으며, 만료된 토큰은
+refresh token으로 갱신한다. 등록된 리디렉션 URI `http://127.0.0.1`은 Device Flow에서 사용하지 않는다.
+
+별도 OAuth App을 사용하려면 해당 앱의 `Enable Device Flow`를 켜고 Client ID를 다음처럼 지정한다.
 
 ```bash
 SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID npm run tauri dev
 SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID npm run tauri build
 ```
 
-Client ID는 빌드 시 앱에 포함되므로 배포 빌드는 반드시 이 값을 지정해야 한다. 비공개 저장소
+환경변수는 실행 시 값, 빌드 시 값, 기본 Client ID 순서로 적용된다. 비공개 저장소
 탐색·가져오기를 위해 `read:user repo` 범위를 요청하며, 실제 확장 동작은 호스트 브로커가 허용한
 읽기 요청과 Git clone으로 제한한다. 기존 버전에서 저장한 PAT는 연결 해제 전까지 읽을 수 있지만,
 새 로그인 화면에서는 PAT 입력을 제공하지 않는다.
