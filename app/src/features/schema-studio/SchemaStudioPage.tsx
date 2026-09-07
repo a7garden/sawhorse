@@ -32,9 +32,9 @@ const SAMPLE_SCHEMA: VaultSchema = {
   revision: 1,
   types: [
     {
-      id: "team-vault.issue",
-      label: "요청",
-      storage: { path: "projects/{projectId}/issues/{id}.md" },
+      id: "team-vault.document",
+      label: "문서",
+      storage: { path: "문서/{id}.md" },
       fields: [
         {
           id: "title",
@@ -48,7 +48,7 @@ const SAMPLE_SCHEMA: VaultSchema = {
           id: "status",
           key: "status",
           label: "상태",
-          valueSchema: { enum: ["new", "active", "done"] },
+          valueSchema: { enum: ["draft", "reviewed", "archived"] },
           aliases: [],
           defaultValue: null,
         },
