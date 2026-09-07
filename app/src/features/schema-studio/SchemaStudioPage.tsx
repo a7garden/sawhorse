@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -60,8 +61,13 @@ const SAMPLE_SCHEMA: VaultSchema = {
 const INITIAL_SOURCE = `${JSON.stringify(SAMPLE_SCHEMA, null, 2)}\n`;
 
 function Diagnostics({ rows }: { rows: SchemaDiagnostic[] }) {
+  const { t } = useTranslation("dashboard");
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">진단이 없습니다.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {t("schemaStudio.noDiagnostics")}
+      </p>
+    );
   }
   return (
     <div className="space-y-2">
@@ -74,7 +80,9 @@ function Diagnostics({ rows }: { rows: SchemaDiagnostic[] }) {
             <Badge
               variant={row.severity === "error" ? "destructive" : "warning"}
             >
-              {row.severity === "error" ? "오류" : "경고"}
+              {row.severity === "error"
+                ? t("schemaStudio.error")
+                : t("schemaStudio.warning")}
             </Badge>
             <span className="font-medium">{row.code}</span>
             <code className="ml-auto text-xs text-muted-foreground">
@@ -89,6 +97,7 @@ function Diagnostics({ rows }: { rows: SchemaDiagnostic[] }) {
 }
 
 export default function SchemaStudioPage() {
+  const { t } = useTranslation("dashboard");
   const [source, setSource] = useState(INITIAL_SOURCE);
   const [validation, setValidation] = useState<SchemaValidationReport | null>(
     null,
@@ -108,7 +117,7 @@ export default function SchemaStudioPage() {
   function schema(): VaultSchema {
     const parsed: unknown = JSON.parse(source);
     if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      throw new Error("스키마 JSON 최상위 값은 object여야 합니다.");
+      throw new Error(t("schemaStudio.topLevelObject"));
     }
     return parsed as VaultSchema;
   }
@@ -134,7 +143,7 @@ export default function SchemaStudioPage() {
     } catch {
       return null;
     }
-  }, [source]);
+  }, [source, t]);
   const artifactType = parsed?.types[selectedType] ?? null;
 
   function setSchema(next: VaultSchema) {
@@ -203,7 +212,7 @@ export default function SchemaStudioPage() {
     if (!report) return;
     setValidation(report);
     if (!report.valid) {
-      setMessage("스키마 오류를 고친 뒤 볼트를 검사하세요.");
+      setMessage(t("schemaStudio.fixSchemaFirst"));
       return;
     }
     const result = await execute("scan", () => schemaStudioApi.scan(parsed));
@@ -257,16 +266,19 @@ export default function SchemaStudioPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <PageHeader title="볼트 문서 구조" />
+      <PageHeader title={t("schemaStudio.title")} />
       <div className="min-h-0 flex-1 overflow-auto p-6">
         <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[minmax(0,1.05fr)_minmax(420px,0.95fr)]">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                문서 종류와 입력 항목
+                {t("schemaStudio.typesAndFields")}
                 {active && (
                   <Badge variant="success">
-                    활성 {active.id} r{active.revision}
+                    {t("schemaStudio.activeBadge", {
+                      id: active.id,
+                      revision: active.revision,
+                    })}
                   </Badge>
                 )}
               </CardTitle>
@@ -278,14 +290,14 @@ export default function SchemaStudioPage() {
                   variant={mode === "visual" ? "secondary" : "ghost"}
                   onClick={() => setMode("visual")}
                 >
-                  시각 편집
+                  {t("schemaStudio.visualEdit")}
                 </Button>
                 <Button
                   size="sm"
                   variant={mode === "json" ? "secondary" : "ghost"}
                   onClick={() => setMode("json")}
                 >
-                  고급 JSON
+                  {t("schemaStudio.advancedJson")}
                 </Button>
               </div>
               {mode === "json" ? (
@@ -303,7 +315,7 @@ export default function SchemaStudioPage() {
                 <div className="space-y-4">
                   <div className="grid gap-3 sm:grid-cols-3">
                     <label className="text-xs">
-                      스키마 ID
+                      {t("schemaStudio.schemaId")}
                       <Input
                         value={parsed.id}
                         onChange={(event) =>
@@ -323,7 +335,7 @@ export default function SchemaStudioPage() {
                       />
                     </label>
                     <label className="text-xs">
-                      초안 ID
+                      {t("schemaStudio.draftId")}
                       <Input
                         value={draftId}
                         onChange={(event) => setDraftId(event.target.value)}
@@ -333,7 +345,7 @@ export default function SchemaStudioPage() {
                   <div className="grid gap-4 lg:grid-cols-[190px_1fr]">
                     <div className="space-y-2">
                       <p className="text-xs font-semibold text-muted-foreground">
-                        문서 종류
+                        {t("schemaStudio.types")}
                       </p>
                       {parsed.types.map((item, index) => (
                         <button
@@ -370,14 +382,14 @@ export default function SchemaStudioPage() {
                           setSelectedType(index);
                         }}
                       >
-                        <Plus /> 타입
+                        <Plus /> {t("schemaStudio.addType")}
                       </Button>
                     </div>
                     {artifactType && (
                       <div className="space-y-3 rounded-lg border p-4">
                         <div className="grid gap-3 sm:grid-cols-2">
                           <label className="text-xs">
-                            타입 ID
+                            {t("schemaStudio.typeId")}
                             <Input
                               value={artifactType.id}
                               onChange={(event) =>
@@ -386,7 +398,7 @@ export default function SchemaStudioPage() {
                             />
                           </label>
                           <label className="text-xs">
-                            표시 이름
+                            {t("schemaStudio.displayName")}
                             <Input
                               value={artifactType.label}
                               onChange={(event) =>
@@ -395,7 +407,7 @@ export default function SchemaStudioPage() {
                             />
                           </label>
                           <label className="text-xs sm:col-span-2">
-                            저장 경로
+                            {t("schemaStudio.storagePath")}
                             <Input
                               value={artifactType.storage.path}
                               onChange={(event) =>
@@ -406,7 +418,7 @@ export default function SchemaStudioPage() {
                             />
                           </label>
                           <label className="text-xs">
-                            템플릿 참조
+                            {t("schemaStudio.templateRef")}
                             <Input
                               value={artifactType.body.templateRef ?? ""}
                               onChange={(event) =>
@@ -420,7 +432,7 @@ export default function SchemaStudioPage() {
                             />
                           </label>
                           <label className="text-xs">
-                            필수 섹션(쉼표)
+                            {t("schemaStudio.requiredSections")}
                             <Input
                               value={artifactType.body.requiredSectionIds.join(
                                 ", ",
@@ -440,7 +452,7 @@ export default function SchemaStudioPage() {
                           </label>
                         </div>
                         <p className="text-xs font-semibold text-muted-foreground">
-                          문서 속성
+                          {t("schemaStudio.fields")}
                         </p>
                         {artifactType.fields.map((field, index) => (
                           <div
@@ -448,7 +460,7 @@ export default function SchemaStudioPage() {
                             className="grid gap-2 rounded-md bg-muted p-3 sm:grid-cols-2"
                           >
                             <Input
-                              aria-label="필드 ID"
+                              aria-label={t("schemaStudio.fieldId")}
                               value={field.id}
                               onChange={(event) =>
                                 patchType({
@@ -480,7 +492,7 @@ export default function SchemaStudioPage() {
                               }
                             />
                             <Input
-                              aria-label="필드 이름"
+                              aria-label={t("schemaStudio.fieldName")}
                               value={field.label}
                               onChange={(event) =>
                                 patchType({
@@ -494,8 +506,10 @@ export default function SchemaStudioPage() {
                               }
                             />
                             <Input
-                              aria-label="이전 key"
-                              placeholder="이전 key, 쉼표"
+                              aria-label={t("schemaStudio.prevKey")}
+                              placeholder={t(
+                                "schemaStudio.prevKeyPlaceholder",
+                              )}
                               value={(field.aliases ?? []).join(", ")}
                               onChange={(event) =>
                                 patchType({
@@ -515,9 +529,9 @@ export default function SchemaStudioPage() {
                               }
                             />
                             <label className="text-xs">
-                              입력 형식
+                              {t("schemaStudio.inputType")}
                               <select
-                                aria-label="입력 형식"
+                                aria-label={t("schemaStudio.inputType")}
                                 className="mt-1 h-9 w-full rounded border bg-background px-2"
                                 value={
                                   Array.isArray(field.valueSchema.enum)
@@ -541,21 +555,31 @@ export default function SchemaStudioPage() {
                                   });
                                 }}
                               >
-                                <option value="string">텍스트</option>
-                                <option value="number">숫자</option>
-                                <option value="integer">정수</option>
-                                <option value="boolean">예 / 아니요</option>
-                                <option value="enum">선택 목록</option>
+                                <option value="string">
+                                  {t("schemaStudio.inputTypes.string")}
+                                </option>
+                                <option value="number">
+                                  {t("schemaStudio.inputTypes.number")}
+                                </option>
+                                <option value="integer">
+                                  {t("schemaStudio.inputTypes.integer")}
+                                </option>
+                                <option value="boolean">
+                                  {t("schemaStudio.inputTypes.boolean")}
+                                </option>
+                                <option value="enum">
+                                  {t("schemaStudio.inputTypes.enum")}
+                                </option>
                                 <option value="custom">
-                                  사용자 정의 (고급)
+                                  {t("schemaStudio.inputTypes.custom")}
                                 </option>
                               </select>
                             </label>
                             {Array.isArray(field.valueSchema.enum) && (
                               <label className="text-xs">
-                                선택 항목 (쉼표로 구분)
+                                {t("schemaStudio.enumValues")}
                                 <Input
-                                  aria-label="선택 항목"
+                                  aria-label={t("schemaStudio.enumValuesAria")}
                                   value={field.valueSchema.enum.join(", ")}
                                   onChange={(event) =>
                                     patchType({
@@ -598,7 +622,7 @@ export default function SchemaStudioPage() {
                                   })
                                 }
                               />{" "}
-                              필수
+                              {t("schemaStudio.required")}
                             </label>
                           </div>
                         ))}
@@ -621,7 +645,7 @@ export default function SchemaStudioPage() {
                             })
                           }
                         >
-                          <Plus /> 필드
+                          <Plus /> {t("schemaStudio.addField")}
                         </Button>
                       </div>
                     )}
@@ -629,11 +653,13 @@ export default function SchemaStudioPage() {
                 </div>
               ) : (
                 <p className="text-sm text-destructive">
-                  JSON을 고급 모드에서 수정하세요.
+                  {t("schemaStudio.fixInJson")}
                 </p>
               )}
               <div className="space-y-2 rounded-md border p-3">
-                <p className="text-xs font-semibold">발행 라이브러리</p>
+                <p className="text-xs font-semibold">
+                  {t("schemaStudio.publishLibrary")}
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {catalog.map((item) => (
                     <Button
@@ -649,7 +675,9 @@ export default function SchemaStudioPage() {
                     </Button>
                   ))}
                 </div>
-                <p className="text-xs font-semibold">초안</p>
+                <p className="text-xs font-semibold">
+                  {t("schemaStudio.drafts")}
+                </p>
                 <div className="flex flex-wrap gap-1">
                   {drafts.map((item) => (
                     <Button
@@ -683,13 +711,13 @@ export default function SchemaStudioPage() {
                   disabled={busy !== null}
                 >
                   <Save className="mr-2 size-4" />
-                  초안 저장
+                  {t("schemaStudio.saveDraft")}
                 </Button>
                 <Button
                   onClick={() => void validateSchema()}
                   disabled={busy !== null}
                 >
-                  정의 검증
+                  {t("schemaStudio.validate")}
                 </Button>
                 <Button
                   variant="outline"
@@ -697,12 +725,12 @@ export default function SchemaStudioPage() {
                     void execute("publish", async () => {
                       await schemaStudioApi.publish(schema());
                       await loadLibrary();
-                      setMessage("불변 schema revision을 발행했습니다.");
+                      setMessage(t("schemaStudio.published"));
                     })
                   }
                   disabled={busy !== null}
                 >
-                  버전 발행
+                  {t("schemaStudio.publish")}
                 </Button>
                 <Button
                   variant="secondary"
@@ -710,12 +738,11 @@ export default function SchemaStudioPage() {
                   disabled={busy !== null}
                 >
                   <FileSearch className="mr-2 size-4" />
-                  볼트 검사
+                  {t("schemaStudio.scanVault")}
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                지원 경로 변수: {"{id}"}, {"{projectId}"}, {"{slug}"}. 관리
-                문서는 frontmatter의 id와 typeId로 식별합니다.
+                {t("schemaStudio.pathVarsHelp")}
               </p>
             </CardContent>
           </Card>
@@ -731,12 +758,14 @@ export default function SchemaStudioPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  정의 진단
+                  {t("schemaStudio.diagnostics")}
                   {validation && (
                     <Badge
                       variant={validation.valid ? "success" : "destructive"}
                     >
-                      {validation.valid ? "유효" : "수정 필요"}
+                      {validation.valid
+                        ? t("schemaStudio.valid")
+                        : t("schemaStudio.needsFix")}
                     </Badge>
                   )}
                 </CardTitle>
@@ -746,7 +775,7 @@ export default function SchemaStudioPage() {
                   <Diagnostics rows={validation.diagnostics} />
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    정의를 먼저 검증하세요.
+                    {t("schemaStudio.validateFirst")}
                   </p>
                 )}
               </CardContent>
@@ -754,7 +783,7 @@ export default function SchemaStudioPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>볼트 검사</CardTitle>
+                <CardTitle>{t("schemaStudio.scan")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {scan ? (
@@ -764,19 +793,19 @@ export default function SchemaStudioPage() {
                         <strong className="block text-lg">
                           {scan.scannedFiles}
                         </strong>
-                        파일
+                        {t("schemaStudio.files")}
                       </div>
                       <div className="rounded-md bg-muted p-3">
                         <strong className="block text-lg">
                           {scan.managedArtifacts.length}
                         </strong>
-                        관리됨
+                        {t("schemaStudio.managed")}
                       </div>
                       <div className="rounded-md bg-muted p-3">
                         <strong className="block text-lg">
                           {scan.unmanagedMarkdown.length}
                         </strong>
-                        보존됨
+                        {t("schemaStudio.preserved")}
                       </div>
                     </div>
                     <Diagnostics rows={scan.diagnostics} />
@@ -785,13 +814,12 @@ export default function SchemaStudioPage() {
                       onClick={() => void buildPlan()}
                       disabled={busy !== null}
                     >
-                      이동 계획 만들기
+                      {t("schemaStudio.makePlan")}
                     </Button>
                   </>
                 ) : (
                   <p className="text-sm text-muted-foreground">
-                    검증된 스키마로 검사하면 관리 문서와 보존할 일반 Markdown을
-                    구분합니다.
+                    {t("schemaStudio.scanHelp")}
                   </p>
                 )}
               </CardContent>
@@ -799,12 +827,12 @@ export default function SchemaStudioPage() {
 
             <Card>
               <CardHeader>
-                <CardTitle>변경 계획과 적용</CardTitle>
+                <CardTitle>{t("schemaStudio.planAndApply")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {!plan ? (
                   <p className="text-sm text-muted-foreground">
-                    볼트 검사 뒤 이동 계획을 만드세요.
+                    {t("schemaStudio.planEmpty")}
                   </p>
                 ) : (
                   <>
@@ -822,7 +850,7 @@ export default function SchemaStudioPage() {
                       {plan.moves.length === 0 && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                           <CheckCircle2 className="size-4 text-success" />{" "}
-                          이동할 문서가 없습니다.
+                          {t("schemaStudio.noMoves")}
                         </div>
                       )}
                       {plan.rewrites.map((rewrite) => (
@@ -832,8 +860,10 @@ export default function SchemaStudioPage() {
                         >
                           <code>{rewrite.source}</code>
                           <span className="ml-2 text-muted-foreground">
-                            필드 {rewrite.fieldChanges} · 링크{" "}
-                            {rewrite.linkChanges}
+                            {t("schemaStudio.rewriteStats", {
+                              fields: rewrite.fieldChanges,
+                              links: rewrite.linkChanges,
+                            })}
                           </span>
                         </div>
                       ))}
@@ -847,7 +877,7 @@ export default function SchemaStudioPage() {
                         plan.conflicts.length > 0
                       }
                     >
-                      ChangeSet 미리보기
+                      {t("schemaStudio.previewChangeSet")}
                     </Button>
                   </>
                 )}
@@ -894,7 +924,7 @@ export default function SchemaStudioPage() {
                           busy !== null || changeSet.status !== "previewed"
                         }
                       >
-                        변경 적용
+                        {t("schemaStudio.applyChanges")}
                       </Button>
                       <Button
                         variant="secondary"
@@ -906,7 +936,10 @@ export default function SchemaStudioPage() {
                             );
                             setActive(state);
                             setMessage(
-                              `schema ${state.id} revision ${state.revision}을 활성화했습니다.`,
+                              t("schemaStudio.activated", {
+                                id: state.id,
+                                revision: state.revision,
+                              }),
                             );
                           })
                         }
@@ -914,7 +947,7 @@ export default function SchemaStudioPage() {
                           busy !== null || changeSet.status !== "applied"
                         }
                       >
-                        활성화
+                        {t("schemaStudio.activate")}
                       </Button>
                       <Button
                         variant="outline"
@@ -925,7 +958,7 @@ export default function SchemaStudioPage() {
                         }
                       >
                         <RotateCcw className="mr-2 size-4" />
-                        롤백
+                        {t("schemaStudio.rollback")}
                       </Button>
                     </div>
                   </div>

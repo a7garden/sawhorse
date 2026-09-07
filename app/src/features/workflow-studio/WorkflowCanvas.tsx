@@ -1,19 +1,10 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type {
   WorkflowDefinition,
   WorkflowEdge,
-  WorkflowNode,
 } from "@/features/workbench/types";
 import { Button } from "@/components/ui/button";
-export const NODE_LABELS: Record<WorkflowNode["kind"], string> = {
-  artifact: "문서 작성",
-  agent: "에이전트 실행",
-  check: "자동 검증",
-  human: "사람의 검토",
-  condition: "조건 분기",
-  subworkflow: "다른 워크플로",
-  end: "완료",
-};
 const EVENTS: Record<string, string> = {
   approved: "승인하면",
   completed: "완료하면",
@@ -34,6 +25,7 @@ export function WorkflowCanvas({
   onSelect: (id: string) => void;
   onChange: (patch: Partial<WorkflowDefinition>) => void;
 }) {
+  const { t } = useTranslation("dashboard");
   const [positions, setPositions] = useState<
     Record<string, { x: number; y: number }>
   >(() => {
@@ -91,12 +83,11 @@ export function WorkflowCanvas({
   return (
     <div className="space-y-4">
       <p className="text-xs text-muted-foreground">
-        단계를 눌러 내용을 편집하고, 끌어서 배치하세요. 아래에서 다음 단계와
-        실행 조건을 연결합니다.
+        {t("canvas.help")}
       </p>
       <div
         className="overflow-auto rounded-lg border bg-muted/30"
-        aria-label="워크플로 캔버스"
+        aria-label={t("canvas.canvasLabel")}
       >
         <div
           className="relative"
@@ -145,7 +136,9 @@ export function WorkflowCanvas({
                     fill="var(--muted-foreground)"
                     fontSize="10"
                   >
-                    {EVENTS[edge.on] ?? edge.on}
+                    {EVENTS[edge.on]
+                      ? t(`canvas.events.${edge.on}`)
+                      : edge.on}
                   </text>
                 </g>
               );
@@ -154,7 +147,7 @@ export function WorkflowCanvas({
           {definition.nodes.map((node) => (
             <button
               key={node.id}
-              aria-label={`단계 ${node.label}`}
+              aria-label={t("canvas.nodeAria", { label: node.label })}
               aria-pressed={selected === node.id}
               className={`absolute w-[180px] touch-none rounded-xl border bg-card p-4 text-left shadow-sm ${selected === node.id ? "border-primary ring-2 ring-primary/20" : ""}`}
               style={{ left: point(node.id).x, top: point(node.id).y }}
@@ -195,22 +188,22 @@ export function WorkflowCanvas({
               }}
             >
               <small className="text-[10px] text-muted-foreground">
-                {node.id === definition.entry ? "시작 · " : ""}
-                {NODE_LABELS[node.kind]}
+                {node.id === definition.entry ? t("canvas.entryPrefix") : ""}
+                {t(`canvas.nodeKinds.${node.kind}`)}
               </small>
               <strong className="mt-1 block text-sm">{node.label}</strong>
             </button>
           ))}
         </div>
       </div>
-      <div className="space-y-2" aria-label="단계 연결">
+      <div className="space-y-2" aria-label={t("canvas.edgesLabel")}>
         {definition.edges.map((edge, i) => (
           <div
             key={i}
             className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2 rounded-md border p-2"
           >
             <select
-              aria-label={`연결 ${i + 1} 시작 단계`}
+              aria-label={t("canvas.edgeFrom", { n: i + 1 })}
               className="min-w-0 rounded border bg-background p-2 text-xs"
               value={edge.from}
               onChange={(e) => patchEdge(i, { from: e.target.value })}
@@ -222,20 +215,20 @@ export function WorkflowCanvas({
               ))}
             </select>
             <select
-              aria-label={`연결 ${i + 1} 조건`}
+              aria-label={t("canvas.edgeOn", { n: i + 1 })}
               className="min-w-0 rounded border bg-background p-2 text-xs"
               value={edge.on}
               onChange={(e) => patchEdge(i, { on: e.target.value })}
             >
-              {Object.entries(EVENTS).map(([id, label]) => (
+              {Object.entries(EVENTS).map(([id]) => (
                 <option key={id} value={id}>
-                  {label}
+                  {t(`canvas.events.${id}`)}
                 </option>
               ))}
               {!EVENTS[edge.on] && <option value={edge.on}>{edge.on}</option>}
             </select>
             <select
-              aria-label={`연결 ${i + 1} 다음 단계`}
+              aria-label={t("canvas.edgeTo", { n: i + 1 })}
               className="min-w-0 rounded border bg-background p-2 text-xs"
               value={edge.to}
               onChange={(e) => patchEdge(i, { to: e.target.value })}
@@ -249,25 +242,24 @@ export function WorkflowCanvas({
             <Button
               size="xs"
               variant="ghost"
-              aria-label={`연결 ${i + 1} 삭제`}
+              aria-label={t("canvas.edgeDelete", { n: i + 1 })}
               onClick={() =>
                 onChange({ edges: definition.edges.filter((_, j) => i !== j) })
               }
             >
-              삭제
+              {t("canvas.delete")}
             </Button>
             {(edge.condition || edge.loopRef) && (
               <small className="col-span-4 text-muted-foreground">
-                추가 조건 또는 반복 제한이 있습니다. 고급 JSON에서 확인할 수
-                있습니다.
+                {t("canvas.edgeConditionHint")}
               </small>
             )}
           </div>
         ))}
         <datalist id="workflow-events">
-          {Object.entries(EVENTS).map(([id, label]) => (
+          {Object.entries(EVENTS).map(([id]) => (
             <option key={id} value={id}>
-              {label}
+              {t(`canvas.events.${id}`)}
             </option>
           ))}
         </datalist>
@@ -290,7 +282,7 @@ export function WorkflowCanvas({
             })
           }
         >
-          연결 추가
+          {t("canvas.addEdge")}
         </Button>
       </div>
     </div>

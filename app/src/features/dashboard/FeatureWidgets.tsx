@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import {
   Check,
   ChevronRight,
@@ -52,11 +54,15 @@ function clockText(ms: number) {
   return `${String(at.getHours()).padStart(2, "0")}:${String(at.getMinutes()).padStart(2, "0")}`;
 }
 
-function durText(ms: number) {
+function durText(ms: number, t: TFunction) {
   const total = Math.max(0, Math.round(ms / 1000));
-  if (total < 60) return `${total}초`;
-  if (total < 3600) return `${Math.floor(total / 60)}분`;
-  return `${Math.floor(total / 3600)}시간 ${Math.floor((total % 3600) / 60)}분`;
+  if (total < 60) return t("duration.seconds", { n: total });
+  if (total < 3600)
+    return t("duration.minutes", { n: Math.floor(total / 60) });
+  return t("duration.hoursMinutes", {
+    h: Math.floor(total / 3600),
+    m: Math.floor((total % 3600) / 60),
+  });
 }
 
 /** 자정부터 흐른 비율. 타임라인 좌표의 단일 출처. */
@@ -221,6 +227,7 @@ export function IssuesWidget({
   onOpen: () => void;
   onChanged: () => Promise<void> | void;
 }) {
+  const { t } = useTranslation("dashboard");
   const [filter, setFilter] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -229,12 +236,12 @@ export function IssuesWidget({
     () =>
       ISSUE_GROUPS.map((group) => ({
         key: group.key,
-        label: group.label,
+        label: t(`issues.groups.${group.key}`),
         tone: group.tone,
         value: work.filter((item) => issueGroup(item.status) === group.key)
           .length,
       })),
-    [work],
+    [work, t],
   );
   const rows = useMemo(() => {
     const pool = filter
@@ -259,7 +266,7 @@ export function IssuesWidget({
         updatedAt: new Date().toISOString(),
       });
       await onChanged();
-      setMessage(`${item.id} ${note}했습니다.`);
+      setMessage(t(`issues.messages.${note}`, { id: item.id }));
     } catch (error) {
       setMessage(String(error));
     } finally {
@@ -268,12 +275,12 @@ export function IssuesWidget({
   }
 
   if (!work.length)
-    return <div className="wb-slot-empty">등록된 이슈가 없습니다.</div>;
+    return <div className="wb-slot-empty">{t("issues.empty")}</div>;
 
   return (
     <div className="wb-widget-body">
       <DistBar
-        label="이슈 상태 분포"
+        label={t("issues.distribution")}
         segments={segments}
         active={filter}
         onPick={setFilter}
@@ -309,33 +316,33 @@ export function IssuesWidget({
               <div className="wb-action-buttons">
                 {canApprove && (
                   <MiniAction
-                    label="승인"
+                    label={t("issues.actions.approve")}
                     primary
                     icon={<ThumbsUp size={13} />}
-                    busy={busy === `${item.id}:승인`}
+                    busy={busy === `${item.id}:approve`}
                     onClick={() =>
                       void move(
                         item,
                         { approve: true, status: "ready" },
-                        "승인",
+                        "approve",
                       )
                     }
                   />
                 )}
                 {canRun && (
                   <MiniAction
-                    label="실행"
+                    label={t("issues.actions.run")}
                     primary
                     icon={<Play size={13} />}
-                    busy={busy === `${item.id}:실행 시작`}
+                    busy={busy === `${item.id}:start`}
                     onClick={() =>
-                      void move(item, { status: "running" }, "실행 시작")
+                      void move(item, { status: "running" }, "start")
                     }
                   />
                 )}
                 {!canApprove && !canRun && (
                   <MiniAction
-                    label="열기"
+                    label={t("issues.actions.open")}
                     icon={<CircleDot size={13} />}
                     onClick={onOpen}
                   />
@@ -346,7 +353,7 @@ export function IssuesWidget({
         })}
         {!rows.length && (
           <div className="wb-slot-empty">
-            선택한 구간에 해당하는 이슈가 없습니다.
+            {t("issues.emptyFilter")}
           </div>
         )}
       </div>
@@ -373,7 +380,13 @@ const JOB_LABEL: Record<string, string> = {
   interrupted: "중단됨",
 };
 
+/** 렌더 시점에 상태 라벨을 번들에서 꺼낸다. 모르는 상태는 원문 그대로. */
+function jobStatusLabel(status: string, t: TFunction) {
+  return JOB_LABEL[status] ? t(`jobs.status.${status}`) : status;
+}
+
 export function JobsWidget({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation("dashboard");
   const jobs = useApp((s) => s.jobs);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const [busy, setBusy] = useState<string | null>(null);
@@ -390,7 +403,7 @@ export function JobsWidget({ onOpen }: { onOpen: () => void }) {
   )
     .map((status) => ({
       key: status,
-      label: JOB_LABEL[status],
+      label: jobStatusLabel(status, t),
       tone: JOB_TONE[status],
       value: jobs.filter((job) => job.status === status).length,
     }))
@@ -409,7 +422,7 @@ export function JobsWidget({ onOpen }: { onOpen: () => void }) {
   }
 
   if (!jobs.length)
-    return <div className="wb-slot-empty">아직 실행 기록이 없습니다.</div>;
+    return <div className="wb-slot-empty">{t("jobs.empty")}</div>;
 
   const rows = [...live, ...jobs.filter((job) => !live.includes(job))].slice(
     0,
@@ -417,7 +430,7 @@ export function JobsWidget({ onOpen }: { onOpen: () => void }) {
   );
   return (
     <div className="wb-widget-body">
-      <DistBar label="실행 상태 분포" segments={segments} />
+      <DistBar label={t("jobs.distribution")} segments={segments} />
       <div className="wb-action-list">
         {rows.map((job) => {
           const running = job.status === "running" || job.status === "queued";
@@ -439,8 +452,10 @@ export function JobsWidget({ onOpen }: { onOpen: () => void }) {
                 <span className="wb-action-text">
                   <strong>{job.label}</strong>
                   <small>
-                    {JOB_LABEL[job.status] ?? job.status} ·{" "}
-                    {running ? `${durText(elapsed)} 경과` : durText(elapsed)}
+                    {jobStatusLabel(job.status, t)} ·{" "}
+                    {running
+                      ? t("jobs.elapsed", { time: durText(elapsed, t) })
+                      : durText(elapsed, t)}
                     {job.finishedAtMs
                       ? ` · ${clockText(job.finishedAtMs)}`
                       : ""}
@@ -450,14 +465,14 @@ export function JobsWidget({ onOpen }: { onOpen: () => void }) {
               <div className="wb-action-buttons">
                 {running && (
                   <MiniAction
-                    label="중지"
+                    label={t("jobs.actions.stop")}
                     icon={<Square size={13} />}
                     busy={busy === job.id}
                     onClick={() => void stop(job)}
                   />
                 )}
                 <MiniAction
-                  label="기록"
+                  label={t("jobs.actions.log")}
                   icon={<ChevronRight size={13} />}
                   onClick={onOpen}
                 />
@@ -472,19 +487,20 @@ export function JobsWidget({ onOpen }: { onOpen: () => void }) {
 
 /* ------------------------------------------------------------ 예약과 반복 */
 
-function scheduleText(row: TaskRow) {
+function scheduleText(row: TaskRow, t: TFunction) {
   const schedule = row.def.schedule;
-  if (!schedule) return "예약 없음";
+  if (!schedule) return t("schedules.noSchedule");
   const kind =
     schedule.kind === "once"
-      ? (schedule.date ?? "지정일")
+      ? (schedule.date ?? t("schedules.onDate"))
       : schedule.kind === "weekdays"
-        ? "평일"
-        : "매일";
+        ? t("schedules.weekdays")
+        : t("schedules.everyday");
   return `${kind} ${schedule.time}`;
 }
 
 export function ScheduledTasksWidget() {
+  const { t } = useTranslation("dashboard");
   const [rows, setRows] = useState<TaskRow[]>([]);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -526,7 +542,9 @@ export function ScheduledTasksWidget() {
     try {
       await api.runTaskNow(row.def.id);
       await refreshJobs();
-      setMessage(`${row.def.title} 실행을 등록했습니다.`);
+      setMessage(
+        t("schedules.messages.runRegistered", { title: row.def.title }),
+      );
     } catch (cause) {
       setMessage(String(cause));
     } finally {
@@ -565,7 +583,7 @@ export function ScheduledTasksWidget() {
   if (!rows.length)
     return (
       <div className="wb-slot-empty">
-        자동화 작업를 만들고 실행 시간을 지정하세요.
+        {t("schedules.empty")}
       </div>
     );
 
@@ -591,9 +609,11 @@ export function ScheduledTasksWidget() {
                 <span className="wb-action-text">
                   <strong>{row.def.title}</strong>
                   <small>
-                    {scheduleText(row)}
-                    {row.lastRun ? ` · 최근 ${row.lastRun}` : ""}
-                    {row.def.enabled ? "" : " · 일시정지"}
+                    {scheduleText(row, t)}
+                    {row.lastRun
+                      ? t("schedules.lastRun", { time: row.lastRun })
+                      : ""}
+                    {row.def.enabled ? "" : t("schedules.pausedSuffix")}
                   </small>
                 </span>
               </span>
@@ -602,9 +622,9 @@ export function ScheduledTasksWidget() {
                   label={
                     active
                       ? active.status === "running"
-                        ? "실행 중 · 중단"
-                        : "대기 중 · 취소"
-                      : "지금 실행"
+                        ? t("schedules.stopRunning")
+                        : t("schedules.stopQueued")
+                      : t("schedules.runNow")
                   }
                   primary
                   icon={active ? <Square size={13} /> : <Play size={13} />}
@@ -614,7 +634,11 @@ export function ScheduledTasksWidget() {
                   }
                 />
                 <MiniAction
-                  label={row.def.enabled ? "일시정지" : "재개"}
+                  label={
+                    row.def.enabled
+                      ? t("schedules.pause")
+                      : t("schedules.resume")
+                  }
                   icon={
                     row.def.enabled ? <Pause size={13} /> : <Play size={13} />
                   }
@@ -634,6 +658,7 @@ export function ScheduledTasksWidget() {
 
 /** 오늘 일지의 체크리스트. 개발 항목이나 자동화 작업가 아니라 일지 문서의 한 줄이다. */
 export function ChecklistWidget({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation("dashboard");
   const todos = useApp((s) => s.todos);
   const refreshTodos = useApp((s) => s.refreshTodos);
   const [error, setError] = useState("");
@@ -661,8 +686,8 @@ export function ChecklistWidget({ onOpen }: { onOpen: () => void }) {
       <div className="wb-slot-empty">
         {error ||
           (todos && !todos.fileExists
-            ? "오늘 일지 문서가 아직 없습니다."
-            : "오늘 할 일이 없습니다.")}
+            ? t("checklist.noJournal")
+            : t("checklist.empty"))}
       </div>
     );
   const done = items.filter((item) => item.checked).length;
@@ -701,7 +726,7 @@ export function ChecklistWidget({ onOpen }: { onOpen: () => void }) {
             </label>
             <div className="wb-action-buttons">
               <MiniAction
-                label="일지"
+                label={t("checklist.openJournal")}
                 icon={<ChevronRight size={13} />}
                 onClick={onOpen}
               />
@@ -716,6 +741,7 @@ export function ChecklistWidget({ onOpen }: { onOpen: () => void }) {
 /* -------------------------------------------------------------- 읽을거리 */
 
 export function ReadingWidget({ onOpen }: { onOpen: () => void }) {
+  const { t } = useTranslation("dashboard");
   const enabled = useCoreExtensions((s) => s.feeds);
   const [articles, setArticles] = useState<ArticleRow[]>([]);
   const [error, setError] = useState("");
@@ -768,13 +794,13 @@ export function ReadingWidget({ onOpen }: { onOpen: () => void }) {
   if (!enabled)
     return (
       <div className="wb-slot-empty">
-        확장에서 읽을거리를 켜면 새 글이 표시됩니다.
+        {t("reading.disabled")}
       </div>
     );
   if (!articles.length)
     return (
       <div className="wb-slot-empty">
-        {error || "읽지 않은 새 글이 없습니다."}
+        {error || t("reading.empty")}
       </div>
     );
 
@@ -797,13 +823,13 @@ export function ReadingWidget({ onOpen }: { onOpen: () => void }) {
             </button>
             <div className="wb-action-buttons">
               <MiniAction
-                label="읽음"
+                label={t("reading.markRead")}
                 icon={<Check size={13} />}
                 busy={busy === article.id}
                 onClick={() => void markRead(article)}
               />
               <MiniAction
-                label="원문"
+                label={t("reading.openSource")}
                 icon={<ExternalLink size={13} />}
                 onClick={() => void api.openExternal(article.url)}
               />
@@ -837,6 +863,7 @@ export function TodayActivity({
   onOpenJobs: () => void;
   compact?: boolean;
 }) {
+  const { t } = useTranslation("dashboard");
   const jobs = useApp((s) => s.jobs);
   const todos = useApp((s) => s.todos);
   const refreshJobs = useApp((s) => s.refreshJobs);
@@ -899,11 +926,11 @@ export function TodayActivity({
       <div className="wb-today-stats">
         <button type="button" className="wb-today-stat" onClick={onOpenJobs}>
           <strong>{counts.live}</strong>
-          <span>진행 중</span>
+          <span>{t("today.live")}</span>
         </button>
         <button type="button" className="wb-today-stat" onClick={onOpenJobs}>
           <strong>{counts.success}</strong>
-          <span>완료 실행</span>
+          <span>{t("today.successRuns")}</span>
         </button>
         <button
           type="button"
@@ -911,14 +938,14 @@ export function TodayActivity({
           onClick={onOpenJobs}
         >
           <strong>{counts.failed}</strong>
-          <span>실패</span>
+          <span>{t("today.failed")}</span>
         </button>
         <div className="wb-today-stat is-static">
           <strong>
             {todoDone}
             <small>/{todoTotal}</small>
           </strong>
-          <span>오늘 할 일</span>
+          <span>{t("today.todos")}</span>
         </div>
       </div>
 
@@ -942,7 +969,10 @@ export function TodayActivity({
                 (dayFraction(to, dayStart) - dayFraction(from, dayStart)) * 100,
               ),
             );
-            const text = `${clockText(from)} ${job.label} · ${JOB_LABEL[job.status] ?? job.status}`;
+            const text = `${clockText(from)} ${job.label} · ${jobStatusLabel(
+              job.status,
+              t,
+            )}`;
             return (
               <button
                 key={job.id}
@@ -958,16 +988,16 @@ export function TodayActivity({
           <span
             className="wb-today-now"
             style={{ left: `${nowPercent}%` }}
-            title={`현재 ${clockText(Date.now())}`}
+            title={t("today.now", { time: clockText(Date.now()) })}
           />
         </div>
         <div className="wb-today-scale" aria-hidden>
-          {["0시", "6시", "12시", "18시", "24시"].map((label) => (
-            <span key={label}>{label}</span>
+          {[0, 6, 12, 18, 24].map((h) => (
+            <span key={h}>{t("today.hour", { h })}</span>
           ))}
         </div>
         {!todayJobs.length && (
-          <p className="wb-today-hint">오늘 실행한 기록이 아직 없습니다.</p>
+          <p className="wb-today-hint">{t("today.noRuns")}</p>
         )}
       </div>
 
@@ -1008,7 +1038,7 @@ export function TodayActivity({
               <span className="wb-dot is-ready" />
               <span className="wb-action-text">
                 <strong>{event.title}</strong>
-                <small>오늘 일정</small>
+                <small>{t("today.eventTag")}</small>
               </span>
             </button>
           ))}
@@ -1022,7 +1052,7 @@ export function TodayActivity({
               <span className="wb-dot is-wait" />
               <span className="wb-action-text">
                 <strong>{item.title}</strong>
-                <small>오늘 마감</small>
+                <small>{t("today.dueTag")}</small>
               </span>
             </button>
           ))}
@@ -1036,7 +1066,7 @@ export function TodayActivity({
               <CircleCheck size={13} className="wb-done-check" />
               <span className="wb-action-text">
                 <strong>{item.title}</strong>
-                <small>오늘 완료</small>
+                <small>{t("today.doneTag")}</small>
               </span>
             </button>
           ))}

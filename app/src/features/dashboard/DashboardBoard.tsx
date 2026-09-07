@@ -1,4 +1,6 @@
 import { useMemo, useState, type ReactNode, type RefObject } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
 import { GripHorizontal, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 import {
   Responsive,
@@ -16,29 +18,45 @@ import { useDashboardLayout } from "./layout-store";
 import {
   DASHBOARD_BREAKPOINTS,
   DASHBOARD_COLS,
-  WIDGET_BY_ID,
   WIDGET_REGISTRY,
   type DashboardBreakpoint,
   type DashboardWidgetId,
 } from "./registry";
+import { METRIC_PREFIX, isMetricWidgetId } from "./metrics";
 
-const BREAKPOINT_LABEL: Record<DashboardBreakpoint, string> = {
-  lg: "넓은 화면",
-  md: "중간 화면",
-  sm: "좁은 화면",
-};
+/** 위젯 화면 문자열의 번들 키. 지표 카드는 metrics.<key>.* 를 쓴다. */
+function widgetTextKeys(id: DashboardWidgetId) {
+  if (isMetricWidgetId(id)) {
+    const key = `metrics.${id.slice(METRIC_PREFIX.length)}`;
+    return { title: `${key}.label`, description: `${key}.hint` };
+  }
+  return {
+    title: `widgets.${id}.title`,
+    description: `widgets.${id}.description`,
+  };
+}
 
 /** 카탈로그가 길어졌으므로 카테고리로 묶는다. 등록 순서를 그대로 쓴다. */
-function groupWidgets(query: string) {
+function groupWidgets(query: string, t: TFunction) {
   const needle = query.trim().toLowerCase();
-  const groups: { category: string; widgets: typeof WIDGET_REGISTRY }[] = [];
+  const groups: { categoryKey: string; widgets: typeof WIDGET_REGISTRY }[] =
+    [];
   for (const widget of WIDGET_REGISTRY) {
-    const haystack =
-      widget.title + " " + widget.description + " " + widget.category;
+    const keys = widgetTextKeys(widget.id);
+    const haystack = [
+      widget.title,
+      widget.description,
+      widget.category,
+      t(keys.title),
+      t(keys.description),
+      t(`categories.${widget.categoryKey}`),
+    ].join(" ");
     if (needle && !haystack.toLowerCase().includes(needle)) continue;
-    const group = groups.find((entry) => entry.category === widget.category);
+    const group = groups.find(
+      (entry) => entry.categoryKey === widget.categoryKey,
+    );
     if (group) group.widgets.push(widget);
-    else groups.push({ category: widget.category, widgets: [widget] });
+    else groups.push({ categoryKey: widget.categoryKey, widgets: [widget] });
   }
   return groups;
 }
@@ -54,6 +72,7 @@ export function DashboardBoard({
   onCatalogClose: () => void;
   renderWidget: (id: DashboardWidgetId) => ReactNode;
 }) {
+  const { t } = useTranslation("dashboard");
   const enabled = useDashboardLayout((state) => state.enabled);
   const layouts = useDashboardLayout((state) => state.layouts);
   const setLayouts = useDashboardLayout((state) => state.setLayouts);
@@ -62,7 +81,7 @@ export function DashboardBoard({
   );
   const reset = useDashboardLayout((state) => state.reset);
   const [query, setQuery] = useState("");
-  const groups = useMemo(() => groupWidgets(query), [query]);
+  const groups = useMemo(() => groupWidgets(query, t), [query, t]);
   const { width, containerRef, mounted } = useContainerWidth({
     measureBeforeMount: true,
   });
@@ -78,16 +97,15 @@ export function DashboardBoard({
       {editing && (
         <div className="mb-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--brand-border)] bg-[var(--brand-soft)] px-3 py-2 text-xs">
           <SlidersHorizontal className="size-3.5 text-[var(--brand)]" />
-          <span className="font-medium">편집 모드</span>
+          <span className="font-medium">{t("board.editMode")}</span>
           <span className="text-muted-foreground">
-            상단 손잡이로 이동하고 모서리로 크기를 조절하세요. 화면 크기별
-            배치는 따로 저장됩니다.
+            {t("board.editHint")}
           </span>
           <span className="rounded-md border border-[var(--brand-border)] bg-card/70 px-2 py-1 text-[10px] font-semibold text-[var(--brand)]">
-            {BREAKPOINT_LABEL[currentBreakpoint]}
+            {t(`board.breakpoint.${currentBreakpoint}`)}
           </span>
           <Button className="ml-auto" size="xs" variant="ghost" onClick={reset}>
-            <RotateCcw /> 모든 화면 기본 배치 복원
+            <RotateCcw /> {t("board.resetLayouts")}
           </Button>
         </div>
       )}
@@ -123,8 +141,10 @@ export function DashboardBoard({
                     <button
                       type="button"
                       className="widget-drag-handle"
-                      aria-label={`${WIDGET_BY_ID[id].title} 위젯 이동`}
-                      title="드래그 또는 방향키로 이동"
+                      aria-label={t("board.moveWidget", {
+                        title: t(widgetTextKeys(id).title),
+                      })}
+                      title={t("board.moveHandleHint")}
                       onKeyDown={(event) => {
                         const delta = (
                           {
@@ -165,8 +185,10 @@ export function DashboardBoard({
                       type="button"
                       className="widget-remove-button"
                       onClick={() => setWidgetEnabled(id, false)}
-                      aria-label={`${WIDGET_BY_ID[id].title} 위젯 숨기기`}
-                      title="위젯 숨기기"
+                      aria-label={t("board.hideWidget", {
+                        title: t(widgetTextKeys(id).title),
+                      })}
+                      title={t("board.hideWidgetHint")}
                     >
                       <X className="size-3.5" />
                     </button>
@@ -180,9 +202,9 @@ export function DashboardBoard({
         {mounted && enabled.length === 0 && (
           <div className="grid min-h-80 place-items-center rounded-xl border border-dashed bg-card/50 text-center">
             <div>
-              <p className="text-sm font-semibold">표시할 위젯이 없습니다.</p>
+              <p className="text-sm font-semibold">{t("board.emptyTitle")}</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                상단의 위젯 추가 버튼에서 필요한 항목을 선택하세요.
+                {t("board.emptyHint")}
               </p>
             </div>
           </div>
@@ -192,26 +214,24 @@ export function DashboardBoard({
       <Dialog
         open={catalogOpen}
         onClose={onCatalogClose}
-        title="위젯 카탈로그"
+        title={t("board.catalogTitle")}
         className="max-w-xl"
       >
         <p className="mb-3 text-xs text-muted-foreground">
-          대시보드에 표시할 위젯을 선택합니다. 지표는 카드 한 장이 위젯
-          하나이므로 필요한 숫자만 골라 두고 크기와 자리도 따로 정할 수
-          있습니다. 다시 추가한 위젯은 보드의 마지막에 배치됩니다.
+          {t("board.catalogIntro")}
         </p>
         <Input
           className="mb-3"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="위젯 이름이나 설명으로 찾기"
-          aria-label="위젯 검색"
+          placeholder={t("board.searchPlaceholder")}
+          aria-label={t("board.searchLabel")}
         />
         <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
           {groups.map((group) => (
-            <section key={group.category} className="space-y-2">
+            <section key={group.categoryKey} className="space-y-2">
               <h3 className="sticky top-0 z-10 bg-card/95 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground">
-                {group.category}
+                {t(`categories.${group.categoryKey}`)}
                 <span className="ml-1.5 font-normal">
                   {
                     group.widgets.filter((widget) =>
@@ -232,14 +252,14 @@ export function DashboardBoard({
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-[13px] font-semibold">
-                        {widget.title}
+                        {t(widgetTextKeys(widget.id).title)}
                       </span>
                       <span className="rounded bg-muted px-1.5 py-0.5 text-[9px] font-medium text-muted-foreground">
-                        {widget.category}
+                        {t(`categories.${widget.categoryKey}`)}
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {widget.description}
+                      {t(widgetTextKeys(widget.id).description)}
                     </p>
                   </label>
                   <Switch
@@ -255,7 +275,7 @@ export function DashboardBoard({
           ))}
           {groups.length === 0 && (
             <p className="rounded-xl border border-dashed p-6 text-center text-xs text-muted-foreground">
-              검색어와 맞는 위젯이 없습니다.
+              {t("board.noResults")}
             </p>
           )}
         </div>

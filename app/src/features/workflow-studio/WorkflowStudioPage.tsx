@@ -1,5 +1,6 @@
 import { useApp } from "@/lib/store";
-import { WorkflowCanvas, NODE_LABELS } from "./WorkflowCanvas";
+import { useTranslation } from "react-i18next";
+import { WorkflowCanvas } from "./WorkflowCanvas";
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -91,6 +92,7 @@ function comma(value: string): string[] {
 }
 
 export default function WorkflowStudioPage() {
+  const { t } = useTranslation("dashboard");
   const initial = useApp((s) => s.workflowToEdit);
   const [catalog, setCatalog] = useState<WorkflowDefinition[]>([]);
   const [drafts, setDrafts] = useState<WorkflowDraftRecord[]>([]);
@@ -112,7 +114,9 @@ export default function WorkflowStudioPage() {
       workflowApi.catalog(),
       workflowApi.drafts().catch((error) => {
         if (!isWorkbenchPreview)
-          setMessage(`초안을 불러오지 못했습니다: ${String(error)}`);
+          setMessage(
+            t("workflowStudio.loadDraftsFailed", { error: String(error) }),
+          );
         return [];
       }),
     ]);
@@ -177,7 +181,7 @@ export default function WorkflowStudioPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <PageHeader title="워크플로 스튜디오">
+      <PageHeader title={t("workflowStudio.title")}>
         <Button
           size="sm"
           variant="outline"
@@ -186,22 +190,22 @@ export default function WorkflowStudioPage() {
             void action(async () => {
               const text = await workflowApi.export(definition);
               await navigator.clipboard.writeText(text);
-              setMessage("워크플로 JSON을 클립보드에 복사했습니다.");
+              setMessage(t("workflowStudio.copied"));
             })
           }
         >
-          <Download className="size-3" /> 내보내기
+          <Download className="size-3" /> {t("workflowStudio.export")}
         </Button>
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-auto p-5">
         <div className="mx-auto grid max-w-7xl gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
           <details className="xl:col-span-2 rounded-xl border bg-card p-4">
             <summary className="cursor-pointer text-sm font-semibold">
-              워크플로 라이브러리 · 기존 흐름 선택
+              {t("workflowStudio.librarySummary")}
             </summary>
             <Card className="mt-3">
               <CardHeader>
-                <CardTitle>라이브러리</CardTitle>
+                <CardTitle>{t("workflowStudio.library")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <Button
@@ -209,11 +213,11 @@ export default function WorkflowStudioPage() {
                   variant="secondary"
                   onClick={() => selectDefinition(freshDefinition())}
                 >
-                  <Plus /> 새 워크플로
+                  <Plus /> {t("workflowStudio.newWorkflow")}
                 </Button>
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-muted-foreground">
-                    발행됨
+                    {t("workflowStudio.published")}
                   </p>
                   {catalog.map((item) => (
                     <button
@@ -230,7 +234,7 @@ export default function WorkflowStudioPage() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-muted-foreground">
-                    초안
+                    {t("workflowStudio.drafts")}
                   </p>
                   {drafts.map((item) => (
                     <button
@@ -247,7 +251,9 @@ export default function WorkflowStudioPage() {
                           item.validation.valid ? "success" : "destructive"
                         }
                       >
-                        {item.validation.valid ? "유효" : "수정"}
+                        {item.validation.valid
+                          ? t("workflowStudio.valid")
+                          : t("workflowStudio.needsFix")}
                       </Badge>
                     </button>
                   ))}
@@ -259,7 +265,7 @@ export default function WorkflowStudioPage() {
           <div className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>정의</CardTitle>
+                <CardTitle>{t("workflowStudio.definition")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 md:grid-cols-2">
                 <label className="text-xs">
@@ -270,7 +276,7 @@ export default function WorkflowStudioPage() {
                   />
                 </label>
                 <label className="text-xs">
-                  버전
+                  {t("workflowStudio.version")}
                   <Input
                     value={definition.version}
                     onChange={(e) =>
@@ -279,9 +285,9 @@ export default function WorkflowStudioPage() {
                   />
                 </label>
                 <label className="text-xs">
-                  이름
+                  {t("workflowStudio.name")}
                   <Input
-                    aria-label="워크플로 이름"
+                    aria-label={t("workflowStudio.nameAria")}
                     value={definition.label}
                     onChange={(e) =>
                       updateDefinition({ label: e.target.value })
@@ -289,7 +295,7 @@ export default function WorkflowStudioPage() {
                   />
                 </label>
                 <label className="text-xs">
-                  시작 단계
+                  {t("workflowStudio.entryStep")}
                   <select
                     className="mt-1 h-9 w-full rounded-md border bg-background px-3"
                     value={definition.entry}
@@ -309,7 +315,7 @@ export default function WorkflowStudioPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  작성할 문서
+                  {t("workflowStudio.documents")}
                   <Button
                     size="xs"
                     variant="outline"
@@ -322,14 +328,14 @@ export default function WorkflowStudioPage() {
                       })
                     }
                   >
-                    <Plus /> 문서
+                    <Plus /> {t("workflowStudio.addDocument")}
                   </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {definition.artifacts.length === 0 && (
                   <p className="text-xs text-muted-foreground">
-                    각 단계에서 작성하거나 참고할 문서를 추가하세요.
+                    {t("workflowStudio.noDocuments")}
                   </p>
                 )}
                 {definition.artifacts.map((artifact, index) => (
@@ -338,7 +344,7 @@ export default function WorkflowStudioPage() {
                     className="grid gap-2 rounded-md border p-3 md:grid-cols-2"
                   >
                     <label className="text-xs">
-                      역할 ID
+                      {t("workflowStudio.roleId")}
                       <Input
                         value={artifact.role}
                         onChange={(e) =>
@@ -354,7 +360,7 @@ export default function WorkflowStudioPage() {
                       />
                     </label>
                     <label className="text-xs">
-                      표시 이름
+                      {t("workflowStudio.displayName")}
                       <Input
                         value={artifact.label}
                         onChange={(e) =>
@@ -370,7 +376,7 @@ export default function WorkflowStudioPage() {
                       />
                     </label>
                     <label className="text-xs md:col-span-2">
-                      문서 저장 위치
+                      {t("workflowStudio.docPath")}
                       <Input
                         value={artifact.path}
                         onChange={(e) =>
@@ -386,7 +392,7 @@ export default function WorkflowStudioPage() {
                       />
                     </label>
                     <label className="text-xs md:col-span-2">
-                      초기 템플릿
+                      {t("workflowStudio.initialTemplate")}
                       <Textarea
                         className="min-h-24 font-mono text-xs"
                         value={artifact.template}
@@ -414,7 +420,7 @@ export default function WorkflowStudioPage() {
                         })
                       }
                     >
-                      <Trash2 /> 삭제
+                      <Trash2 /> {t("workflowStudio.delete")}
                     </Button>
                   </div>
                 ))}
@@ -423,7 +429,8 @@ export default function WorkflowStudioPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <GitBranch className="size-4" /> 단계와 연결
+                  <GitBranch className="size-4" />{" "}
+                  {t("workflowStudio.stepsAndEdges")}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
@@ -448,7 +455,7 @@ export default function WorkflowStudioPage() {
                     setSelected(next.id);
                   }}
                 >
-                  <Plus /> 단계 추가
+                  <Plus /> {t("workflowStudio.addStep")}
                 </Button>
               </CardContent>
             </Card>
@@ -458,7 +465,7 @@ export default function WorkflowStudioPage() {
             {node && (
               <Card>
                 <CardHeader>
-                  <CardTitle>선택한 단계</CardTitle>
+                  <CardTitle>{t("workflowStudio.selectedStep")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <label className="text-xs">
@@ -485,14 +492,14 @@ export default function WorkflowStudioPage() {
                     />
                   </label>
                   <label className="text-xs">
-                    이름
+                    {t("workflowStudio.name")}
                     <Input
                       value={node.label}
                       onChange={(e) => updateNode({ label: e.target.value })}
                     />
                   </label>
                   <label className="text-xs">
-                    종류
+                    {t("workflowStudio.kind")}
                     <select
                       className="mt-1 h-9 w-full rounded-md border bg-background px-3"
                       value={node.kind}
@@ -512,14 +519,14 @@ export default function WorkflowStudioPage() {
                         "end",
                       ].map((kind) => (
                         <option key={kind} value={kind}>
-                          {NODE_LABELS[kind as WorkflowNode["kind"]]}
+                          {t(`canvas.nodeKinds.${kind}`)}
                         </option>
                       ))}
                     </select>
                   </label>
                   {node.kind === "artifact" && (
                     <label className="text-xs">
-                      편집할 산출물 역할
+                      {t("workflowStudio.artifactRole")}
                       <Input
                         value={node.artifactRole ?? ""}
                         onChange={(e) =>
@@ -530,7 +537,7 @@ export default function WorkflowStudioPage() {
                   )}
                   {(node.kind === "agent" || node.kind === "check") && (
                     <label className="text-xs">
-                      실행할 기능 ID
+                      {t("workflowStudio.actionRef")}
                       <Input
                         value={node.actionRef ?? ""}
                         onChange={(e) =>
@@ -541,7 +548,7 @@ export default function WorkflowStudioPage() {
                   )}
                   {node.kind === "human" && (
                     <label className="text-xs">
-                      결정 키
+                      {t("workflowStudio.decisionKey")}
                       <Input
                         value={node.decision ?? ""}
                         onChange={(e) =>
@@ -553,7 +560,7 @@ export default function WorkflowStudioPage() {
                   {node.kind === "subworkflow" && (
                     <div className="grid grid-cols-2 gap-2 rounded-md border p-2">
                       <label className="text-xs">
-                        하위 workflow ID
+                        {t("workflowStudio.subworkflowId")}
                         <Input
                           list="workflow-library"
                           value={node.workflowRef?.id ?? ""}
@@ -568,7 +575,7 @@ export default function WorkflowStudioPage() {
                         />
                       </label>
                       <label className="text-xs">
-                        정확한 버전
+                        {t("workflowStudio.exactVersion")}
                         <Input
                           value={node.workflowRef?.version ?? ""}
                           onChange={(e) =>
@@ -594,7 +601,7 @@ export default function WorkflowStudioPage() {
                     </div>
                   )}
                   <label className="text-xs">
-                    담당 역할(쉼표)
+                    {t("workflowStudio.allowedRoles")}
                     <Input
                       value={node.allowedRoles.join(", ")}
                       onChange={(e) =>
@@ -605,7 +612,7 @@ export default function WorkflowStudioPage() {
                     />
                   </label>
                   <label className="text-xs">
-                    입력 역할(쉼표)
+                    {t("workflowStudio.inputRoles")}
                     <Input
                       value={node.inputs.join(", ")}
                       onChange={(e) =>
@@ -614,7 +621,7 @@ export default function WorkflowStudioPage() {
                     />
                   </label>
                   <label className="text-xs">
-                    출력 역할(쉼표)
+                    {t("workflowStudio.outputRoles")}
                     <Input
                       value={node.outputs.join(", ")}
                       onChange={(e) =>
@@ -623,7 +630,7 @@ export default function WorkflowStudioPage() {
                     />
                   </label>
                   <label className="text-xs">
-                    지침
+                    {t("workflowStudio.instructions")}
                     <Textarea
                       value={node.instructions}
                       onChange={(e) =>
@@ -638,7 +645,7 @@ export default function WorkflowStudioPage() {
                         updateNode({ requiresCompletedDependencies: value })
                       }
                     />{" "}
-                    선행 항목 완료 필요
+                    {t("workflowStudio.requiresDeps")}
                   </label>
                   <Button
                     variant="destructive"
@@ -666,18 +673,18 @@ export default function WorkflowStudioPage() {
                       );
                     }}
                   >
-                    <Trash2 /> 삭제
+                    <Trash2 /> {t("workflowStudio.delete")}
                   </Button>
                 </CardContent>
               </Card>
             )}
             <Card>
               <CardHeader>
-                <CardTitle>검증과 발행</CardTitle>
+                <CardTitle>{t("workflowStudio.validatePublish")}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <label className="text-xs">
-                  초안 ID
+                  {t("workflowStudio.draftId")}
                   <Input
                     value={draftId}
                     onChange={(e) => setDraftId(e.target.value)}
@@ -699,7 +706,7 @@ export default function WorkflowStudioPage() {
                       })
                     }
                   >
-                    <Save /> 초안 저장
+                    <Save /> {t("workflowStudio.saveDraft")}
                   </Button>
                   <Button
                     size="sm"
@@ -711,7 +718,7 @@ export default function WorkflowStudioPage() {
                       )
                     }
                   >
-                    검증
+                    {t("workflowStudio.validate")}
                   </Button>
                   <Button
                     size="sm"
@@ -720,11 +727,11 @@ export default function WorkflowStudioPage() {
                       void action(async () => {
                         await workflowApi.publish(definition);
                         await load();
-                        setMessage("새 불변 버전을 발행했습니다.");
+                        setMessage(t("workflowStudio.publishedNew"));
                       })
                     }
                   >
-                    <CheckCircle2 /> 버전 발행
+                    <CheckCircle2 /> {t("workflowStudio.publish")}
                   </Button>
                 </div>
                 {validation?.issues.map((issue, index) => (
@@ -736,7 +743,7 @@ export default function WorkflowStudioPage() {
                   </p>
                 ))}
                 <label className="text-xs">
-                  시뮬레이션 이벤트(쉼표)
+                  {t("workflowStudio.simulationEvents")}
                   <Input
                     value={events}
                     onChange={(e) => setEvents(e.target.value)}
@@ -758,12 +765,18 @@ export default function WorkflowStudioPage() {
                     )
                   }
                 >
-                  가상 실행
+                  {t("workflowStudio.simulate")}
                 </Button>
                 {simulation && (
                   <div className="rounded-md bg-muted p-3 text-xs">
                     <strong>{simulation.status}</strong>
-                    <p>활성: {simulation.activeNodes.join(", ") || "없음"}</p>
+                    <p>
+                      {t("workflowStudio.activeNodes", {
+                        nodes:
+                          simulation.activeNodes.join(", ") ||
+                          t("workflowStudio.none"),
+                      })}
+                    </p>
                     {simulation.trace.map((row, index) => (
                       <p key={index}>
                         {row.event ?? "start"} · {row.nodeId} · {row.outcome}
@@ -776,7 +789,10 @@ export default function WorkflowStudioPage() {
                   variant="ghost"
                   onClick={() => setAdvanced((value) => !value)}
                 >
-                  <Copy /> {advanced ? "시각 편집으로" : "고급 JSON"}
+                  <Copy />{" "}
+                  {advanced
+                    ? t("workflowStudio.toVisual")
+                    : t("workflowStudio.advancedJson")}
                 </Button>
                 {advanced && (
                   <Textarea
@@ -790,7 +806,7 @@ export default function WorkflowStudioPage() {
                         );
                         setMessage(null);
                       } catch {
-                        setMessage("JSON 구문을 확인하세요.");
+                        setMessage(t("workflowStudio.jsonSyntaxError"));
                       }
                     }}
                   />

@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import i18n from "@/i18n";
 import type {
   ChangeSet,
   SchemaMigrationPlan,
@@ -16,7 +17,7 @@ function desktopCall<T>(
   if (!isTauri()) {
     return Promise.reject(
       new Error(
-        "스키마 검사와 파일 적용은 Sawhorse 데스크톱 앱에서 사용할 수 있습니다.",
+        i18n.t("dashboard:schemaStudio.desktopOnly"),
       ),
     );
   }

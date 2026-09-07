@@ -1,1 +1,373 @@
-{}
+{
+  "board": {
+    "editMode": "Edit mode",
+    "editHint": "Drag the top handle to move and the corners to resize. Layouts are saved separately per screen size.",
+    "breakpoint": {
+      "lg": "Wide screen",
+      "md": "Medium screen",
+      "sm": "Narrow screen"
+    },
+    "resetLayouts": "Restore default layout for all screens",
+    "moveWidget": "Move {{title}} widget",
+    "moveHandleHint": "Drag or use arrow keys to move",
+    "hideWidget": "Hide {{title}} widget",
+    "hideWidgetHint": "Hide widget",
+    "emptyTitle": "No widgets to display.",
+    "emptyHint": "Pick the ones you need from the add-widget button above.",
+    "catalogTitle": "Widget catalog",
+    "catalogIntro": "Choose the widgets shown on the dashboard. Each metric card is a widget of its own, so pick only the numbers you need and set their size and place separately. Re-added widgets are placed at the end of the board.",
+    "searchPlaceholder": "Search by widget name or description",
+    "searchLabel": "Search widgets",
+    "noResults": "No widgets match your search."
+  },
+  "categories": {
+    "calendar": "Calendar",
+    "dev": "Dev",
+    "issues": "Issues",
+    "workflow": "Workflow",
+    "jobs": "Runs",
+    "automation": "Automation",
+    "extensions": "Core extensions",
+    "vault": "Vault",
+    "metrics": "Metrics"
+  },
+  "widgets": {
+    "today": {
+      "title": "Today's activity",
+      "description": "24-hour timeline of today's runs, events, and todos"
+    },
+    "next": {
+      "title": "Next work items",
+      "description": "By due date and priority"
+    },
+    "issues": {
+      "title": "Issues",
+      "description": "Status distribution and approval, design, run"
+    },
+    "due": {
+      "title": "Due soon",
+      "description": "Work items due within a week"
+    },
+    "events": {
+      "title": "Upcoming events",
+      "description": "Upcoming appointments and milestones"
+    },
+    "stages": {
+      "title": "Stage context",
+      "description": "Where each work item stands in the flow"
+    },
+    "done": {
+      "title": "Recently completed",
+      "description": "Completed work items and their results"
+    },
+    "jobs": {
+      "title": "Run status",
+      "description": "Recent agent runs, with stop controls"
+    },
+    "schedules": {
+      "title": "Schedules & routines",
+      "description": "Times of registered automation tasks and instant runs"
+    },
+    "reading": {
+      "title": "Reading list",
+      "description": "Unread new articles from RSS feeds"
+    },
+    "checklist": {
+      "title": "Todos",
+      "description": "Checklist from today's journal"
+    }
+  },
+  "metrics": {
+    "backlog": { "label": "Proposals", "hint": "Requests not yet reviewed" },
+    "review": {
+      "label": "Awaiting approval",
+      "hint": "Items waiting for review or approval"
+    },
+    "ready": {
+      "label": "Ready to run",
+      "hint": "Work items ready to start"
+    },
+    "running": {
+      "label": "In progress",
+      "hint": "Items being worked on right now"
+    },
+    "done": { "label": "Completed", "hint": "Accumulated results" },
+    "hold": {
+      "label": "Rejected or cancelled",
+      "hint": "Items not accepted or abandoned midway"
+    },
+    "overdue": { "label": "Overdue", "hint": "Items past their due date" },
+    "due-today": {
+      "label": "Due today",
+      "hint": "Items that must be done by today"
+    },
+    "due-week": {
+      "label": "Due within 7 days",
+      "hint": "Deadlines landing this week"
+    },
+    "assigned": {
+      "label": "Assigned",
+      "hint": "Open items with an assignee"
+    },
+    "needs-approval": {
+      "label": "Needs approval",
+      "hint": "Items that cannot proceed without approval"
+    },
+    "blocked": {
+      "label": "On hold",
+      "hint": "Items waiting on someone to unblock"
+    },
+    "done-today": {
+      "label": "Done today",
+      "hint": "Work items finished today"
+    },
+    "done-week": {
+      "label": "Done in last 7 days",
+      "hint": "Amount handled over the past week"
+    },
+    "jobs-live": {
+      "label": "Running",
+      "hint": "Agent jobs queued or running"
+    },
+    "jobs-failed": {
+      "label": "Failed runs",
+      "hint": "Agent jobs that failed today"
+    }
+  },
+  "issues": {
+    "groups": {
+      "backlog": "Proposals",
+      "review": "Awaiting approval",
+      "ready": "Ready",
+      "running": "Running",
+      "done": "Done",
+      "blocked": "On hold",
+      "dropped": "Rejected / cancelled"
+    },
+    "distribution": "Issue status distribution",
+    "empty": "No issues registered.",
+    "emptyFilter": "No issues in the selected segment.",
+    "actions": {
+      "approve": "Approve",
+      "run": "Run",
+      "open": "Open"
+    },
+    "messages": {
+      "approve": "{{id}} approved.",
+      "start": "{{id}} started."
+    }
+  },
+  "jobs": {
+    "distribution": "Run status distribution",
+    "empty": "No run history yet.",
+    "status": {
+      "queued": "Queued",
+      "running": "Running",
+      "success": "Success",
+      "failed": "Failed",
+      "cancelled": "Cancelled",
+      "interrupted": "Interrupted"
+    },
+    "elapsed": "{{time}} elapsed",
+    "actions": {
+      "stop": "Stop",
+      "log": "Log"
+    }
+  },
+  "duration": {
+    "seconds": "{{n}}s",
+    "minutes": "{{n}}m",
+    "hoursMinutes": "{{h}}h {{m}}m"
+  },
+  "schedules": {
+    "empty": "Create an automation task and set when it should run.",
+    "noSchedule": "No schedule",
+    "onDate": "On date",
+    "weekdays": "Weekdays",
+    "everyday": "Every day",
+    "lastRun": " · last run {{time}}",
+    "pausedSuffix": " · paused",
+    "stopRunning": "Running · stop",
+    "stopQueued": "Queued · cancel",
+    "runNow": "Run now",
+    "pause": "Pause",
+    "resume": "Resume",
+    "messages": {
+      "runRegistered": "Scheduled {{title}} to run."
+    }
+  },
+  "checklist": {
+    "noJournal": "Today's journal document doesn't exist yet.",
+    "empty": "No todos for today.",
+    "openJournal": "Journal"
+  },
+  "reading": {
+    "disabled": "Turn on the reading list in extensions to see new articles.",
+    "empty": "No unread articles.",
+    "markRead": "Mark read",
+    "openSource": "Source"
+  },
+  "today": {
+    "live": "Running",
+    "successRuns": "Completed runs",
+    "failed": "Failed",
+    "todos": "Today's todos",
+    "now": "Now {{time}}",
+    "hour": "{{h}}:00",
+    "noRuns": "No runs recorded today yet.",
+    "eventTag": "Today's event",
+    "dueTag": "Due today",
+    "doneTag": "Done today"
+  },
+  "canvas": {
+    "help": "Click a step to edit its content and drag to arrange it. Connect next steps and run conditions below.",
+    "canvasLabel": "Workflow canvas",
+    "nodeAria": "Step {{label}}",
+    "entryPrefix": "Start · ",
+    "edgesLabel": "Step connections",
+    "edgeFrom": "Edge {{n}} from step",
+    "edgeOn": "Edge {{n}} condition",
+    "edgeTo": "Edge {{n}} to step",
+    "edgeDelete": "Delete edge {{n}}",
+    "delete": "Delete",
+    "edgeConditionHint": "There is an extra condition or loop limit. See the advanced JSON.",
+    "addEdge": "Add connection",
+    "nodeKinds": {
+      "artifact": "Write document",
+      "agent": "Run agent",
+      "check": "Automated check",
+      "human": "Human review",
+      "condition": "Condition branch",
+      "subworkflow": "Another workflow",
+      "end": "Done"
+    },
+    "events": {
+      "approved": "On approval",
+      "completed": "On completion",
+      "failed": "On failure",
+      "rejected": "On rejection",
+      "next": "Next"
+    }
+  },
+  "workflowStudio": {
+    "title": "Workflow studio",
+    "loadDraftsFailed": "Failed to load drafts: {{error}}",
+    "copied": "Workflow JSON copied to the clipboard.",
+    "export": "Export",
+    "librarySummary": "Workflow library · pick an existing flow",
+    "library": "Library",
+    "newWorkflow": "New workflow",
+    "published": "Published",
+    "drafts": "Drafts",
+    "valid": "Valid",
+    "needsFix": "Fix",
+    "definition": "Definition",
+    "version": "Version",
+    "name": "Name",
+    "nameAria": "Workflow name",
+    "entryStep": "Entry step",
+    "documents": "Documents to write",
+    "addDocument": "Document",
+    "noDocuments": "Add documents each step writes or refers to.",
+    "roleId": "Role ID",
+    "displayName": "Display name",
+    "docPath": "Document path",
+    "initialTemplate": "Initial template",
+    "delete": "Delete",
+    "stepsAndEdges": "Steps and connections",
+    "addStep": "Add step",
+    "selectedStep": "Selected step",
+    "kind": "Kind",
+    "artifactRole": "Artifact role to edit",
+    "actionRef": "Function ID to run",
+    "decisionKey": "Decision key",
+    "subworkflowId": "Sub-workflow ID",
+    "exactVersion": "Exact version",
+    "allowedRoles": "Allowed roles (comma)",
+    "inputRoles": "Input roles (comma)",
+    "outputRoles": "Output roles (comma)",
+    "instructions": "Instructions",
+    "requiresDeps": "Require predecessors completed",
+    "validatePublish": "Validate & publish",
+    "draftId": "Draft ID",
+    "saveDraft": "Save draft",
+    "validate": "Validate",
+    "publish": "Publish version",
+    "publishedNew": "Published a new immutable version.",
+    "simulationEvents": "Simulation events (comma)",
+    "simulate": "Simulate",
+    "activeNodes": "Active: {{nodes}}",
+    "none": "None",
+    "toVisual": "To visual editor",
+    "advancedJson": "Advanced JSON",
+    "jsonSyntaxError": "Check the JSON syntax."
+  },
+  "schemaStudio": {
+    "title": "Vault document structure",
+    "typesAndFields": "Document types and fields",
+    "activeBadge": "Active {{id}} r{{revision}}",
+    "visualEdit": "Visual editor",
+    "advancedJson": "Advanced JSON",
+    "schemaId": "Schema ID",
+    "draftId": "Draft ID",
+    "types": "Document types",
+    "addType": "Type",
+    "typeId": "Type ID",
+    "displayName": "Display name",
+    "storagePath": "Storage path",
+    "templateRef": "Template reference",
+    "requiredSections": "Required sections (comma)",
+    "fields": "Document properties",
+    "fieldId": "Field ID",
+    "fieldName": "Field name",
+    "prevKey": "Previous key",
+    "prevKeyPlaceholder": "Previous key, comma",
+    "inputType": "Input type",
+    "inputTypes": {
+      "string": "Text",
+      "number": "Number",
+      "integer": "Integer",
+      "boolean": "Yes / No",
+      "enum": "Choice list",
+      "custom": "Custom (advanced)"
+    },
+    "enumValues": "Choices (comma separated)",
+    "enumValuesAria": "Choices",
+    "required": "Required",
+    "addField": "Field",
+    "fixInJson": "Edit the JSON in advanced mode.",
+    "topLevelObject": "The top-level schema JSON value must be an object.",
+    "publishLibrary": "Published library",
+    "drafts": "Drafts",
+    "saveDraft": "Save draft",
+    "validate": "Validate definition",
+    "publish": "Publish version",
+    "published": "Published an immutable schema revision.",
+    "scanVault": "Scan vault",
+    "pathVarsHelp": "Supported path variables: {id}, {projectId}, {slug}. Managed documents are identified by the id and typeId in their frontmatter.",
+    "diagnostics": "Definition diagnostics",
+    "valid": "Valid",
+    "needsFix": "Needs fixes",
+    "noDiagnostics": "No diagnostics.",
+    "error": "Error",
+    "warning": "Warning",
+    "validateFirst": "Validate the definition first.",
+    "scan": "Vault scan",
+    "files": "Files",
+    "managed": "Managed",
+    "preserved": "Preserved",
+    "makePlan": "Create migration plan",
+    "scanHelp": "Scanning with a validated schema separates managed documents from ordinary Markdown to preserve.",
+    "planAndApply": "Change plan & apply",
+    "planEmpty": "Run the vault scan, then create the migration plan.",
+    "noMoves": "No documents to move.",
+    "rewriteStats": "Fields {{fields}} · Links {{links}}",
+    "previewChangeSet": "Preview ChangeSet",
+    "applyChanges": "Apply changes",
+    "activated": "Activated schema {{id}} revision {{revision}}.",
+    "activate": "Activate",
+    "rollback": "Roll back",
+    "fixSchemaFirst": "Fix the schema errors, then scan the vault.",
+    "desktopOnly": "Schema scanning and file changes are available in the Sawhorse desktop app."
+  }
+}

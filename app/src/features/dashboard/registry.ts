@@ -26,36 +26,51 @@ export interface DashboardWidgetDefinition {
   title: string;
   description: string;
   category: string;
+  categoryKey: string;
   defaultLayout: Record<DashboardBreakpoint, Omit<LayoutItem, "i">>;
 }
 export const DASHBOARD_BREAKPOINTS = { lg: 900, md: 620, sm: 0 };
 export const DASHBOARD_COLS = { lg: 12, md: 8, sm: 4 };
 // 카테고리는 사이드바 진입점과 같은 이름을 쓴다 — 개발(WorkItem) / 자동화(TaskDef) / 볼트.
 // 지표만은 어느 화면에도 속하지 않는 숫자 한 장이므로 자기 이름을 쓴다.
-const panelEntries: [PanelWidgetId, string, string, string][] = [
-  ["today", "오늘 활동", "오늘 실행·일정·할 일의 24시간 타임라인", "캘린더"],
-  ["next", "다음 개발 항목", "기한과 우선순위순", "개발"],
-  ["issues", "이슈", "상태 분포와 승인·설계·실행", "이슈"],
-  ["due", "기한 임박", "일주일 안에 마감되는 개발 항목", "개발"],
-  ["events", "임박 일정", "다가오는 약속과 마일스톤", "캘린더"],
-  ["stages", "단계별 맥락", "개발 흐름의 진행 상황", "워크플로"],
-  ["done", "최근 완료", "완료한 개발 항목과 결과", "개발"],
-  ["jobs", "실행 현황", "에이전트의 최근 실행과 중지", "실행"],
+const panelEntries: [PanelWidgetId, string, string, string, string][] = [
+  [
+    "today",
+    "오늘 활동",
+    "오늘 실행·일정·할 일의 24시간 타임라인",
+    "캘린더",
+    "calendar",
+  ],
+  ["next", "다음 개발 항목", "기한과 우선순위순", "개발", "dev"],
+  ["issues", "이슈", "상태 분포와 승인·설계·실행", "이슈", "issues"],
+  ["due", "기한 임박", "일주일 안에 마감되는 개발 항목", "개발", "dev"],
+  ["events", "임박 일정", "다가오는 약속과 마일스톤", "캘린더", "calendar"],
+  ["stages", "단계별 맥락", "개발 흐름의 진행 상황", "워크플로", "workflow"],
+  ["done", "최근 완료", "완료한 개발 항목과 결과", "개발", "dev"],
+  ["jobs", "실행 현황", "에이전트의 최근 실행과 중지", "실행", "jobs"],
   [
     "schedules",
     "예약과 반복",
     "등록된 자동화 작업의 시간과 즉시 실행",
     "자동화",
+    "automation",
   ],
-  ["reading", "읽을거리", "RSS로 받아온 읽지 않은 새 글", "코어 확장"],
-  ["checklist", "할 일", "오늘 일지에 적어 둔 체크리스트", "볼트"],
+  [
+    "reading",
+    "읽을거리",
+    "RSS로 받아온 읽지 않은 새 글",
+    "코어 확장",
+    "extensions",
+  ],
+  ["checklist", "할 일", "오늘 일지에 적어 둔 체크리스트", "볼트", "vault"],
 ];
-const metricEntries: [DashboardWidgetId, string, string, string][] =
+const metricEntries: [DashboardWidgetId, string, string, string, string][] =
   METRIC_DEFINITIONS.map((metric) => [
     metricWidgetId(metric.key),
     metric.label,
     metric.hint,
     "지표",
+    "metrics",
   ]);
 const entries = [...metricEntries, ...panelEntries];
 
@@ -122,11 +137,12 @@ function packLayout(
 }
 
 export const WIDGET_REGISTRY: DashboardWidgetDefinition[] = entries.map(
-  ([id, title, description, category]) => ({
+  ([id, title, description, category, categoryKey]) => ({
     id,
     title,
     description,
     category,
+    categoryKey,
     // 카탈로그에서 다시 켤 때는 크기만 쓰고 위치는 보드 맨 아래로 붙는다.
     defaultLayout: {
       lg: { x: 0, y: 0, ...sizeOf(id, "lg") },

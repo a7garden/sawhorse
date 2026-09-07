@@ -1,1 +1,346 @@
-{}
+{
+  "board": {
+    "editMode": "편집 모드",
+    "editHint": "상단 손잡이로 이동하고 모서리로 크기를 조절하세요. 화면 크기별 배치는 따로 저장됩니다.",
+    "breakpoint": {
+      "lg": "넓은 화면",
+      "md": "중간 화면",
+      "sm": "좁은 화면"
+    },
+    "resetLayouts": "모든 화면 기본 배치 복원",
+    "moveWidget": "{{title}} 위젯 이동",
+    "moveHandleHint": "드래그 또는 방향키로 이동",
+    "hideWidget": "{{title}} 위젯 숨기기",
+    "hideWidgetHint": "위젯 숨기기",
+    "emptyTitle": "표시할 위젯이 없습니다.",
+    "emptyHint": "상단의 위젯 추가 버튼에서 필요한 항목을 선택하세요.",
+    "catalogTitle": "위젯 카탈로그",
+    "catalogIntro": "대시보드에 표시할 위젯을 선택합니다. 지표는 카드 한 장이 위젯 하나이므로 필요한 숫자만 골라 두고 크기와 자리도 따로 정할 수 있습니다. 다시 추가한 위젯은 보드의 마지막에 배치됩니다.",
+    "searchPlaceholder": "위젯 이름이나 설명으로 찾기",
+    "searchLabel": "위젯 검색",
+    "noResults": "검색어와 맞는 위젯이 없습니다."
+  },
+  "categories": {
+    "calendar": "캘린더",
+    "dev": "개발",
+    "issues": "이슈",
+    "workflow": "워크플로",
+    "jobs": "실행",
+    "automation": "자동화",
+    "extensions": "코어 확장",
+    "vault": "볼트",
+    "metrics": "지표"
+  },
+  "widgets": {
+    "today": {
+      "title": "오늘 활동",
+      "description": "오늘 실행·일정·할 일의 24시간 타임라인"
+    },
+    "next": {
+      "title": "다음 개발 항목",
+      "description": "기한과 우선순위순"
+    },
+    "issues": {
+      "title": "이슈",
+      "description": "상태 분포와 승인·설계·실행"
+    },
+    "due": {
+      "title": "기한 임박",
+      "description": "일주일 안에 마감되는 개발 항목"
+    },
+    "events": {
+      "title": "임박 일정",
+      "description": "다가오는 약속과 마일스톤"
+    },
+    "stages": {
+      "title": "단계별 맥락",
+      "description": "개발 흐름의 진행 상황"
+    },
+    "done": {
+      "title": "최근 완료",
+      "description": "완료한 개발 항목과 결과"
+    },
+    "jobs": {
+      "title": "실행 현황",
+      "description": "에이전트의 최근 실행과 중지"
+    },
+    "schedules": {
+      "title": "예약과 반복",
+      "description": "등록된 자동화 작업의 시간과 즉시 실행"
+    },
+    "reading": {
+      "title": "읽을거리",
+      "description": "RSS로 받아온 읽지 않은 새 글"
+    },
+    "checklist": {
+      "title": "할 일",
+      "description": "오늘 일지에 적어 둔 체크리스트"
+    }
+  },
+  "metrics": {
+    "backlog": { "label": "제안", "hint": "아직 검토 전인 요청" },
+    "review": { "label": "승인 대기", "hint": "검토·승인을 기다리는 항목" },
+    "ready": { "label": "실행 대기", "hint": "바로 시작할 개발 항목" },
+    "running": { "label": "진행 중", "hint": "지금 손대고 있는 항목" },
+    "done": { "label": "완료", "hint": "축적된 결과" },
+    "hold": {
+      "label": "반려·취소",
+      "hint": "받아들이지 않았거나 중간에 그만둔 항목"
+    },
+    "overdue": { "label": "기한 초과", "hint": "마감일이 지난 항목" },
+    "due-today": { "label": "오늘 마감", "hint": "오늘까지 끝내야 하는 항목" },
+    "due-week": { "label": "7일 내 마감", "hint": "이번 주 안에 닥치는 기한" },
+    "assigned": { "label": "담당 지정", "hint": "담당자가 정해진 열린 항목" },
+    "needs-approval": {
+      "label": "승인 필요",
+      "hint": "승인 없이는 못 넘어가는 항목"
+    },
+    "blocked": { "label": "보류", "hint": "누군가 풀어줘야 움직이는 항목" },
+    "done-today": { "label": "오늘 완료", "hint": "오늘 끝낸 개발 항목" },
+    "done-week": { "label": "최근 7일 완료", "hint": "일주일간 처리한 양" },
+    "jobs-live": {
+      "label": "실행 중",
+      "hint": "대기·실행 중인 에이전트 작업"
+    },
+    "jobs-failed": {
+      "label": "실행 실패",
+      "hint": "오늘 실패한 에이전트 작업"
+    }
+  },
+  "issues": {
+    "groups": {
+      "backlog": "제안",
+      "review": "승인 대기",
+      "ready": "실행 대기",
+      "running": "진행",
+      "done": "완료",
+      "blocked": "보류",
+      "dropped": "반려·취소"
+    },
+    "distribution": "이슈 상태 분포",
+    "empty": "등록된 이슈가 없습니다.",
+    "emptyFilter": "선택한 구간에 해당하는 이슈가 없습니다.",
+    "actions": {
+      "approve": "승인",
+      "run": "실행",
+      "open": "열기"
+    },
+    "messages": {
+      "approve": "{{id}} 승인했습니다.",
+      "start": "{{id}} 실행 시작했습니다."
+    }
+  },
+  "jobs": {
+    "distribution": "실행 상태 분포",
+    "empty": "아직 실행 기록이 없습니다.",
+    "status": {
+      "queued": "대기",
+      "running": "실행 중",
+      "success": "성공",
+      "failed": "실패",
+      "cancelled": "취소됨",
+      "interrupted": "중단됨"
+    },
+    "elapsed": "{{time}} 경과",
+    "actions": {
+      "stop": "중지",
+      "log": "기록"
+    }
+  },
+  "duration": {
+    "seconds": "{{n}}초",
+    "minutes": "{{n}}분",
+    "hoursMinutes": "{{h}}시간 {{m}}분"
+  },
+  "schedules": {
+    "empty": "자동화 작업를 만들고 실행 시간을 지정하세요.",
+    "noSchedule": "예약 없음",
+    "onDate": "지정일",
+    "weekdays": "평일",
+    "everyday": "매일",
+    "lastRun": " · 최근 {{time}}",
+    "pausedSuffix": " · 일시정지",
+    "stopRunning": "실행 중 · 중단",
+    "stopQueued": "대기 중 · 취소",
+    "runNow": "지금 실행",
+    "pause": "일시정지",
+    "resume": "재개",
+    "messages": {
+      "runRegistered": "{{title}} 실행을 등록했습니다."
+    }
+  },
+  "checklist": {
+    "noJournal": "오늘 일지 문서가 아직 없습니다.",
+    "empty": "오늘 할 일이 없습니다.",
+    "openJournal": "일지"
+  },
+  "reading": {
+    "disabled": "확장에서 읽을거리를 켜면 새 글이 표시됩니다.",
+    "empty": "읽지 않은 새 글이 없습니다.",
+    "markRead": "읽음",
+    "openSource": "원문"
+  },
+  "today": {
+    "live": "진행 중",
+    "successRuns": "완료 실행",
+    "failed": "실패",
+    "todos": "오늘 할 일",
+    "now": "현재 {{time}}",
+    "hour": "{{h}}시",
+    "noRuns": "오늘 실행한 기록이 아직 없습니다.",
+    "eventTag": "오늘 일정",
+    "dueTag": "오늘 마감",
+    "doneTag": "오늘 완료"
+  },
+  "canvas": {
+    "help": "단계를 눌러 내용을 편집하고, 끌어서 배치하세요. 아래에서 다음 단계와 실행 조건을 연결합니다.",
+    "canvasLabel": "워크플로 캔버스",
+    "nodeAria": "단계 {{label}}",
+    "entryPrefix": "시작 · ",
+    "edgesLabel": "단계 연결",
+    "edgeFrom": "연결 {{n}} 시작 단계",
+    "edgeOn": "연결 {{n}} 조건",
+    "edgeTo": "연결 {{n}} 다음 단계",
+    "edgeDelete": "연결 {{n}} 삭제",
+    "delete": "삭제",
+    "edgeConditionHint": "추가 조건 또는 반복 제한이 있습니다. 고급 JSON에서 확인할 수 있습니다.",
+    "addEdge": "연결 추가",
+    "nodeKinds": {
+      "artifact": "문서 작성",
+      "agent": "에이전트 실행",
+      "check": "자동 검증",
+      "human": "사람의 검토",
+      "condition": "조건 분기",
+      "subworkflow": "다른 워크플로",
+      "end": "완료"
+    },
+    "events": {
+      "approved": "승인하면",
+      "completed": "완료하면",
+      "failed": "실패하면",
+      "rejected": "반려하면",
+      "next": "다음으로"
+    }
+  },
+  "workflowStudio": {
+    "title": "워크플로 스튜디오",
+    "loadDraftsFailed": "초안을 불러오지 못했습니다: {{error}}",
+    "copied": "워크플로 JSON을 클립보드에 복사했습니다.",
+    "export": "내보내기",
+    "librarySummary": "워크플로 라이브러리 · 기존 흐름 선택",
+    "library": "라이브러리",
+    "newWorkflow": "새 워크플로",
+    "published": "발행됨",
+    "drafts": "초안",
+    "valid": "유효",
+    "needsFix": "수정",
+    "definition": "정의",
+    "version": "버전",
+    "name": "이름",
+    "nameAria": "워크플로 이름",
+    "entryStep": "시작 단계",
+    "documents": "작성할 문서",
+    "addDocument": "문서",
+    "noDocuments": "각 단계에서 작성하거나 참고할 문서를 추가하세요.",
+    "roleId": "역할 ID",
+    "displayName": "표시 이름",
+    "docPath": "문서 저장 위치",
+    "initialTemplate": "초기 템플릿",
+    "delete": "삭제",
+    "stepsAndEdges": "단계와 연결",
+    "addStep": "단계 추가",
+    "selectedStep": "선택한 단계",
+    "kind": "종류",
+    "artifactRole": "편집할 산출물 역할",
+    "actionRef": "실행할 기능 ID",
+    "decisionKey": "결정 키",
+    "subworkflowId": "하위 workflow ID",
+    "exactVersion": "정확한 버전",
+    "allowedRoles": "담당 역할(쉼표)",
+    "inputRoles": "입력 역할(쉼표)",
+    "outputRoles": "출력 역할(쉼표)",
+    "instructions": "지침",
+    "requiresDeps": "선행 항목 완료 필요",
+    "validatePublish": "검증과 발행",
+    "draftId": "초안 ID",
+    "saveDraft": "초안 저장",
+    "validate": "검증",
+    "publish": "버전 발행",
+    "publishedNew": "새 불변 버전을 발행했습니다.",
+    "simulationEvents": "시뮬레이션 이벤트(쉼표)",
+    "simulate": "가상 실행",
+    "activeNodes": "활성: {{nodes}}",
+    "none": "없음",
+    "toVisual": "시각 편집으로",
+    "advancedJson": "고급 JSON",
+    "jsonSyntaxError": "JSON 구문을 확인하세요."
+  },
+  "schemaStudio": {
+    "title": "볼트 문서 구조",
+    "typesAndFields": "문서 종류와 입력 항목",
+    "activeBadge": "활성 {{id}} r{{revision}}",
+    "visualEdit": "시각 편집",
+    "advancedJson": "고급 JSON",
+    "schemaId": "스키마 ID",
+    "draftId": "초안 ID",
+    "types": "문서 종류",
+    "addType": "타입",
+    "typeId": "타입 ID",
+    "displayName": "표시 이름",
+    "storagePath": "저장 경로",
+    "templateRef": "템플릿 참조",
+    "requiredSections": "필수 섹션(쉼표)",
+    "fields": "문서 속성",
+    "fieldId": "필드 ID",
+    "fieldName": "필드 이름",
+    "prevKey": "이전 key",
+    "prevKeyPlaceholder": "이전 key, 쉼표",
+    "inputType": "입력 형식",
+    "inputTypes": {
+      "string": "텍스트",
+      "number": "숫자",
+      "integer": "정수",
+      "boolean": "예 / 아니요",
+      "enum": "선택 목록",
+      "custom": "사용자 정의 (고급)"
+    },
+    "enumValues": "선택 항목 (쉼표로 구분)",
+    "enumValuesAria": "선택 항목",
+    "required": "필수",
+    "addField": "필드",
+    "fixInJson": "JSON을 고급 모드에서 수정하세요.",
+    "topLevelObject": "스키마 JSON 최상위 값은 object여야 합니다.",
+    "publishLibrary": "발행 라이브러리",
+    "drafts": "초안",
+    "saveDraft": "초안 저장",
+    "validate": "정의 검증",
+    "publish": "버전 발행",
+    "published": "불변 schema revision을 발행했습니다.",
+    "scanVault": "볼트 검사",
+    "pathVarsHelp": "지원 경로 변수: {id}, {projectId}, {slug}. 관리 문서는 frontmatter의 id와 typeId로 식별합니다.",
+    "diagnostics": "정의 진단",
+    "valid": "유효",
+    "needsFix": "수정 필요",
+    "noDiagnostics": "진단이 없습니다.",
+    "error": "오류",
+    "warning": "경고",
+    "validateFirst": "정의를 먼저 검증하세요.",
+    "scan": "볼트 검사",
+    "files": "파일",
+    "managed": "관리됨",
+    "preserved": "보존됨",
+    "makePlan": "이동 계획 만들기",
+    "scanHelp": "검증된 스키마로 검사하면 관리 문서와 보존할 일반 Markdown을 구분합니다.",
+    "planAndApply": "변경 계획과 적용",
+    "planEmpty": "볼트 검사 뒤 이동 계획을 만드세요.",
+    "noMoves": "이동할 문서가 없습니다.",
+    "rewriteStats": "필드 {{fields}} · 링크 {{links}}",
+    "previewChangeSet": "ChangeSet 미리보기",
+    "applyChanges": "변경 적용",
+    "activated": "schema {{id}} revision {{revision}}을 활성화했습니다.",
+    "activate": "활성화",
+    "rollback": "롤백",
+    "fixSchemaFirst": "스키마 오류를 고친 뒤 볼트를 검사하세요.",
+    "desktopOnly": "스키마 검사와 파일 적용은 Sawhorse 데스크톱 앱에서 사용할 수 있습니다."
+  }
+}
