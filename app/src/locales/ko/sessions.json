@@ -182,13 +182,10 @@
       "empty": "연결된 문서에 반영할 갱신이 없습니다."
     },
     "import": {
-      "intro": "#{{n}} {{title}} — 문서로 가져옵니다.",
-      "projectIdLabel": "projectId (등록된 코어 프로젝트 UUID)",
-      "projectIdPlaceholder": "예: 5fce…",
-      "notesDirLabel": "notesDir (문서를 만들 디렉터리)",
-      "notesDirPlaceholder": "예: 보관함/이슈",
-      "idPrefixLabel": "idPrefix (문서 파일 이름 접두)",
-      "idPrefixPlaceholder": "예: gh-"
+      "intro": "#{{n}} {{title}} — 선택한 프로젝트의 작업 항목으로 가져옵니다.",
+      "projectLabel": "가져올 프로젝트",
+      "noProjects": "프로젝트가 없습니다. 먼저 프로젝트를 만드세요.",
+      "projectHint": "가져온 이슈는 선택한 프로젝트의 작업 항목(backlog)이 되고, GitHub 상태 변화는 GitHub 미러 필드로 반영됩니다."
     },
     "dialog": {
       "importTitle": "가져오기 수락",
@@ -225,7 +222,7 @@
       "github": "GitHub"
     },
     "validation": {
-      "projectAndNotesDirRequired": "projectId와 notesDir는 필수입니다.",
+      "projectRequired": "가져올 프로젝트를 선택하세요.",
       "repoDirRequired": "로컬 저장소 경로(repoDir)를 입력하세요."
     },
     "add": {
@@ -233,6 +230,7 @@
       "nameLabel": "연결 이름",
       "namePlaceholder": "예: 내-블로그-피드",
       "requestedPermissions": "요청 권한:",
+      "projectLabel": "가져올 프로젝트",
       "rssLabel": "RSS 피드",
       "feedNamePlaceholder": "이름",
       "tagsPlaceholder": "태그 (쉼표)",

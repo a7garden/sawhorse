@@ -83,6 +83,10 @@
     "documents": {
       "title": "Work documents",
       "description": "Open work artifacts for each workflow"
+    },
+    "journal": {
+      "title": "Journal",
+      "description": "Recent entries and your week of writing"
     }
   },
   "metrics": {

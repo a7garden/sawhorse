@@ -83,6 +83,10 @@
     "documents": {
       "title": "작업 문서",
       "description": "워크플로우별 산출물과 문서 열기"
+    },
+    "journal": {
+      "title": "일지",
+      "description": "달력과 최근 일지 모아보기"
     }
   },
   "metrics": {

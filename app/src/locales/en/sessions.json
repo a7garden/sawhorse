@@ -182,13 +182,10 @@
       "empty": "No updates to apply to linked documents."
     },
     "import": {
-      "intro": "#{{n}} {{title}} — importing as a document.",
-      "projectIdLabel": "projectId (registered core project UUID)",
-      "projectIdPlaceholder": "e.g. 5fce…",
-      "notesDirLabel": "notesDir (directory for the document)",
-      "notesDirPlaceholder": "e.g. Archive/Issues",
-      "idPrefixLabel": "idPrefix (document file name prefix)",
-      "idPrefixPlaceholder": "e.g. gh-"
+      "intro": "#{{n}} {{title}} — importing as a work item of the selected project.",
+      "projectLabel": "Target project",
+      "noProjects": "No projects yet. Create a project first.",
+      "projectHint": "Imported issues become backlog work items of the selected project; GitHub state changes land in the GitHub mirror fields."
     },
     "dialog": {
       "importTitle": "Accept import",
@@ -225,7 +222,7 @@
       "github": "GitHub"
     },
     "validation": {
-      "projectAndNotesDirRequired": "projectId and notesDir are required.",
+      "projectRequired": "Select the project to import into.",
       "repoDirRequired": "Enter the local repository path (repoDir)."
     },
     "add": {
@@ -236,6 +233,7 @@
       "rssLabel": "RSS feeds",
       "feedNamePlaceholder": "Name",
       "tagsPlaceholder": "Tags (comma)",
+      "projectLabel": "Target project",
       "feedRemoveAria": "Remove feed",
       "addFeed": "Add feed",
       "refreshMinutesLabel": "Refresh (minutes)",
