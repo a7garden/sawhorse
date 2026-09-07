@@ -1,4 +1,4 @@
-// CollaborationSection — 설정 > 협업 탭. 승인 정책 선택, 등록 프로젝트의 통합
+// CollaborationSection — 설정 > 협업 섹션. 승인 정책 선택, 등록 프로젝트의 통합
 // 대상 표시, 검증 프로필 편집, legacy 프로젝트 등록을 맡는다. 정책은 다른 draft
 // 값과 달리 즉시 커밋한다 — 활성 세션은 시작 때 찍은 snapshot을 따르므로 안전.
 import { useCallback, useEffect, useState } from "react";

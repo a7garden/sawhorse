@@ -11,7 +11,26 @@ import {
 } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-/** 설정 카드. 제목과 한 줄 설명을 머리에 두고, actions 에 카드 단위 버튼을 받는다. */
+/** 섹션 머리(단일 스크롤 설정의 앵커 제목). 레일 내비가 가리키는 대상이기도 하다. */
+export function SectionHeader({
+  title,
+  desc,
+}: {
+  title: ReactNode;
+  desc?: ReactNode;
+}) {
+  return (
+    <div className="space-y-0.5">
+      <h2 className="text-sm font-semibold leading-tight">{title}</h2>
+      {desc && (
+        <p className="text-xs leading-snug text-muted-foreground">{desc}</p>
+      )}
+    </div>
+  );
+}
+
+/** 설정 카드. 제목과 한 줄 설명을 머리에 두고, actions 에 카드 단위 버튼을 받는다.
+ *  섹션 머리가 곧 제목인 카드(섹션당 카드 하나)는 title 을 비워 둔다. */
 export function SectionCard({
   title,
   desc,
@@ -19,7 +38,7 @@ export function SectionCard({
   children,
   className,
 }: {
-  title: ReactNode;
+  title?: ReactNode;
   desc?: ReactNode;
   actions?: ReactNode;
   children: ReactNode;
@@ -27,13 +46,15 @@ export function SectionCard({
 }) {
   return (
     <Card className={className}>
-      <CardHeader className="flex-row items-start justify-between gap-2 space-y-0 pb-3">
-        <div className="min-w-0 space-y-1">
-          <CardTitle className="text-[13px]">{title}</CardTitle>
-          {desc && <CardDescription>{desc}</CardDescription>}
-        </div>
-        {actions && <div className="shrink-0">{actions}</div>}
-      </CardHeader>
+      {(title || actions) && (
+        <CardHeader className="flex-row items-start justify-between gap-2 space-y-0 pb-3">
+          <div className="min-w-0 space-y-1">
+            {title && <CardTitle className="text-[13px]">{title}</CardTitle>}
+            {desc && <CardDescription>{desc}</CardDescription>}
+          </div>
+          {actions && <div className="shrink-0">{actions}</div>}
+        </CardHeader>
+      )}
       <CardContent>{children}</CardContent>
     </Card>
   );

@@ -1,19 +1,20 @@
-// 설정 화면의 껍데기. 왼쪽 섹션 레일(좁은 화면에서는 탭)로 다섯 섹션을 고르고,
-// 오른쪽 내용은 settings/ 아래 섹션 컴포넌트가 그린다. 탭을 옮겨도 draft 는
-// 유지되고 저장은 항상 설정 전체 기준이다.
+// 설정 화면의 껍데기. 탭을 나누지 않고 다섯 섹션을 한 페이지에 쌓는다 — 저장은
+// 항상 설정 전체 기준인데 탭을 옮겨 다니면 저장하지 않은 변경이 안 보이는 곳에
+// 남으므로, 모든 변경이 한 화면에 보이는 쪽이 저장 모델과 어울린다. 왼쪽 레일이
+// 섹션으로 스크롤해 보내고, 반대로 스크롤 위치도 따라와 현재 섹션을 밝힌다.
 //
 // 예약 카드(자동화 페이지)와 협업 승인 정책만 예외로 draft 를 타지 않는다 —
 // 두 값은 자기 API 로 즉시 커밋된다. 이유는 settings/ScheduleCard.tsx 와
 // settings/CollaborationSection.tsx.
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import {
   Activity,
-  FolderGit2,
+  AppWindow,
   Play,
-  SlidersHorizontal,
   Users,
+  Vault,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
@@ -21,28 +22,32 @@ import type { ConfigPatch, ConfigView } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { Notice } from "./settings/parts";
+import { Notice, SectionHeader } from "./settings/parts";
+import AppSection from "./settings/AppSection";
 import CollaborationSection from "./settings/CollaborationSection";
 import DiagnosticsSection from "./settings/DiagnosticsSection";
 import ExecutionSection from "./settings/ExecutionSection";
-import GeneralSection from "./settings/GeneralSection";
-import ProjectsSection from "./settings/ProjectsSection";
+import VaultSection from "./settings/VaultSection";
 import { PageHeader } from "./common";
 
 type SectionId =
-  "general" | "projects" | "collaboration" | "execution" | "diagnostics";
+  | "app"
+  | "vault"
+  | "execution"
+  | "collaboration"
+  | "diagnostics";
 
 const SECTION_IDS: SectionId[] = [
-  "general",
-  "projects",
-  "collaboration",
+  "app",
+  "vault",
   "execution",
+  "collaboration",
   "diagnostics",
 ];
 
 const SECTION_ICONS: Record<SectionId, ComponentType<{ className?: string }>> = {
-  general: SlidersHorizontal,
-  projects: FolderGit2,
+  app: AppWindow,
+  vault: Vault,
   collaboration: Users,
   execution: Play,
   diagnostics: Activity,
@@ -84,7 +89,6 @@ export default function SettingsPage() {
   const refreshAgents = useApp((s) => s.refreshAgents);
   const openWizard = useApp((s) => s.openWizard);
 
-  const [section, setSection] = useState<SectionId>("general");
   const [draft, setDraft] = useState<ConfigView | null>(
     config ? structuredClone(config) : null,
   );
@@ -115,9 +119,68 @@ export default function SettingsPage() {
     diag != null &&
     (!diag.configExists ||
       !diag.vaultPathOk ||
-      !diag.claudeOk ||
       diag.projects.some((p) => !p.pathOk || !p.gitOk));
 
+  // 스크롤 스파이. 스크롤은 창이 아니라 앱 레이아웃의 내부 컨테이너에서 일어나므로
+  // 그 컨테이너의 scroll 이벤트를 듣고, 헤더(58px) 바로 아래 선을 지난 마지막
+  // 섹션을 현재로 삼는다. 컨테이너 끝에 닿으면 마지막 섹션을 강제한다 — 마지막
+  // 섹션은 경계선까지 올라오지 않을 수 있기 때문.
+  const sectionEls = useRef<Partial<Record<SectionId, HTMLElement | null>>>({});
+  const [active, setActive] = useState<SectionId>("app");
+
+  useEffect(() => {
+    if (!draft) return;
+    const first = sectionEls.current[SECTION_IDS[0]];
+    if (!first) return;
+    let node: HTMLElement | null = first.parentElement;
+    while (node) {
+      const oy = getComputedStyle(node).overflowY;
+      if (oy === "auto" || oy === "scroll") break;
+      node = node.parentElement;
+    }
+    const scroller = node;
+    if (!scroller) return;
+    const last = SECTION_IDS[SECTION_IDS.length - 1];
+    const update = () => {
+      const line = scroller.getBoundingClientRect().top + 70;
+      let current = SECTION_IDS[0];
+      for (const id of SECTION_IDS) {
+        const el = sectionEls.current[id];
+        if (el && el.getBoundingClientRect().top <= line) current = id;
+      }
+      const atEnd =
+        scroller.scrollTop + scroller.clientHeight >=
+        scroller.scrollHeight - 4;
+      setActive(atEnd ? last : current);
+    };
+    update();
+    scroller.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      scroller.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [draft != null]);
+
+  function scrollToSection(id: SectionId) {
+    const el = sectionEls.current[id];
+    if (!el) return;
+    // 스크롤IntoView 대신 컨테이너 좌표로 직접 굴린다 — 창까지 건드리지 않고,
+    // 헤더 높이만큼 여백을 둔 위치가 어디서나 같게 잡힌다.
+    let node: HTMLElement | null = el.parentElement;
+    while (node) {
+      const oy = getComputedStyle(node).overflowY;
+      if (oy === "auto" || oy === "scroll") break;
+      node = node.parentElement;
+    }
+    if (!node) return;
+    const top =
+      node.scrollTop +
+      el.getBoundingClientRect().top -
+      node.getBoundingClientRect().top -
+      70;
+    node.scrollTo({ top, behavior: "smooth" });
+  }
   function patchDraft(fn: (d: ConfigView) => void) {
     setDraft((prev) => {
       if (!prev) return prev;
@@ -168,6 +231,18 @@ export default function SettingsPage() {
     }
   }
 
+  async function setDefaultAgent(id: string) {
+    try {
+      await api.setDefaultAgent(id);
+      await refreshAgents();
+    } catch (e) {
+      setMsg({
+        ok: false,
+        text: t("diag.defaultAgentFailed", { error: String(e) }),
+      });
+    }
+  }
+
   return (
     <div>
       <PageHeader title={t("page.title")}>
@@ -208,11 +283,11 @@ export default function SettingsPage() {
         </div>
       ) : (
         <div className="flex items-start">
-          {/* 섹션 레일. 어디에 무엇이 있는지 한눈에 보이게 아이콘과 한 줄 설명을
-              곁들이고, 진단에 문항이 있으면 점을 찍어 눈길을 끈다. */}
+          {/* 섹션 레일. 앵커 내비 — 누르면 해당 섹션으로 스크롤하고, 스크롤 위치를
+              따라 현재 섹션을 밝힌다. 진단에 문항이 있으면 점을 찍어 눈길을 끈다. */}
           <nav
             aria-label={t("page.title")}
-            className="sticky top-[58px] hidden max-h-[calc(100dvh-58px)] w-56 shrink-0 flex-col gap-0.5 self-start overflow-y-auto border-r p-3 md:flex"
+            className="sticky top-[58px] hidden max-h-[calc(100dvh-58px)] w-52 shrink-0 flex-col gap-0.5 self-start overflow-y-auto border-r p-3 md:flex"
           >
             {SECTION_IDS.map((id) => {
               const Icon = SECTION_ICONS[id];
@@ -220,11 +295,11 @@ export default function SettingsPage() {
                 <button
                   key={id}
                   type="button"
-                  aria-current={section === id ? "page" : undefined}
-                  onClick={() => setSection(id)}
+                  aria-current={active === id ? "location" : undefined}
+                  onClick={() => scrollToSection(id)}
                   className={cn(
                     "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors",
-                    section === id
+                    active === id
                       ? "bg-secondary text-secondary-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                   )}
@@ -250,41 +325,53 @@ export default function SettingsPage() {
           </nav>
 
           <div className="min-w-0 flex-1">
-            {/* 좁은 화면에서는 레일 대신 탭 한 줄. */}
-            <div className="border-b px-4 py-2 md:hidden">
-              <Tabs tabs={tabs} value={section} onChange={setSection} />
+            {/* 좁은 화면에서는 레일 대신 칩 한 줄. 누르면 마찬가지로 스크롤한다. */}
+            <div className="sticky top-[58px] z-10 border-b bg-background/90 px-4 py-2 backdrop-blur-xl md:hidden">
+              <Tabs tabs={tabs} value={active} onChange={scrollToSection} />
             </div>
             <div className="mx-auto w-full max-w-3xl p-4 lg:p-5">
-              {section === "general" && (
-                <GeneralSection
-                  draft={draft}
-                  patchDraft={patchDraft}
-                  onLaunchAtLogin={toggleLogin}
-                />
-              )}
-              {section === "projects" && (
-                <ProjectsSection draft={draft} patchDraft={patchDraft} />
-              )}
-              {section === "collaboration" && (
-                <CollaborationSection draft={draft} patchDraft={patchDraft} />
-              )}
-              {section === "execution" && (
-                <ExecutionSection draft={draft} patchDraft={patchDraft} />
-              )}
-              {section === "diagnostics" && (
-                <DiagnosticsSection
-                  diag={diag}
-                  requirements={requirements}
-                  agents={agents}
-                  defaultAgent={defaultAgent}
-                  vaultPath={draft.vaultPath}
-                  onRefresh={() => {
-                    void refreshDiagnostics();
-                    void refreshRequirements();
-                    void refreshAgents();
+              {SECTION_IDS.map((id) => (
+                <section
+                  key={id}
+                  id={id}
+                  ref={(el) => {
+                    sectionEls.current[id] = el;
                   }}
-                />
-              )}
+                  className="space-y-3 border-t pt-5 first:border-t-0 first:pt-0"
+                >
+                  <SectionHeader
+                    title={t(`sections.${id}`)}
+                    desc={t(`sectionsDesc.${id}`)}
+                  />
+                  {id === "app" && (
+                    <AppSection draft={draft} onLaunchAtLogin={toggleLogin} />
+                  )}
+                  {id === "vault" && (
+                    <VaultSection draft={draft} patchDraft={patchDraft} />
+                  )}
+                  {id === "execution" && (
+                    <ExecutionSection draft={draft} patchDraft={patchDraft} />
+                  )}
+                  {id === "collaboration" && (
+                    <CollaborationSection draft={draft} patchDraft={patchDraft} />
+                  )}
+                  {id === "diagnostics" && (
+                    <DiagnosticsSection
+                      diag={diag}
+                      requirements={requirements}
+                      agents={agents}
+                      defaultAgent={defaultAgent}
+                      vaultPath={draft.vaultPath}
+                      onRefresh={() => {
+                        void refreshDiagnostics();
+                        void refreshRequirements();
+                        void refreshAgents();
+                      }}
+                      onSetDefaultAgent={(v) => void setDefaultAgent(v)}
+                    />
+                  )}
+                </section>
+              ))}
             </div>
           </div>
         </div>

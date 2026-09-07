@@ -11,18 +11,18 @@
     "rescan": "Rescan"
   },
   "sections": {
-    "general": "General",
-    "projects": "Projects",
-    "collaboration": "Collaboration",
+    "app": "App",
+    "vault": "Vault",
     "execution": "Execution",
+    "collaboration": "Collaboration",
     "diagnostics": "Diagnostics"
   },
   "sectionsDesc": {
-    "general": "Vault location and app behavior",
-    "projects": "Repositories to work on",
-    "collaboration": "Multi-agent approval and integration",
+    "app": "Language and system startup",
+    "vault": "Vault location and project registration",
     "execution": "How agents run, and herdr",
-    "diagnostics": "Installs and configuration checks"
+    "collaboration": "Multi-agent approval and integration",
+    "diagnostics": "Install status and config checks"
   },
   "fields": {
     "vaultPath": "Vault path",
@@ -275,7 +275,6 @@
     "schemasHint": "Review and edit the vault document schemas",
     "open": "Open",
     "noProject": "(none)",
-    "appTitle": "App",
     "launchAtLogin": "Launch at login"
   },
   "projects": {
@@ -369,10 +368,12 @@
     "agentsDesc": "Detected agents and what they can do",
     "agentsTitle": "Agents",
     "noAgents": "No agents detected.",
+    "defaultAgent": "Default agent",
+    "defaultAgentHint": "The target for skill installs and the baseline for guidance. The job runner is currently Claude Code.",
+    "defaultAgentFailed": "Failed to change default agent: {{error}}",
     "badgeDefault": "Default",
     "badgeSkillInstallable": "Skill install available",
-    "badgeRunsJobs": "Runs jobs",
-    "defaultAgentHint": "Change the default agent in the wizard (\"Reopen wizard\" at the top of Settings)."
+    "badgeRunsJobs": "Runs jobs"
   },
   "exec": {
     "runOptions": "Run options",

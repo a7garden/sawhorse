@@ -7,8 +7,9 @@ import type {
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { Empty } from "../common";
-import { SectionCard } from "./parts";
+import { SectionCard, SettingRow } from "./parts";
 import DetectRow, { InstallButton, NeedBadge } from "../setup/DetectRow";
 
 export default function DiagnosticsSection({
@@ -18,6 +19,7 @@ export default function DiagnosticsSection({
   agents,
   defaultAgent,
   onRefresh,
+  onSetDefaultAgent,
 }: {
   diag: Diagnostics | null;
   vaultPath: string;
@@ -25,6 +27,7 @@ export default function DiagnosticsSection({
   agents: AgentPresence[];
   defaultAgent: string;
   onRefresh: () => void;
+  onSetDefaultAgent: (id: string) => void;
 }) {
   const { t } = useTranslation("settings");
   return (
@@ -181,6 +184,24 @@ export default function DiagnosticsSection({
         desc={t("diag.agentsDesc")}
       >
         <div className="space-y-1.5">
+          {/* 마법사 「에이전트」 단계와 같은 선택. 스킬 설치 대상과 안내의 기준이
+              되는 값이지만 잡 실행기는 현재 Claude Code 하나다. */}
+          <SettingRow
+            label={t("diag.defaultAgent")}
+            htmlFor="default-agent"
+            hint={t("diag.defaultAgentHint")}
+            control={
+              <Select
+                id="default-agent"
+                className="w-44"
+                value={defaultAgent}
+                onChange={onSetDefaultAgent}
+                options={agents
+                  .filter((a) => a.detected)
+                  .map((a) => ({ value: a.id, label: a.name }))}
+              />
+            }
+          />
           {agents.filter((a) => a.detected).length === 0 ? (
             <Empty className="py-4">{t("diag.noAgents")}</Empty>
           ) : (
@@ -211,9 +232,6 @@ export default function DiagnosticsSection({
                 />
               ))
           )}
-          <p className="text-[11px] text-muted-foreground">
-            {t("diag.defaultAgentHint")}
-          </p>
         </div>
       </SectionCard>
     </div>

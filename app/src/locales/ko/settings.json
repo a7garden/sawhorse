@@ -11,17 +11,17 @@
     "rescan": "다시 검사"
   },
   "sections": {
-    "general": "일반",
-    "projects": "프로젝트",
-    "collaboration": "협업",
+    "app": "앱",
+    "vault": "볼트",
     "execution": "실행",
+    "collaboration": "협업",
     "diagnostics": "진단"
   },
   "sectionsDesc": {
-    "general": "볼트 위치와 앱 동작",
-    "projects": "작업을 맡길 저장소 등록",
-    "collaboration": "멀티 에이전트 승인과 통합",
+    "app": "언어와 시스템 시작",
+    "vault": "볼트 위치와 프로젝트 등록",
     "execution": "에이전트 실행 방식과 herdr",
+    "collaboration": "멀티 에이전트 승인과 통합",
     "diagnostics": "설치 상태와 설정 검사"
   },
   "fields": {
@@ -275,7 +275,6 @@
     "schemasHint": "볼트 문서의 스키마를 검토하고 편집합니다",
     "open": "열기",
     "noProject": "(없음)",
-    "appTitle": "앱",
     "launchAtLogin": "로그인 시 자동 시작"
   },
   "projects": {
@@ -374,7 +373,9 @@
     "badgeDefault": "기본",
     "badgeSkillInstallable": "스킬 설치 가능",
     "badgeRunsJobs": "잡 실행",
-    "defaultAgentHint": "기본 에이전트는 마법사(설정 상단의 「마법사 다시 열기」)에서 바꿉니다."
+    "defaultAgent": "기본 에이전트",
+    "defaultAgentHint": "스킬 설치 대상이며 안내의 기준이 됩니다. 잡 실행기는 현재 Claude Code입니다.",
+    "defaultAgentFailed": "기본 에이전트 변경 실패: {{error}}"
   },
   "exec": {
     "runOptions": "실행 옵션",
