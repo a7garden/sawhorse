@@ -34,6 +34,9 @@
     ],
     "resources": {
       "../../plugin": "plugin"
+    },
+    "macOS": {
+      "signingIdentity": "Developer ID Application: Jeong-Won Lee (W5SAS95CBV)"
     }
   }
 }

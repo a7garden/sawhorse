@@ -1,0 +1,14 @@
+# Sign the freshly built dev binary before cargo runs it, so the macOS
+# Keychain ACL ("Always Allow") survives rebuilds. The linker's ad-hoc
+# signature changes on every build, which re-triggers the keychain prompt
+# every time the GitHub tab reads the stored token.
+# cargo reads this file from the workspace root regardless of the invocation
+# cwd; SAWHORSE_DEV_SIGN_SCRIPT resolves to an absolute path via [env].
+[env]
+SAWHORSE_DEV_SIGN_SCRIPT = { value = "scripts/dev-codesign.sh", relative = true }
+
+[target.aarch64-apple-darwin]
+runner = ["sh", "-c", 'exec sh "$SAWHORSE_DEV_SIGN_SCRIPT" "$@"', "dev-codesign"]
+
+[target.x86_64-apple-darwin]
+runner = ["sh", "-c", 'exec sh "$SAWHORSE_DEV_SIGN_SCRIPT" "$@"', "dev-codesign"]
