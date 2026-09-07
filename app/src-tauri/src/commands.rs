@@ -1486,17 +1486,9 @@ pub fn inbound_list(state: String) -> Result<serde_json::Value, String> {
 pub fn inbound_accept_import(
     inbound_id: String,
     project_id: String,
-    notes_dir: String,
-    id_prefix: String,
 ) -> Result<serde_json::Value, String> {
     let store = crate::collab::store::Store::open()?;
-    let path = crate::extensions::github::accept_import(
-        &store,
-        &inbound_id,
-        &project_id,
-        std::path::Path::new(&notes_dir),
-        &id_prefix,
-    )?;
+    let path = crate::extensions::github::accept_import(&store, &inbound_id, &project_id)?;
     Ok(serde_json::json!({ "notePath": path }))
 }
 

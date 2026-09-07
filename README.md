@@ -14,6 +14,8 @@ npm ci
 npm run tauri dev
 ```
 
+기존 설치를 업데이트하면 첫 실행에서 이전 볼트와 Sawhorse 플러그인을 백업·검증 후 자동 갱신한다. [자동 업그레이드와 복구](docs/architecture/automatic-upgrades.md)를 참고한다.
+
 처음 실행하면 설정 마법사에서 기록을 저장할 작업공간 경로를 정한다.
 작업대에서 **작업공간 초기화**를 누른 뒤 **프로젝트**에 폴더를 등록한다. 이름은 폴더에서 따오고,
 설명과 검증 명령은 저장 후 에이전트가 분석해 채운다. 기본 모델 목록은 에이전트 CLI에서 가져온다.
@@ -119,7 +121,7 @@ Codex를 지원하며 조사·계획·구현·검증·검토 역할을 선택할
 SDD 작업대는 앱의 기본 기능이며 별도 팩 설치가 필요하지 않다.
 `plugin/skills/sdd`와 `plugin/skills/tdd`는 에이전트가 선택한 워크플로우의 산출물·증거 규약을 따르도록 돕는다.
 
-- `si`: 업무 루틴, 일지, 위키, 이슈, 발주처 보고 워크플로.
+- `si`: 업무 루틴, 일지·보고, 개념·프로젝트 지식 문서와 공통 작업 바로가기.
 - `starter`: 빠른 기록과 주간 회고.
 - 사용자 팩: `~/.claude/sawhorse/packs/<id>/pack.json`에서 추가한다.
 
@@ -142,6 +144,7 @@ Git으로 배포할 수 있다. `xlsx-export`는 설치·활성화한 프로젝�
 - [구현 검증과 운영 범위](docs/architecture/sdd-validation.md)
 - [확장 가능한 워크플로우 플랫폼 설계와 구현 현황](docs/architecture/workflow-platform-design.md)
 - [앱 개발 안내](app/README.md)
+- [워크플로우·스키마·확장의 경계와 정리 내역](docs/architecture/extension-boundaries.md)
 - [팩 작성 안내](plugin/packs/README.md)
 - [기존 협업 및 확장 설계](docs/superpowers/specs/2026-09-05-multi-agent-collaboration-design.md)
 - [Connector SDK](docs/connector-sdk.md)

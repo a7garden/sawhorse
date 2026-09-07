@@ -20,6 +20,7 @@ mod spawn;
 mod state;
 mod tasks;
 mod transcript;
+mod upgrade;
 mod vault;
 mod watcher;
 mod workflow;
@@ -85,6 +86,7 @@ pub fn run() {
             if let Ok(res) = app.path().resource_dir() {
                 plugin::set_root_override(res.join("plugin"));
             }
+            upgrade::startup();
             let data_dir = app.path().app_data_dir()?;
             let state = Arc::new(state::AppState::new(data_dir));
             // herdr sessions outlive the app, so these are candidates for resuming
@@ -108,6 +110,7 @@ pub fn run() {
                         let svc = svc.clone();
                         let emit = collab_tick_emit.clone();
                         tauri::async_runtime::spawn_blocking(move || {
+                            if !upgrade::ready() { return; }
                             if let Ok(actions) = collab::integration::recover_on_startup(&svc.store) {
                                 if !actions.is_empty() {
                                     emit("collab-changed", &serde_json::json!({ "reason": "recovery", "actions": actions }));
@@ -126,6 +129,7 @@ pub fn run() {
                                 let svc = svc.clone();
                                 let emit = emit.clone();
                                 let _ = tauri::async_runtime::spawn_blocking(move || {
+                                    if !upgrade::ready() { return; }
                                     let view = config::load_view();
                                     if let Ok(reports) = svc.tick(&view) {
                                         if !reports.is_empty() {
@@ -144,7 +148,7 @@ pub fn run() {
             }
             {
                 let mgr = mgr.clone();
-                tauri::async_runtime::spawn(async move { mgr.reattach_herdr(resumable).await });
+                tauri::async_runtime::spawn(async move { if upgrade::ready() { mgr.reattach_herdr(resumable).await; } });
             }
 
             // watch the vault for external changes (skip when not configured yet)
@@ -155,8 +159,9 @@ pub fn run() {
                 }
             }
 
-            // watch the task store for agent inbox activity
-            {
+            // Do not recreate a target that an interrupted upgrade is restoring.
+            // Retry restarts the app and attaches watchers after successful recovery.
+            if upgrade::ready() {
                 let root = tasks::workbench_root();
                 let _ = tasks::ensure_dirs(&root);
                 if let Some(w) = watcher::start_path(
@@ -201,6 +206,7 @@ pub fn run() {
                 interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
                 loop {
                     interval.tick().await;
+                    if !upgrade::ready() { continue; }
                     if let Err(error) = sdlc_harness::tick().await {
                         // An unconfigured vault is normal during first-run setup.
                         if !config::load_view().vault_path.is_empty() {
@@ -308,6 +314,8 @@ pub fn run() {
             sdlc::sdd_save_event,
             sdlc::sdd_delete_event,
             sdlc::sdd_search,
+            upgrade::upgrade_status,
+            upgrade::upgrade_retry,
             sdlc::issue_migration_plan,
             sdlc::issue_migrate,
             sdlc_harness::sdd_launch,
@@ -380,7 +388,7 @@ pub fn run() {
             commands::fetch_extension_catalog,
             commands::set_connector_enabled,
             extensions::package::extension_package_install,
-            extensions::package::extension_package_list,
+            extensions::package::extension_package_workflows,
             extensions::package::extension_package_resolve,
             extensions::package::extension_package_activate,
             extensions::package::extension_package_lock,

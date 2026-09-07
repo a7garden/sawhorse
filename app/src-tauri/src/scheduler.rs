@@ -218,6 +218,9 @@ pub fn tick_once(
     emit: &crate::jobs::EmitFn,
     booted_at: DateTime<Local>,
 ) {
+    if !crate::upgrade::ready() {
+        return;
+    }
     let tasks_root = crate::tasks::workbench_root();
     let _ = crate::tasks::ensure_dirs(&tasks_root);
     crate::tasks::process_inbox(&tasks_root, &Local::now().format("%Y-%m-%d").to_string());

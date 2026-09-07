@@ -24,8 +24,6 @@ use crate::herdr::{self, Herdr};
 use crate::state::AppState;
 use crate::transcript;
 
-pub const EXCEL_FILENAME: &str = "개선수정사항-체크리스트.xlsx";
-
 /// herdr agent kind for a Claude Code pane — also the executable name herdr
 /// launches, which is why the launch preflight keys off it.
 const CLAUDE_AGENT: &str = "claude";
@@ -389,7 +387,7 @@ fn build_job(
     req: JobRequest,
     opts: &SpawnOpts,
     view: &ConfigView,
-    state: &AppState,
+    _state: &AppState,
 ) -> Result<Job, String> {
     let base = Job {
         id: uuid::Uuid::new_v4().to_string(),
@@ -475,32 +473,9 @@ fn build_job(
                 ..base
             })
         }
-        "excel" => {
-            if opts.vault_path.is_empty() {
-                return Err("볼트 경로가 설정되지 않았습니다".into());
-            }
-            if view.dashboard.excel_output_dir.is_empty() {
-                return Err("엑셀 저장 경로가 설정되지 않았습니다 (설정에서 지정하세요)".into());
-            }
-            let out = Path::new(&view.dashboard.excel_output_dir).join(EXCEL_FILENAME);
-            let mut prompt = format!("/sawhorse:improve-excel --out \"{}\"", out.display());
-            let prev = {
-                let st = state.state.lock();
-                st.excel_last_out.clone()
-            };
-            if let Some(p) = prev {
-                if Path::new(&p).is_file() {
-                    prompt = format!("{prompt} --prev \"{p}\"");
-                }
-            }
-            Ok(Job {
-                label: "개선 엑셀 뽑기".into(),
-                prompt,
-                cwd: opts.vault_path.clone(),
-                excel_out: Some(out.to_string_lossy().to_string()),
-                ..base
-            })
-        }
+        "excel" => Err(
+            "기존 개선 엑셀 작업은 종료되었습니다. 확장 관리에서 xlsx-export를 설치하고 프로젝트에 활성화한 뒤 내보내기를 실행하세요".into(),
+        ),
         "initVault" => {
             if opts.vault_path.is_empty() {
                 return Err("볼트 경로가 설정되지 않았습니다".into());
@@ -818,6 +793,7 @@ impl JobManager {
 
     /// Production enqueue: reads the current config for spawn options.
     pub fn enqueue(&self, req: JobRequest) -> Result<Job, String> {
+        crate::upgrade::ensure_ready()?;
         let view = config::load_view();
         let opts = SpawnOpts::from(&view);
         self.enqueue_with(req, opts, &view)
@@ -1895,67 +1871,28 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
     }
 
     #[test]
-    fn excel_prompt_carries_out_and_prev() {
-        let rig_dir = temp_dir("excel");
+    fn retired_excel_job_cannot_bypass_extension_activation() {
+        let rig_dir = temp_dir("retired-excel");
         let state = AppState::new(rig_dir.join("data"));
-        let out_dir = temp_dir("excelout");
-        {
-            let mut st = state.state.lock();
-            st.excel_last_out = Some(out_dir.join("prev.xlsx").to_string_lossy().to_string());
-            std::fs::write(out_dir.join("prev.xlsx"), b"x").unwrap();
-        }
         let view = config::view(
             &serde_json::json!({
                 "vaultPath": rig_dir.to_string_lossy(),
-                "dashboard": {"excelOutputDir": out_dir.to_string_lossy()}
+                "dashboard": {"excelOutputDir": rig_dir.to_string_lossy()}
             }),
             true,
         );
-        let job = build_job(
+        let err = build_job(
             JobRequest {
                 kind: "excel".into(),
-                project: None,
-                ids: None,
-                routine: None,
                 ..Default::default()
             },
             &SpawnOpts::from(&view),
             &view,
             &state,
         )
-        .unwrap();
-        assert!(job.prompt.contains(&format!(
-            "--out \"{}\"",
-            out_dir.join(EXCEL_FILENAME).display()
-        )));
-        assert!(
-            job.prompt.contains("--prev"),
-            "prev must be included: {}",
-            job.prompt
-        );
-        assert_eq!(
-            job.excel_out.as_deref(),
-            Some(out_dir.join(EXCEL_FILENAME).to_str().unwrap())
-        );
-
-        let view2 = config::view(
-            &serde_json::json!({"vaultPath": rig_dir.to_string_lossy()}),
-            true,
-        );
-        let err = build_job(
-            JobRequest {
-                kind: "excel".into(),
-                project: None,
-                ids: None,
-                routine: None,
-                ..Default::default()
-            },
-            &SpawnOpts::from(&view2),
-            &view2,
-            &state,
-        )
         .unwrap_err();
-        assert!(err.contains("엑셀 저장 경로"));
+        assert!(err.contains("xlsx-export"));
+        std::fs::remove_dir_all(rig_dir).unwrap();
     }
 
     #[test]
