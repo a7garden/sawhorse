@@ -526,32 +526,28 @@ function PackActionTaskDialog({
                 <Select
                   className="w-full"
                   value={values[param.key] ?? ""}
-                  onChange={(event) =>
-                    setValues({ ...values, [param.key]: event.target.value })
-                  }
-                >
-                  <option value="">{t("tasks.dialog.select")}</option>
-                  {param.options.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label || option.value}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => setValues({ ...values, [param.key]: v })}
+                  options={[
+                    { value: "", label: t("tasks.dialog.select") },
+                    ...param.options.map((option) => ({
+                      value: option.value,
+                      label: option.label || option.value,
+                    })),
+                  ]}
+                />
               ) : param.type === "project" ? (
                 <Select
                   className="w-full"
                   value={values[param.key] ?? ""}
-                  onChange={(event) =>
-                    setValues({ ...values, [param.key]: event.target.value })
-                  }
-                >
-                  <option value="">{t("fields.defaultProject")}</option>
-                  {projects.map((project) => (
-                    <option key={project} value={project}>
-                      {project}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => setValues({ ...values, [param.key]: v })}
+                  options={[
+                    { value: "", label: t("fields.defaultProject") },
+                    ...projects.map((project) => ({
+                      value: project,
+                      label: project,
+                    })),
+                  ]}
+                />
               ) : (
                 <Input
                   value={values[param.key] ?? ""}
@@ -713,13 +709,14 @@ function TaskDialog({
           <Select
             aria-label={t("tasks.dialog.freqLabel")}
             value={kind}
-            onChange={(e) => setKind(e.target.value as ScheduleKind | "none")}
-          >
-            <option value="none">{t("tasks.dialog.freq.none")}</option>
-            <option value="daily">{t("tasks.dialog.freq.daily")}</option>
-            <option value="weekdays">{t("tasks.dialog.freq.weekdays")}</option>
-            <option value="once">{t("tasks.dialog.freq.once")}</option>
-          </Select>
+            onChange={(v) => setKind(v as ScheduleKind | "none")}
+            options={[
+              { value: "none", label: t("tasks.dialog.freq.none") },
+              { value: "daily", label: t("tasks.dialog.freq.daily") },
+              { value: "weekdays", label: t("tasks.dialog.freq.weekdays") },
+              { value: "once", label: t("tasks.dialog.freq.once") },
+            ]}
+          />
           {kind !== "none" && (
             <Input
               type="time"

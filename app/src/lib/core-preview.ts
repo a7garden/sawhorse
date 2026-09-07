@@ -1,8 +1,14 @@
 import type {
+  AgentsView,
+  ConfigPatch,
+  ConfigView,
+  DashboardCfg,
+  Diagnostics,
   Job,
   NavEntry,
   PackInfo,
   PackView,
+  RequirementStatus,
   TaskDef,
   TaskRow,
   TodoSections,
@@ -128,6 +134,174 @@ const previewNav: NavEntry[] = PREVIEW_VAULT_VIEWS.map(
     group: "vault",
   }),
 );
+// 설정 화면 미리보기 — 브라우저에서 설정 다섯 탭이 실제로 그려지게 하는 최소 데이터.
+// 데스크톱 명령을 흉내만 내며 어떤 파일도 만지지 않는다.
+const CONFIG_KEY = "sawhorse.preview-config";
+const previewConfigBase: ConfigView = {
+  exists: true,
+  vaultPath: "/Users/won/Documents/vault",
+  defaultProject: "Sawhorse",
+  projects: [
+    {
+      name: "Sawhorse",
+      path: "/Volumes/MERCURY/PROJECTS/sawhorse",
+      workBranch: "main",
+      portableBase: "",
+      idPrefix: "SH",
+      verify: "npm run build",
+    },
+    {
+      name: "Herdr",
+      path: "/Volumes/MERCURY/PROJECTS/herdr",
+      workBranch: "main",
+      portableBase: "",
+      idPrefix: "HD",
+      verify: "cargo check",
+    },
+  ],
+  coreProjects: {},
+  dashboard: {
+    schedules: {
+      morning: { enabled: true, time: "08:00" },
+      lunch: { enabled: false, time: "12:30" },
+      evening: { enabled: true, time: "19:00" },
+    },
+    excelOutputDir: "",
+    claudeBin: "claude",
+    permissionMode: "acceptEdits",
+    launchAtLogin: false,
+    herdr: {
+      mode: "auto",
+      bin: "herdr",
+      session: "",
+      workspaceLabel: "sawhorse",
+      cleanup: "closeAlways",
+      maxParallel: 3,
+      startTimeoutSec: 60,
+      jobTimeoutMin: 120,
+      notify: true,
+    },
+    customAgents: [],
+    collaboration: {
+      localIntegrationApproval: "required",
+      verificationMode: "command",
+      failurePolicy: "pause",
+      integrationStrategy: "worktree",
+      remoteWriteApproval: "required",
+    },
+  },
+};
+const readConfig = (): ConfigView => {
+  const stored = localStorage.getItem(CONFIG_KEY);
+  return stored
+    ? (JSON.parse(stored) as ConfigView)
+    : structuredClone(previewConfigBase);
+};
+const saveConfig = (view: ConfigView) =>
+  localStorage.setItem(CONFIG_KEY, JSON.stringify(view));
+const previewDiagnostics: Diagnostics = {
+  configExists: true,
+  vaultPathOk: true,
+  claudeOk: true,
+  claudeVersion: "2.1.7 (Claude Code)",
+  herdr: {
+    mode: "auto",
+    binOk: false,
+    serverOk: false,
+    effectiveRunner: "headless",
+    reason: "herdr 실행 파일을 찾지 못했습니다",
+  },
+  projects: [
+    { name: "Sawhorse", pathOk: true, gitOk: true, branchOk: true },
+    { name: "Herdr", pathOk: false, gitOk: false, branchOk: null },
+  ],
+};
+const previewRequirements: RequirementStatus[] = [
+  {
+    id: "claude",
+    name: "claude CLI",
+    need: "required",
+    why: "에이전트 잡을 직접 돌리는 실행 기반",
+    detected: true,
+    version: "2.1.7",
+    path: "/opt/homebrew/bin/claude",
+    outdated: false,
+    minMajor: 1,
+    installUrl: "https://docs.anthropic.com/en/docs/claude-code",
+    installHint: "npm install -g @anthropic-ai/claude-code",
+  },
+  {
+    id: "herdr",
+    name: "herdr",
+    need: "recommended",
+    why: "잡을 보이는 터미널 세션에서 실행",
+    detected: false,
+    path: "",
+    outdated: false,
+    minMajor: 0,
+    installUrl: "https://github.com/a7garden/herdr",
+    installHint: "cargo install herdr",
+  },
+  {
+    id: "git",
+    name: "git",
+    need: "required",
+    why: "프로젝트 동기화와 통합",
+    detected: true,
+    version: "2.51.0",
+    path: "/usr/bin/git",
+    outdated: false,
+    minMajor: 2,
+    installUrl: "",
+    installHint: "",
+  },
+];
+const previewAgents: AgentsView = {
+  agents: [
+    {
+      id: "claude",
+      name: "claude",
+      detected: true,
+      version: "2.1.7",
+      path: "/opt/homebrew/bin/claude",
+      home: "/Users/won/.claude",
+      installable: true,
+      runsJobs: true,
+      installUrl: "https://docs.anthropic.com/en/docs/claude-code",
+      installHint: "npm install -g @anthropic-ai/claude-code",
+      custom: false,
+      note: "",
+    },
+    {
+      id: "codex",
+      name: "codex",
+      detected: true,
+      version: "0.42.0",
+      path: "/opt/homebrew/bin/codex",
+      home: "/Users/won/.codex",
+      installable: false,
+      runsJobs: true,
+      installUrl: "",
+      installHint: "",
+      custom: false,
+      note: "",
+    },
+    {
+      id: "gemini",
+      name: "gemini",
+      detected: false,
+      path: "",
+      home: "",
+      installable: true,
+      runsJobs: false,
+      installUrl: "https://github.com/google-gemini/gemini-cli",
+      installHint: "npm install -g @google/gemini-cli",
+      custom: false,
+      note: "",
+    },
+  ],
+  defaultAgent: "claude",
+};
 // Explicit browser preview only. No commands here launch agents or touch desktop files.
 export async function corePreview(
   command: string,
@@ -494,6 +668,55 @@ export async function corePreview(
       );
       return;
     }
+    case "get_config":
+      return readConfig();
+    case "save_config": {
+      const patch = (args.patch ?? {}) as ConfigPatch;
+      const cur = readConfig();
+      const dashboard: DashboardCfg = {
+        ...cur.dashboard,
+        ...(patch.claudeBin != null ? { claudeBin: patch.claudeBin } : {}),
+        ...(patch.permissionMode != null
+          ? { permissionMode: patch.permissionMode }
+          : {}),
+        ...(patch.launchAtLogin != null
+          ? { launchAtLogin: patch.launchAtLogin }
+          : {}),
+        ...(patch.schedules ? { schedules: patch.schedules } : {}),
+        ...(patch.excelOutputDir != null
+          ? { excelOutputDir: patch.excelOutputDir }
+          : {}),
+        ...(patch.herdr
+          ? { herdr: { ...cur.dashboard.herdr, ...patch.herdr } }
+          : {}),
+        ...(patch.customAgents ? { customAgents: patch.customAgents } : {}),
+        collaboration: {
+          ...cur.dashboard.collaboration,
+          ...(patch.dashboard?.collaboration ?? {}),
+        },
+      };
+      const next: ConfigView = {
+        ...cur,
+        vaultPath: patch.vaultPath ?? cur.vaultPath,
+        defaultProject: patch.defaultProject ?? cur.defaultProject,
+        projects: patch.projects ?? cur.projects,
+        coreProjects: patch.coreProjects ?? cur.coreProjects,
+        dashboard,
+      };
+      saveConfig(next);
+      return next;
+    }
+    case "set_default_agent":
+      return readConfig();
+    case "set_launch_at_login":
+    case "herdr_probe":
+      return undefined;
+    case "diagnostics":
+      return structuredClone(previewDiagnostics);
+    case "check_requirements":
+      return structuredClone(previewRequirements);
+    case "list_agents":
+      return structuredClone(previewAgents);
     case "list_missed":
     case "list_schedules":
     case "list_extension_packages":

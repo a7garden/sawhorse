@@ -554,15 +554,17 @@ export default function SessionsPage() {
             <Select
               className="w-full"
               value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-            >
-              <option value="">{t("create.selectProject")}</option>
-              {(projects?.registered ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.path} ({p.integration.branch || t("create.defaultBranch")})
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => setProjectId(v)}
+              options={[
+                { value: "", label: t("create.selectProject") },
+                ...(projects?.registered ?? []).map((p) => ({
+                  value: p.id,
+                  label: `${p.path} (${
+                    p.integration.branch || t("create.defaultBranch")
+                  })`,
+                })),
+              ]}
+            />
           </div>
           <div className="space-y-1">
             <Label>{t("create.goal")}</Label>
@@ -586,13 +588,12 @@ export default function SessionsPage() {
               <Label>{t("create.mode")}</Label>
               <Select
                 value={mode}
-                onChange={(e) =>
-                  setMode(e.target.value as CollabSession["mode"])
-                }
-              >
-                <option value="direct">{t("create.modeDirect")}</option>
-                <option value="isolated">{t("create.modeIsolated")}</option>
-              </Select>
+                onChange={(v) => setMode(v as CollabSession["mode"])}
+                options={[
+                  { value: "direct", label: t("create.modeDirect") },
+                  { value: "isolated", label: t("create.modeIsolated") },
+                ]}
+              />
             </div>
           </div>
 
@@ -625,20 +626,21 @@ export default function SessionsPage() {
                   />
                   <Select
                     value={l.driver}
-                    onChange={(e) =>
+                    onChange={(v) =>
                       setLanes((ls) =>
                         ls.map((x, j) =>
                           j === i
-                            ? { ...x, driver: e.target.value as CollabDriver }
+                            ? { ...x, driver: v as CollabDriver }
                             : x,
                         ),
                       )
                     }
                     aria-label={t("create.laneDriverAria", { n: i + 1 })}
-                  >
-                    <option value="claude">{t("create.driverClaude")}</option>
-                    <option value="codex">{t("create.driverCodex")}</option>
-                  </Select>
+                    options={[
+                      { value: "claude", label: t("create.driverClaude") },
+                      { value: "codex", label: t("create.driverCodex") },
+                    ]}
+                  />
                   <Button
                     size="icon"
                     variant="ghost"

@@ -7,8 +7,8 @@ import type {
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty } from "../common";
+import { SectionCard } from "./parts";
 import DetectRow, { InstallButton, NeedBadge } from "../setup/DetectRow";
 
 export default function DiagnosticsSection({
@@ -28,15 +28,17 @@ export default function DiagnosticsSection({
 }) {
   const { t } = useTranslation("settings");
   return (
-    <div className="space-y-4 p-4">
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-          <CardTitle className="text-[13px]">{t("diag.title")}</CardTitle>
-          <Button size="xs" variant="outline" onClick={onRefresh}>
+    <div className="space-y-4">
+      <SectionCard
+        title={t("diag.title")}
+        desc={t("diag.desc")}
+        actions={
+          <Button size="sm" variant="outline" onClick={onRefresh}>
             <RefreshCw /> {t("actions.rescan")}
           </Button>
-        </CardHeader>
-        <CardContent className="space-y-1.5">
+        }
+      >
+        <div className="space-y-1.5">
           {!diag ? (
             <Empty className="py-4">{t("diag.noResults")}</Empty>
           ) : (
@@ -139,16 +141,16 @@ export default function DiagnosticsSection({
               ))}
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
       {/* 마법사의 「프로그램」 단계와 같은 목록. 첫 설치 뒤에 도구를 깔았을 때 마법사를
           다시 열지 않고 여기서 확인·설치할 수 있어야 한다. */}
-      <Card>
-        <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">{t("diag.requirementsTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1.5">
+      <SectionCard
+        title={t("diag.requirementsTitle")}
+        desc={t("diag.requirementsDesc")}
+      >
+        <div className="space-y-1.5">
           {requirements.length === 0 ? (
             <Empty className="py-4">{t("diag.noResults")}</Empty>
           ) : (
@@ -171,14 +173,14 @@ export default function DiagnosticsSection({
               />
             ))
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
-      <Card>
-        <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">{t("diag.agentsTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1.5">
+      <SectionCard
+        title={t("diag.agentsTitle")}
+        desc={t("diag.agentsDesc")}
+      >
+        <div className="space-y-1.5">
           {agents.filter((a) => a.detected).length === 0 ? (
             <Empty className="py-4">{t("diag.noAgents")}</Empty>
           ) : (
@@ -212,8 +214,8 @@ export default function DiagnosticsSection({
           <p className="text-[11px] text-muted-foreground">
             {t("diag.defaultAgentHint")}
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
     </div>
   );
 }

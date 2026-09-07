@@ -17,6 +17,13 @@
     "execution": "실행",
     "diagnostics": "진단"
   },
+  "sectionsDesc": {
+    "general": "볼트 위치와 앱 동작",
+    "projects": "작업을 맡길 저장소 등록",
+    "collaboration": "멀티 에이전트 승인과 통합",
+    "execution": "에이전트 실행 방식과 herdr",
+    "diagnostics": "설치 상태와 설정 검사"
+  },
   "fields": {
     "vaultPath": "볼트 경로",
     "defaultProject": "기본 프로젝트",
@@ -264,12 +271,16 @@
   },
   "general": {
     "saveLocation": "저장 위치",
+    "saveLocationDesc": "문서와 작업 기록이 모이는 볼트",
+    "schemasHint": "볼트 문서의 스키마를 검토하고 편집합니다",
+    "open": "열기",
     "noProject": "(없음)",
     "appTitle": "앱",
     "launchAtLogin": "로그인 시 자동 시작"
   },
   "projects": {
     "title": "프로젝트",
+    "desc": "작업을 맡길 저장소를 등록합니다. 이름과 검증 명령을 함께 둡니다.",
     "empty": "등록된 프로젝트가 없습니다.",
     "namePlaceholder": "프로젝트명",
     "nameAria": "프로젝트 이름",
@@ -296,6 +307,7 @@
       "saveFailed": "승인 정책 저장 실패: {{error}}"
     },
     "registeredTitle": "등록 프로젝트",
+    "registeredDesc": "협업 세션이 후보를 보내는 통합 대상",
     "registeredCount": "{{count}}개",
     "noRegistered": "등록된 협업 프로젝트가 없습니다.",
     "path": "경로: {{path}}",
@@ -304,6 +316,7 @@
     "defaultProfile": "기본",
     "profileTitle": "검증 프로필",
     "projectLabel": "프로젝트",
+    "profileDesc": "프로젝트마다 통합 전 자동·수동 검증을 정의합니다",
     "select": "선택…",
     "profileName": "프로필 이름",
     "profileNamePlaceholder": "예: 기본",
@@ -329,6 +342,7 @@
     "nameRequired": "프로필 이름을 입력하세요.",
     "profileSaved": "검증 프로필 \"{{name}}\"을 저장했습니다.",
     "profileSaveFailed": "검증 프로필 저장 실패: {{error}}",
+    "legacyDesc": "설정에만 등록된 프로젝트를 협업으로 옮겨 담습니다",
     "registeredMsg": "\"{{name}}\" 프로젝트를 등록했습니다.",
     "registerFailed": "프로젝트 등록 실패: {{error}}",
     "legacyTitle": "프로젝트 등록 (기존 목록)",
@@ -339,6 +353,7 @@
   },
   "diag": {
     "title": "진단",
+    "desc": "설정 파일·볼트·실행 파일 상태",
     "noResults": "검사 결과가 없습니다.",
     "configFile": "설정 파일",
     "claudeCli": "claude CLI",
@@ -352,8 +367,10 @@
     "badgePath": "경로",
     "badgeBranch": "브랜치",
     "requirementsTitle": "필요한 프로그램",
+    "requirementsDesc": "잡 실행에 필요한 프로그램",
     "agentsTitle": "에이전트",
     "noAgents": "감지된 에이전트가 없습니다.",
+    "agentsDesc": "감지된 에이전트와 할 수 있는 일",
     "badgeDefault": "기본",
     "badgeSkillInstallable": "스킬 설치 가능",
     "badgeRunsJobs": "잡 실행",
@@ -361,7 +378,9 @@
   },
   "exec": {
     "runOptions": "실행 옵션",
+    "runOptionsDesc": "에이전트 명령과 승인 정책",
     "herdrTitle": "herdr 세션",
+    "herdrDesc": "잡을 보이는 터미널 세션에서 실행",
     "mode": "실행 방식",
     "perm": {
       "default": "기본",

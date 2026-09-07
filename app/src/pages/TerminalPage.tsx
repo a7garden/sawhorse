@@ -286,29 +286,21 @@ export default function TerminalPage() {
                 <Select
                   className="min-w-0 flex-1"
                   value={target}
-                  onChange={(e) => setTarget(e.target.value)}
-                >
-                  {cwdChoices.map((c) => (
-                    <option key={c.value} value={c.value}>
-                      {c.label}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => setTarget(v)}
+                  options={cwdChoices}
+                />
                 <Select
                   className="min-w-0 flex-1"
                   value={action}
-                  onChange={(e) => setAction(e.target.value)}
-                >
-                  <option value="">{t("terminal.selectAction")}</option>
-                  {runnable.map(({ pack, action: a }) => (
-                    <option
-                      key={`${pack.id}:${a.id}`}
-                      value={`${pack.id}:${a.id}`}
-                    >
-                      {a.label} · {pack.name}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => setAction(v)}
+                  options={[
+                    { value: "", label: t("terminal.selectAction") },
+                    ...runnable.map(({ pack, action: a }) => ({
+                      value: `${pack.id}:${a.id}`,
+                      label: `${a.label} · ${pack.name}`,
+                    })),
+                  ]}
+                />
                 <RunButton
                   size="sm"
                   variant="default"

@@ -17,6 +17,13 @@
     "execution": "Execution",
     "diagnostics": "Diagnostics"
   },
+  "sectionsDesc": {
+    "general": "Vault location and app behavior",
+    "projects": "Repositories to work on",
+    "collaboration": "Multi-agent approval and integration",
+    "execution": "How agents run, and herdr",
+    "diagnostics": "Installs and configuration checks"
+  },
   "fields": {
     "vaultPath": "Vault path",
     "defaultProject": "Default project",
@@ -264,12 +271,16 @@
   },
   "general": {
     "saveLocation": "Save location",
+    "saveLocationDesc": "The vault where documents and work records live",
+    "schemasHint": "Review and edit the vault document schemas",
+    "open": "Open",
     "noProject": "(none)",
     "appTitle": "App",
     "launchAtLogin": "Launch at login"
   },
   "projects": {
     "title": "Projects",
+    "desc": "Register repositories to work on, with their verify commands.",
     "empty": "No registered projects.",
     "namePlaceholder": "Project name",
     "nameAria": "Project name",
@@ -296,6 +307,7 @@
       "saveFailed": "Failed to save approval policy: {{error}}"
     },
     "registeredTitle": "Registered projects",
+    "registeredDesc": "Where collaboration sessions send candidates",
     "registeredCount": "{{count}}",
     "noRegistered": "No registered collaboration projects.",
     "path": "Path: {{path}}",
@@ -303,6 +315,7 @@
     "defaultBranch": "default branch",
     "defaultProfile": "default",
     "profileTitle": "Verification profiles",
+    "profileDesc": "Define automated and manual checks before integration",
     "projectLabel": "Project",
     "select": "Select…",
     "profileName": "Profile name",
@@ -321,6 +334,7 @@
     "manualTitle": "Manual checks",
     "addItem": "Add item",
     "noManual": "With no manual checks, verification completes right after the automated checks pass.",
+    "legacyDesc": "Move projects registered only in settings into collaboration",
     "manualPlaceholder": "e.g. confirm the home screen renders on the dev server",
     "manualAria": "Manual check {{index}}",
     "manualDeleteAria": "Delete manual check {{index}}",
@@ -339,6 +353,7 @@
   },
   "diag": {
     "title": "Diagnostics",
+    "desc": "Config file, vault, and executable status",
     "noResults": "No results yet.",
     "configFile": "Config file",
     "claudeCli": "claude CLI",
@@ -349,9 +364,9 @@
     "nextJob": "Next job: {{runner}}",
     "runnerHerdr": "herdr session",
     "runnerFallback": "Running headless — {{reason}}",
-    "badgePath": "Path",
-    "badgeBranch": "Branch",
     "requirementsTitle": "Required programs",
+    "requirementsDesc": "Programs that job execution depends on",
+    "agentsDesc": "Detected agents and what they can do",
     "agentsTitle": "Agents",
     "noAgents": "No agents detected.",
     "badgeDefault": "Default",
@@ -361,7 +376,9 @@
   },
   "exec": {
     "runOptions": "Run options",
+    "runOptionsDesc": "Agent command and approval policy",
     "herdrTitle": "herdr session",
+    "herdrDesc": "Run jobs in terminal sessions you can see",
     "mode": "Run mode",
     "perm": {
       "default": "Default",

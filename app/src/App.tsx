@@ -3,6 +3,9 @@ import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
 import {
   CalendarDays,
+  Bot,
+  History,
+  Search,
   KanbanSquare,
   FolderGit2,
   LayoutDashboard,
@@ -13,7 +16,6 @@ import {
   Moon,
   Sun,
   Puzzle,
-  CircleDot,
   FileText,
   Github,
   Repeat,
@@ -26,6 +28,8 @@ import { useTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import appIcon from "../src-tauri/icons/icon.svg";
 import WorkbenchPage from "@/features/workbench/WorkbenchPage";
+import { useProjectScope } from "@/features/workbench/project-scope";
+import { ensureWorkspaceSnapshot, useWorkspaceSnapshot } from "@/features/workbench/snapshot-store";
 import { isWorkbenchPreview } from "@/features/workbench/api";
 import { AppToolbar } from "@/components/AppToolbar";
 import { useCoreExtensions } from "@/lib/core-extensions";
@@ -49,10 +53,12 @@ import OnboardingPage from "@/pages/OnboardingPage";
 import GitHubExtensionPage from "@/pages/GitHubExtensionPage";
 import { DetailNavigation } from "@/components/DetailNavigation";
 import { Toaster } from "@/components/ui/toast";
+import { Select } from "@/components/ui/select";
 import SetupWizard from "@/pages/SetupWizard";
 
 /** 사이드바 섹션 — 호스트가 섹션 목록·순서를 소유하고, 팩 뷰는 group 태그로 섹션을 고른다. */
 const SECTIONS: { id: string; labelKey: string }[] = [
+  { id: "project-scope", labelKey: "nav.section.project" },
   { id: "work", labelKey: "nav.section.work" },
   { id: "vault", labelKey: "nav.section.vault" },
   { id: "reading", labelKey: "nav.section.reading" },
@@ -63,16 +69,17 @@ const TOP_NAV: {
   icon: IconComponent;
   group: string;
 }[] = [
-  { id: "overview", labelKey: "nav.overview", icon: LayoutDashboard, group: "work" },
-  // 개발 = intent.md 로 시작하는 SDLC 단위(WorkItem).
-  // 자동화 = 저장해 둔 자동화 작업(TaskDef). 저장 형식도 수명주기도 다르므로 갈라 둔다.
-  { id: "board", labelKey: "nav.board", icon: KanbanSquare, group: "work" },
+  { id: "overview", labelKey: "nav.overview", icon: LayoutDashboard, group: "project-scope" },
+  // 작업은 하나의 생명주기를 목록과 공정 보드로 본다. 자동화 정의는 별도다.
+  { id: "work", labelKey: "nav.work", icon: KanbanSquare, group: "project-scope" },
   { id: "task-library", labelKey: "nav.taskLibrary", icon: Repeat, group: "work" },
-  { id: "calendar", labelKey: "nav.calendar", icon: CalendarDays, group: "work" },
+  { id: "calendar", labelKey: "nav.calendar", icon: CalendarDays, group: "project-scope" },
+  { id: "harness", labelKey: "nav.tab.harness", icon: Bot, group: "project-scope" },
+  { id: "jobs", labelKey: "nav.tab.jobs", icon: History, group: "project-scope" },
+  { id: "knowledge", labelKey: "nav.workDocuments", icon: Search, group: "project-scope" },
   { id: "projects", labelKey: "nav.projects", icon: FolderGit2, group: "work" },
   // 워크플로우는 확장의 부속이 아니라 제품의 주인 객체다. 작업 섹션의 1급 진입점.
   { id: "workflows", labelKey: "nav.workflows", icon: Workflow, group: "work" },
-  { id: "issues", labelKey: "nav.issues", icon: CircleDot, group: "work" },
   // `실행` 은 잡·하네스 런 한 가지만 가리킨다. 진입점 이름까지 실행이면 여섯 개가
   // 같은 낱말을 쓴다.
   { id: "terminal", labelKey: "nav.terminal", icon: Terminal, group: "work" },
@@ -94,9 +101,7 @@ const PAGE_GROUPS = [
     root: "terminal",
     tabs: [
       { id: "terminal", labelKey: "nav.tab.terminal" },
-      { id: "harness", labelKey: "nav.tab.harness" },
       { id: "sessions", labelKey: "nav.tab.sessions" },
-      { id: "jobs", labelKey: "nav.tab.jobs" },
       { id: "review", labelKey: "nav.tab.review" },
     ],
   },
@@ -108,7 +113,7 @@ const BOTTOM_NAV: { id: PageId; labelKey: string; icon: IconComponent }[] = [
 
 /** 선언형 뷰로 옮기지 않은 화면들. 팩이 `type: native` 로 이 이름을 가리킨다. */
 const NATIVE: Record<string, () => JSX.Element> = {
-  issues: () => <WorkbenchPage view="issues" />,
+  issues: () => <WorkbenchPage view="work" />,
   todos: TodosPage,
   docs: DocsPage,
   vault: VaultPage,
@@ -126,6 +131,10 @@ export default function App() {
   const init = useApp((s) => s.init);
   const nav = useApp((s) => s.nav);
   const { t } = useTranslation("common");
+  const snapshot = useWorkspaceSnapshot((state) => state.snapshot);
+  const selectedProjectId = useProjectScope((state) => state.projectId);
+  const selectProject = useProjectScope((state) => state.selectProject);
+  const selectedProject = snapshot?.projects.find((project) => project.id === selectedProjectId);
   const coreExtensions = useCoreExtensions();
   const groups = PAGE_GROUPS;
   const group = groups.find((g) => g.tabs.some((tab) => tab.id === page));
@@ -137,24 +146,29 @@ export default function App() {
 
   useEffect(() => {
     void init();
+    void ensureWorkspaceSnapshot();
     // 사이드바 버전은 tauri.conf.json 이 정본이다 — 손으로 적으면 반드시 어긋난다
     getVersion()
       .then(setVersion)
       .catch(() => setVersion(""));
   }, [init]);
 
+  useEffect(() => {
+    if (snapshot && selectedProjectId && !selectedProject) selectProject("");
+  }, [snapshot, selectedProjectId, selectedProject, selectProject]);
+
   const body = (() => {
     switch (page) {
+      case "work":
       case "overview":
       case "board":
       case "calendar":
       case "harness":
       case "knowledge":
       case "projects":
-      // 이슈는 개발 항목과 같은 스냅샷을 다른 축으로 본 화면이다. 별도 페이지가
-      // 아니라 워크벤치의 뷰여야 상세·폼·저장 경로가 하나로 유지된다.
+      // 과거 진입점도 같은 작업 화면으로 연결한다.
       case "issues":
-        return <WorkbenchPage key={page} view={page} />;
+        return <WorkbenchPage key={["board", "issues"].includes(page) ? "work" : page} view={page} />;
       case "github":
         return <GitHubExtensionPage />;
       case "docs":
@@ -224,8 +238,9 @@ export default function App() {
           )
             setPage(id);
         }}
+        aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+          "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
           active
             ? "bg-secondary text-secondary-foreground"
             : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
@@ -261,7 +276,7 @@ export default function App() {
             );
             const packViews = nav.filter(
               (n) =>
-                n.group === id &&
+                id !== "project-scope" && n.group === id &&
                 !["issues", "todos", "docs"].includes(n.component),
             );
             if (id === "vault") {
@@ -273,16 +288,39 @@ export default function App() {
             }
             if (core.length === 0 && packViews.length === 0) return null;
             return (
-              <Fragment key={id}>
-                <div
-                  className={
-                    index === 0
-                      ? "mb-2 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground"
-                      : "mb-1 mt-4 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground"
-                  }
-                >
-                  {t(labelKey)}
+              <section
+                key={id}
+                aria-label={t(labelKey)}
+                data-nav-scope={id === "project-scope" ? "project" : "workspace"}
+                className={cn("flex shrink-0 flex-col gap-0.5", index > 0 && "mt-5", index === 1 && "border-t border-border/60 pt-4")}
+              >
+                <div className="mb-1 flex items-center justify-between gap-2 px-2 pt-1 text-[10px] font-semibold tracking-wider text-muted-foreground">
+                  <span>{t(labelKey)}</span>
+                  {id !== "project-scope" && <span className="text-[9px] font-normal tracking-normal text-muted-foreground/60">{t("nav.scope.shared")}</span>}
                 </div>
+                {id === "project-scope" && (
+                  <div className="mb-2">
+                    <label htmlFor="sidebar-project" className="sr-only">{t("nav.scope.select")}</label>
+                    <Select
+                      id="sidebar-project"
+                      size="sm"
+                      variant="sidebar"
+                      leadingIcon={<FolderGit2 className="size-4" />}
+                      className="w-full min-w-0"
+                      disabled={!snapshot}
+                      aria-label={t("nav.scope.select")}
+                      value={selectedProject?.id ?? ""}
+                      options={[
+                        { value: "", label: t("workbench:scope.all") },
+                        ...(snapshot?.projects.map((project) => ({ value: project.id, label: project.name })) ?? []),
+                      ]}
+                      onChange={(next) => {
+                        if (window.dispatchEvent(new Event("sawhorse:navigate", { cancelable: true }))) selectProject(next);
+                      }}
+                    />
+                    <p className="mt-1.5 px-2 text-[10px] leading-relaxed text-muted-foreground/70">{t("nav.scope.appliesBelow")}</p>
+                  </div>
+                )}
                 {core.map((n) => (
                   <NavButton
                     key={n.id}
@@ -299,24 +337,24 @@ export default function App() {
                     Icon={packIcon(n.icon)}
                   />
                 ))}
-              </Fragment>
+              </section>
             );
           })}
 
           {nav.some(
             (n) =>
               !["issues", "todos", "docs"].includes(n.component) &&
-              !SECTIONS.some((s) => s.id === n.group),
+              !SECTIONS.some((s) => s.id !== "project-scope" && s.id === n.group),
           ) && (
             <Fragment>
-              <div className="mb-1 mt-4 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground">
-                {t("nav.other")}
+              <div className="mb-1 mt-4 flex items-center justify-between px-2 text-[10px] font-semibold tracking-wider text-muted-foreground">
+                {t("nav.other")}<span>{t("nav.scope.shared")}</span>
               </div>
               {nav
                 .filter(
                   (n) =>
                     !["issues", "todos", "docs"].includes(n.component) &&
-                    !SECTIONS.some((s) => s.id === n.group),
+                    !SECTIONS.some((s) => s.id !== "project-scope" && s.id === n.group),
                 )
                 .map((n) => (
                   <NavButton
@@ -330,6 +368,7 @@ export default function App() {
           )}
 
           <div className="my-1.5 h-px bg-border" />
+          <div className="px-2 text-[10px] text-muted-foreground">{t("nav.scope.sharedSettings")}</div>
           {BOTTOM_NAV.map((n) => (
             <NavButton
               key={n.id}

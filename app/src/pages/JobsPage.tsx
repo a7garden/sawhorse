@@ -1,3 +1,5 @@
+import { jobsForProject, useProjectScope } from "@/features/workbench/project-scope";
+import { useWorkspaceSnapshot } from "@/features/workbench/snapshot-store";
 import { useState } from "react";
 import {
   CircleCheck,
@@ -18,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog } from "@/components/ui/dialog";
+import { Select } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -64,7 +67,12 @@ function EntryIcon({
 }
 
 export default function JobsPage() {
-  const jobs = useApp((s) => s.jobs);
+  const allJobs = useApp((s) => s.jobs);
+  const projectId = useProjectScope((s) => s.projectId);
+  const selectProject = useProjectScope((s) => s.selectProject);
+  const snapshot = useWorkspaceSnapshot((s) => s.snapshot);
+  const project = snapshot?.projects.find((p) => p.id === projectId);
+  const jobs = jobsForProject(allJobs, project);
   const progress = useApp((s) => s.progress);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const { t } = useTranslation("sessions");
@@ -144,6 +152,19 @@ export default function JobsPage() {
   return (
     <div>
       <PageHeader title={t("jobs.title")}>
+        <Select
+          aria-label={t("workbench:scope.label")}
+          size="sm"
+          value={project?.id ?? ""}
+          onChange={(v) => selectProject(v)}
+          options={[
+            { value: "", label: t("workbench:scope.all") },
+            ...(snapshot?.projects ?? []).map((entry) => ({
+              value: entry.id,
+              label: entry.name,
+            })),
+          ]}
+        />
         <Button size="sm" variant="outline" onClick={() => void refreshJobs()}>
           <RefreshCw /> {t("actions.refresh")}
         </Button>

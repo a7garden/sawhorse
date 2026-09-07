@@ -1,22 +1,33 @@
-// 설정 화면의 껍데기. draft 상태와 저장·검증만 여기 있고, 내용은 settings/ 아래
-// 섹션 넷이 나눠 그린다. 탭을 옮겨도 draft 는 유지되고 저장은 항상 설정 전체 기준이다.
+// 설정 화면의 껍데기. 왼쪽 섹션 레일(좁은 화면에서는 탭)로 다섯 섹션을 고르고,
+// 오른쪽 내용은 settings/ 아래 섹션 컴포넌트가 그린다. 탭을 옮겨도 draft 는
+// 유지되고 저장은 항상 설정 전체 기준이다.
 //
-// 예약 카드(ExecutionSection 안)만 예외로 draft 를 타지 않는다 — 예약은 자기 API 로
-// 즉시 커밋된다. 자세한 이유는 settings/ScheduleCard.tsx.
-import { useEffect, useMemo, useState } from "react";
+// 예약 카드(자동화 페이지)와 협업 승인 정책만 예외로 draft 를 타지 않는다 —
+// 두 값은 자기 API 로 즉시 커밋된다. 이유는 settings/ScheduleCard.tsx 와
+// settings/CollaborationSection.tsx.
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
+import {
+  Activity,
+  FolderGit2,
+  Play,
+  SlidersHorizontal,
+  Users,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import type { ConfigPatch, ConfigView } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Tabs } from "@/components/ui/tabs";
+import { cn } from "@/lib/utils";
+import { Notice } from "./settings/parts";
 import CollaborationSection from "./settings/CollaborationSection";
 import DiagnosticsSection from "./settings/DiagnosticsSection";
 import ExecutionSection from "./settings/ExecutionSection";
 import GeneralSection from "./settings/GeneralSection";
 import ProjectsSection from "./settings/ProjectsSection";
-import { Empty, PageHeader } from "./common";
+import { PageHeader } from "./common";
 
 type SectionId =
   "general" | "projects" | "collaboration" | "execution" | "diagnostics";
@@ -28,6 +39,14 @@ const SECTION_IDS: SectionId[] = [
   "execution",
   "diagnostics",
 ];
+
+const SECTION_ICONS: Record<SectionId, ComponentType<{ className?: string }>> = {
+  general: SlidersHorizontal,
+  projects: FolderGit2,
+  collaboration: Users,
+  execution: Play,
+  diagnostics: Activity,
+};
 
 function validate(d: ConfigView): string | null {
   if (d.vaultPath.trim().length === 0) return i18n.t("settings:validate.vaultPathRequired");
@@ -83,6 +102,21 @@ export default function SettingsPage() {
       JSON.stringify(draft) !== JSON.stringify(config),
     [config, draft],
   );
+
+  // 성공 배너는 스스로 사라진다. 실패는 사용자가 다음 동작을 결정할 때까지 남는다.
+  useEffect(() => {
+    if (!msg?.ok) return;
+    const id = window.setTimeout(() => setMsg(null), 3000);
+    return () => window.clearTimeout(id);
+  }, [msg]);
+
+  // 진단에 문제가 있으면 레일의 진단 항목에 점을 찍어 어디를 봐야 하는지 가리킨다.
+  const diagProblem =
+    diag != null &&
+    (!diag.configExists ||
+      !diag.vaultPathOk ||
+      !diag.claudeOk ||
+      diag.projects.some((p) => !p.pathOk || !p.gitOk));
 
   function patchDraft(fn: (d: ConfigView) => void) {
     setDraft((prev) => {
@@ -158,62 +192,102 @@ export default function SettingsPage() {
         >
           {saving ? t("actions.saving") : t("actions.save")}
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => useApp.getState().setPage("schemas")}
-        >
-          {t("page.schemas")}
-        </Button>
       </PageHeader>
 
       {msg && (
-        <div
-          className={`px-4 pt-2 text-xs ${msg.ok ? "text-success" : "text-destructive"}`}
-        >
-          {msg.text}
+        <div className="px-4 pt-3 lg:px-5">
+          <Notice ok={msg.ok} text={msg.text} />
         </div>
       )}
 
       {!draft ? (
-        <Empty>{t("page.loading")}</Empty>
+        <div className="max-w-3xl space-y-4 p-4 lg:p-5" aria-busy="true">
+          <span className="sr-only">{t("page.loading")}</span>
+          <div className="h-28 animate-pulse rounded-xl border bg-muted/40" />
+          <div className="h-40 animate-pulse rounded-xl border bg-muted/40" />
+        </div>
       ) : (
-        <>
-          <div className="sticky top-[58px] z-10 border-b bg-background/90 px-4 py-2 backdrop-blur-xl lg:px-5">
-            <Tabs tabs={tabs} value={section} onChange={setSection} />
-          </div>
+        <div className="flex items-start">
+          {/* 섹션 레일. 어디에 무엇이 있는지 한눈에 보이게 아이콘과 한 줄 설명을
+              곁들이고, 진단에 문항이 있으면 점을 찍어 눈길을 끈다. */}
+          <nav
+            aria-label={t("page.title")}
+            className="sticky top-[58px] hidden max-h-[calc(100dvh-58px)] w-56 shrink-0 flex-col gap-0.5 self-start overflow-y-auto border-r p-3 md:flex"
+          >
+            {SECTION_IDS.map((id) => {
+              const Icon = SECTION_ICONS[id];
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-current={section === id ? "page" : undefined}
+                  onClick={() => setSection(id)}
+                  className={cn(
+                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors",
+                    section === id
+                      ? "bg-secondary text-secondary-foreground"
+                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                  )}
+                >
+                  <Icon className="mt-0.5 size-3.5 shrink-0" />
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-1.5 text-[13px] font-medium leading-tight">
+                      {t(`sections.${id}`)}
+                      {id === "diagnostics" && diagProblem && (
+                        <span
+                          className="size-1.5 shrink-0 rounded-full bg-warning"
+                          aria-hidden
+                        />
+                      )}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+                      {t(`sectionsDesc.${id}`)}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
 
-          {section === "general" && (
-            <GeneralSection
-              draft={draft}
-              patchDraft={patchDraft}
-              onLaunchAtLogin={toggleLogin}
-            />
-          )}
-          {section === "projects" && (
-            <ProjectsSection draft={draft} patchDraft={patchDraft} />
-          )}
-          {section === "collaboration" && (
-            <CollaborationSection draft={draft} patchDraft={patchDraft} />
-          )}
-          {section === "execution" && (
-            <ExecutionSection draft={draft} patchDraft={patchDraft} />
-          )}
-          {section === "diagnostics" && (
-            <DiagnosticsSection
-              diag={diag}
-              requirements={requirements}
-              agents={agents}
-              defaultAgent={defaultAgent}
-              vaultPath={draft.vaultPath}
-              onRefresh={() => {
-                void refreshDiagnostics();
-                void refreshRequirements();
-                void refreshAgents();
-              }}
-            />
-          )}
-        </>
+          <div className="min-w-0 flex-1">
+            {/* 좁은 화면에서는 레일 대신 탭 한 줄. */}
+            <div className="border-b px-4 py-2 md:hidden">
+              <Tabs tabs={tabs} value={section} onChange={setSection} />
+            </div>
+            <div className="mx-auto w-full max-w-3xl p-4 lg:p-5">
+              {section === "general" && (
+                <GeneralSection
+                  draft={draft}
+                  patchDraft={patchDraft}
+                  onLaunchAtLogin={toggleLogin}
+                />
+              )}
+              {section === "projects" && (
+                <ProjectsSection draft={draft} patchDraft={patchDraft} />
+              )}
+              {section === "collaboration" && (
+                <CollaborationSection draft={draft} patchDraft={patchDraft} />
+              )}
+              {section === "execution" && (
+                <ExecutionSection draft={draft} patchDraft={patchDraft} />
+              )}
+              {section === "diagnostics" && (
+                <DiagnosticsSection
+                  diag={diag}
+                  requirements={requirements}
+                  agents={agents}
+                  defaultAgent={defaultAgent}
+                  vaultPath={draft.vaultPath}
+                  onRefresh={() => {
+                    void refreshDiagnostics();
+                    void refreshRequirements();
+                    void refreshAgents();
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

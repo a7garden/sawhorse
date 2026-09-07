@@ -1,12 +1,13 @@
 import { PathInput } from "@/components/ui/path-input";
 import type { ConfigView } from "@/lib/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "react-i18next";
+import { useApp } from "@/lib/store";
 
 import { getLanguage, setLanguage, type Language } from "@/i18n";
+import { SectionCard, SettingRow } from "./parts";
 
 export default function GeneralSection({
   draft,
@@ -20,71 +21,93 @@ export default function GeneralSection({
   const { t } = useTranslation("common");
   const { t: ts } = useTranslation("settings");
   return (
-    <div className="grid items-start gap-4 p-4 lg:grid-cols-2">
-      <Card>
-        <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">{ts("general.saveLocation")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="vault-path">{ts("fields.vaultPath")}</Label>
-            <PathInput
-              id="vault-path"
-              value={draft.vaultPath}
-              onValueChange={(value) =>
-                patchDraft((d) => (d.vaultPath = value))
-              }
-              placeholder="/path/to/vault"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="default-project">{ts("fields.defaultProject")}</Label>
-            <Select
-              id="default-project"
-              className="w-full"
-              value={draft.defaultProject}
-              onChange={(e) =>
-                patchDraft((d) => (d.defaultProject = e.target.value))
-              }
-            >
-              <option value="">{ts("general.noProject")}</option>
-              {draft.projects.map((p) => (
-                <option key={p.name} value={p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+    <div className="space-y-4">
+      <SectionCard
+        title={ts("general.saveLocation")}
+        desc={ts("general.saveLocationDesc")}
+      >
+        <div className="divide-y divide-border">
+          <SettingRow
+            stacked
+            label={ts("fields.vaultPath")}
+            htmlFor="vault-path"
+            control={
+              <PathInput
+                id="vault-path"
+                value={draft.vaultPath}
+                onValueChange={(value) =>
+                  patchDraft((d) => (d.vaultPath = value))
+                }
+                placeholder="/path/to/vault"
+              />
+            }
+          />
+          <SettingRow
+            label={ts("fields.defaultProject")}
+            htmlFor="default-project"
+            control={
+              <Select
+                id="default-project"
+                className="w-52"
+                value={draft.defaultProject}
+                onChange={(v) => patchDraft((d) => (d.defaultProject = v))}
+                options={[
+                  { value: "", label: ts("general.noProject") },
+                  ...draft.projects.map((p) => ({
+                    value: p.name,
+                    label: p.name,
+                  })),
+                ]}
+              />
+            }
+          />
+          <SettingRow
+            label={ts("page.schemas")}
+            hint={ts("general.schemasHint")}
+            control={
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => useApp.getState().setPage("schemas")}
+              >
+                {ts("general.open")}
+              </Button>
+            }
+          />
+        </div>
+      </SectionCard>
 
-      <Card>
-        <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">{ts("general.appTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-2">
-            <Switch
-              id="launch-at-login"
-              checked={draft.dashboard.launchAtLogin}
-              onCheckedChange={(on) => onLaunchAtLogin(on)}
-            />
-            <Label htmlFor="launch-at-login">{ts("general.launchAtLogin")}</Label>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label htmlFor="app-language">{t("language")}</Label>
-            <Select
-              id="app-language"
-              className="w-full"
-              value={getLanguage()}
-              onChange={(e) => setLanguage(e.target.value as Language)}
-            >
-              <option value="ko">한국어</option>
-              <option value="en">English</option>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      <SectionCard title={ts("general.appTitle")}>
+        <div className="divide-y divide-border">
+          <SettingRow
+            label={t("language")}
+            htmlFor="app-language"
+            control={
+              <Select
+                id="app-language"
+                className="w-52"
+                value={getLanguage()}
+                onChange={(v) => setLanguage(v as Language)}
+                options={[
+                  { value: "ko", label: "한국어" },
+                  { value: "en", label: "English" },
+                ]}
+              />
+            }
+          />
+          <SettingRow
+            label={ts("general.launchAtLogin")}
+            htmlFor="launch-at-login"
+            control={
+              <Switch
+                id="launch-at-login"
+                checked={draft.dashboard.launchAtLogin}
+                onCheckedChange={onLaunchAtLogin}
+              />
+            }
+          />
+        </div>
+      </SectionCard>
     </div>
   );
 }

@@ -1076,14 +1076,12 @@ function AddConnectionDialog({
             <Select
               className="w-full"
               value={choiceKey}
-              onChange={(e) => setChoiceKey(e.target.value)}
-            >
-              {choices.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.extensionName}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => setChoiceKey(v)}
+              options={choices.map((c) => ({
+                value: c.key,
+                label: c.extensionName,
+              }))}
+            />
           </div>
           <div className="space-y-1">
             <Label>{t("sources.add.nameLabel")}</Label>
@@ -1242,12 +1240,13 @@ function AddConnectionDialog({
               <Select
                 className="w-full"
                 value={ghState}
-                onChange={(e) => setGhState(e.target.value)}
-              >
-                <option value="open">open</option>
-                <option value="closed">closed</option>
-                <option value="all">all</option>
-              </Select>
+                onChange={(v) => setGhState(v)}
+                options={[
+                  { value: "open", label: "open" },
+                  { value: "closed", label: "closed" },
+                  { value: "all", label: "all" },
+                ]}
+              />
             </div>
           </div>
         )}

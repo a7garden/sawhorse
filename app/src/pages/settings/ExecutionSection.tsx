@@ -5,8 +5,7 @@ import type {
   HerdrMode,
   PermissionMode,
 } from "@/lib/types";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "react-i18next";
@@ -17,6 +16,7 @@ import {
   PERMISSION_OPTIONS,
   clampInt,
 } from "./constants";
+import { SectionCard, SettingRow } from "./parts";
 
 export default function ExecutionSection({
   draft,
@@ -27,15 +27,17 @@ export default function ExecutionSection({
 }) {
   const { t } = useTranslation("settings");
   return (
-    <div className="grid items-start gap-4 p-4 lg:grid-cols-2">
-      <div className="space-y-4">
-        <Card>
-          <CardHeader className="pb-1">
-            <CardTitle className="text-[13px]">{t("exec.runOptions")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-1">
-              <Label htmlFor="claude-bin">{t("fields.claudeBin")}</Label>
+    <div className="space-y-4">
+      <SectionCard
+        title={t("exec.runOptions")}
+        desc={t("exec.runOptionsDesc")}
+      >
+        <div className="divide-y divide-border">
+          <SettingRow
+            stacked
+            label={t("fields.claudeBin")}
+            htmlFor="claude-bin"
+            control={
               <PathInput
                 directory={false}
                 id="claude-bin"
@@ -45,65 +47,62 @@ export default function ExecutionSection({
                 }
                 placeholder="claude"
               />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="perm-mode">{t("fields.permissionMode")}</Label>
+            }
+          />
+          <SettingRow
+            stacked
+            label={t("fields.permissionMode")}
+            htmlFor="perm-mode"
+            hint={t("exec.permissionHint")}
+            control={
               <Select
                 id="perm-mode"
-                className="w-full"
+                className="w-full sm:w-80"
                 value={draft.dashboard.permissionMode}
-                onChange={(e) =>
+                onChange={(v) =>
                   patchDraft(
-                    (d) =>
-                      (d.dashboard.permissionMode = e.target
-                        .value as PermissionMode),
+                    (d) => (d.dashboard.permissionMode = v as PermissionMode),
                   )
                 }
-              >
-                {PERMISSION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {t(o.key)}
-                  </option>
-                ))}
-              </Select>
-              <p className="text-[11px] text-muted-foreground">
-                {t("exec.permissionHint")}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                options={PERMISSION_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: t(o.key),
+                }))}
+              />
+            }
+          />
+        </div>
+      </SectionCard>
 
-      <Card>
-        <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">{t("exec.herdrTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="space-y-1">
-            <Label htmlFor="herdr-mode">{t("exec.mode")}</Label>
-            <Select
-              id="herdr-mode"
-              className="w-full"
-              value={draft.dashboard.herdr.mode}
-              onChange={(e) =>
-                patchDraft(
-                  (d) => (d.dashboard.herdr.mode = e.target.value as HerdrMode),
-                )
-              }
-            >
-              {HERDR_MODE_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {t(o.key)}
-                </option>
-              ))}
-            </Select>
-            <p className="text-[11px] text-muted-foreground">
-              {t("exec.herdrHint")}
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
-              <Label htmlFor="herdr-bin">{t("fields.herdrBin")}</Label>
+      <SectionCard title={t("exec.herdrTitle")} desc={t("exec.herdrDesc")}>
+        <div className="divide-y divide-border">
+          <SettingRow
+            stacked
+            label={t("exec.mode")}
+            htmlFor="herdr-mode"
+            hint={t("exec.herdrHint")}
+            control={
+              <Select
+                id="herdr-mode"
+                className="w-full sm:w-80"
+                value={draft.dashboard.herdr.mode}
+                onChange={(v) =>
+                  patchDraft(
+                    (d) => (d.dashboard.herdr.mode = v as HerdrMode),
+                  )
+                }
+                options={HERDR_MODE_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: t(o.key),
+                }))}
+              />
+            }
+          />
+          <SettingRow
+            stacked
+            label={t("fields.herdrBin")}
+            htmlFor="herdr-bin"
+            control={
               <PathInput
                 directory={false}
                 id="herdr-bin"
@@ -113,11 +112,15 @@ export default function ExecutionSection({
                 }
                 placeholder="herdr"
               />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="herdr-session">{t("exec.sessionName")}</Label>
+            }
+          />
+          <SettingRow
+            label={t("exec.sessionName")}
+            htmlFor="herdr-session"
+            control={
               <Input
                 id="herdr-session"
+                className="w-52"
                 value={draft.dashboard.herdr.session}
                 onChange={(e) =>
                   patchDraft(
@@ -126,33 +129,36 @@ export default function ExecutionSection({
                 }
                 placeholder={t("exec.sessionPlaceholder")}
               />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="herdr-cleanup">{t("exec.cleanupLabel")}</Label>
+            }
+          />
+          <SettingRow
+            label={t("exec.cleanupLabel")}
+            htmlFor="herdr-cleanup"
+            control={
               <Select
                 id="herdr-cleanup"
-                className="w-full"
+                className="w-52"
                 value={draft.dashboard.herdr.cleanup}
-                onChange={(e) =>
+                onChange={(v) =>
                   patchDraft(
-                    (d) =>
-                      (d.dashboard.herdr.cleanup = e.target
-                        .value as HerdrCleanup),
+                    (d) => (d.dashboard.herdr.cleanup = v as HerdrCleanup),
                   )
                 }
-              >
-                {HERDR_CLEANUP_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                  {t(o.key)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="herdr-parallel">{t("exec.parallel")}</Label>
+                options={HERDR_CLEANUP_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: t(o.key),
+                }))}
+              />
+            }
+          />
+          <SettingRow
+            label={t("exec.parallel")}
+            htmlFor="herdr-parallel"
+            control={
               <Input
                 id="herdr-parallel"
                 type="number"
+                className="w-20"
                 min={1}
                 max={8}
                 value={draft.dashboard.herdr.maxParallel}
@@ -168,12 +174,16 @@ export default function ExecutionSection({
                   )
                 }
               />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="herdr-start">{t("exec.startTimeout")}</Label>
+            }
+          />
+          <SettingRow
+            label={t("exec.startTimeout")}
+            htmlFor="herdr-start"
+            control={
               <Input
                 id="herdr-start"
                 type="number"
+                className="w-20"
                 min={10}
                 max={600}
                 value={draft.dashboard.herdr.startTimeoutSec}
@@ -189,12 +199,16 @@ export default function ExecutionSection({
                   )
                 }
               />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="herdr-timeout">{t("exec.jobTimeout")}</Label>
+            }
+          />
+          <SettingRow
+            label={t("exec.jobTimeout")}
+            htmlFor="herdr-timeout"
+            control={
               <Input
                 id="herdr-timeout"
                 type="number"
+                className="w-20"
                 min={0}
                 value={draft.dashboard.herdr.jobTimeoutMin}
                 onChange={(e) =>
@@ -209,25 +223,28 @@ export default function ExecutionSection({
                   )
                 }
               />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch
-              id="herdr-notify"
-              checked={draft.dashboard.herdr.notify}
-              onCheckedChange={(on) =>
-                patchDraft((d) => (d.dashboard.herdr.notify = on))
-              }
-            />
-            <Label htmlFor="herdr-notify">{t("exec.notify")}</Label>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            {t("exec.workspaceHint", {
-              workspace: draft.dashboard.herdr.workspaceLabel,
-            })}
-          </p>
-        </CardContent>
-      </Card>
+            }
+          />
+          <SettingRow
+            label={t("exec.notify")}
+            htmlFor="herdr-notify"
+            control={
+              <Switch
+                id="herdr-notify"
+                checked={draft.dashboard.herdr.notify}
+                onCheckedChange={(on) =>
+                  patchDraft((d) => (d.dashboard.herdr.notify = on))
+                }
+              />
+            }
+          />
+        </div>
+        <p className="mt-3 border-t pt-3 text-xs leading-snug text-muted-foreground">
+          {t("exec.workspaceHint", {
+            workspace: draft.dashboard.herdr.workspaceLabel,
+          })}
+        </p>
+      </SectionCard>
     </div>
   );
 }

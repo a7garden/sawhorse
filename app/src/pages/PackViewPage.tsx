@@ -464,17 +464,15 @@ export default function PackViewPage({
         {extensionPackageId && (
           <Select
             aria-label={t("view.projectAria")}
-            className="h-8 w-40"
+            size="sm"
+            className="w-40"
             value={projectId ?? ""}
-            onChange={(event) => setProjectId(event.target.value || null)}
-          >
-            <option value="">{t("select.project")}</option>
-            {extensionProjects.map((id) => (
-              <option key={id} value={id}>
-                {id}
-              </option>
-            ))}
-          </Select>
+            onChange={(v) => setProjectId(v || null)}
+            options={[
+              { value: "", label: t("select.project") },
+              ...extensionProjects.map((id) => ({ value: id, label: id })),
+            ]}
+          />
         )}
         {actions.map((a) => (
           <RunButton

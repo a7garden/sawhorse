@@ -1,7 +1,12 @@
 {
   "language": "언어",
   "nav": {
-    "section": { "work": "작업공간", "vault": "볼트", "reading": "확장 기능" },
+    "section": {
+      "work": "전체 작업공간",
+      "vault": "볼트",
+      "reading": "확장 기능",
+      "project": "프로젝트별 화면"
+    },
     "overview": "작업대",
     "board": "개발",
     "taskLibrary": "자동화",
@@ -31,11 +36,23 @@
       "onboarding": "프로젝트으로 돌아가기",
       "sources": "읽을거리으로 돌아가기"
     },
-    "theme": { "light": "라이트", "dark": "다크", "system": "시스템" },
+    "theme": {
+      "light": "라이트",
+      "dark": "다크",
+      "system": "시스템"
+    },
     "themeTitle": "테마: {{theme}} (클릭하여 전환)",
     "themeToggle": "테마 전환",
     "viewPicker": "화면 선택",
-    "previewNotice": "브라우저 체험 · 예제 데이터는 이 브라우저에만 저장됩니다. 실제 에이전트와 파일은 데스크톱 앱에서 연결됩니다."
+    "previewNotice": "브라우저 체험 · 예제 데이터는 이 브라우저에만 저장됩니다. 실제 에이전트와 파일은 데스크톱 앱에서 연결됩니다.",
+    "work": "작업",
+    "workDocuments": "작업 문서 검색",
+    "scope": {
+      "shared": "공통",
+      "select": "사이드바 프로젝트 선택",
+      "appliesBelow": "아래 화면에 적용",
+      "sharedSettings": "앱 공통 설정"
+    }
   },
   "toolbar": {
     "search": "전체 검색",
@@ -69,8 +86,16 @@
     "pickFolder": "폴더 선택",
     "pickFile": "파일 선택"
   },
-  "toast": { "dismiss": "알림 닫기" },
-  "dialog": { "close": "닫기" },
-  "api": { "desktopOnly": "Sawhorse 데스크톱 앱에서 열어 주세요." },
-  "markdown": { "embed": "[임베드] {{inner}}" }
+  "toast": {
+    "dismiss": "알림 닫기"
+  },
+  "dialog": {
+    "close": "닫기"
+  },
+  "api": {
+    "desktopOnly": "Sawhorse 데스크톱 앱에서 열어 주세요."
+  },
+  "markdown": {
+    "embed": "[임베드] {{inner}}"
+  }
 }

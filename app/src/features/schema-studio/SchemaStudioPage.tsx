@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { PageHeader } from "@/pages/common";
 import { schemaStudioApi } from "./api";
 import type {
@@ -530,21 +531,21 @@ export default function SchemaStudioPage() {
                             />
                             <label className="text-xs">
                               {t("schemaStudio.inputType")}
-                              <select
+                              <Select
                                 aria-label={t("schemaStudio.inputType")}
-                                className="mt-1 h-9 w-full rounded border bg-background px-2"
+                                className="mt-1"
                                 value={
                                   Array.isArray(field.valueSchema.enum)
                                     ? "enum"
                                     : String(field.valueSchema.type ?? "custom")
                                 }
-                                onChange={(event) => {
+                                onChange={(v) => {
                                   const valueSchema =
-                                    event.target.value === "enum"
+                                    v === "enum"
                                       ? { enum: ["새 항목"] }
-                                      : event.target.value === "custom"
+                                      : v === "custom"
                                         ? field.valueSchema
-                                        : { type: event.target.value };
+                                        : { type: v };
                                   patchType({
                                     fields: artifactType.fields.map(
                                       (item, j) =>
@@ -554,26 +555,33 @@ export default function SchemaStudioPage() {
                                     ),
                                   });
                                 }}
-                              >
-                                <option value="string">
-                                  {t("schemaStudio.inputTypes.string")}
-                                </option>
-                                <option value="number">
-                                  {t("schemaStudio.inputTypes.number")}
-                                </option>
-                                <option value="integer">
-                                  {t("schemaStudio.inputTypes.integer")}
-                                </option>
-                                <option value="boolean">
-                                  {t("schemaStudio.inputTypes.boolean")}
-                                </option>
-                                <option value="enum">
-                                  {t("schemaStudio.inputTypes.enum")}
-                                </option>
-                                <option value="custom">
-                                  {t("schemaStudio.inputTypes.custom")}
-                                </option>
-                              </select>
+                                options={[
+                                  {
+                                    value: "string",
+                                    label: t("schemaStudio.inputTypes.string"),
+                                  },
+                                  {
+                                    value: "number",
+                                    label: t("schemaStudio.inputTypes.number"),
+                                  },
+                                  {
+                                    value: "integer",
+                                    label: t("schemaStudio.inputTypes.integer"),
+                                  },
+                                  {
+                                    value: "boolean",
+                                    label: t("schemaStudio.inputTypes.boolean"),
+                                  },
+                                  {
+                                    value: "enum",
+                                    label: t("schemaStudio.inputTypes.enum"),
+                                  },
+                                  {
+                                    value: "custom",
+                                    label: t("schemaStudio.inputTypes.custom"),
+                                  },
+                                ]}
+                              />
                             </label>
                             {Array.isArray(field.valueSchema.enum) && (
                               <label className="text-xs">

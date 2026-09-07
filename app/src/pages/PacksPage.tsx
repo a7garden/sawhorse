@@ -528,17 +528,17 @@ export default function PacksPage() {
             <div className="grid gap-2 md:grid-cols-[150px_1fr_220px_auto]">
               <Select
                 value={sourceKind}
-                onChange={(event) =>
-                  setSourceKind(event.target.value as typeof sourceKind)
-                }
-              >
-                <option value="local-directory">
-                  {t("install.localDirectory")}
-                </option>
-                <option value="local-file">{t("install.localFile")}</option>
-                <option value="git">Git commit</option>
-                <option value="https">HTTPS</option>
-              </Select>
+                onChange={(v) => setSourceKind(v as typeof sourceKind)}
+                options={[
+                  {
+                    value: "local-directory",
+                    label: t("install.localDirectory"),
+                  },
+                  { value: "local-file", label: t("install.localFile") },
+                  { value: "git", label: "Git commit" },
+                  { value: "https", label: "HTTPS" },
+                ]}
+              />
               {sourceKind.startsWith("local-") ? (
                 <PathInput
                   directory={sourceKind === "local-directory"}
@@ -1125,15 +1125,15 @@ function SettingInput({
         <Select
           className="mt-1 w-full"
           value={typeof value === "string" ? value : ""}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          <option value="">{t("unset")}</option>
-          {field.options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label || o.value}
-            </option>
-          ))}
-        </Select>
+          onChange={(v) => onChange(v)}
+          options={[
+            { value: "", label: t("unset") },
+            ...field.options.map((o) => ({
+              value: o.value,
+              label: o.label || o.value,
+            })),
+          ]}
+        />
       </div>
     );
   }

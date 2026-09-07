@@ -12,10 +12,10 @@ import type {
   LocalIntegrationApproval,
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Empty } from "../common";
+import { Notice, SectionCard } from "./parts";
 
 const APPROVAL_OPTIONS: { value: LocalIntegrationApproval; key: string }[] = [
   { value: "required", key: "collab.approval.required" },
@@ -158,51 +158,39 @@ export default function CollaborationSection({
   );
 
   return (
-    <div className="space-y-4 p-4">
-      {msg && (
-        <div
-          className={`text-xs ${msg.ok ? "text-success" : "text-destructive"}`}
-        >
-          {msg.text}
-        </div>
-      )}
+    <div className="space-y-4">
+      {msg && <Notice ok={msg.ok} text={msg.text} />}
 
-      <Card>
-        <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">{t("collab.approval.title")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Select
-            value={draft.dashboard.collaboration.localIntegrationApproval}
-            onChange={(e) =>
-              void setApproval(e.target.value as LocalIntegrationApproval)
-            }
-            aria-label={t("collab.approval.aria")}
-          >
-            {APPROVAL_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {t(o.key)}
-              </option>
-            ))}
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {t("collab.approval.hint")}
-          </p>
-        </CardContent>
-      </Card>
+      <SectionCard
+        title={t("collab.approval.title")}
+        desc={t("collab.approval.hint")}
+      >
+        <Select
+          className="w-full sm:w-80"
+          value={draft.dashboard.collaboration.localIntegrationApproval}
+          onChange={(v) => void setApproval(v as LocalIntegrationApproval)}
+          aria-label={t("collab.approval.aria")}
+          options={APPROVAL_OPTIONS.map((o) => ({
+            value: o.value,
+            label: t(o.key),
+          }))}
+        />
+      </SectionCard>
 
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-          <CardTitle className="text-[13px]">{t("collab.registeredTitle")}</CardTitle>
-          {(projects?.registered.length ?? 0) > 0 && (
+      <SectionCard
+        title={t("collab.registeredTitle")}
+        desc={t("collab.registeredDesc")}
+        actions={
+          (projects?.registered.length ?? 0) > 0 && (
             <span className="text-xs text-muted-foreground">
               {t("collab.registeredCount", {
                 count: projects?.registered.length ?? 0,
               })}
             </span>
-          )}
-        </CardHeader>
-        <CardContent className="space-y-2">
+          )
+        }
+      >
+        <div className="space-y-2">
           {projects && projects.registered.length === 0 && (
             <Empty className="py-3">{t("collab.noRegistered")}</Empty>
           )}
@@ -224,29 +212,29 @@ export default function CollaborationSection({
               </div>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
-      <Card>
-        <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">{t("collab.profileTitle")}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      <SectionCard
+        title={t("collab.profileTitle")}
+        desc={t("collab.profileDesc")}
+      >
+        <div className="space-y-2">
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
               <Label>{t("collab.projectLabel")}</Label>
               <Select
                 className="w-full"
                 value={profileProject}
-                onChange={(e) => setProfileProject(e.target.value)}
-              >
-                <option value="">{t("collab.select")}</option>
-                {(projects?.registered ?? []).map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </Select>
+                onChange={(v) => setProfileProject(v)}
+                options={[
+                  { value: "", label: t("collab.select") },
+                  ...(projects?.registered ?? []).map((p) => ({
+                    value: p.id,
+                    label: p.name,
+                  })),
+                ]}
+              />
             </div>
             <div className="space-y-1">
               <Label>{t("collab.profileName")}</Label>
@@ -299,23 +287,24 @@ export default function CollaborationSection({
                 <div className="flex items-center gap-2">
                   <Select
                     value={c.kind}
-                    onChange={(e) =>
+                    onChange={(v) =>
                       setChecks((cs) =>
                         cs.map((x, j) =>
                           j === i
                             ? {
                                 ...x,
-                                kind: e.target.value as "command" | "http",
+                                kind: v as "command" | "http",
                               }
                             : x,
                         ),
                       )
                     }
                     aria-label={t("collab.checkKindAria", { index: i + 1 })}
-                  >
-                    <option value="command">{t("collab.command")}</option>
-                    <option value="http">{t("collab.http")}</option>
-                  </Select>
+                    options={[
+                      { value: "command", label: t("collab.command") },
+                      { value: "http", label: t("collab.http") },
+                    ]}
+                  />
                   <Button
                     size="icon"
                     variant="ghost"
@@ -428,16 +417,14 @@ export default function CollaborationSection({
               {t("collab.saveProfile")}
             </Button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
 
-      <Card>
-        <CardHeader className="pb-1">
-          <CardTitle className="text-[13px]">
-            {t("collab.legacyTitle")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
+      <SectionCard
+        title={t("collab.legacyTitle")}
+        desc={t("collab.legacyDesc")}
+      >
+        <div className="space-y-2">
           {projects && projects.legacy.length === 0 && (
             <Empty className="py-3">
               {t("collab.noLegacy")}
@@ -470,8 +457,8 @@ export default function CollaborationSection({
               </Button>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </SectionCard>
     </div>
   );
 }

@@ -11,6 +11,8 @@ import { Dialog } from "./ui/dialog";
 import { Button } from "./ui/button";
 import WorkbenchPage from "@/features/workbench/WorkbenchPage";
 
+const isMac = /mac/i.test(navigator.platform);
+
 export function AppToolbar() {
   const { t } = useTranslation("common");
   const [runs, setRuns] = useState<HarnessRun[]>([]);
@@ -141,11 +143,14 @@ export function AppToolbar() {
     <>
       <div className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-background px-5">
         <button
-          className="flex items-center gap-2 text-xs text-muted-foreground"
+          className="flex h-8 w-60 items-center gap-2 rounded-md border bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover:bg-accent"
           onClick={() => setSearch(true)}
         >
-          <Search size={15} /> {t("toolbar.search")}{" "}
-          <kbd className="ml-6 rounded border px-1.5 py-0.5">⌘ / Ctrl K</kbd>
+          <Search size={14} className="shrink-0" />
+          <span className="flex-1 truncate text-left">{t("toolbar.search")}</span>
+          <kbd className="shrink-0 rounded border bg-background px-1.5 py-0.5 text-[10px] font-normal">
+            {isMac ? "⌘K" : "Ctrl K"}
+          </kbd>
         </button>
         <button
           className="relative rounded-md p-2 hover:bg-accent"
@@ -177,7 +182,7 @@ export function AppToolbar() {
         title={t("toolbar.search")}
         className="max-w-5xl"
       >
-        <WorkbenchPage view="knowledge" />
+        <WorkbenchPage view="knowledge" globalScope />
       </Dialog>
       <Dialog
         open={notifications}

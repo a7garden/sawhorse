@@ -136,23 +136,22 @@ export default function ReadingPage() {
         </Button>
         {instances.length > 0 && (
           <>
-            <Select value={selId} onChange={(e) => setSelId(e.target.value)}>
-              {instances.map((i) => (
-                <option key={i.instanceId} value={i.instanceId}>
-                  {i.instanceId}
-                </option>
-              ))}
-            </Select>
+            <Select
+              value={selId}
+              onChange={(v) => setSelId(v)}
+              options={instances.map((i) => ({
+                value: i.instanceId,
+                label: i.instanceId,
+              }))}
+            />
             <Select
               value={filter}
-              onChange={(e) => setFilter(e.target.value as ArticleFilter)}
-            >
-              {FILTERS.map((f) => (
-                <option key={f} value={f}>
-                  {t(`filter.${f}`)}
-                </option>
-              ))}
-            </Select>
+              onChange={(v) => setFilter(v as ArticleFilter)}
+              options={FILTERS.map((f) => ({
+                value: f,
+                label: t(`filter.${f}`),
+              }))}
+            />
             <Button
               size="sm"
               variant="ghost"

@@ -5,6 +5,7 @@ import type {
   WorkflowEdge,
 } from "@/features/workbench/types";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 const EVENTS: Record<string, string> = {
   approved: "승인하면",
   completed: "완료하면",
@@ -202,43 +203,44 @@ export function WorkflowCanvas({
             key={i}
             className="grid grid-cols-[1fr_1fr_1fr_auto] items-center gap-2 rounded-md border p-2"
           >
-            <select
+            <Select
               aria-label={t("canvas.edgeFrom", { n: i + 1 })}
-              className="min-w-0 rounded border bg-background p-2 text-xs"
+              className="min-w-0"
+              size="sm"
               value={edge.from}
-              onChange={(e) => patchEdge(i, { from: e.target.value })}
-            >
-              {definition.nodes.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.label}
-                </option>
-              ))}
-            </select>
-            <select
+              onChange={(v) => patchEdge(i, { from: v })}
+              options={definition.nodes.map((n) => ({
+                value: n.id,
+                label: n.label,
+              }))}
+            />
+            <Select
               aria-label={t("canvas.edgeOn", { n: i + 1 })}
-              className="min-w-0 rounded border bg-background p-2 text-xs"
+              className="min-w-0"
+              size="sm"
               value={edge.on}
-              onChange={(e) => patchEdge(i, { on: e.target.value })}
-            >
-              {Object.entries(EVENTS).map(([id]) => (
-                <option key={id} value={id}>
-                  {t(`canvas.events.${id}`)}
-                </option>
-              ))}
-              {!EVENTS[edge.on] && <option value={edge.on}>{edge.on}</option>}
-            </select>
-            <select
+              onChange={(v) => patchEdge(i, { on: v })}
+              options={[
+                ...Object.entries(EVENTS).map(([id]) => ({
+                  value: id,
+                  label: t(`canvas.events.${id}`),
+                })),
+                ...(EVENTS[edge.on]
+                  ? []
+                  : [{ value: edge.on, label: edge.on }]),
+              ]}
+            />
+            <Select
               aria-label={t("canvas.edgeTo", { n: i + 1 })}
-              className="min-w-0 rounded border bg-background p-2 text-xs"
+              className="min-w-0"
+              size="sm"
               value={edge.to}
-              onChange={(e) => patchEdge(i, { to: e.target.value })}
-            >
-              {definition.nodes.map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => patchEdge(i, { to: v })}
+              options={definition.nodes.map((n) => ({
+                value: n.id,
+                label: n.label,
+              }))}
+            />
             <Button
               size="xs"
               variant="ghost"

@@ -26,6 +26,7 @@ import type {
  * 팩 화면의 id 는 `view:<packId>:<viewId>`.
  */
 export const CORE_PAGES = [
+  "work",
   "github",
   "issues",
   "docs",
@@ -131,6 +132,7 @@ export const useApp = create<AppState>((set, get) => ({
    * 팩이 꺼져 화면이 사라졌으면 홈으로 — 존재하지 않는 페이지에 갇히지 않게.
    */
   setPage: (p) => {
+    if (["board", "issues", "improve"].includes(p)) return set({ page: "work" });
     if (isCore(p)) return set({ page: p });
     if (parseViewPage(p)) {
       const { packId, viewId } = parseViewPage(p)!;
@@ -178,6 +180,8 @@ export const useApp = create<AppState>((set, get) => ({
         // 화면 전체가 죽는 쪽이 훨씬 나쁘므로 개별 실패를 삼킨다.
         await Promise.all(
           [
+            get().refreshConfig(),
+            get().refreshDiagnostics(),
             get().refreshImprovements(),
             get().refreshPacks(),
             get().refreshTree(),
@@ -185,6 +189,8 @@ export const useApp = create<AppState>((set, get) => ({
             get().refreshTodos(),
           ].map((task) => task.catch(() => {})),
         );
+        void get().refreshAgents();
+        void get().refreshRequirements();
       }
       return;
     }

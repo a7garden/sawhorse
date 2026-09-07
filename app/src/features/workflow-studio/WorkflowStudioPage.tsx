@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/pages/common";
 import { workflowApi, sddApi, isWorkbenchPreview } from "@/features/workbench/api";
@@ -353,19 +354,15 @@ export default function WorkflowStudioPage() {
                 </label>
                 <label className="text-xs">
                   {t("workflowStudio.entryStep")}
-                  <select
-                    className="mt-1 h-9 w-full rounded-md border bg-background px-3"
+                  <Select
+                    className="mt-1"
                     value={definition.entry}
-                    onChange={(e) =>
-                      updateDefinition({ entry: e.target.value })
-                    }
-                  >
-                    {definition.nodes.map((n) => (
-                      <option key={n.id} value={n.id}>
-                        {n.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => updateDefinition({ entry: v })}
+                    options={definition.nodes.map((n) => ({
+                      value: n.id,
+                      label: n.label,
+                    }))}
+                  />
                 </label>
               </CardContent>
             </Card>
@@ -557,16 +554,15 @@ export default function WorkflowStudioPage() {
                   </label>
                   <label className="text-xs">
                     {t("workflowStudio.kind")}
-                    <select
-                      className="mt-1 h-9 w-full rounded-md border bg-background px-3"
+                    <Select
+                      className="mt-1"
                       value={node.kind}
-                      onChange={(e) =>
+                      onChange={(v) =>
                         updateNode({
-                          kind: e.target.value as WorkflowNode["kind"],
+                          kind: v as WorkflowNode["kind"],
                         })
                       }
-                    >
-                      {[
+                      options={[
                         "artifact",
                         "agent",
                         "check",
@@ -574,12 +570,11 @@ export default function WorkflowStudioPage() {
                         "condition",
                         "subworkflow",
                         "end",
-                      ].map((kind) => (
-                        <option key={kind} value={kind}>
-                          {t(`canvas.nodeKinds.${kind}`)}
-                        </option>
-                      ))}
-                    </select>
+                      ].map((kind) => ({
+                        value: kind,
+                        label: t(`canvas.nodeKinds.${kind}`),
+                      }))}
+                    />
                   </label>
                   {node.kind === "artifact" && (
                     <label className="text-xs">

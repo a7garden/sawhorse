@@ -1,5 +1,6 @@
 // Opt-in browser tour only. Failed desktop IPC never falls back to this store.
 import i18n from "@/i18n";
+import { isFinalWorkNode, workActions } from "./lifecycle";
 import {
   ARTIFACTS,
   STAGES,
@@ -161,7 +162,7 @@ function work(
       "문제와 원하는 결과를 정의하고, 근거를 남기며 다음 단계로 이어갑니다.",
     projectId,
     stage,
-    status,
+    status: stage !== "intent" && ["backlog", "ready", "review"].includes(status) ? "running" : status,
     priority: offset < 2 ? "high" : "normal",
     owner: "나",
     startDate: date(-2),
@@ -342,7 +343,17 @@ function load(): Store {
   return { snapshot: structuredClone(seed), documents: {} };
 }
 let state = load();
-const save = () => localStorage.setItem(KEY, JSON.stringify(state));
+const save = () => {
+  for (const work of state.snapshot.work) {
+    work.state = isClosedStatus(work.status) ? "closed" : "open";
+    work.closed = work.state === "closed" ? work.closed || now().slice(0, 10) : "";
+  }
+  localStorage.setItem(KEY, JSON.stringify(state));
+};
+function substantive(markdown: string) {
+  return markdown.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, "").replace(/<!--[\s\S]*?-->/g, "")
+    .split("\n").some((line) => line.trim() && !/^\s*(#|[-*] \[ \])/.test(line));
+}
 function doc(workId: string, artifact: string): Document {
   const key = `${workId}/${artifact}`;
   if (!state.documents[key]) {
@@ -415,14 +426,26 @@ export async function previewInvoke(
       const i = s.work.findIndex((v) => v.id === w.id);
       if (i >= 0 && s.work[i].stage !== w.stage)
         throw new Error(i18n.t("workbench:preview.useTransitionButton"));
+      if (i >= 0) {
+        const old = s.work[i];
+        Object.assign(w, { status: old.status, approve: old.approve, approved: old.approved,
+          approvalRequired: old.approvalRequired, decisions: old.decisions,
+          workflowId: old.workflowId, workflowVersion: old.workflowVersion,
+          workflowDigest: old.workflowDigest, workflowInstanceId: old.workflowInstanceId, activeNodes: old.activeNodes });
+      }
       w.createdAt ||= now();
       w.updatedAt = now();
       if (i < 0) {
         const project = s.projects.find(
           (project) => project.id === w.projectId,
         );
-        w.workflowId = project?.workflowId ?? "sdd-main";
-        w.workflowVersion = project?.workflowVersion ?? "1.0.0";
+        w.status = "backlog";
+        w.approve = false;
+        w.approved = "";
+        w.approvalRequired = false;
+        w.decisions = [];
+        w.workflowId = w.workflowId || project?.workflowId || "sdd-main";
+        w.workflowVersion = w.workflowVersion || project?.workflowVersion || "1.1.0";
         w.workflowDigest = `preview-${w.workflowId}-${w.workflowVersion}`;
         w.workflowInstanceId = null;
         w.activeNodes = [];
@@ -442,28 +465,10 @@ export async function previewInvoke(
     }
     case "sdd_transition": {
       const w = s.work.find((v) => v.id === id);
-      if (!w) throw new Error(i18n.t("workbench:errors.workNotFound"));
-      const next = args.stage as WorkItem["stage"];
-      const definition = s.workflows.find(
-        (candidate) =>
-          candidate.id === w.workflowId &&
-          candidate.version === w.workflowVersion,
-      );
-      if (
-        !definition?.edges.some(
-          (edge) => edge.from === w.stage && edge.to === next,
-        )
-      )
-        throw new Error(i18n.t("workbench:errors.invalidTransition"));
-      w.stage = next;
-      w.updatedAt = now();
-      w.decisions.push({
-        stage: next,
-        at: now(),
-        note: String(args.note ?? "브라우저 체험에서 단계 전환"),
-      });
-      save();
-      return structuredClone(w);
+      const definition = s.workflows.find((candidate) => candidate.id === w?.workflowId && candidate.version === w.workflowVersion);
+      const edge = definition?.edges.find((candidate) => candidate.from === w?.stage && candidate.to === args.stage);
+      if (!w || !edge) throw new Error(i18n.t("workbench:errors.invalidTransition"));
+      return previewInvoke("workflow_command", { input: { workId: id, event: edge.on, targetNodeId: edge.to, expectedNodeId: w.stage, note: args.note } });
     }
     case "workflow_command": {
       const input = args.input as {
@@ -472,6 +477,7 @@ export async function previewInvoke(
         targetNodeId?: string;
         expectedNodeId: string;
         note: string;
+        facts?: Record<string, unknown>;
       };
       const w = s.work.find((candidate) => candidate.id === input.workId);
       if (!w) throw new Error(i18n.t("workbench:errors.workNotFound"));
@@ -482,6 +488,30 @@ export async function previewInvoke(
           candidate.id === w.workflowId &&
           candidate.version === w.workflowVersion,
       );
+      if (!input.note?.trim()) throw new Error(i18n.t("workbench:detail.reviewNoteRequired"));
+      if (isClosedStatus(w.status)) throw new Error(i18n.t("workbench:work.closedError"));
+      if (input.event.startsWith("work:")) {
+        const action = input.event.slice(5);
+        if ((input.facts?.expectedStatus && input.facts.expectedStatus !== w.status) || !workActions(w, definition).includes(action))
+          throw new Error(i18n.t("workbench:work.invalidAction"));
+        if (["submit", "complete"].includes(action)) {
+          if (!isFinalWorkNode(w, definition)) throw new Error(i18n.t("workbench:work.invalidAction"));
+          const node = definition!.nodes.find((node) => node.id === w.stage)!;
+          for (const role of [...node.inputs, ...node.outputs]) {
+            if (!substantive(doc(w.id, role).markdown)) throw new Error(i18n.t("workbench:work.evidenceRequired", { role }));
+          }
+          if (w.dependsOn.some((id) => s.work.find((item) => item.id === id)?.status !== "done"))
+            throw new Error(i18n.t("workbench:work.invalidAction"));
+        }
+        const statuses: Record<string, WorkItem["status"]> = { accept: "ready", start: "running", reject: "rejected", cancel: "cancelled", pause: "blocked", resume: "running", revise: "running", submit: "review", complete: "done" };
+        w.status = statuses[action];
+        if (["accept", "start"].includes(action)) { w.approve = true; w.approved ||= now().slice(0, 10); }
+        w.updatedAt = now();
+        w.decisions.push({ stage: w.stage, at: now(), note: `${input.event}: ${input.note}` });
+        save();
+        return structuredClone(w);
+      }
+      if (w.status === "blocked") throw new Error(i18n.t("workbench:work.closedError"));
       const edges = definition?.edges.filter(
         (edge) =>
           edge.from === w.stage &&
@@ -490,6 +520,16 @@ export async function previewInvoke(
       );
       if (edges?.length !== 1)
         throw new Error(i18n.t("workbench:preview.unhandledEvent"));
+      const target = definition!.nodes.find((node) => node.id === edges[0].to)!;
+      for (const role of target.inputs) {
+        if (!substantive(doc(w.id, role).markdown)) throw new Error(i18n.t("workbench:work.evidenceRequired", { role }));
+      }
+      if (target.requiresCompletedDependencies && w.dependsOn.some((id) => s.work.find((item) => item.id === id)?.status !== "done"))
+        throw new Error(i18n.t("workbench:work.invalidAction"));
+      w.status = target.kind === "end" ? "done" : "running";
+      w.approve = true;
+      w.approvalRequired = false;
+      w.approved ||= now().slice(0, 10);
       w.stage = edges[0].to;
       w.updatedAt = now();
       w.decisions.push({ stage: w.stage, at: now(), note: input.note });

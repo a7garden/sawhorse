@@ -103,18 +103,18 @@ export default function OnboardingPage({
                     aria-label={t("onboarding.projectAria")}
                     value={projectId}
                     disabled={!!project}
-                    onChange={(event) => {
-                      setProjectId(event.target.value);
+                    onChange={(v) => {
+                      setProjectId(v);
                       setSelected(null);
                     }}
-                  >
-                    <option value="">{t("select.project")}</option>
-                    {(project ? [project] : projects).map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}
-                      </option>
-                    ))}
-                  </Select>
+                    options={[
+                      { value: "", label: t("select.project") },
+                      ...(project ? [project] : projects).map((item) => ({
+                        value: item.id,
+                        label: item.name,
+                      })),
+                    ]}
+                  />
                 </label>
                 <label className="text-xs">
                   {t("onboarding.inputPaths")}

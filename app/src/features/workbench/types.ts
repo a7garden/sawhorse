@@ -37,13 +37,14 @@ export const ARTIFACTS = [
 /** Artifact roles are supplied by the pinned workflow; ARTIFACTS is the legacy fallback. */
 export type ArtifactKind = string;
 export type WorkbenchView =
+  | "work"
   | "overview"
   | "board"
   | "calendar"
   | "harness"
   | "knowledge"
   | "projects"
-  // 개발 항목을 요청·승인의 축으로 본 화면. 저장소도 상태 어휘도 board와 같다.
+  // 이전 진입점 호환용. work 화면으로 연결한다.
   | "issues";
 export const ISSUE_TYPES = ["버그", "기능", "작업", "질문"] as const;
 export type IssueType = (typeof ISSUE_TYPES)[number];
@@ -70,10 +71,10 @@ export const STAGE_LABELS: Record<string, string> = {
   maintain: "학습",
 };
 export const STATUS_LABELS: Record<WorkStatus, string> = {
-  backlog: "백로그",
+  backlog: "접수",
   ready: "예정",
-  running: "진행중",
-  review: "검토",
+  running: "진행",
+  review: "결과 검토",
   // 막힘이 아니라 보류다. 볼트의 이슈·개선·마일스톤·프로젝트 템플릿이 모두
   // 보류를 쓴다.
   blocked: "보류",

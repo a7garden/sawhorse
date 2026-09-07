@@ -1,7 +1,12 @@
 {
   "language": "Language",
   "nav": {
-    "section": { "work": "Workspace", "vault": "Vault", "reading": "Extensions" },
+    "section": {
+      "work": "Workspace",
+      "vault": "Vault",
+      "reading": "Extensions",
+      "project": "Project views"
+    },
     "overview": "Workbench",
     "board": "Develop",
     "taskLibrary": "Automation",
@@ -31,11 +36,23 @@
       "onboarding": "Back to Projects",
       "sources": "Back to Reading"
     },
-    "theme": { "light": "Light", "dark": "Dark", "system": "System" },
+    "theme": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
     "themeTitle": "Theme: {{theme}} (click to switch)",
     "themeToggle": "Toggle theme",
     "viewPicker": "View picker",
-    "previewNotice": "Browser preview · Sample data is stored in this browser only. Connect real agents and files from the desktop app."
+    "previewNotice": "Browser preview · Sample data is stored in this browser only. Connect real agents and files from the desktop app.",
+    "work": "Work",
+    "workDocuments": "Work document search",
+    "scope": {
+      "shared": "Shared",
+      "select": "Sidebar project selection",
+      "appliesBelow": "Applies to the views below",
+      "sharedSettings": "App settings · shared"
+    }
   },
   "toolbar": {
     "search": "Search everything",
@@ -69,8 +86,16 @@
     "pickFolder": "Choose folder",
     "pickFile": "Choose file"
   },
-  "toast": { "dismiss": "Dismiss notification" },
-  "dialog": { "close": "Close" },
-  "api": { "desktopOnly": "Open in the Sawhorse desktop app." },
-  "markdown": { "embed": "[Embed] {{inner}}" }
+  "toast": {
+    "dismiss": "Dismiss notification"
+  },
+  "dialog": {
+    "close": "Close"
+  },
+  "api": {
+    "desktopOnly": "Open in the Sawhorse desktop app."
+  },
+  "markdown": {
+    "embed": "[Embed] {{inner}}"
+  }
 }
