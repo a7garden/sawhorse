@@ -35,6 +35,8 @@ import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Empty, PageHeader } from "./common";
+import { sddApi } from "@/features/workbench/api";
+import type { Project } from "@/features/workbench/types";
 
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -170,11 +172,11 @@ export default function SourcesPage({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+  /** 가져오기 대상 프로젝트 목록. 이슈는 프로젝트의 개발 항목으로 들어온다. */
+  const [projects, setProjects] = useState<Project[]>([]);
   /** 가져오기 수락 폼 대상 — null이면 닫힘. */
   const [importFor, setImportFor] = useState<InboundChange | null>(null);
   const [importProjectId, setImportProjectId] = useState("");
-  const [importNotesDir, setImportNotesDir] = useState("");
-  const [importIdPrefix, setImportIdPrefix] = useState("");
   /** 실행 repoDir 프롬프트 대상 — null이면 닫힘. */
   const [execFor, setExecFor] = useState<RemoteOperation | null>(null);
   const [execRepoDir, setExecRepoDir] = useState("");
@@ -227,6 +229,14 @@ export default function SourcesPage({
       window.clearInterval(timer);
     };
   }, [reload]);
+
+  // 가져오기 대상이 될 프로젝트 목록. 깃허브 이슈는 프로젝트의 작업 항목이 된다.
+  useEffect(() => {
+    void sddApi
+      .snapshot()
+      .then((snapshot) => setProjects(snapshot.projects))
+      .catch(() => setProjects([]));
+  }, []);
 
   async function act<T>(
     id: string,
@@ -308,18 +318,18 @@ export default function SourcesPage({
 
   function openImportForm(ib: InboundChange) {
     setImportFor(ib);
-    setImportProjectId("");
-    setImportNotesDir("");
-    setImportIdPrefix("");
+    // 동기화 인스턴스가 기억하는 프로젝트를 기본 선택으로 둔다.
+    const config = sel && isGitHubCfg(sel.config) ? sel.config : null;
+    setImportProjectId(config?.projectId ?? "");
   }
 
   function submitImport() {
     const ib = importFor;
     if (!ib) return;
-    if (!importProjectId.trim() || !importNotesDir.trim()) {
+    if (!importProjectId.trim()) {
       setMsg({
         ok: false,
-        text: t("sources.validation.projectAndNotesDirRequired"),
+        text: t("sources.validation.projectRequired"),
       });
       return;
     }
@@ -330,8 +340,6 @@ export default function SourcesPage({
         api.inboundAcceptImport({
           inboundId: ib.id,
           projectId: importProjectId.trim(),
-          notesDir: importNotesDir.trim(),
-          idPrefix: importIdPrefix.trim(),
         }),
       (r) => t("sources.toast.noteCreated", { path: r.notePath }),
     );
@@ -604,6 +612,7 @@ export default function SourcesPage({
 
       {addOpen && (
         <AddConnectionDialog
+          projects={projects}
           choices={connChoices(bundles).filter(
             (c) => c.adapter === `builtin:${scope}`,
           )}
@@ -635,28 +644,25 @@ export default function SourcesPage({
               ) : null;
             })()}
             <div className="space-y-1">
-              <Label>{t("sources.import.projectIdLabel")}</Label>
-              <Input
-                value={importProjectId}
-                onChange={(e) => setImportProjectId(e.target.value)}
-                placeholder={t("sources.import.projectIdPlaceholder")}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>{t("sources.import.notesDirLabel")}</Label>
-              <PathInput
-                value={importNotesDir}
-                onValueChange={(value) => setImportNotesDir(value)}
-                placeholder={t("sources.import.notesDirPlaceholder")}
-              />
-            </div>
-            <div className="space-y-1">
-              <Label>{t("sources.import.idPrefixLabel")}</Label>
-              <Input
-                value={importIdPrefix}
-                onChange={(e) => setImportIdPrefix(e.target.value)}
-                placeholder={t("sources.import.idPrefixPlaceholder")}
-              />
+              <Label>{t("sources.import.projectLabel")}</Label>
+              {projects.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  {t("sources.import.noProjects")}
+                </p>
+              ) : (
+                <Select
+                  aria-label={t("sources.import.projectLabel")}
+                  value={importProjectId}
+                  onChange={setImportProjectId}
+                  options={projects.map((project) => ({
+                    value: project.id,
+                    label: project.name,
+                  }))}
+                />
+              )}
+              <small className="text-muted-foreground">
+                {t("sources.import.projectHint")}
+              </small>
             </div>
             <div className="flex justify-end gap-2">
               <Button
@@ -668,7 +674,7 @@ export default function SourcesPage({
               </Button>
               <Button
                 size="sm"
-                disabled={busy != null}
+                disabled={busy != null || !importProjectId.trim()}
                 onClick={() => void submitImport()}
               >
                 {t("actions.import")}
@@ -950,12 +956,14 @@ function RemoteOpsCard({
 }
 
 function AddConnectionDialog({
+  projects,
   choices,
   takenIds,
   onClose,
   onSaved,
   onError: reportError,
 }: {
+  projects: Project[];
   choices: ConnChoice[];
   takenIds: string[];
   onClose: () => void;
@@ -974,11 +982,13 @@ function AddConnectionDialog({
     { name: "", url: "", tags: [] },
   ]);
   const [tagsText, setTagsText] = useState<string[]>([""]);
-  const [refreshMinutes, setRefreshMinutes] = useState("30");
   const [ghAccount, setGhAccount] = useState("");
-  const [ghRepository, setGhRepository] = useState("");
+  const [refreshMinutes, setRefreshMinutes] = useState("30");
   const [ghRepositoryId, setGhRepositoryId] = useState("");
   const [ghState, setGhState] = useState("open");
+  const [ghRepository, setGhRepository] = useState("");
+  /** 이 동기화로 가져온 이슈가 들어갈 프로젝트. 가져오기 폼의 기본값이 된다. */
+  const [ghProjectId, setGhProjectId] = useState("");
   const [granted, setGranted] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
 
@@ -1042,6 +1052,7 @@ function AddConnectionDialog({
         repository: ghRepository.trim(),
         repositoryId: ghRepositoryId.trim(),
         state: ghState,
+        projectId: ghProjectId,
       };
       network = choice.requests.network;
     }
@@ -1246,6 +1257,18 @@ function AddConnectionDialog({
                   { value: "closed", label: "closed" },
                   { value: "all", label: "all" },
                 ]}
+              />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>{t("sources.add.projectLabel")}</Label>
+              <Select
+                className="w-full"
+                value={ghProjectId}
+                onChange={(v) => setGhProjectId(v)}
+                options={projects.map((project) => ({
+                  value: project.id,
+                  label: project.name,
+                }))}
               />
             </div>
           </div>
