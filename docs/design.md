@@ -1,6 +1,6 @@
 # sawhorse 설계 문서
 
-> **이슈 모델 우선(2026-09-05).** 작업 추적의 정식 모델은 `plugin/packs/si/skills/issues/references/issues-milestones-design.md`의 이슈·마일스톤이다. 이 문서에 남아 있는 `개선`·`문제` 구조와 스키마는 기존 볼트의 호환 규격이며, 새 노트를 만들 때는 이슈 모델을 따른다.
+> 보관 규격: 이전 SI 볼트의 문서 유형과 개선 모델입니다. 새 작업·승인·스키마의 경계는 [현재 구조](architecture/extension-boundaries.md)를 따릅니다.
 
 > **호스트 우선(2026-09-05).** 제품은 데스크톱 앱(`app/`)이고, SI 업무 방식은
 > 그 위에 얹히는 **확장 하나**(`plugin/packs/si/`)다. 이 문서는 그 확장의 내용 — 볼트 구조,
