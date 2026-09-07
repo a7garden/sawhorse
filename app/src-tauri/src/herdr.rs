@@ -106,12 +106,12 @@ fn spawn_command(bin: &str, args: &[&str]) -> tokio::process::Command {
     let mut c;
     #[cfg(windows)]
     {
-        c = tokio::process::Command::new("cmd");
+        c = crate::spawn::no_window_async(tokio::process::Command::new("cmd"));
         c.arg("/c").arg(bin);
     }
     #[cfg(not(windows))]
     {
-        c = tokio::process::Command::new(bin);
+        c = crate::spawn::no_window_async(tokio::process::Command::new(bin));
     }
     c.args(args);
     c.kill_on_drop(true);

@@ -287,7 +287,7 @@ pub mod secrets {
         if name.is_empty() || value.is_empty() {
             return Err("secret 이름과 값은 비어 있을 수 없다".into());
         }
-        let out = std::process::Command::new("security")
+        let out = crate::spawn::no_window(std::process::Command::new("security"))
             .args([
                 "add-generic-password",
                 "-s",
@@ -312,7 +312,7 @@ pub mod secrets {
 
     /// 조회. 토큰은 connector로 반환되지 않고 broker 내부에서만 쓴다.
     pub fn read(name: &str) -> Result<String, String> {
-        let out = std::process::Command::new("security")
+        let out = crate::spawn::no_window(std::process::Command::new("security"))
             .args(["find-generic-password", "-s", "sawhorse", "-a", name, "-w"])
             .output()
             .map_err(|e| format!("keychain 실행 실패: {e}"))?;
@@ -324,7 +324,7 @@ pub mod secrets {
     }
 
     pub fn delete(name: &str) -> Result<(), String> {
-        let _ = std::process::Command::new("security")
+        let _ = crate::spawn::no_window(std::process::Command::new("security"))
             .args(["delete-generic-password", "-s", "sawhorse", "-a", name])
             .output();
         Ok(())

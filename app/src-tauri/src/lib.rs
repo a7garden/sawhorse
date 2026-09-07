@@ -15,6 +15,7 @@ mod scheduler;
 mod schemas;
 mod sdlc;
 mod sdlc_harness;
+mod spawn;
 mod state;
 mod tasks;
 mod transcript;

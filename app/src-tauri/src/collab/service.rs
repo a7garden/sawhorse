@@ -436,7 +436,7 @@ impl CollabService {
             .join("worktrees")
             .join(&run_id);
         // 현재 통합 HEAD에서 worktree+branch 생성(설계 423줄).
-        let out = std::process::Command::new("git")
+        let out = crate::spawn::no_window(std::process::Command::new("git"))
             .arg("-C")
             .arg(&repo)
             .args([

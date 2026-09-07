@@ -677,13 +677,13 @@ pub struct HerdrDiag {
 fn build_command(bin: &str, args: &[&str]) -> std::process::Command {
     #[cfg(windows)]
     {
-        let mut c = std::process::Command::new("cmd");
+        let mut c = crate::spawn::no_window(std::process::Command::new("cmd"));
         c.arg("/c").arg(bin).args(args);
         c
     }
     #[cfg(not(windows))]
     {
-        let mut c = std::process::Command::new(bin);
+        let mut c = crate::spawn::no_window(std::process::Command::new(bin));
         c.args(args);
         c
     }

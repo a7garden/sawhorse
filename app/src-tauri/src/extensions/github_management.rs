@@ -490,7 +490,7 @@ pub async fn github_clone_project(
     let authorization =
         base64::engine::general_purpose::STANDARD.encode(format!("x-access-token:{token}"));
     // Environment-only credentials: never written to .git/config, command arguments or logs.
-    let mut command = tokio::process::Command::new("git");
+    let mut command = crate::spawn::no_window_async(tokio::process::Command::new("git"));
     command
         .args([
             "-c",

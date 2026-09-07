@@ -283,7 +283,7 @@ fn execute_push(repo_dir: &Path, payload: &serde_json::Value) -> Result<String, 
     let branch = payload["branch"].as_str().ok_or("branch가 없다")?;
     // remote 이름은 repository 표기에서 유추하지 않는다 — origin 고정(MVP).
     let _ = repository;
-    let out = std::process::Command::new("git")
+    let out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(repo_dir)
         .args([
@@ -319,7 +319,7 @@ fn execute_pr_create(
     let head = pr["head"].as_str().ok_or("head가 없다")?;
     let base = pr["base"].as_str().ok_or("base가 없다")?;
     let title = pr["title"].as_str().ok_or("title이 없다")?;
-    let out = std::process::Command::new("gh")
+    let out = crate::spawn::no_window(std::process::Command::new("gh"))
         .arg("pr")
         .arg("create")
         .args(["--draft", "--head", head, "--base", base, "--title", title])

@@ -173,12 +173,12 @@ fn build_command(path: &Path, args: &[&str]) -> tokio::process::Command {
             .map(str::to_ascii_lowercase)
             .unwrap_or_default();
         if ext == "cmd" || ext == "bat" {
-            let mut c = tokio::process::Command::new("cmd");
+            let mut c = crate::spawn::no_window_async(tokio::process::Command::new("cmd"));
             c.arg("/c").arg(path).args(args);
             return c;
         }
     }
-    let mut c = tokio::process::Command::new(path);
+    let mut c = crate::spawn::no_window_async(tokio::process::Command::new(path));
     c.args(args);
     c
 }

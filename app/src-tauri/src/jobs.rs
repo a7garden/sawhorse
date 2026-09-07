@@ -302,12 +302,12 @@ fn build_spawn_command(bin: &str, args: &[&str], cwd: &str) -> tokio::process::C
     let mut c;
     #[cfg(windows)]
     {
-        c = tokio::process::Command::new("cmd");
+        c = crate::spawn::no_window_async(tokio::process::Command::new("cmd"));
         c.arg("/c").arg(bin);
     }
     #[cfg(not(windows))]
     {
-        c = tokio::process::Command::new(bin);
+        c = crate::spawn::no_window_async(tokio::process::Command::new(bin));
     }
     c.args(args);
     c.current_dir(cwd);

@@ -378,7 +378,7 @@ pub fn verification_plan_hash(session: &Session) -> String {
 }
 
 fn tree_of(repo: &Path, rev: &str) -> Result<String, String> {
-    let out = std::process::Command::new("git")
+    let out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(repo)
         .args(["rev-parse", &format!("{rev}^{{tree}}")])
@@ -399,7 +399,7 @@ mod tests {
     use super::*;
 
     fn run(path: &Path, args: &[&str]) -> String {
-        let out = std::process::Command::new("git")
+        let out = crate::spawn::no_window(std::process::Command::new("git"))
             .arg("-C")
             .arg(path)
             .args(args)

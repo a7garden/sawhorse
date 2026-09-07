@@ -30,7 +30,7 @@ impl RepoIdentity {
 
 /// git 명령 실행. 실패 시 stderr를 담은 오류를 반환한다.
 fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
-    let out = Command::new("git")
+    let out = crate::spawn::no_window(Command::new("git"))
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(repo)
@@ -51,7 +51,7 @@ fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
 
 /// NUL 구분 출력용(경로에 공백·개행이 섞여도 안전).
 fn git_bytes(repo: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
-    let out = Command::new("git")
+    let out = crate::spawn::no_window(Command::new("git"))
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(repo)
@@ -163,7 +163,7 @@ pub fn resolve_commit(repo: &Path, sha: &str) -> Result<String, String> {
 }
 
 pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool, String> {
-    let out = Command::new("git")
+    let out = crate::spawn::no_window(Command::new("git"))
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(repo)
@@ -281,7 +281,7 @@ pub fn three_way_simulation(
     args.push(ours.to_string());
     args.push(theirs.to_string());
     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let out = Command::new("git")
+    let out = crate::spawn::no_window(Command::new("git"))
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(repo)
@@ -318,7 +318,7 @@ pub fn three_way_simulation(
 pub fn create_protected_ref(repo: &Path, candidate_id: &str, sha: &str) -> Result<(), String> {
     let refname = format!("refs/sawhorse/candidates/{candidate_id}");
     let zero = "0".repeat(40);
-    let out = Command::new("git")
+    let out = crate::spawn::no_window(Command::new("git"))
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(repo)
@@ -342,7 +342,7 @@ pub fn create_protected_ref(repo: &Path, candidate_id: &str, sha: &str) -> Resul
 
 pub fn protected_ref_sha(repo: &Path, candidate_id: &str) -> Result<Option<String>, String> {
     let refname = format!("refs/sawhorse/candidates/{candidate_id}");
-    let out = Command::new("git")
+    let out = crate::spawn::no_window(Command::new("git"))
         .arg("--no-optional-locks")
         .arg("-C")
         .arg(repo)
@@ -457,7 +457,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn run(path: &Path, args: &[&str]) -> String {
-        let out = Command::new("git")
+        let out = crate::spawn::no_window(Command::new("git"))
             .arg("-C")
             .arg(path)
             .args(args)

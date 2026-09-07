@@ -1076,7 +1076,7 @@ pub async fn extension_package_install(
                 .ok_or_else(|| "Git package는 정확한 40자리 commit이 필요합니다".to_string())?;
             fs::create_dir_all(temporary.path())
                 .map_err(|error| format!("Git package 임시 폴더 생성 실패: {error}"))?;
-            let status = Command::new("git")
+            let status = crate::spawn::no_window(Command::new("git"))
                 .args(["init", "--quiet"])
                 .current_dir(temporary.path())
                 .status()
@@ -1096,7 +1096,7 @@ pub async fn extension_package_install(
                 ],
                 vec!["checkout", "--quiet", "--detach", "FETCH_HEAD"],
             ] {
-                let status = Command::new("git")
+                let status = crate::spawn::no_window(Command::new("git"))
                     .args(args)
                     .current_dir(temporary.path())
                     .status()
@@ -1105,7 +1105,7 @@ pub async fn extension_package_install(
                     return Err("Git package 가져오기 실패".into());
                 }
             }
-            let output = Command::new("git")
+            let output = crate::spawn::no_window(Command::new("git"))
                 .args(["rev-parse", "HEAD"])
                 .current_dir(temporary.path())
                 .output()

@@ -68,7 +68,7 @@ pub fn run_command_check(
             detail: format!("cwd 없음: {}", dir.display()),
         };
     }
-    let out = Command::new(&argv[0])
+    let out = crate::spawn::no_window(Command::new(&argv[0]))
         .args(&argv[1..])
         .current_dir(&dir)
         .output();

@@ -227,7 +227,7 @@ pub fn attempt_merge(
     // 7. SHA 기준 비대화형 merge(설계 385-387줄).
     ctx.store
         .update_attempt_phase(&attempt.id, AttemptPhase::Merging, "", "", "")?;
-    let merge_out = std::process::Command::new("git")
+    let merge_out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(&repo)
         .args([
@@ -290,7 +290,7 @@ pub fn attempt_merge(
     ctx.store
         .update_attempt_phase(&attempt.id, AttemptPhase::Merged, "", "", "")?;
     let msg = merge_commit_message(session, candidate, approval);
-    let commit_out = std::process::Command::new("git")
+    let commit_out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(&repo)
         .args(["commit", "--no-verify", "--no-gpg-sign", "-m", &msg])
@@ -525,7 +525,7 @@ pub fn attempt_revert(
     ctx.store.insert_attempt(&attempt)?;
 
     // revert simulation: ours=HEAD, theirs=<merge>^1, base=<merge>.
-    let first_parent = std::process::Command::new("git")
+    let first_parent = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(&repo)
         .args(["rev-parse", &format!("{merge_sha}^1")])
@@ -563,7 +563,7 @@ pub fn attempt_revert(
         .update_attempt_phase(&attempt.id, AttemptPhase::Reverting, "", "", "")?;
     ctx.store
         .update_change_set_status(candidate.id.clone(), ChangeSetStatus::Reverting)?;
-    let out = std::process::Command::new("git")
+    let out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(&repo)
         .args(["revert", "--no-commit", "-m", "1", &merge_sha])
@@ -604,7 +604,7 @@ pub fn attempt_revert(
         candidate = candidate.id,
         merge_sha = merge_sha,
     );
-    let commit_out = std::process::Command::new("git")
+    let commit_out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(&repo)
         .args(["commit", "--no-verify", "--no-gpg-sign", "-m", &msg])
@@ -765,7 +765,7 @@ pub fn recover_on_startup(store: &Store) -> Result<Vec<String>, String> {
 fn commit_matches_attempt(repo: &Path, attempt: &IntegrationAttempt) -> bool {
     // 1번 parent = pre_head, 2번 parent = source(merge만), tree = planned(설계 488줄).
     let rev = |spec: &str| -> Option<String> {
-        std::process::Command::new("git")
+        crate::spawn::no_window(std::process::Command::new("git"))
             .arg("-C")
             .arg(repo)
             .args(["rev-parse", spec])
@@ -793,7 +793,7 @@ fn commit_matches_attempt(repo: &Path, attempt: &IntegrationAttempt) -> bool {
 
 /// 예상 commit 뒤에 다른 commit이 하나라도 있으면 자동 복원 금지(설계 489줄).
 fn after_head_clean(repo: &Path, expected: &str) -> bool {
-    std::process::Command::new("git")
+    crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(repo)
         .args(["rev-parse", "HEAD"])
@@ -809,7 +809,7 @@ fn after_head_clean(repo: &Path, expected: &str) -> bool {
 
 /// 충돌 시 merge abort. 그 시점에만 abort하며(설계 388줄) 복원을 확인한다.
 fn abort_merge(repo: &Path) -> Result<bool, String> {
-    std::process::Command::new("git")
+    crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(repo)
         .args(["merge", "--abort"])
@@ -820,7 +820,7 @@ fn abort_merge(repo: &Path) -> Result<bool, String> {
 }
 
 fn git_tree_of(repo: &Path, rev: &str) -> Result<String, String> {
-    let out = std::process::Command::new("git")
+    let out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(repo)
         .args(["rev-parse", &format!("{rev}^{{tree}}")])
@@ -834,7 +834,7 @@ fn git_tree_of(repo: &Path, rev: &str) -> Result<String, String> {
 
 /// 현재 index의 tree. `git write-tree`와 동일(설계 390줄).
 fn staged_tree(repo: &Path) -> Result<String, String> {
-    let out = std::process::Command::new("git")
+    let out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(repo)
         .args(["write-tree"])
@@ -863,7 +863,7 @@ mod tests {
     use super::*;
 
     fn run(path: &Path, args: &[&str]) -> String {
-        let out = std::process::Command::new("git")
+        let out = crate::spawn::no_window(std::process::Command::new("git"))
             .arg("-C")
             .arg(path)
             .args(args)
