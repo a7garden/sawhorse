@@ -75,6 +75,29 @@ export default function ExecutionSection({
         <div className="divide-y divide-border">
           <SettingRow
             stacked
+            label={t("exec.childModelPolicy")}
+            htmlFor="child-model-policy"
+            hint={t("exec.childModelHint")}
+            control={
+              <Select
+                id="child-model-policy"
+                className="w-full sm:w-80"
+                value={draft.dashboard.herdr.childModelPolicy ?? "auto"}
+                onChange={(value) => patchDraft((d) => {
+                  d.dashboard.herdr.childModelPolicy = value as "auto" | "inherit";
+                })}
+                options={[
+                  { value: "auto", label: t("exec.childModelAuto") },
+                  { value: "inherit", label: t("exec.childModelInherit") },
+                ]}
+              />
+            }
+          />
+          {draft.dashboard.herdr.maxParallel < 2 && (
+            <p className="py-3 text-sm text-muted-foreground">{t("exec.childModelCapacity")}</p>
+          )}
+          <SettingRow
+            stacked
             label={t("exec.mode")}
             htmlFor="herdr-mode"
             hint={t("exec.herdrHint")}

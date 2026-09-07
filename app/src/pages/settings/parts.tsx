@@ -1,24 +1,22 @@
-// 설정 화면의 공통 조각. 섹션 머리(제목+설명 — 섹션 정체를 말하는 유일한 지점),
-// 섹션 안의 평면 그룹(예전 카드에서 테두리를 벗긴 것), 라벨 왼쪽·컨트롤 오른쪽 설정 행,
-// 저장 결과 배너. 다섯 섹션이 같은 어휘로 그리도록 여기서만 모양을 정의한다.
 import type { ReactNode } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** 섹션 머리(단일 스크롤 설정의 앵커 제목). 레일 내비가 가리키는 대상이며, 섹션
- *  안의 그룹과 행은 섹션 제목을 다시 반복하지 않는다. */
+/** 카테고리 패널의 제목과 설명. */
 export function SectionHeader({
+  id,
   title,
   desc,
 }: {
+  id?: string;
   title: ReactNode;
   desc?: ReactNode;
 }) {
   return (
-    <div>
-      <h2 className="text-sm font-semibold tracking-tight">{title}</h2>
+    <div className="settings-section-heading">
+      <h2 id={id} className="text-2xl font-semibold tracking-tight">{title}</h2>
       {desc != null && (
-        <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
           {desc}
         </p>
       )}
@@ -26,8 +24,7 @@ export function SectionHeader({
   );
 }
 
-/** 섹션 안의 묶음. 카드 테두리를 벗긴 평면 그룹 — 제목 행 + 내용. 제목 없는 묶음
- *  (섹션 바로 아래 첫 묶음)은 title 을 비운다. 부모가 space-y 로 묶음 사이를 벌린다. */
+/** 제목·설명·액션과 입력 행을 묶는 설정 카드. */
 export function SettingsGroup({
   title,
   desc,
@@ -42,12 +39,12 @@ export function SettingsGroup({
   className?: string;
 }) {
   return (
-    <section className={className}>
+    <section className={cn("settings-group", className)}>
       {(title != null || actions != null) && (
-        <div className="mb-1.5 flex items-start justify-between gap-3">
+        <div className="settings-group-heading">
           <div className="min-w-0">
             {title != null && (
-              <h3 className="text-[13px] font-medium leading-6">{title}</h3>
+              <h3 className="text-sm font-semibold leading-6">{title}</h3>
             )}
             {desc != null && (
               <p className="text-xs leading-snug text-muted-foreground">
@@ -60,7 +57,7 @@ export function SettingsGroup({
           )}
         </div>
       )}
-      {children}
+      <div className="settings-group-body">{children}</div>
     </section>
   );
 }
@@ -86,7 +83,7 @@ export function SettingRow({
         {label}
       </label>
       {hint != null && (
-        <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
+        <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">
           {hint}
         </span>
       )}
@@ -94,16 +91,16 @@ export function SettingRow({
   );
   if (stacked) {
     return (
-      <div className="py-3 first:pt-0 last:pb-0">
+      <div className="setting-row setting-row-stacked">
         {head}
         <div className="mt-2">{control}</div>
       </div>
     );
   }
   return (
-    <div className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+    <div className="setting-row">
       {head}
-      <div className="shrink-0">{control}</div>
+      <div className="setting-control">{control}</div>
     </div>
   );
 }

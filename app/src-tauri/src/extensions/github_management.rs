@@ -190,7 +190,7 @@ fn account(value: &Value) -> Value {
 #[tauri::command]
 pub async fn github_account() -> Result<Value, String> {
     require_enabled()?;
-    if secrets::read(ACCESS_TOKEN_SECRET).is_err() {
+    if secrets::read_optional(ACCESS_TOKEN_SECRET)?.is_none() {
         return Ok(Value::Null);
     }
     Ok(account(&get("/user").await?))
@@ -383,7 +383,7 @@ pub(crate) async fn oauth_access_token() -> Result<String, String> {
         return Ok(credential.access_token);
     }
     let _guard = refresh_lock().lock().await;
-    // 다른 요청이 기다리는 동안 이미 갱신했을 수 있으므로 키체인을 다시 읽는다.
+    // 다른 요청이 기다리는 동안 갱신했을 수 있으므로 세션의 최신 값을 읽는다.
     let current = parse_stored_credential(&secrets::read(ACCESS_TOKEN_SECRET)?)?;
     if !current
         .expires_at

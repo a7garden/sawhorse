@@ -18,7 +18,7 @@
     "diagnostics": "진단"
   },
   "sectionsDesc": {
-    "app": "언어와 시스템 시작",
+    "app": "나에게 맞는 화면과 작업 환경을 설정합니다.",
     "vault": "볼트 위치와 프로젝트 등록",
     "execution": "에이전트 실행 방식과 herdr",
     "collaboration": "멀티 에이전트 승인과 통합",
@@ -260,7 +260,13 @@
     "saved": "설정을 저장했습니다.",
     "saveFailed": "저장 실패: {{error}}",
     "autoStartFailed": "자동 시작 설정 실패: {{error}}",
-    "dirty": "변경됨"
+    "dirty": "변경됨",
+    "scope": "전체 작업공간",
+    "preferences": "환경 설정",
+    "unsaved": "저장하지 않은 변경",
+    "upToDate": "변경 사항 없음",
+    "setupTitle": "처음부터 설정할까요?",
+    "setupHint": "설정 마법사에서 필요한 도구와 연결을 차례로 확인하세요."
   },
   "validate": {
     "vaultPathRequired": "볼트 경로를 입력하세요.",
@@ -410,7 +416,12 @@
     "startTimeout": "기동 대기 (초)",
     "jobTimeout": "최대 실행 (분, 0=무제한)",
     "notify": "승인 대기·실패 시 herdr 알림",
-    "workspaceHint": "잡마다 「{{workspace}}」 워크스페이스에 탭 하나가 생깁니다. 승인 대기가 실제로 쓸모 있으려면 권한 모드를 `default` 또는 `acceptEdits`로 두세요."
+    "workspaceHint": "잡마다 「{{workspace}}」 워크스페이스에 탭 하나가 생깁니다. 승인 대기가 실제로 쓸모 있으려면 권한 모드를 `default` 또는 `acceptEdits`로 두세요.",
+    "childModelPolicy": "하위 에이전트 모델 정책",
+    "childModelHint": "내부 스킬이 난이도를 판단합니다. 작은 작업은 Sonnet, 복잡한 작업은 Opus를 사용하며 명시한 모델은 우선합니다. 새 루트 실행부터 적용됩니다. Codex·사용자 정의 모델은 같은 에이전트의 부모 모델을 상속합니다.",
+    "childModelAuto": "자동 · 스킬이 판단",
+    "childModelInherit": "부모 모델 상속",
+    "childModelCapacity": "동시 실행 한도가 1이면 부모가 직접 처리합니다. 하위 위임에는 부모를 포함해 최소 2개가 필요합니다."
   },
   "schedule": {
     "title": "예약",
@@ -419,5 +430,23 @@
     "daily": "매일",
     "timeAria": "{{label}} 예약 시각",
     "hint": "예약은 확장이 선언하고, 여기서 바꾼 값이 그 위에 덮입니다. 시각이 지나도 앱이 꺼져 있었다면 자동 실행하지 않고 홈에 알립니다. 에이전트가 만든 자동화 작업는 자동화의 예약과 반복에서 다룹니다."
+  },
+  "navDesc": {
+    "app": "화면과 기본 동작",
+    "vault": "저장 위치와 프로젝트",
+    "execution": "에이전트와 실행 정책",
+    "collaboration": "승인과 프로젝트 통합",
+    "diagnostics": "연결 상태와 설치 도구"
+  },
+  "appearance": {
+    "title": "화면 스타일",
+    "desc": "작업하기 편한 테마를 선택하세요.",
+    "light": "라이트",
+    "dark": "다크",
+    "system": "시스템",
+    "immediate": "테마와 언어는 선택하는 즉시 적용됩니다.",
+    "general": "기본 동작",
+    "languageHint": "앱에서 사용할 언어를 선택합니다.",
+    "launchHint": "컴퓨터에 로그인하면 Sawhorse를 실행합니다."
   }
 }

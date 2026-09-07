@@ -39,7 +39,14 @@ pub fn simulate(input: SimulationInput) -> SimulationResult {
     let root_id = input.definition.id.clone();
     let root_version = input.definition.version.clone();
     let mut registry = vec![input.definition];
-    registry.extend(input.definitions);
+    // The edited root is a simulation draft and intentionally shadows its published
+    // revision. Other duplicate revisions still have to agree exactly.
+    registry.extend(
+        input
+            .definitions
+            .into_iter()
+            .filter(|definition| definition.id != root_id || definition.version != root_version),
+    );
     for definition in builtins::all() {
         if !registry.iter().any(|candidate| {
             candidate.id == definition.id && candidate.version == definition.version
@@ -190,6 +197,70 @@ fn failed_simulation(error: String, mut issues: Vec<ValidationIssue>) -> Simulat
 mod tests {
     use super::*;
     use crate::workflow::builtins;
+
+    #[test]
+    fn simulation_uses_the_edited_root_without_replacing_published_definitions() {
+        let mut draft = builtins::tdd();
+        draft.label = "Edited draft".into();
+        let result = simulate(SimulationInput {
+            definition: draft,
+            definitions: builtins::all(),
+            ..Default::default()
+        });
+        assert_eq!(
+            result.status,
+            SimulationStatus::Waiting,
+            "{:?}",
+            result.issues
+        );
+    }
+
+    #[test]
+    fn simulation_rejects_invalid_children_and_recursion_before_running() {
+        let mut child = builtins::tdd();
+        child.entry = "missing".into();
+        let result = simulate(SimulationInput {
+            definition: builtins::sdd_with_tdd(),
+            definitions: vec![child],
+            ..Default::default()
+        });
+        assert_eq!(result.status, SimulationStatus::Invalid);
+        assert!(result.trace.is_empty());
+
+        let mut recursive = builtins::sdd_with_tdd();
+        recursive.id = "cycle-parent".into();
+        let mut child = recursive.clone();
+        child.id = "cycle-child".into();
+        recursive
+            .nodes
+            .iter_mut()
+            .find(|node| node.kind == NodeKind::Subworkflow)
+            .unwrap()
+            .workflow_ref = Some(WorkflowRef {
+            id: child.id.clone(),
+            version: child.version.clone(),
+        });
+        child
+            .nodes
+            .iter_mut()
+            .find(|node| node.kind == NodeKind::Subworkflow)
+            .unwrap()
+            .workflow_ref = Some(WorkflowRef {
+            id: recursive.id.clone(),
+            version: recursive.version.clone(),
+        });
+        let result = simulate(SimulationInput {
+            definition: recursive,
+            definitions: vec![child],
+            ..Default::default()
+        });
+        assert_eq!(result.status, SimulationStatus::Invalid);
+        assert!(result
+            .issues
+            .iter()
+            .any(|issue| issue.code == "recursive-subworkflow"));
+        assert!(result.trace.is_empty());
+    }
 
     #[test]
     fn tdd_happy_path_finishes_without_running_actions() {

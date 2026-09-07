@@ -614,65 +614,7 @@ fn resolve_closure(
     root_id: &str,
     version: &str,
 ) -> Result<Vec<InstalledPackage>, String> {
-    fn visit(
-        installed: &[InstalledPackage],
-        id: &str,
-        requirement: &VersionReq,
-        visiting: &mut HashSet<String>,
-        output: &mut BTreeMap<String, InstalledPackage>,
-    ) -> Result<(), String> {
-        if let Some(selected) = output.get(id) {
-            let selected_version = Version::parse(&selected.manifest.version)
-                .map_err(|error| format!("설치 package semver가 유효하지 않습니다: {error}"))?;
-            if requirement.matches(&selected_version) {
-                return Ok(());
-            }
-            return Err(format!(
-                "extension dependency 버전 요구가 충돌합니다: {id} {requirement} (이미 {} 선택)",
-                selected.manifest.version
-            ));
-        }
-        if !visiting.insert(id.into()) {
-            return Err(format!("extension dependency 순환입니다: {id}"));
-        }
-        let mut matches = installed
-            .iter()
-            .filter(|package| {
-                package.manifest.id == id
-                    && Version::parse(&package.manifest.version)
-                        .ok()
-                        .is_some_and(|version| requirement.matches(&version))
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-        matches.sort_by(|left, right| {
-            Version::parse(&right.manifest.version)
-                .unwrap()
-                .cmp(&Version::parse(&left.manifest.version).unwrap())
-        });
-        let package = matches.into_iter().next().ok_or_else(|| {
-            format!("dependency를 정확히 해석할 설치 버전이 없습니다: {id} {requirement}")
-        })?;
-        for dependency in &package.manifest.dependencies {
-            if dependency.optional {
-                continue;
-            }
-            visit(
-                installed,
-                &dependency.id,
-                &VersionReq::parse(&dependency.requirement).map_err(|error| error.to_string())?,
-                visiting,
-                output,
-            )?;
-        }
-        visiting.remove(id);
-        output.insert(id.into(), package);
-        Ok(())
-    }
-    let exact = VersionReq::parse(&format!("={version}")).map_err(|error| error.to_string())?;
-    let mut output = BTreeMap::new();
-    visit(installed, root_id, &exact, &mut HashSet::new(), &mut output)?;
-    Ok(output.into_values().collect())
+    super::resolver::resolve(installed, root_id, version)
 }
 
 pub fn resolve_installed(package_id: &str, version: &str) -> Result<Vec<InstalledPackage>, String> {
@@ -692,9 +634,6 @@ fn read_json<T: for<'de> Deserialize<'de>>(root: &Path, relative: &str) -> Resul
 
 fn activate_contributions(root: &Path, package: &InstalledPackage) -> Result<(), String> {
     let directory = Path::new(&package.path);
-    for path in &package.manifest.contributions.workflows {
-        crate::workflow::publish_at(root, read_json(directory, path)?)?;
-    }
     for path in &package.manifest.contributions.schemas {
         crate::schemas::publish_at(root, read_json(directory, path)?)?;
     }
@@ -766,8 +705,12 @@ fn activate_contributions(root: &Path, package: &InstalledPackage) -> Result<(),
     Ok(())
 }
 
-fn preflight_contributions(root: &Path, packages: &[InstalledPackage]) -> Result<(), String> {
+fn preflight_contributions(
+    root: &Path,
+    packages: &[InstalledPackage],
+) -> Result<Vec<crate::workflow::WorkflowDefinition>, String> {
     let mut workflows = crate::workflow::catalog(Some(root))?;
+    let mut contributed_workflows = Vec::new();
     let mut schemas = crate::schemas::catalog_at(root)?;
     for package in packages {
         let directory = Path::new(&package.path);
@@ -790,8 +733,9 @@ fn preflight_contributions(root: &Path, packages: &[InstalledPackage]) -> Result
                     ));
                 }
             } else {
-                workflows.push(definition);
+                workflows.push(definition.clone());
             }
+            contributed_workflows.push(definition);
         }
         for path in &package.manifest.contributions.schemas {
             let schema: crate::schemas::VaultSchema = read_json(directory, path)?;
@@ -867,7 +811,7 @@ fn preflight_contributions(root: &Path, packages: &[InstalledPackage]) -> Result
     if !issues.is_empty() {
         return Err(format!("package workflow registry 검증 실패: {issues:?}"));
     }
-    Ok(())
+    Ok(contributed_workflows)
 }
 
 fn merge_project_packages(
@@ -888,10 +832,20 @@ fn merge_project_packages(
 }
 
 pub fn activate_at(root: &Path, input: ExtensionActivateInput) -> Result<ExtensionLock, String> {
+    activate_with_installed_at(root, input, &list_installed()?)
+}
+
+/// Resolve once against one verified installation snapshot; validate the complete
+/// resulting project before publishing contributions or changing its lock.
+fn activate_with_installed_at(
+    root: &Path,
+    input: ExtensionActivateInput,
+    installed: &[InstalledPackage],
+) -> Result<ExtensionLock, String> {
     if !valid_id(&input.project_id) {
         return Err("유효하지 않은 project ID입니다".into());
     }
-    let closure = resolve_installed(&input.package_id, &input.version)?;
+    let closure = resolve_closure(installed, &input.package_id, &input.version)?;
     let mut locked = Vec::new();
     for package in &closure {
         let grants = input
@@ -928,18 +882,13 @@ pub fn activate_at(root: &Path, input: ExtensionActivateInput) -> Result<Extensi
             commit: package.commit.clone(),
         });
     }
-    preflight_contributions(root, &closure)?;
-    for package in &closure {
-        activate_contributions(root, package)?;
-    }
-    locked.sort_by(|left, right| left.id.cmp(&right.id));
     let mut lock = read_lock(root)?;
     let merged = merge_project_packages(
         lock.projects.remove(&input.project_id).unwrap_or_default(),
         locked,
     );
+    validate_project_packages(installed, &merged)?;
     lock.projects.insert(input.project_id.clone(), merged);
-    write_atomic(&lock_path(root), &lock)?;
     let profile_path = root
         .join(".sawhorse")
         .join("profiles")
@@ -961,8 +910,52 @@ pub fn activate_at(root: &Path, input: ExtensionActivateInput) -> Result<Extensi
             serde_json::to_value(lock.projects.get(&input.project_id))
                 .map_err(|error| error.to_string())?,
         );
+    let workflows = preflight_contributions(root, &closure)?;
+    crate::workflow::publish_all_at(root, workflows)?;
+    for package in &closure {
+        activate_contributions(root, package)?;
+    }
+    write_atomic(&lock_path(root), &lock)?;
     write_atomic(&profile_path, &profile)?;
     Ok(lock)
+}
+
+fn validate_project_packages(
+    installed: &[InstalledPackage],
+    locked: &[LockedPackage],
+) -> Result<(), String> {
+    let mut ids = HashSet::new();
+    for entry in locked {
+        if !ids.insert(&entry.id) {
+            return Err(format!(
+                "project extension lock에 중복 package가 있습니다: {}",
+                entry.id
+            ));
+        }
+        let package = installed.iter().find(|package| package.manifest.id == entry.id
+            && package.manifest.version == entry.version && package.digest == entry.digest)
+            .ok_or_else(|| format!("프로젝트에 고정한 extension {}@{}의 정확한 digest를 찾을 수 없습니다. 해당 패키지를 다시 설치하세요",
+                entry.id, entry.version))?;
+        for dependency in package
+            .manifest
+            .dependencies
+            .iter()
+            .filter(|dependency| !dependency.optional)
+        {
+            let selected = locked.iter().find(|entry| entry.id == dependency.id);
+            let requirement =
+                VersionReq::parse(&dependency.requirement).map_err(|error| error.to_string())?;
+            if !selected
+                .and_then(|entry| Version::parse(&entry.version).ok())
+                .is_some_and(|version| requirement.matches(&version))
+            {
+                return Err(format!("기존 프로젝트 확장과 의존성이 충돌합니다: {}@{} → {} {} (적용할 버전: {}). 호환되는 확장 버전을 선택하세요",
+                    entry.id, entry.version, dependency.id, dependency.requirement,
+                    selected.map(|entry| entry.version.as_str()).unwrap_or("없음")));
+            }
+        }
+    }
+    Ok(())
 }
 
 pub fn authorize_at(
@@ -1409,6 +1402,306 @@ mod tests {
         ];
         let error = resolve_closure(&packages, "root", "1.0.0").unwrap_err();
         assert!(error.contains("충돌"));
+    }
+
+    #[test]
+    fn dependency_resolution_backtracks_shared_versions_and_publishes_dependencies_first() {
+        let packages = vec![
+            installed(
+                "root",
+                "1.0.0",
+                vec![dependency("left", "^1"), dependency("right", "^1")],
+            ),
+            installed("left", "1.0.0", vec![dependency("shared", ">=1, <3")]),
+            installed("right", "1.0.0", vec![dependency("shared", "^1")]),
+            installed("shared", "1.0.0", Vec::new()),
+            installed("shared", "2.0.0", Vec::new()),
+        ];
+        let resolved = resolve_closure(&packages, "root", "1.0.0").unwrap();
+        assert_eq!(
+            resolved
+                .iter()
+                .map(|package| package.manifest.id.as_str())
+                .collect::<Vec<_>>(),
+            ["shared", "left", "right", "root"]
+        );
+        assert_eq!(resolved[0].manifest.version, "1.0.0");
+    }
+
+    #[test]
+    fn dependency_resolution_retries_broken_newest_versions_and_rejects_cycles() {
+        let mut packages = vec![
+            installed("root", "1.0.0", vec![dependency("child", "^1")]),
+            installed("child", "1.0.0", Vec::new()),
+            installed("child", "1.1.0", vec![dependency("missing", "^1")]),
+        ];
+        assert_eq!(
+            resolve_closure(&packages, "root", "1.0.0").unwrap()[0]
+                .manifest
+                .version,
+            "1.0.0"
+        );
+        packages[2].manifest.dependencies = vec![dependency("root", "^1")];
+        assert_eq!(
+            resolve_closure(&packages, "root", "1.0.0").unwrap()[0]
+                .manifest
+                .version,
+            "1.0.0"
+        );
+        packages.remove(1);
+        assert!(resolve_closure(&packages, "root", "1.0.0")
+            .unwrap_err()
+            .contains("순환"));
+    }
+
+    #[test]
+    fn dependency_resolution_deduplicates_identical_copies_but_rejects_ambiguous_digests() {
+        let package = installed("root", "1.0.0", Vec::new());
+        assert_eq!(
+            resolve_closure(&[package.clone(), package.clone()], "root", "1.0.0")
+                .unwrap()
+                .len(),
+            1
+        );
+        let mut conflict = package.clone();
+        conflict.digest = "different".into();
+        assert!(resolve_closure(&[package, conflict], "root", "1.0.0")
+            .unwrap_err()
+            .contains("digest"));
+    }
+
+    #[test]
+    fn dependency_resolution_keeps_optional_dependencies_opt_in_and_root_version_exact() {
+        let mut optional = dependency("missing", "^1");
+        optional.optional = true;
+        let packages = [installed("root", "1.0.0+team", vec![optional])];
+        assert_eq!(
+            resolve_closure(&packages, "root", "1.0.0+team")
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(resolve_closure(&packages, "root", "1.0.0").is_err());
+        assert!(resolve_closure(&packages, "root", "1").is_err());
+    }
+
+    fn contributed_package(
+        directory: &Path,
+        id: &str,
+        definitions: &[crate::workflow::WorkflowDefinition],
+        dependencies: Vec<PackageDependency>,
+    ) -> InstalledPackage {
+        fs::create_dir_all(directory).unwrap();
+        let mut package = installed(id, "1.0.0", dependencies);
+        package.manifest.name = id.into();
+        package.path = directory.display().to_string();
+        for (index, definition) in definitions.iter().enumerate() {
+            let path = format!("workflow-{index}.json");
+            let body = serde_json::to_vec_pretty(definition).unwrap();
+            fs::write(directory.join(&path), &body).unwrap();
+            package
+                .manifest
+                .file_digests
+                .insert(path.clone(), digest(&body));
+            package.manifest.contributions.workflows.push(path);
+        }
+        write_atomic(&directory.join("extension.json"), &package.manifest).unwrap();
+        package.digest = verify_directory(directory).unwrap().1;
+        package
+    }
+
+    fn locked_package(package: &InstalledPackage) -> LockedPackage {
+        LockedPackage {
+            id: package.manifest.id.clone(),
+            version: package.manifest.version.clone(),
+            digest: package.digest.clone(),
+            permissions: package.manifest.permissions.clone(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn activation_publishes_composed_workflows_regardless_of_manifest_and_package_order() {
+        let temporary = TemporaryDirectory::new();
+        let root = temporary.path().join("vault");
+        let mut child = crate::workflow::builtins::tdd();
+        child.id = "team-child".into();
+        let mut parent = crate::workflow::builtins::sdd_with_tdd();
+        parent.id = "team-parent".into();
+        parent
+            .nodes
+            .iter_mut()
+            .find(|node| node.kind == crate::workflow::NodeKind::Subworkflow)
+            .unwrap()
+            .workflow_ref = Some(crate::workflow::WorkflowRef {
+            id: child.id.clone(),
+            version: child.version.clone(),
+        });
+        let mut outer = parent.clone();
+        outer.id = "team-outer".into();
+        outer
+            .nodes
+            .iter_mut()
+            .find(|node| node.kind == crate::workflow::NodeKind::Subworkflow)
+            .unwrap()
+            .workflow_ref = Some(crate::workflow::WorkflowRef {
+            id: parent.id.clone(),
+            version: parent.version.clone(),
+        });
+        let bundle = contributed_package(
+            &temporary.path().join("bundle"),
+            "z-bundle",
+            &[parent.clone(), child.clone()],
+            Vec::new(),
+        );
+        let entry = contributed_package(
+            &temporary.path().join("entry"),
+            "a-entry",
+            &[outer.clone()],
+            vec![dependency("z-bundle", "^1")],
+        );
+        let input = ExtensionActivateInput {
+            project_id: "alpha".into(),
+            package_id: "a-entry".into(),
+            version: "1.0.0".into(),
+            ..Default::default()
+        };
+        let unrelated = installed("unrelated", "1.0.0", Vec::new());
+        let prior = vec![locked_package(&unrelated)];
+        write_atomic(
+            &lock_path(&root),
+            &ExtensionLock {
+                format_version: 1,
+                projects: BTreeMap::from([
+                    ("alpha".into(), prior.clone()),
+                    ("beta".into(), prior.clone()),
+                ]),
+            },
+        )
+        .unwrap();
+        let profile_path = root.join(".sawhorse/profiles/alpha.json");
+        write_atomic(&profile_path, &serde_json::json!({"custom": "keep"})).unwrap();
+        let installed = [entry, bundle, unrelated];
+        let lock = activate_with_installed_at(&root, input.clone(), &installed).unwrap();
+        assert_eq!(lock.projects["alpha"].len(), 3);
+        assert_eq!(lock.projects["beta"], prior);
+        let profile: serde_json::Value =
+            serde_json::from_slice(&fs::read(profile_path).unwrap()).unwrap();
+        assert_eq!(profile["custom"], "keep");
+        assert_eq!(
+            profile["extensions"],
+            serde_json::to_value(&lock.projects["alpha"]).unwrap()
+        );
+        for definition in [outer, parent, child] {
+            assert_eq!(
+                crate::workflow::resolve(Some(&root), &definition.id, &definition.version).unwrap(),
+                definition
+            );
+        }
+        assert_eq!(
+            activate_with_installed_at(&root, input, &installed).unwrap(),
+            lock
+        );
+    }
+
+    #[test]
+    fn incompatible_extension_update_preserves_lock_profile_and_workflow_catalog() {
+        let temporary = TemporaryDirectory::new();
+        let root = temporary.path().join("vault");
+        let mut workflow = crate::workflow::builtins::tdd();
+        workflow.id = "must-not-publish".into();
+        let new = contributed_package(
+            &temporary.path().join("new"),
+            "new",
+            &[workflow.clone()],
+            vec![dependency("shared", "^2")],
+        );
+        let existing = installed("existing", "1.0.0", vec![dependency("shared", "^1")]);
+        let shared_old = installed("shared", "1.0.0", Vec::new());
+        let shared_new = installed("shared", "2.0.0", Vec::new());
+        let prior = ExtensionLock {
+            format_version: 1,
+            projects: BTreeMap::from([
+                (
+                    "alpha".into(),
+                    vec![locked_package(&existing), locked_package(&shared_old)],
+                ),
+                ("beta".into(), vec![locked_package(&shared_new)]),
+            ]),
+        };
+        write_atomic(&lock_path(&root), &prior).unwrap();
+        let profile_path = root.join(".sawhorse/profiles/alpha.json");
+        write_atomic(&profile_path, &serde_json::json!({"custom": "keep"})).unwrap();
+        let before_lock = fs::read(lock_path(&root)).unwrap();
+        let before_profile = fs::read(&profile_path).unwrap();
+        let error = activate_with_installed_at(
+            &root,
+            ExtensionActivateInput {
+                project_id: "alpha".into(),
+                package_id: "new".into(),
+                version: "1.0.0".into(),
+                ..Default::default()
+            },
+            &[new, existing, shared_old, shared_new],
+        )
+        .unwrap_err();
+        assert!(
+            error.contains("existing@1.0.0") && error.contains("shared"),
+            "{error}"
+        );
+        assert_eq!(fs::read(lock_path(&root)).unwrap(), before_lock);
+        assert_eq!(fs::read(profile_path).unwrap(), before_profile);
+        assert!(!crate::workflow::catalog(Some(&root))
+            .unwrap()
+            .iter()
+            .any(|definition| definition.id == workflow.id));
+    }
+
+    #[test]
+    fn activation_preflights_profile_and_exact_existing_digests_before_publishing() {
+        let temporary = TemporaryDirectory::new();
+        let root = temporary.path().join("vault");
+        let mut workflow = crate::workflow::builtins::tdd();
+        workflow.id = "must-not-publish".into();
+        let package = contributed_package(
+            &temporary.path().join("package"),
+            "new",
+            &[workflow.clone()],
+            Vec::new(),
+        );
+        let input = ExtensionActivateInput {
+            project_id: "alpha".into(),
+            package_id: "new".into(),
+            version: "1.0.0".into(),
+            ..Default::default()
+        };
+        let profile_path = root.join(".sawhorse/profiles/alpha.json");
+        write_atomic(&profile_path, &serde_json::json!([])).unwrap();
+        assert!(
+            activate_with_installed_at(&root, input.clone(), &[package.clone()])
+                .unwrap_err()
+                .contains("profile")
+        );
+        assert!(!lock_path(&root).exists());
+        assert!(!crate::workflow::catalog(Some(&root))
+            .unwrap()
+            .iter()
+            .any(|definition| definition.id == workflow.id));
+
+        let other = installed("other", "1.0.0", Vec::new());
+        let mut locked = locked_package(&other);
+        locked.digest = "missing-revision".into();
+        write_atomic(
+            &lock_path(&root),
+            &ExtensionLock {
+                format_version: 1,
+                projects: BTreeMap::from([("alpha".into(), vec![locked])]),
+            },
+        )
+        .unwrap();
+        assert!(activate_with_installed_at(&root, input, &[package, other])
+            .unwrap_err()
+            .contains("digest"));
     }
 
     #[test]

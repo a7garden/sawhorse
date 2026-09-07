@@ -1,0 +1,395 @@
+.wb-mockup-detail {
+  max-width: 1380px !important;
+  max-height: calc(100vh - 24px);
+}
+.wb-mockup-detail .wb-detail-head {
+  padding-bottom: 8px;
+}
+.wb-mockup-detail .wb-detail-head h2 {
+  font-size: 19px;
+}
+.wb-mockup-detail .wb-stepper {
+  padding: 8px 0;
+}
+.wb-mockup-detail .wb-detail-meta {
+  padding: 6px 0;
+}
+.wb-mockup-detail .wb-detail-split {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 12px 0;
+}
+.mockup-review {
+  padding: 20px;
+  color: var(--foreground);
+  min-width: 0;
+}
+.mockup-heading,
+.mockup-revision,
+.mockup-screen-context,
+.mockup-preview-toolbar,
+.mockup-feedback-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.mockup-heading {
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.mockup-eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--muted-foreground);
+}
+.mockup-heading h3 {
+  margin: 4px 0;
+  font-size: 20px;
+  line-height: 1.35;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+.mockup-heading p {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.mockup-revision {
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.mockup-revision > span {
+  padding: 4px 8px;
+  background: var(--secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 650;
+}
+.mockup-screens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.mockup-screens button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  background: var(--background);
+}
+.mockup-screens button > span:first-child {
+  font:
+    10px ui-monospace,
+    monospace;
+  color: var(--muted-foreground);
+}
+.mockup-screens button small {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--secondary);
+  font-size: 10px;
+}
+.mockup-screens button[aria-pressed="true"] {
+  border-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 7%, var(--background));
+  font-weight: 650;
+}
+.mockup-draft-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--primary);
+}
+.mockup-screen {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.mockup-screen-context {
+  padding: 12px 14px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  background: var(--background);
+}
+.mockup-screen-context > span {
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.mockup-screen-context > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-left: auto;
+}
+.mockup-screen-context button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--secondary);
+  font-size: 10px;
+}
+.mockup-preview-toolbar {
+  padding: 6px 10px;
+  border-block: 1px solid var(--border);
+  flex-wrap: wrap;
+  background: var(--background);
+  font-size: 11px;
+}
+.mockup-preview-toolbar > div {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.mockup-preview-toolbar button,
+.mockup-feedback-kinds button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  color: var(--muted-foreground);
+}
+.mockup-preview-toolbar button[aria-pressed="true"],
+.mockup-feedback-kinds button[aria-pressed="true"] {
+  background: var(--secondary);
+  color: var(--foreground);
+  font-weight: 600;
+}
+.mockup-dimensions {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+.mockup-canvas {
+  padding: 16px;
+  overflow: auto;
+  max-height: 650px;
+  background-color: var(--muted);
+  background-image: radial-gradient(var(--border) 0.7px, transparent 0.7px);
+  background-size: 12px 12px;
+}
+.mockup-device {
+  position: relative;
+  margin-inline: auto;
+  overflow: hidden;
+  background: white;
+  border-radius: 5px;
+  box-shadow: 0 2px 12px #00000012;
+  flex-shrink: 0;
+}
+.mockup-device iframe {
+  display: block;
+  position: absolute;
+  inset: 0;
+  transform-origin: top left;
+  border: 0;
+  background: white;
+  color-scheme: normal;
+}
+.mockup-state {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  min-height: 200px;
+  padding: 24px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+.mockup-state p {
+  max-width: 500px;
+  overflow-wrap: anywhere;
+}
+.mockup-review-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 1fr);
+  gap: 20px;
+  margin-top: 20px;
+}
+.mockup-context,
+.mockup-feedback {
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.mockup-comparison {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding-bottom: 14px;
+}
+.mockup-review h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.mockup-comparison > div:first-child h4 {
+  color: var(--muted-foreground);
+}
+.mockup-comparison > div:last-child h4 {
+  color: var(--primary);
+}
+.mockup-context ul {
+  padding-left: 16px;
+  list-style: disc;
+}
+.mockup-context li {
+  margin: 5px 0;
+  overflow-wrap: anywhere;
+}
+.mockup-context details {
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+}
+.mockup-context summary {
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+.mockup-context summary span {
+  color: var(--muted-foreground);
+  margin-left: 4px;
+}
+.mockup-feedback {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 14px;
+  background: var(--background);
+  align-self: start;
+}
+.mockup-feedback h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.mockup-feedback h4 > span {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted-foreground);
+}
+.mockup-feedback-kinds {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+  font-size: 11px;
+}
+.mockup-feedback label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.mockup-feedback textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--background);
+  color: var(--foreground);
+  line-height: 1.6;
+  font-size: 12px;
+}
+.mockup-feedback textarea::placeholder {
+  color: var(--muted-foreground);
+}
+.mockup-feedback-actions {
+  justify-content: space-between;
+  margin-top: 10px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.mockup-feedback-actions small {
+  max-width: 200px;
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.mockup-success,
+.mockup-error {
+  margin-top: 8px;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.mockup-success {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--primary);
+}
+.mockup-error {
+  color: var(--destructive);
+}
+.mockup-comments {
+  list-style: none;
+  padding: 0;
+  margin: 14px 0 0;
+  max-height: 260px;
+  overflow: auto;
+}
+.mockup-comments li {
+  border-top: 1px solid var(--border);
+  padding: 10px 0;
+}
+.mockup-comments li > div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+.mockup-comments p {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.mockup-no-comments {
+  margin-top: 14px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.mockup-review button:focus-visible,
+.mockup-review textarea:focus-visible,
+.mockup-review summary:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.mockup-review button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 1050px) {
+  .mockup-review-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 650px) {
+  .mockup-review {
+    padding: 12px;
+  }
+  .mockup-heading h3 {
+    font-size: 17px;
+  }
+  .mockup-heading {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .mockup-preview-toolbar button > span {
+    display: none;
+  }
+  .mockup-comparison {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

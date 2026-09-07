@@ -20,6 +20,8 @@ Read the selected task and its dependencies. Work only in the scope authorized b
 
 ## Deliverables by role
 
+For a child run, the harness's child-specific deliverable and edit limits take precedence: report in the named run evidence file, leaving canonical artifacts to the parent.
+
 - Research: cite source paths and concrete findings; carry uncertainty and unresolved questions into `intent.md` or `spec.md` as requested.
 - Planner: turn the accepted intent into `spec.md`, then a bounded `plan.md` with affected repositories, dependencies, acceptance criteria, and reproducible checks. Flag contradictory requirements.
 - Implementer: follow the accepted spec and plan. Run the project's checks and record actual results in `verification.md`, including failures and environmental limitations.
@@ -28,8 +30,10 @@ Read the selected task and its dependencies. Work only in the scope authorized b
 
 Operational findings should become a new intent through Sawhorse's task UI, with a link to the originating work and evidence. Completion of one artifact does not authorize deployment or remote publication; preserve the authorization in the current task.
 
-## Child research
+## Model-aware child work
 
-When the harness prompt explicitly supplies a child-request inbox and its JSON format, submit only supported roles and scope using a new request ID and the current run as parent. Read the resulting child run and its evidence before using its conclusions. The host validates requests, concurrency, ancestry, and role boundaries. If no inbox is supplied, use the app's child-run action; do not invent a schema or directly spawn untracked agents.
+Apply the sibling [delegate skill](../delegate/SKILL.md) automatically when decomposing work. Assess each bounded subtask yourself and submit its complexity and reason; leave its model empty for the host policy. The harness also embeds this policy so it applies when skills are not separately installed. Tiny tasks may be cheaper to finish locally.
+
+When the harness prompt supplies a child-request inbox, submit only supported roles and scope using a new request ID and the current run as parent. Children write evidence to their own run evidence file; the parent owns canonical artifacts. Read the resulting child run and evidence before using its conclusions. The host validates requests, concurrency, ancestry, model selection and role boundaries. Without an inbox, complete the work locally or use an available tracked child-run action; do not invent a schema or directly spawn untracked agents.
 
 Finish with the changed artifact paths, checks actually run, results, and any remaining blocker. The app records review decisions and advances stages.

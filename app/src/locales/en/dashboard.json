@@ -15,7 +15,7 @@
     "emptyTitle": "No widgets to display.",
     "emptyHint": "Pick the ones you need from the add-widget button above.",
     "catalogTitle": "Widget catalog",
-    "catalogIntro": "Previews show each widget rendered with your real data — pick the ones you like. Each metric card is a widget of its own, and re-added widgets are placed at the end of the board.",
+    "catalogIntro": "Choose which widgets to show. Added widgets appear at the bottom of your desk.",
     "searchPlaceholder": "Search by widget name or description",
     "searchLabel": "Search widgets",
     "noResults": "No widgets match your search."
@@ -238,7 +238,8 @@
     "noRuns": "No runs recorded today yet.",
     "eventTag": "Today's event",
     "dueTag": "Due today",
-    "doneTag": "Done today"
+    "doneTag": "Done today",
+    "timeline": "Run timeline"
   },
   "canvas": {
     "help": "Click a step to edit its content and drag to arrange it. Connect next steps and run conditions below.",
@@ -393,5 +394,68 @@
     "rollback": "Roll back",
     "fixSchemaFirst": "Fix the schema errors, then scan the vault.",
     "desktopOnly": "Schema scanning and file changes are available in the Sawhorse desktop app."
+  },
+  "studio": {
+    "headerNote": "Workflows that start with intent",
+    "versionHistory": "Earlier versions",
+    "noDrafts": "Your work in progress will appear here.",
+    "libraryHint": "Shape the way you work together with your agent.",
+    "backToOverview": "Back to overview",
+    "advancedHint": "Adjust only what you need.",
+    "generationInvalid": "The draft needs corrections. Refine your request and try again.",
+    "previewGenerated": "This is a sample draft. In the desktop app, your selected agent writes a draft for your request.",
+    "generated": "Your draft is ready. Review the flow or describe a change.",
+    "saved": "Draft saved.",
+    "requestLabel": "What would you like your agent to handle?",
+    "refineLabel": "What would you like to change?",
+    "placeholder": "For example, turn feature requests into requirements, implementation, and tests. Check with me once the design is ready.",
+    "refinePlaceholder": "For example, ask me to review the design before implementation.",
+    "agent": "Agent to write the draft",
+    "preview": "Sample preview",
+    "agentReady": "Draft author",
+    "generating": "Writing draft",
+    "generate": "Create a draft",
+    "refine": "Request changes",
+    "progress": "Reading your request and putting together the steps and deliverables. This may take a moment.",
+    "eyebrow": "WORKFLOW STUDIO",
+    "heading1": "What would you like to delegate?",
+    "heading2": "Let’s shape how it gets done.",
+    "intro": "Describe the work and where you want to review it.\nYour agent will prepare a draft you can edit.",
+    "examplesLabel": "A few ideas to get started",
+    "agentDoes": "Your agent puts the steps together",
+    "youDo": "You review the direction and results",
+    "manual": "Prefer to build it yourself?",
+    "overview": "WORKFLOW / REVIEW DRAFT",
+    "publish": "Review & publish",
+    "defaultDescription": "Review the flow and tell your agent what to change.",
+    "flow": "Here’s how it works",
+    "details": "Edit details",
+    "flowHint": "Review each step’s role and the conditions for moving on.",
+    "human": "Your review",
+    "done": "Complete",
+    "agentStep": "Agent / system",
+    "yourPart": "Your moments to review",
+    "approvalHint": "These steps are configured for a human decision.",
+    "noApproval": "There are no human review steps. Ask your agent to add one if needed.",
+    "deliverables": "What you get",
+    "publishHint": "Publishing makes this available to projects. Existing work keeps its current version.",
+    "examples": {
+      "development": {
+        "title": "Feature development",
+        "description": "From request to implementation and tests",
+        "prompt": "Turn feature requests into requirements and a design. Ask me to approve the design, then implement and test it. Let me review the final result."
+      },
+      "review": {
+        "title": "Code review",
+        "description": "Inspect changes and suggest improvements",
+        "prompt": "Analyze code changes for bugs and improvements. Write a review report with verification evidence, then ask me to review it."
+      },
+      "research": {
+        "title": "Research & synthesis",
+        "description": "From sources to a useful recommendation",
+        "prompt": "Research a topic and summarize the findings with sources. Create a comparison report and recommendation for my final review."
+      }
+    },
+    "applyJson": "Validate & apply"
   }
 }

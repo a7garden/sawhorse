@@ -206,6 +206,13 @@ export interface Document {
   markdown: string;
   revision: string;
 }
+export interface IntentCheckpoint {
+  id: string;
+  event: string;
+  note: string;
+  at: string;
+  stage: Stage;
+}
 export interface SearchHit {
   path: string;
   title: string;
@@ -223,6 +230,7 @@ export interface LaunchInput {
   model: string;
   instructions: string;
   parentRunId: string | null;
+  modelAssessment?: { complexity: "routine" | "standard" | "complex"; reason: string };
 }
 export interface HarnessRun {
   id: string;
@@ -231,6 +239,13 @@ export interface HarnessRun {
   role: AgentRole;
   agent: string;
   model: string;
+  modelSelection?: {
+    source: "auto" | "explicit" | "inherited" | "default";
+    requestedModel: string;
+    assessment: { complexity: "routine" | "standard" | "complex"; reason: string } | null;
+    reason: string;
+  } | null;
+  childModelPolicy?: "auto" | "inherit";
   parentRunId: string | null;
   stage: Stage;
   workflowId: string;
@@ -361,6 +376,7 @@ export interface WorkflowDraftRecord {
   definition: WorkflowDefinition;
   validation: ValidationReport;
   updatedAt: string;
+  revision: string;
 }
 
 export type NodeRunStatus =

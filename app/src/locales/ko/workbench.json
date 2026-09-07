@@ -107,7 +107,10 @@
     "title": "작업대",
     "addWidgets": "위젯 추가",
     "layoutDone": "배치 완료",
-    "layoutEdit": "배치 편집"
+    "layoutEdit": "배치 편집",
+    "description": "진행 중인 일과 다음에 살펴볼 작업을 확인하세요.",
+    "workspaceSummary": "한눈에 보기",
+    "manageProjects": "관리"
   },
   "widgets": {
     "today": "오늘 활동",
@@ -437,7 +440,8 @@
     "stopHint": "이 역할의 실행이 진행 중입니다. 누르면 중단합니다.",
     "stop": "실행 중 · 중단",
     "start": "실행 시작",
-    "needsProject": "실행하려면 프로젝트를 연결해 주세요."
+    "needsProject": "실행하려면 프로젝트를 연결해 주세요.",
+    "childModelHint": "부모 실행의 모델입니다. 하위 작업의 모델은 설정의 정책에 따라 내부 스킬이 판단합니다."
   },
   "harness": {
     "outputReadFailed": "출력을 읽지 못했습니다: {{error}}",
@@ -468,7 +472,24 @@
     "terminalKeysHint": "자동 전송하지 않습니다. 필요한 키만 직접 누르세요.",
     "terminalKeyAria": "터미널 키 {{key}}",
     "launchChild": "조사 자식 실행",
-    "childHint": "자식 실행도 독립된 기록과 출력으로 보존됩니다."
+    "childHint": "자식 실행도 독립된 기록과 출력으로 보존됩니다.",
+    "modelAuto": "자동 선택",
+    "modelSource": {
+      "auto": "스킬 판단으로 모델 선택",
+      "explicit": "명시한 모델 사용",
+      "inherited": "부모 모델 상속 · 에이전트가 다르면 CLI 기본값",
+      "default": "CLI 기본 모델"
+    },
+    "modelComplexity": {
+      "routine": "작은 작업",
+      "standard": "범위가 명확한 작업",
+      "complex": "복잡한 작업"
+    },
+    "childModelPolicy": "하위 모델 정책: {{policy}}",
+    "childPolicy": {
+      "auto": "자동 · 스킬이 판단",
+      "inherit": "부모 모델 상속"
+    }
   },
   "preview": {
     "projectNotFound": "프로젝트를 찾을 수 없습니다.",
@@ -564,6 +585,37 @@
       "failed": "실행에 실패했어요. 원인을 확인하고 다시 시도해 주세요.",
       "stopped": "실행이 중지됐어요",
       "unknown": "실행 상태를 확인할 수 없어요"
-    }
+    },
+    "progress": "의도에서 결과까지",
+    "humanIntent": "인간 · 의도",
+    "aiDesign": "AI · 설계",
+    "humanApproval": "인간 · 승인",
+    "aiBuild": "AI · 구현·검증",
+    "humanResult": "인간 · 결과 확인",
+    "completedHint": "완료한 결과와 검증 근거, 당시의 설계와 결정 기록을 다시 확인할 수 있습니다.",
+    "designMissing": "설계를 요청하면 AI가 설계와 작업 단위를 작성합니다. 두 문서가 준비되면 검토 후 구현을 승인할 수 있습니다.",
+    "designReady": "설계와 작업 단위가 준비됐습니다. 범위·완료 기준·검증 방법을 읽고 구현을 승인하거나 수정할 내용을 남겨 주세요.",
+    "resultMissing": "구현을 계속하면 AI가 검증 근거를 포함한 결과를 보고합니다. 결과 문서가 준비돼야 완료할 수 있습니다.",
+    "resultReady": "구현 결과가 준비됐습니다. 승인한 범위와 검증 근거를 확인한 뒤 완료하거나 보완할 내용을 남겨 주세요.",
+    "feedbackPending": "아직 전달하지 않은 메모가 있습니다. AI에 보내 보완을 요청하거나 메모를 지운 뒤 승인·완료해 주세요.",
+    "pausedHint": "이 작업은 보류 중입니다. 재개한 뒤 설계나 구현을 이어갈 수 있습니다.",
+    "resume": "작업 재개",
+    "resumeNote": "기록을 확인하고 작업을 재개합니다.",
+    "openRun": "이 실행 열기",
+    "stopRun": "실행 중지",
+    "history": "단계별 문서 기록",
+    "historyHint": "이전 시점의 기록을 보고 있습니다. 승인·실행은 현재 문서에서 진행하세요.",
+    "currentDocuments": "현재 문서로 돌아가기",
+    "historyDescription": "원본 의도와 수정·검토·실행 시점의 문서 사본입니다. 실제 승인과 완료 결정은 작업의 결정 기록에 남습니다.",
+    "agentReport": "에이전트 보고",
+    "runHistory": "연결된 실행 기록",
+    "historyEvents": {
+      "captured": "의도 기록",
+      "before-edit": "수정 전 문서",
+      "design-review": "설계 검토 시점",
+      "result-review": "결과 검토 시점",
+      "run-input": "실행 입력 기록"
+    },
+    "flowHint": "메모는 의도 → AI 설계 → 인간 승인 → AI 구현·보고 흐름으로 진행됩니다."
   }
 }

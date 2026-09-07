@@ -1,5 +1,6 @@
 mod agents;
 mod changes;
+pub mod cli;
 mod collab;
 mod commands;
 mod config;
@@ -9,6 +10,8 @@ mod extensions;
 mod herdr;
 mod ingestion;
 mod jobs;
+mod model_policy;
+mod mockups;
 mod notes;
 mod packs;
 mod plugin;
@@ -25,6 +28,7 @@ mod vault;
 mod watcher;
 mod workflow;
 mod workspace;
+mod workspace_io;
 
 use parking_lot::Mutex;
 use std::sync::Arc;
@@ -272,6 +276,7 @@ pub fn run() {
             ingestion::ingestion_apply,
             workflow::workflow_catalog,
             workflow::workflow_validate,
+            sdlc_harness::workflow_generate,
             workflow::workflow_simulate,
             workflow::workflow_activate,
             workflow::workflow_draft_list,
@@ -294,6 +299,7 @@ pub fn run() {
             schemas::schema_publish,
             schemas::schema_activate,
             schemas::schema_active,
+            schemas::vault_attention,
             schemas::schema_scan,
             schemas::schema_plan,
             schemas::schema_changeset_preview,
@@ -308,8 +314,11 @@ pub fn run() {
             sdlc::sdd_capture_intent,
             sdlc::sdd_capture_image,
             sdlc::sdd_intent_review,
+            sdlc::sdd_intent_checkpoint,
             sdlc::sdd_transition,
             sdlc::sdd_read_document,
+            mockups::sdd_read_mockup,
+            mockups::sdd_read_mockup_html,
             sdlc::sdd_write_document,
             sdlc::sdd_save_event,
             sdlc::sdd_delete_event,

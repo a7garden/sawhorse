@@ -82,7 +82,10 @@ mod tests {
 
     #[test]
     fn io_not_found_classifies_as_spawn_not_found() {
-        let e = CoreError::from_io("claude", &std::io::Error::from(std::io::ErrorKind::NotFound));
+        let e = CoreError::from_io(
+            "claude",
+            &std::io::Error::from(std::io::ErrorKind::NotFound),
+        );
         assert_eq!(e.code(), CoreCode::SpawnNotFound);
     }
 }

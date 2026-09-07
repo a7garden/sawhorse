@@ -1,4 +1,5 @@
 import { JournalWidget } from "@/features/journal/JournalPage";
+import { MockupReview } from "@/features/mockups/MockupReview";
 import { IntentComposer } from "./IntentComposer";
 import { IntentFlowPanel } from "./IntentFlowPanel";
 import { INTENT_WORKFLOW } from "./intent";
@@ -115,6 +116,7 @@ import {
 } from "./types";
 import "./workbench.css";
 import "./work-view.css";
+import "./dashboard.css";
 type Notice = {
   tone: "error" | "success";
   text: string;
@@ -533,7 +535,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     const item = allWork.find((candidate) => candidate.id === workId);
     const definition = item ? workflowForWork(workflows, item) : undefined;
     setSelectedWorkId(workId);
-    setSelectedArtifact(artifact ?? definition?.artifacts[0]?.role ?? "intent");
+    setSelectedArtifact(artifact ?? (item?.workflowId === "mockup-review" ? "mockup" : definition?.artifacts[0]?.role ?? "intent"));
     setRevealText(snippet);
   };
   const afterSave = async (text: string) => {
@@ -593,7 +595,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     onEditWork: (item: WorkItem) => setWorkModal(item),
   };
   return (
-    <div className={cx("wb-page", ["work", "board", "issues"].includes(view) && "wb-work-page")}>
+    <div className={cx("wb-page", view === "overview" && "wb-overview-page", ["work", "board", "issues"].includes(view) && "wb-work-page")}>
       {error && (
         <div className="wb-inline-error" role="alert">
           {error}
@@ -609,19 +611,9 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
           </span>
         </div>
       )}
-      {["overview", "calendar", "harness", "knowledge"].includes(view) && (
+      {selectedProject && ["calendar", "harness", "knowledge"].includes(view) && (
         <div className="wb-project-scope">
-          <Select
-            id="workbench-project-scope"
-            className="min-w-[180px]"
-            value={scopeId}
-            onChange={(value) => selectProject(value)}
-            options={[
-              { value: "", label: t("scope.all") },
-              ...projects.map((project) => ({ value: project.id, label: project.name })),
-            ]}
-          />
-          {selectedProject && <span>{t("scope.defaultWorkflow", { workflow: workflowForProject(workflows, selectedProject)?.label ?? selectedProject.workflowId })}</span>}
+          <span>{t("scope.defaultWorkflow", { workflow: workflowForProject(workflows, selectedProject)?.label ?? selectedProject.workflowId })}</span>
         </div>
       )}
       {view === "overview" && <OverviewView key={scopeId} {...shared} />}
@@ -826,6 +818,7 @@ function OverviewView({
   workflows,
   events,
   reload,
+  onNewWork,
   onSelectWork,
   onEditWork,
 }: {
@@ -883,8 +876,8 @@ function OverviewView({
     .sort((a, b) => a.date.localeCompare(b.date))
     .slice(0, 8);
   const link = (page: string, label: string) => (
-    <button className="wb-panel-link" onClick={() => setPage(page)}>
-      {label} →
+    <button className="wb-panel-link" aria-label={label} title={label} onClick={() => setPage(page)}>
+      <span>{label}</span><ArrowRight size={13} aria-hidden />
     </button>
   );
   // 위젯에서 바로 끝내는 한 줄짜리 변경. 상세 화면을 열지 않고 상태·기한만 움직인다.
@@ -942,6 +935,7 @@ function OverviewView({
         return (
           <SlotCard
             title={t("widgets.next")}
+            count={next.length}
             description={t("widgets.nextDesc")}
             action={link("board", t("widgets.openBoard"))}
           >
@@ -966,14 +960,17 @@ function OverviewView({
           </SlotCard>
         );
       case "projects":
-        return <SlotCard title={t("scope.projectsTitle")}>
+        return <SlotCard title={t("scope.projectsTitle")} count={projects.length} action={link("projects", t("overview.manageProjects"))}>
           {projects.map((entry) => {
             const items = work.filter((item) => item.projectId === entry.id);
             const count = (status: string) => items.filter((item) => item.status === status).length;
-            return <button className="wb-project-summary" key={entry.id} onClick={() => selectProject(entry.id)}>
-              <strong>{entry.name}</strong>
-              <span>{t("scope.projectCounts", { running: count("running"), review: count("review"), blocked: count("blocked") })}</span>
-              <ArrowRight size={14} />
+            return <button className="wb-project-summary wb-overview-project" key={entry.id} onClick={() => selectProject(entry.id)}>
+              <span className="wb-project-initial" aria-hidden>{entry.name.slice(0, 1).toUpperCase()}</span>
+              <span className="wb-project-info">
+                <strong>{entry.name}</strong>
+                <span>{t("scope.projectCounts", { running: count("running"), review: count("review"), blocked: count("blocked") })}</span>
+              </span>
+              <ArrowRight size={14} aria-hidden />
             </button>;
           })}
           {!projects.length && <div className="wb-slot-empty">{t("projects.emptyTitle")}</div>}
@@ -1031,6 +1028,7 @@ function OverviewView({
         return (
           <SlotCard
             title={t("widgets.due")}
+            count={due.length}
             description={t("widgets.dueDesc")}
           >
             {due.length ? (
@@ -1059,6 +1057,7 @@ function OverviewView({
         return (
           <SlotCard
             title={t("widgets.events")}
+            count={upcoming.length}
             action={link("calendar", t("widgets.openCalendar"))}
           >
             {upcoming.length ? (
@@ -1076,7 +1075,7 @@ function OverviewView({
         );
       case "done":
         return (
-          <SlotCard title={t("widgets.done")}>
+          <SlotCard title={t("widgets.done")} count={done.length}>
             {done.length ? (
               done.map((item) => (
                 <DoneRow
@@ -1152,23 +1151,30 @@ function OverviewView({
   }
   return (
     <>
-      <PageHeader title={project ? t("scope.projectTitle", { project: project.name }) : t("overview.title")}>
+      <header className="wb-header wb-overview-header">
+        <div>
+          <time className="wb-overview-date" dateTime={today}>{new Intl.DateTimeFormat(i18n.language, { month: "long", day: "numeric", weekday: "long" }).format(new Date(`${today}T12:00:00`))}</time>
+          <h1>{project ? t("scope.projectTitle", { project: project.name }) : t("overview.title")}</h1>
+          <p>{t("overview.description")}</p>
+        </div>
+        <div className="wb-header-actions">
+          <Button size="sm" variant="ghost" aria-pressed={editing} onClick={() => setEditing(!editing)}>
+            <SlidersHorizontal />
+            {editing ? t("overview.layoutDone") : t("overview.layoutEdit")}
+          </Button>
+          <Button onClick={onNewWork}><Plus />{t("board.newWork")}</Button>
+        </div>
+      </header>
+      <div className="wb-overview-tools">
+        <span>{t("overview.workspaceSummary")}</span>
         <Button
-          size="sm"
-          variant="outline"
+          size="xs"
+          variant="ghost"
           onClick={() => setCatalogOpen(true)}
         >
           <Plus /> {t("overview.addWidgets")}
         </Button>
-        <Button
-          size="sm"
-          variant={editing ? "default" : "outline"}
-          onClick={() => setEditing(!editing)}
-        >
-          <SlidersHorizontal />
-          {editing ? t("overview.layoutDone") : t("overview.layoutEdit")}
-        </Button>
-      </PageHeader>
+      </div>
       <DashboardBoard
         key={project?.id ?? "all"}
         scope={project?.id}
@@ -1182,26 +1188,28 @@ function OverviewView({
 }
 function SlotCard({
   title,
+  count,
   description,
   action,
   children,
 }: {
   title: string;
+  count?: number;
   description?: string;
   action?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <div className="wb-panel wb-slot-panel">
-      <div className="wb-panel-title">
-        <div>
-          <h2>{title}</h2>
-          {description && <span>{description}</span>}
+    <section className="wb-panel wb-slot-panel" aria-label={title}>
+      <header className="wb-panel-title">
+        <div className="wb-widget-heading">
+          <div className="wb-widget-title"><h2>{title}</h2>{count != null && <span className="wb-widget-count">{count}</span>}</div>
+          {description && <p className="wb-widget-description" title={description}>{description}</p>}
         </div>
         {action}
-      </div>
-      <div className="wb-slot-content">{children}</div>
-    </div>
+      </header>
+      <div className="wb-slot-content" tabIndex={0} role="group" aria-label={title}>{children}</div>
+    </section>
   );
 }
 function DueRow({
@@ -1220,13 +1228,12 @@ function DueRow({
   const { t } = useTranslation("workbench");
   const days = item.dueDate ? daysUntil(item.dueDate) : 0;
   return (
-    <div className="wb-dense-row">
+    <div className="wb-dense-row wb-due-row">
       <button className="wb-dense-open" onClick={onClick} title={item.title}>
         <span className={cx("wb-date-chip", days < 0 && "is-overdue")}>
           {dueChip(days)}
         </span>
-        <span className="wb-dense-title">{item.title}</span>
-        <span className="wb-dense-meta">{formatDate(item.dueDate)}</span>
+        <span className="wb-due-copy"><span className="wb-dense-title">{item.title}</span><time className="wb-dense-meta" dateTime={item.dueDate ?? undefined}>{formatDate(item.dueDate)}</time></span>
       </button>
       <div className="wb-action-buttons">
         <MiniAction
@@ -1253,13 +1260,14 @@ function EventRow({
   event: CalendarEvent;
   onClick: () => void;
 }) {
+  const date = new Date(`${event.date}T12:00:00`);
   return (
-    <button className="wb-dense-row" onClick={onClick} title={event.title}>
-      <span className="wb-event-kind">{eventKindText(event.kind)}</span>
-      <span className="wb-dense-title">{event.title}</span>
-      <span className="wb-dense-meta">
-        {formatDate(event.endDate ?? event.date)}
-      </span>
+    <button className="wb-dense-row wb-agenda-row" onClick={onClick} title={event.title}>
+      <time className="wb-agenda-date" dateTime={event.date} aria-label={formatDate(event.date)}>
+        <span>{date.toLocaleDateString(i18n.language, { month: "short" })}</span><strong>{date.getDate()}</strong>
+      </time>
+      <span className="wb-agenda-copy"><span className="wb-dense-title">{event.title}</span><span className="wb-dense-meta">{eventKindText(event.kind)}{event.endDate && event.endDate !== event.date ? ` · ${formatDate(event.date)} – ${formatDate(event.endDate)}` : ""}</span></span>
+      <ArrowRight size={13} aria-hidden />
     </button>
   );
 }
@@ -1295,8 +1303,7 @@ function Metric({
   const shell = cx("wb-metric", solo && "is-solo", warn && "is-warn");
   const body = (
     <>
-      <div className="wb-metric-icon">{icon}</div>
-      <span>{label}</span>
+      <div className="wb-metric-top"><span>{label}</span><div className="wb-metric-icon" aria-hidden>{icon}</div></div>
       <strong>{value}</strong>
       <small>{hint}</small>
     </>
@@ -1306,6 +1313,7 @@ function Metric({
     <button
       type="button"
       className={cx(shell, "is-clickable")}
+      title={hint}
       onClick={onClick}
     >
       {body}
@@ -1332,10 +1340,8 @@ function WorkRow({
   const { t } = useTranslation("workbench");
   return (
     <div className="wb-work-row">
-      <button className="wb-work-main" onClick={onClick}>
-        <span className={statusClass(item.status)}>
-          {statusText(item.status)}
-        </span>
+      <button className="wb-work-main" onClick={onClick} title={item.title}>
+        <span className="wb-work-state" data-status={item.status} title={statusText(item.status)}><span className="sr-only">{statusText(item.status)}</span></span>
         <div>
           <strong>{item.title}</strong>
           <small>
@@ -1350,7 +1356,7 @@ function WorkRow({
         </div>
       </button>
       <div className="wb-row-meta">
-        {item.dueDate && <span>{formatDate(item.dueDate)}</span>}
+        {item.dueDate && <time dateTime={item.dueDate} className={daysUntil(item.dueDate) < 0 ? "is-overdue" : undefined}>{formatDate(item.dueDate)}</time>}
         {!isClosedStatus(item.status) && (
           <MiniAction
             label={t("work.review") }
@@ -1363,6 +1369,7 @@ function WorkRow({
         <button
           className="wb-icon-button"
           aria-label={t("row.editWork")}
+          title={t("row.editWork")}
           onClick={onEdit}
         >
           <MoreHorizontal size={17} />
@@ -3688,7 +3695,7 @@ function WorkDetailDialog({
       open
       onClose={requestClose}
       wide
-      className="wb-detail-dialog"
+      className={cx("wb-detail-dialog", work.workflowId === "mockup-review" && "wb-mockup-detail")}
       title={
         <div className="wb-detail-title">
           <span className={statusClass(work.status)}>
@@ -3702,7 +3709,7 @@ function WorkDetailDialog({
         <div className="wb-detail-head">
           <div>
             <h2>{work.title}</h2>
-            {!intentFlow && <p>
+            {!intentFlow && work.workflowId !== "mockup-review" && <p>
               {work.description ||
                 t("detail.noDescription")}
             </p>}
@@ -3815,7 +3822,7 @@ function WorkDetailDialog({
           </div>
         )}
         {work.workflowInstanceId && (
-          <RuntimeLedger instanceId={work.workflowInstanceId} />
+          <RuntimeLedger instanceId={work.workflowInstanceId} revision={work.updatedAt} />
         )}
         {!closed && !intentFlow && <>
         <label className="wb-review-note">
@@ -3897,7 +3904,7 @@ function WorkDetailDialog({
   );
 }
 
-function RuntimeLedger({ instanceId }: { instanceId: string }) {
+function RuntimeLedger({ instanceId, revision }: { instanceId: string; revision: string }) {
   const { t } = useTranslation("workbench");
   const [instance, setInstance] = useState<WorkflowInstance | null>(null);
   const [events, setEvents] = useState<WorkflowEventRecord[]>([]);
@@ -3917,7 +3924,7 @@ function RuntimeLedger({ instanceId }: { instanceId: string }) {
     return () => {
       alive = false;
     };
-  }, [instanceId]);
+  }, [instanceId, revision]);
   return (
     <div className="wb-ledger">
       <h3>{t("ledger.title")}</h3>
@@ -3982,6 +3989,10 @@ function ArtifactEditor({
   const [document, setDocument] = useState<Document | null>(null);
   const [markdown, setMarkdown] = useState("");
   const [dirty, setDirty] = useState(false);
+  const [feedbackDirty, setFeedbackDirty] = useState(false);
+  const [previewMockup, setPreviewMockup] = useState(true);
+  const isMockup = work.workflowId === "mockup-review" && selected === "mockup";
+  const hasUnsavedChanges = dirty || feedbackDirty;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [latestMarkdown, setLatestMarkdown] = useState<string | null>(null);
@@ -3995,7 +4006,7 @@ function ArtifactEditor({
   const reloadDocument = async (confirmDiscard = false) => {
     if (
       confirmDiscard &&
-      dirty &&
+      hasUnsavedChanges &&
       !window.confirm(t("editor.confirmReload"))
     )
       return;
@@ -4019,14 +4030,16 @@ function ArtifactEditor({
   };
   useEffect(() => {
     void reloadDocument();
+    setPreviewMockup(true);
+    setFeedbackDirty(false);
   }, [work.id, selected]);
   useEffect(() => {
-    onDirtyChange(dirty);
-  }, [dirty, onDirtyChange]);
+    onDirtyChange(hasUnsavedChanges);
+  }, [hasUnsavedChanges, onDirtyChange]);
   useEffect(() => {
     const protectNavigation = (event: Event) => {
       if (
-        dirty &&
+        hasUnsavedChanges &&
         !window.confirm(
           t("editor.confirmNavigate"),
         )
@@ -4036,17 +4049,17 @@ function ArtifactEditor({
     window.addEventListener("sawhorse:navigate", protectNavigation);
     return () =>
       window.removeEventListener("sawhorse:navigate", protectNavigation);
-  }, [dirty]);
+  }, [hasUnsavedChanges]);
   useEffect(() => {
     const protectUnload = (event: BeforeUnloadEvent) => {
-      if (dirty) {
+      if (hasUnsavedChanges) {
         event.preventDefault();
         event.returnValue = "";
       }
     };
     window.addEventListener("beforeunload", protectUnload);
     return () => window.removeEventListener("beforeunload", protectUnload);
-  }, [dirty]);
+  }, [hasUnsavedChanges]);
   const compareLatest = async () => {
     setBusy(true);
     try {
@@ -4113,7 +4126,7 @@ function ArtifactEditor({
   const changeArtifact = (artifact: ArtifactKind) => {
     if (
       artifact !== selected &&
-      dirty &&
+      hasUnsavedChanges &&
       !window.confirm(t("editor.confirmSwitch"))
     )
       return;
@@ -4141,9 +4154,13 @@ function ArtifactEditor({
             <FileText size={16} />
             <strong>{artifactLabel(workflow, selected)}</strong>
             <small>
-              {dirty ? t("editor.unsaved") : document ? t("editor.saved") : ""}
+              {hasUnsavedChanges ? t("editor.unsaved") : document ? t("editor.saved") : ""}
             </small>
           </div>
+          {isMockup && <Button size="xs" variant="ghost" onClick={() => {
+            if (feedbackDirty && !window.confirm(t("editor.confirmSwitch"))) return;
+            setPreviewMockup((value) => !value);
+          }}>{t(previewMockup ? "mockups:editDocument" : "mockups:preview")}</Button>}
           <Button
             size="xs"
             variant="ghost"
@@ -4182,6 +4199,11 @@ function ArtifactEditor({
         )}
         {busy && !document ? (
           <LoadingState />
+        ) : document && isMockup && previewMockup ? (
+          <MockupReview key={work.id} workId={work.id} onDirtyChange={setFeedbackDirty} onOpenWork={(workId, artifact) => {
+            if (hasUnsavedChanges && !window.confirm(t("editor.confirmSwitch"))) return;
+            useApp.getState().openWork({ workId, artifact });
+          }} />
         ) : document ? (
           <div className="wb-atomic-editor">
             <AtomicCodeMirrorEditor
@@ -4333,6 +4355,7 @@ function RunLauncher({
           onValueChange={setModel}
           placeholder={t("launcher.modelPlaceholder")}
         />
+        <small>{t("launcher.childModelHint")}</small>
       </label>
       <label>
         {t("launcher.instructions")}
@@ -4382,6 +4405,7 @@ function HarnessView({
   onSelectWork: (id: string) => void;
 }) {
   const { t } = useTranslation("workbench");
+  const requestedRun = useApp((state) => state.openRunRequest);
   const [runs, setRuns] = useState<HarnessRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<HarnessRun | null>(null);
@@ -4394,10 +4418,13 @@ function HarnessView({
       const next = (await sddApi.runs()).filter((run) => !projectId || run.projectId === projectId);
       setRuns(next);
       setSelected((current) =>
-        current
+        requestedRun
+          ? (next.find((run) => run.id === requestedRun.id) ?? null)
+          : current
           ? (next.find((run) => run.id === current.id) ?? null)
           : (next[0] ?? null),
       );
+      if (requestedRun) useApp.getState().clearOpenRun();
     } catch (e) {
       onNotice({ tone: "error", text: errorText(e) });
     } finally {
@@ -4406,7 +4433,7 @@ function HarnessView({
   };
   useEffect(() => {
     void load();
-  }, []);
+  }, [projectId, requestedRun?.id]);
   useEffect(() => {
     if (!runs.some((run) => ACTIVE_RUN_STATUS.includes(run.status))) return;
     const timer = window.setInterval(() => {
@@ -4448,7 +4475,7 @@ function HarnessView({
     return () => {
       alive = false;
     };
-  }, [selected?.id]);
+  }, [selected?.id, selected?.updatedAt]);
   const refresh = async () => {
     if (!selected) return;
     setBusy(true);
@@ -4540,7 +4567,7 @@ function HarnessView({
         projectId: item.projectId,
         role: "research",
         agent: selected.agent === "claude" ? "claude" : "codex",
-        model: selected.model,
+        model: "",
         instructions: "상위 실행을 위한 조사 결과와 근거를 정리해 주세요.",
         parentRunId: selected.id,
       });
@@ -4588,6 +4615,8 @@ function HarnessView({
                   </strong>
                   <small>
                     {roleText(run.role)} · {run.agentName || run.agent}
+                    {run.model && ` · ${run.model}`}
+                    {run.modelSelection?.source === "auto" && ` · ${t("harness.modelAuto")}`}
                   </small>
                 </div>
                 {run.parentRunId && <span className="wb-child-mark">↳</span>}
@@ -4612,6 +4641,18 @@ function HarnessView({
                       selected.workflowId,
                       selected.workflowVersion,
                     )}
+                  </p>
+                  {selected.modelSelection && (
+                    <p data-testid="model-selection" className="text-sm text-muted-foreground">
+                      {t(`harness.modelSource.${selected.modelSelection.source}`)}
+                      {selected.modelSelection.assessment && (
+                        <> · {t(`harness.modelComplexity.${selected.modelSelection.assessment.complexity}`)}
+                          {" — "}{selected.modelSelection.assessment.reason}</>
+                      )}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {t("harness.childModelPolicy", { policy: t(`harness.childPolicy.${selected.childModelPolicy ?? "inherit"}`) })}
                   </p>
                 </div>
                 <div>

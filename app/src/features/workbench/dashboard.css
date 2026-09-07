@@ -1,0 +1,16 @@
+/* A working desk: restrained totals, actionable rows, and project context. */
+.wb-overview-page { max-width: 1440px; padding-top: 30px; }
+.wb-overview-header { align-items: flex-end; margin-bottom: 28px; }
+.wb-overview-date { display: block; color: var(--wb-muted); font-size: 11px; margin-bottom: 10px; }
+.wb-overview-header h1 { font-size: 28px; font-weight: 650; line-height: 1.25; letter-spacing: -.045em; }
+.wb-overview-header p:not(.wb-eyebrow) { font-size: 12px; line-height: 1.6; margin-top: 8px; }
+.wb-overview-header .wb-header-actions { gap: 12px; padding-bottom: 2px; }
+.wb-overview-tools { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wb-overview-tools > span { font-size: 11px; font-weight: 550; color: var(--wb-muted); }
+.wb-overview-tools > button { color: var(--wb-muted); font-size: 11px; }
+@container (max-width: 620px) {
+  .wb-overview-page { padding: 24px 18px 36px; }
+  .wb-overview-header { flex-wrap: wrap; align-items: flex-start; gap: 18px; margin-bottom: 24px; }
+  .wb-overview-header h1 { font-size: 25px; }
+  .wb-overview-header .wb-header-actions { width: 100%; justify-content: flex-end; }
+}

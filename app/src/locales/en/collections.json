@@ -1,0 +1,43 @@
+{
+  "clearSearch": "Clear search",
+  "reset": "Reset filters",
+  "noResults": "No matching items",
+  "noResultsHint": "Try another search or reset your filters.",
+  "loading": "Loading items…",
+  "tasks": {
+    "libraryDescription": "Save recurring work and run it whenever you need it.",
+    "schedulesDescription": "Choose when saved tasks run and manage their recurring schedules.",
+    "search": "Search automation tasks",
+    "filters": "Automation task categories",
+    "all": "All",
+    "custom": "My tasks",
+    "builtin": "Built-in & extension tasks",
+    "count": "{{count}} tasks",
+    "enabled": "{{count}} active schedules",
+    "emptyHint": "Create an automation task first, then schedule it for a time that works for you.",
+    "enabledLabel": "Enable {{title}}",
+    "createFirst": "Create your first task",
+    "chooseForSchedule": "Choose a task to schedule"
+  },
+  "jobs": {
+    "description": "Follow active runs and find logs and results from completed work.",
+    "search": "Search runs or projects",
+    "filters": "Run result filters",
+    "all": "All",
+    "history": "Past runs",
+    "idle": "No tasks are running right now",
+    "idleHint": "Run an automation task to see its progress and results here.",
+    "openLibrary": "Browse automation tasks",
+    "actions": "Run results",
+    "cancelFailed": "Could not cancel the run: {{error}}",
+    "cancelRun": "Cancel {{label}}"
+  },
+  "reading": {
+    "description": "Catch up on your feeds and save articles to revisit later.",
+    "search": "Search article titles or content",
+    "filters": "Article status filters",
+    "source": "Select reading source",
+    "unread": "{{count}} unread articles"
+  },
+  "loadFailed": "Could not load items."
+}

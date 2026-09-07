@@ -95,6 +95,9 @@ mod tests {
             "stderr: {}",
             String::from_utf8_lossy(&out.stderr)
         );
-        assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "spawn-smoke-ok");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stdout).trim(),
+            "spawn-smoke-ok"
+        );
     }
 }

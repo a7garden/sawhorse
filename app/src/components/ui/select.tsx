@@ -90,12 +90,15 @@ export const Select = React.forwardRef<HTMLButtonElement, SelectProps>(
       const spaceAbove = rect.top - margin;
       const openUp = spaceAbove > spaceBelow && spaceBelow < 160;
       const maxHeight = Math.max(120, Math.min(MAX_LIST_HEIGHT, openUp ? spaceAbove : spaceBelow));
+      // A collapsed sidebar has a narrow trigger, but project names need a readable menu.
+      const width = Math.min(Math.max(rect.width, variant === "sidebar" ? 200 : 0), window.innerWidth - margin * 2);
+      const left = Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin));
       setPopupStyle(
         openUp
-          ? { left: rect.left, bottom: window.innerHeight - rect.top + gap, width: rect.width, maxHeight }
-          : { left: rect.left, top: rect.bottom + gap, width: rect.width, maxHeight },
+          ? { left, bottom: window.innerHeight - rect.top + gap, width, maxHeight }
+          : { left, top: rect.bottom + gap, width, maxHeight },
       );
-    }, []);
+    }, [variant]);
 
     const closeList = React.useCallback(() => {
       setOpen(false);

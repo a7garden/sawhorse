@@ -336,8 +336,9 @@ test("schema studio exposes the guarded desktop migration workflow", async ({
 }) => {
   await page.goto("/?preview=1");
   await nav(page, "설정");
+  await page.getByRole("navigation", { name: "설정", exact: true }).getByRole("button", { name: "볼트", exact: true }).click();
   await page
-    .getByRole("button", { name: "볼트 문서 구조", exact: true })
+    .getByRole("button", { name: "열기", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "볼트 문서 구조" }),

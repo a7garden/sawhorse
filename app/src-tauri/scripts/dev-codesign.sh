@@ -7,13 +7,14 @@
 # produces a new CDHash and macOS asks for keychain access again — this is
 # why the GitHub tab re-prompted for the keychain on every rebuild. Signing
 # with a codesigning identity and a fixed identifier keeps the DR stable
-# across rebuilds, so one "Always Allow" covers every future build. The
-# identifier matches the release bundle identifier (tauri.conf.json), so dev
-# and installed builds share the same trusted identity.
+# across rebuilds, so "Always Allow" can survive rebuilds. The identifier
+# matches the release bundle identifier (tauri.conf.json); dev and installed
+# builds share a trusted identity when their signing requirements also match.
 #
 # Identity selection: SAWHORSE_SIGN_IDENTITY override, else the first
 # Developer ID Application identity, else any codesigning identity. If
-# identity signing fails (locked keychain, missing intermediate), the script
+# identity signing fails (locked keychain, missing intermediate, overridden
+# certificate trust), the script
 # falls back to plain ad-hoc so the app still runs — but ad-hoc's DR is the
 # CDHash itself, so keychain prompts will recur until identity signing works.
 set -eu
@@ -28,10 +29,10 @@ if [ -z "$identity" ]; then
 fi
 
 if [ -n "$identity" ]; then
-  if codesign --force --identifier com.a7garden.sawhorse --sign "$identity" "$bin" 2>/dev/null; then
+  if codesign --force --identifier com.a7garden.sawhorse --sign "$identity" "$bin"; then
     exec "$bin" "$@"
   fi
-  echo "dev-codesign: identity signing failed; falling back to ad-hoc (keychain prompts may recur). If this persists, verify the 'Developer ID Certification Authority (G2)' intermediate is installed: https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer" >&2
+  echo "dev-codesign: identity signing failed; falling back to ad-hoc (keychain prompts may recur after a restart). For certificate chain errors, check the issuer certificate and restore code-signing certificate trust to system defaults: https://developer.apple.com/forums/thread/712043" >&2
 fi
 if ! codesign --force -s - --identifier com.a7garden.sawhorse "$bin" 2>/dev/null; then
   echo "dev-codesign: signing failed; keychain may prompt again" >&2

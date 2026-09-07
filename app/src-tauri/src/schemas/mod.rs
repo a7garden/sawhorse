@@ -1322,6 +1322,48 @@ pub fn schema_activate(
 pub fn schema_active() -> Result<Option<ActiveSchemaState>, String> {
     active_schema_at(&crate::sdlc::vault_root()?)
 }
+/// 작업대·마법사 상단에 1급으로 띄울 "사용자가 진행해야 할 일" 집계. 이관과
+/// 스키마 마이그레이션은 데이터를 고치는 작업이라 앱이 임의로 밀어붙일 수 없고
+/// 사용자가 인지한 뒤 실행해야 한다. 이 카운트가 없으면 사용자는 고쳐야 할
+/// 문서가 있는지 스튜디오를 열어 보기 전까지 알 수 없다.
+#[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultAttention {
+    /// 활성 스키마의 storage.path가 아직 적용되지 않아 이동 대기 중인 관리 문서 수.
+    pub pending_schema_moves: u64,
+    /// 사람이 고쳐야 마이그레이션을 진행할 수 있는 충돌(필수 필드 누락 등) 수.
+    pub schema_conflicts: u64,
+    pub schema_id: String,
+    pub schema_revision: u32,
+    /// 아직 개발 항목으로 이관하지 않은 이슈·개선 노트 수.
+    pub pending_legacy_issues: u64,
+}
+
+pub fn vault_attention_at(root: &Path) -> Result<VaultAttention, String> {
+    let mut attention = VaultAttention::default();
+    if let Some(active) = active_schema_at(root)? {
+        if let Some(schema) = catalog_at(root)?
+            .into_iter()
+            .find(|schema| schema.id == active.id && schema.revision == active.revision)
+        {
+            attention.schema_id = schema.id.clone();
+            attention.schema_revision = schema.revision;
+            let migration = plan(&scan(root, &schema)?);
+            attention.pending_schema_moves = migration.moves.len() as u64;
+            attention.schema_conflicts = migration.conflicts.len() as u64;
+        }
+    }
+    attention.pending_legacy_issues = crate::sdlc::legacy_issue_notes(root)
+        .iter()
+        .filter(|note| note.migrated_to.trim().is_empty())
+        .count() as u64;
+    Ok(attention)
+}
+
+#[tauri::command]
+pub fn vault_attention() -> Result<VaultAttention, String> {
+    vault_attention_at(&crate::sdlc::vault_root()?)
+}
 
 #[cfg(test)]
 mod tests {
@@ -1534,6 +1576,40 @@ mod tests {
         let active = activate_at(&root, &target, Some(&set.id)).unwrap();
         assert_eq!(active.revision, 3);
         assert_eq!(active_schema_at(&root).unwrap(), Some(active));
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn vault_attention_counts_moves_conflicts_and_unmigrated_issue_notes() {
+        let root = tempdir();
+        fs::create_dir_all(root.join("projects/alpha/issues")).unwrap();
+        fs::write(
+            root.join("projects/alpha/issues/issue-1.md"),
+            "---\nid: issue-1\ntypeId: team-vault.issue\nschemaRevision: 3\nprojectId: alpha\ntitle: 로그인 요청\n진행상태: 접수\n---\n\n# 요청\n",
+        )
+        .unwrap();
+        publish_at(&root, schema()).unwrap();
+        activate_at(&root, &schema(), None).unwrap();
+
+        // 활성화 뒤 외부 편집으로 생긴 드리프트를 잡는 것이 이 프로브의 존재 이유다.
+        fs::create_dir_all(root.join("old")).unwrap();
+        fs::write(
+            root.join("old/issue-2.md"),
+            "---\nid: issue-2\ntypeId: team-vault.issue\nprojectId: alpha\ntitle: 검색 버그\n---\n\n# 요청\n",
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("프로젝트/alpha/이슈")).unwrap();
+        fs::write(
+            root.join("프로젝트/alpha/이슈/9.md"),
+            "---\ntype: 이슈\nid: 9\ntitle: 정렬 문제\n---\n본문\n",
+        )
+        .unwrap();
+
+        let attention = vault_attention_at(&root).unwrap();
+        assert_eq!(attention.schema_id, "team-vault");
+        assert_eq!(attention.schema_revision, 3);
+        assert_eq!(attention.pending_schema_moves, 1);
+        assert_eq!(attention.schema_conflicts, 1);
+        assert_eq!(attention.pending_legacy_issues, 1);
         fs::remove_dir_all(root).unwrap();
     }
 }

@@ -14,8 +14,8 @@ pub const ISSUE_WORKFLOW_ID: &str = "issue-main";
 /// 만들어진 항목이 digest 로 고정하고 있어 정의를 그 자리에서 고칠 수 없다.
 pub const ISSUE_WORKFLOW_VERSION: &str = "1.1.0";
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct WorkflowDefinition {
     pub definition_version: u32,
     pub id: String,
@@ -46,8 +46,8 @@ impl Default for WorkflowDefinition {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct ArtifactDefinition {
     /// Stable logical role used by nodes and the UI.
     pub role: String,
@@ -57,7 +57,7 @@ pub struct ArtifactDefinition {
     pub template: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum NodeKind {
     Artifact,
@@ -75,8 +75,8 @@ impl Default for NodeKind {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct WorkflowNode {
     pub id: String,
     pub label: String,
@@ -92,15 +92,15 @@ pub struct WorkflowNode {
     pub requires_completed_dependencies: bool,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct WorkflowRef {
     pub id: String,
     pub version: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct WorkflowEdge {
     pub from: String,
     pub to: String,
@@ -109,8 +109,8 @@ pub struct WorkflowEdge {
     pub loop_ref: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct ConditionExpression {
     /// A key in the simulation/command fact map. Dotted keys are data, not code.
     pub field: String,
@@ -118,7 +118,7 @@ pub struct ConditionExpression {
     pub value: Option<Value>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum ConditionOperator {
     Equals,
@@ -133,15 +133,15 @@ impl Default for ConditionOperator {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
-#[serde(default, rename_all = "camelCase")]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
 pub struct LoopDefinition {
     pub id: String,
     pub max_iterations: u32,
     pub on_limit: LoopLimitAction,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum LoopLimitAction {
     Pause,
@@ -154,14 +154,14 @@ impl Default for LoopLimitAction {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum IssueSeverity {
     Error,
     Warning,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidationIssue {
     pub severity: IssueSeverity,
@@ -170,14 +170,14 @@ pub struct ValidationIssue {
     pub message: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ValidationReport {
     pub valid: bool,
     pub issues: Vec<ValidationIssue>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SimulationInput {
     pub definition: WorkflowDefinition,
@@ -187,14 +187,14 @@ pub struct SimulationInput {
     pub max_steps: Option<u32>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SimulationEvent {
     pub event: String,
     pub facts: BTreeMap<String, Value>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SimulationStatus {
     Completed,
@@ -210,7 +210,7 @@ impl Default for SimulationStatus {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SimulationTraceEntry {
     pub node_id: String,
@@ -218,7 +218,7 @@ pub struct SimulationTraceEntry {
     pub outcome: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SimulationResult {
     pub status: SimulationStatus,
@@ -228,7 +228,7 @@ pub struct SimulationResult {
     pub issues: Vec<ValidationIssue>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum WorkflowInstanceStatus {
     Running,
@@ -245,7 +245,7 @@ impl Default for WorkflowInstanceStatus {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum NodeRunStatus {
     Pending,
@@ -265,7 +265,7 @@ impl Default for NodeRunStatus {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct RuntimeFrame {
     pub workflow_id: String,
@@ -277,7 +277,7 @@ pub struct RuntimeFrame {
     pub loop_iterations: BTreeMap<String, u32>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ActiveNode {
     pub workflow_id: String,
@@ -287,7 +287,7 @@ pub struct ActiveNode {
     pub depth: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct NodeRun {
     pub id: String,
@@ -306,7 +306,7 @@ pub struct NodeRun {
     pub updated_at: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WorkflowInstance {
     pub format_version: u32,
@@ -327,7 +327,7 @@ pub struct WorkflowInstance {
     pub error: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WorkflowInstanceStartInput {
     pub work_id: String,
@@ -337,7 +337,7 @@ pub struct WorkflowInstanceStartInput {
     pub input_digest: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WorkflowInstanceCommandInput {
     pub instance_id: String,
@@ -348,7 +348,7 @@ pub struct WorkflowInstanceCommandInput {
     pub input_digest: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WorkflowEventRecord {
     pub instance_id: String,
@@ -359,18 +359,21 @@ pub struct WorkflowEventRecord {
     pub created_at: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WorkflowDraftRecord {
     pub draft_id: String,
     pub definition: WorkflowDefinition,
     pub validation: ValidationReport,
     pub updated_at: String,
+    pub revision: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct WorkflowDraftSaveInput {
     pub draft_id: String,
     pub definition: WorkflowDefinition,
+    /// Omit for a new draft; updates must match the revision returned by a read.
+    pub expected_revision: Option<String>,
 }

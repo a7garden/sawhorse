@@ -16,6 +16,7 @@ use uuid::Uuid;
 use crate::{
     config,
     herdr::{self, AgentInfo, Herdr},
+    model_policy::{self, ModelSelection},
     sdlc::{self, HarnessRun, LaunchInput},
     workflow::{self, WorkflowDefinition, WorkflowNode},
 };
@@ -29,6 +30,7 @@ const MAX_FINAL_REPORT: usize = 6_000;
 /// A root, child, and grandchild are enough to retain useful decomposition
 /// without allowing a run tree to fan out indefinitely.
 const MAX_PARENT_DEPTH: usize = 2;
+const MAX_CHILD_RUNS: usize = 8;
 const RUN_LOCK_STRIPES: usize = 64;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +43,11 @@ struct RunRecord {
     role: String,
     agent: String,
     model: String,
+    #[serde(default)]
+    model_selection: Option<ModelSelection>,
+    // Legacy parents retain inheritance; new roots snapshot the configured policy.
+    #[serde(default = "inherit_policy")]
+    child_model_policy: String,
     parent_run_id: Option<String>,
     stage: String,
     #[serde(default)]
@@ -104,6 +111,10 @@ struct ChildRequest {
     #[serde(default)]
     model: String,
     #[serde(default)]
+    // Decode inside processing so an invalid assessment becomes a visible rejection,
+    // rather than making an otherwise valid pending request disappear from the queue.
+    model_assessment: Option<Value>,
+    #[serde(default)]
     instructions: String,
     #[serde(default)]
     status: String,
@@ -113,6 +124,10 @@ struct ChildRequest {
     error: Option<String>,
     #[serde(default)]
     updated_at: String,
+}
+
+fn inherit_policy() -> String {
+    "inherit".into()
 }
 
 fn launch_mutex() -> &'static Mutex<()> {
@@ -173,6 +188,8 @@ impl RunRecord {
             role: self.role.clone(),
             agent: self.agent.clone(),
             model: self.model.clone(),
+            model_selection: self.model_selection.clone(),
+            child_model_policy: self.child_model_policy.clone(),
             parent_run_id: self.parent_run_id.clone(),
             stage: self.stage.clone(),
             workflow_id: self.workflow_id.clone(),
@@ -503,6 +520,8 @@ fn build_prompt(
     input: &LaunchInput,
     work: &sdlc::WorkItem,
     context: &LaunchContext,
+    child_model_policy: &str,
+    max_parallel: u32,
 ) -> Result<String, String> {
     let artifacts = artifact_paths(root, work, &context.definition)?;
     let verification = if context.verification.is_empty() {
@@ -510,7 +529,12 @@ fn build_prompt(
     } else {
         context.verification.join("\n- ")
     };
-    let deliverable = if context.node.outputs.is_empty() {
+    let deliverable = if input.parent_run_id.is_some() {
+        format!("Write child evidence only to {}/{}.evidence.md. Do not edit canonical workflow artifacts. {}",
+            runs_dir(root)?.display(), run_id,
+            if input.role == "implementer" { "Edit only the source/test files delegated in the instructions; the parent must pause its own code edits until this child settles." }
+            else { "Research/verifier children must not edit source code or tests." })
+    } else if context.node.outputs.is_empty() {
         "이 노드는 새 문서를 직접 만들지 않습니다. 판정 근거와 미확인 사항을 실행 결과에 제출하세요.".into()
     } else {
         format!(
@@ -531,10 +555,12 @@ fn build_prompt(
             .as_ref()
             .is_some_and(|reference| reference.id.starts_with("tdd"))
     {
-        "plugin/skills/tdd/SKILL.md"
+        "skills/tdd/SKILL.md"
     } else {
-        "plugin/skills/sdd/SKILL.md"
+        "skills/sdd/SKILL.md"
     };
+    let skill = crate::plugin::resolve_root()?.join(skill);
+    let delegation = include_str!("../../../plugin/skills/delegate/SKILL.md");
     Ok(format!(
         "You are the {role} agent for Sawhorse workflow item {work}.\n\n\
 Harness run ID: {run_id}\n\
@@ -550,14 +576,18 @@ Validation commands (run only when relevant; report results faithfully):\n- {ver
 Permitted deliverable for this role:\n{deliverable}\n\n\
 Workflow node instructions:\n{node_instructions}\n\n\
 Instructions from the user:\n{instructions}\n\n\
-Write real, durable evidence in the permitted canonical artifact files; terminal output alone is not a deliverable.\n\
-Never change work.md stage/status/decisions, approved-design.json, project metadata, schema, or any host-managed run identity to bypass a gate.\n\
+Write real, durable evidence in the permitted deliverable files above; terminal output alone is not a deliverable.\n\
+Never change work.md stage/status/decisions, approved-design.json, history/ checkpoints, project metadata, schema, or any host-managed run identity to bypass a gate.\n\
 Do not deploy, merge, or approve any dialog. If an approval/question is shown, stop and leave it for human review.\n\
 When your turn becomes idle or done, it will be marked review; it is not verification passed.\n\
 The matching Sawhorse workflow skill is available at {skill}; follow its artifact/evidence rules.\n\
 To request a bounded child, write a JSON file `{inbox}/<requestId>.json` containing requestId,\n\
-parentRunId `{run_id}`, workId, projectId, role (research or verifier), agent, model, and\n\
-instructions. Only active parents are accepted; requestId makes retries idempotent.",
+parentRunId `{run_id}`, workId, projectId, role (research, verifier, or implementer), agent, model,\n\
+modelAssessment (complexity: routine|standard|complex, reason: nonempty string), and instructions.\n\
+Leave model empty for automatic selection; an explicit model overrides routing. Only active parents are accepted; requestId makes retries idempotent.\n\
+Child model policy for this run tree: {child_model_policy}. Current total concurrency limit: {max_parallel} (includes parents).\n\
+At most {max_children} descendants per root, at most {max_depth} levels. With a concurrency limit of 1, do the work locally; do not wait for a child.\n\n\
+Internal delegation skill (apply automatically when decomposition helps):\n{delegation}",
         run_id = run_id,
         role = input.role,
         work = input.work_id,
@@ -577,7 +607,9 @@ instructions. Only active parents are accepted; requestId makes retries idempote
         node_instructions = context.node.instructions,
         instructions = input.instructions,
         inbox = runs_dir(root)?.join("inbox").display(),
-        skill = skill,
+        skill = skill.display(),
+        max_children = MAX_CHILD_RUNS,
+        max_depth = MAX_PARENT_DEPTH,
     ))
 }
 
@@ -656,7 +688,11 @@ fn launch_gate(root: &Path, input: &LaunchInput) -> Result<LaunchContext, String
         .find(|node| node.id == stage)
         .cloned()
         .ok_or_else(|| "작업 node가 고정한 workflow에 없습니다".to_string())?;
-    if !node.allowed_roles.is_empty() && !node.allowed_roles.iter().any(|role| role == &input.role)
+    let supporting_child =
+        input.parent_run_id.is_some() && matches!(input.role.as_str(), "research" | "verifier");
+    if !supporting_child
+        && !node.allowed_roles.is_empty()
+        && !node.allowed_roles.iter().any(|role| role == &input.role)
     {
         return Err(format!(
             "{} node에서 허용하지 않는 역할입니다: {}",
@@ -695,8 +731,33 @@ fn launch_gate(root: &Path, input: &LaunchInput) -> Result<LaunchContext, String
                 "활성이고 같은 작업/프로젝트인 부모 실행만 자식 실행을 만들 수 있습니다".into(),
             );
         }
-        if !matches!(input.role.as_str(), "research" | "verifier") {
-            return Err("자식 실행 역할은 research 또는 verifier만 가능합니다".into());
+        validate_child_role(&parent, &input.role)?;
+        let records = list_records(root)?;
+        let tree_root = root_run_id(root, &parent.id)?;
+        let descendants = records
+            .iter()
+            .filter(|record| record.parent_run_id.is_some())
+            .filter_map(|record| {
+                root_run_id(root, &record.id)
+                    .ok()
+                    .filter(|id| id == &tree_root)
+                    .map(|_| record)
+            })
+            .collect::<Vec<_>>();
+        if descendants.len() >= MAX_CHILD_RUNS {
+            return Err(format!(
+                "하위 실행은 루트당 최대 {MAX_CHILD_RUNS}개입니다. 부모가 남은 작업을 처리하세요"
+            ));
+        }
+        if input.role == "implementer"
+            && descendants
+                .iter()
+                .any(|run| run.role == "implementer" && active_status(&run.status))
+        {
+            return Err("같은 실행 트리의 하위 구현자는 한 번에 하나만 실행할 수 있습니다".into());
+        }
+        if input.instructions.trim().is_empty() {
+            return Err("하위 실행에는 범위와 검증 기준을 담은 지시가 필요합니다".into());
         }
         if parent_depth(root, &parent.id)? >= MAX_PARENT_DEPTH {
             return Err(format!(
@@ -735,6 +796,28 @@ fn launch_gate(root: &Path, input: &LaunchInput) -> Result<LaunchContext, String
         },
         project_dependencies: transitive_project_context(&snapshot.projects, &input.project_id)?,
     })
+}
+
+fn validate_child_role(parent: &RunRecord, role: &str) -> Result<(), String> {
+    if matches!(role, "research" | "verifier")
+        || (role == "implementer" && parent.role == "implementer")
+    {
+        Ok(())
+    } else {
+        Err(
+            "하위 역할은 research/verifier이며, implementer 부모만 구현을 위임할 수 있습니다"
+                .into(),
+        )
+    }
+}
+
+fn root_run_id(root: &Path, id: &str) -> Result<String, String> {
+    parent_depth(root, id)?; // Cycle validation before walking.
+    let mut record = load_record(root, id)?;
+    while let Some(parent) = record.parent_run_id {
+        record = load_record(root, &parent)?;
+    }
+    Ok(record.id)
 }
 
 fn parent_depth(root: &Path, id: &str) -> Result<usize, String> {
@@ -808,6 +891,20 @@ fn record_launch_with_request(
     input: &LaunchInput,
     inbox_request_id: Option<&str>,
 ) -> Result<RunRecord, String> {
+    record_launch_with_config(
+        root,
+        input,
+        inbox_request_id,
+        &config::load_view().dashboard.herdr.sanitized(),
+    )
+}
+
+fn record_launch_with_config(
+    root: &Path,
+    input: &LaunchInput,
+    inbox_request_id: Option<&str>,
+    cfg: &config::HerdrCfg,
+) -> Result<RunRecord, String> {
     let _guard = launch_mutex()
         .lock()
         .map_err(|_| "harness launch lock이 손상되었습니다".to_string())?;
@@ -816,7 +913,6 @@ fn record_launch_with_request(
             return Ok(existing);
         }
     }
-    let cfg = config::load_view().dashboard.herdr.sanitized();
     if !capacity_available(&list_records(root)?, cfg.max_parallel as usize) {
         return Err(format!(
             "Herdr 동시 실행 한도({})에 도달했습니다",
@@ -824,6 +920,24 @@ fn record_launch_with_request(
         ));
     }
     let context = launch_gate(root, input)?;
+    let parent = input
+        .parent_run_id
+        .as_deref()
+        .map(|id| load_record(root, id))
+        .transpose()?;
+    let child_model_policy = parent
+        .as_ref()
+        .map(|p| p.child_model_policy.clone())
+        .unwrap_or_else(|| cfg.child_model_policy.clone());
+    let (model, selection) = model_policy::resolve(
+        &input.agent,
+        &input.model,
+        parent
+            .as_ref()
+            .map(|p| (p.agent.as_str(), p.model.as_str())),
+        &child_model_policy,
+        input.model_assessment.as_ref(),
+    )?;
     let snapshot = sdlc::snapshot(root)?;
     let work = snapshot
         .work
@@ -831,7 +945,15 @@ fn record_launch_with_request(
         .find(|work| work.id == input.work_id)
         .ok_or_else(|| "작업을 찾을 수 없습니다".to_string())?;
     let id = Uuid::new_v4().to_string();
-    let prompt = build_prompt(root, &id, input, work, &context)?;
+    let prompt = build_prompt(
+        root,
+        &id,
+        input,
+        work,
+        &context,
+        &child_model_policy,
+        cfg.max_parallel,
+    )?;
     let timestamp = now();
     let record = RunRecord {
         schema_version: RUN_SCHEMA,
@@ -840,7 +962,9 @@ fn record_launch_with_request(
         project_id: input.project_id.clone(),
         role: input.role.clone(),
         agent: input.agent.clone(),
-        model: input.model.trim().to_string(),
+        model,
+        model_selection: Some(selection),
+        child_model_policy,
         parent_run_id: input.parent_run_id.clone(),
         stage: context.stage,
         workflow_id: context.workflow_id,
@@ -1522,6 +1646,28 @@ fn pending_child_requests(paths: Vec<PathBuf>) -> Vec<(PathBuf, ChildRequest)> {
         .collect()
 }
 
+fn child_launch_input(request: &ChildRequest, parent: &RunRecord) -> Result<LaunchInput, String> {
+    Ok(LaunchInput {
+        work_id: request.work_id.clone(),
+        project_id: request.project_id.clone(),
+        role: request.role.clone(),
+        agent: if request.agent.trim().is_empty() {
+            parent.agent.clone()
+        } else {
+            request.agent.trim().into()
+        },
+        model: request.model.clone(),
+        model_assessment: request
+            .model_assessment
+            .clone()
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| format!("modelAssessment가 올바르지 않습니다: {error}"))?,
+        instructions: request.instructions.clone(),
+        parent_run_id: Some(parent.id.clone()),
+    })
+}
+
 async fn process_inbox(root: &Path) -> Result<(), String> {
     let dir = inbox_dir(root)?;
     let mut paths = fs::read_dir(dir)
@@ -1562,7 +1708,7 @@ async fn process_inbox(root: &Path) -> Result<(), String> {
         if !active_status(&parent.status)
             || parent.work_id != request.work_id
             || parent.project_id != request.project_id
-            || !matches!(request.role.as_str(), "research" | "verifier")
+            || validate_child_role(&parent, &request.role).is_err()
         {
             request.status = "rejected".into();
             request.error = Some("활성 부모/작업/역할 검증에 실패했습니다".into());
@@ -1570,24 +1716,9 @@ async fn process_inbox(root: &Path) -> Result<(), String> {
             save_child_request(&path, &request)?;
             continue;
         }
-        let input = LaunchInput {
-            work_id: request.work_id.clone(),
-            project_id: request.project_id.clone(),
-            role: request.role.clone(),
-            agent: if request.agent.is_empty() {
-                parent.agent.clone()
-            } else {
-                request.agent.clone()
-            },
-            model: if request.model.is_empty() {
-                parent.model.clone()
-            } else {
-                request.model.clone()
-            },
-            instructions: request.instructions.clone(),
-            parent_run_id: Some(parent.id.clone()),
-        };
-        match record_launch_with_request(root, &input, Some(&request.request_id)) {
+        let launch = child_launch_input(&request, &parent)
+            .and_then(|input| record_launch_with_request(root, &input, Some(&request.request_id)));
+        match launch {
             Ok(run) => {
                 let root = root.to_path_buf();
                 spawn_start(root, run.id.clone());
@@ -1611,7 +1742,14 @@ async fn process_inbox(root: &Path) -> Result<(), String> {
 #[tauri::command]
 pub async fn sdd_launch(input: LaunchInput) -> Result<HarnessRun, String> {
     let root = sdlc::vault_root()?;
-    let record = record_launch(&root, &input)?;
+    let mut record = record_launch(&root, &input)?;
+    if input.parent_run_id.is_none() {
+        if let Err(error) = sdlc::record_intent_launch(&root, &input.work_id, &input.project_id, &record.stage, &record.id) {
+            update(&mut record, "failed", Some(error.clone()));
+            save_record(&root, &record)?;
+            return Err(error);
+        }
+    }
     let result = record.public();
     spawn_start(root, record.id);
     Ok(result)
@@ -2310,6 +2448,8 @@ mod tests {
             role: "research".into(),
             agent: "codex".into(),
             model: "gpt".into(),
+            model_selection: None,
+            child_model_policy: "auto".into(),
             parent_run_id,
             stage: "plan".into(),
             workflow_id: workflow::DEFAULT_WORKFLOW_ID.into(),
@@ -2338,6 +2478,121 @@ mod tests {
             final_report: None,
             resumed_at: None,
         }
+    }
+
+    #[test]
+    fn child_launch_persists_skill_selection_and_respects_parent_policy() {
+        let root = tempdir("child-model");
+        sdlc::initialize(&root).unwrap();
+        sdlc::save_project_at(
+            &root,
+            sdlc::Project {
+                id: "project-1".into(),
+                name: "Model policy".into(),
+                repo_path: root.display().to_string(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let work = sdlc::WorkItem {
+            id: "work-1".into(),
+            title: "Bounded implementation".into(),
+            project_id: "project-1".into(),
+            stage: "build".into(),
+            status: "running".into(),
+            priority: "normal".into(),
+            workflow_id: workflow::DEFAULT_WORKFLOW_ID.into(),
+            workflow_version: workflow::DEFAULT_WORKFLOW_VERSION.into(),
+            ..Default::default()
+        };
+        let work_dir = root.join("work/work-1");
+        fs::create_dir_all(&work_dir).unwrap();
+        fs::write(
+            work_dir.join("work.md"),
+            format!("---\n{}---\n", serde_yaml::to_string(&work).unwrap()),
+        )
+        .unwrap();
+        fs::write(
+            work_dir.join("spec.md"),
+            "# Spec\n\nImplement the bounded helper with the existing regression check.",
+        )
+        .unwrap();
+        let mut parent = record(Uuid::new_v4().to_string(), None, "running");
+        parent.role = "implementer".into();
+        parent.agent = "claude".into();
+        parent.model = "opus".into();
+        save_record(&root, &parent).unwrap();
+        let request: ChildRequest = serde_json::from_value(serde_json::json!({
+            "requestId": Uuid::new_v4().to_string(), "parentRunId": parent.id,
+            "workId": "work-1", "projectId": "project-1", "role": "implementer",
+            "modelAssessment": { "complexity": "standard", "reason": "기존 헬퍼 패턴과 회귀 검증이 있는 한 파일 수정" },
+            "instructions": "Update the named helper only and run its regression check."
+        })).unwrap();
+        let mut input = child_launch_input(&request, &parent).unwrap();
+        // Config changes after the root started must not change its child policy.
+        let cfg = config::HerdrCfg {
+            max_parallel: 4,
+            child_model_policy: "inherit".into(),
+            ..Default::default()
+        };
+        let child =
+            record_launch_with_config(&root, &input, Some(&request.request_id), &cfg).unwrap();
+        let saved = load_record(&root, &child.id).unwrap();
+        assert_eq!(saved.model, "sonnet");
+        assert_eq!(saved.public().model_selection.unwrap().source, "auto");
+        assert_eq!(saved.child_model_policy, "auto");
+        assert!(saved.prompt.contains(&format!("{}.evidence.md", child.id)));
+        assert_eq!(load_record(&root, &parent.id).unwrap().model, "opus");
+        let retry =
+            record_launch_with_config(&root, &input, Some(&request.request_id), &cfg).unwrap();
+        assert_eq!(retry.id, child.id);
+        // Concurrent implementers cannot write into the same tree.
+        assert!(record_launch_with_config(&root, &input, None, &cfg)
+            .unwrap_err()
+            .contains("하위 구현자"));
+        input.role = "research".into();
+        // Supporting research is permitted even in a build node, but cannot edit code.
+        let research = record_launch_with_config(&root, &input, None, &cfg).unwrap();
+        assert!(research
+            .prompt
+            .contains("must not edit source code or tests"));
+        parent.role = "research".into();
+        save_record(&root, &parent).unwrap();
+        input.role = "implementer".into();
+        assert!(record_launch_with_config(&root, &input, None, &cfg)
+            .unwrap_err()
+            .contains("implementer 부모"));
+        let mut invalid_request = request;
+        invalid_request.model_assessment =
+            Some(serde_json::json!({"complexity":"unknown", "reason":"Unrecognized tier"}));
+        assert!(child_launch_input(&invalid_request, &parent)
+            .unwrap_err()
+            .contains("modelAssessment"));
+        // Completed children also count toward the budget, so repeated retries are bounded.
+        input.role = "research".into();
+        for _ in 2..MAX_CHILD_RUNS {
+            let completed = record(
+                Uuid::new_v4().to_string(),
+                Some(parent.id.clone()),
+                "review",
+            );
+            save_record(&root, &completed).unwrap();
+        }
+        assert!(record_launch_with_config(&root, &input, None, &cfg)
+            .unwrap_err()
+            .contains("루트당 최대"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn legacy_run_defaults_to_inheritance_after_restart() {
+        let run = record(Uuid::new_v4().to_string(), None, "running");
+        let mut json = serde_json::to_value(&run).unwrap();
+        json.as_object_mut().unwrap().remove("childModelPolicy");
+        json.as_object_mut().unwrap().remove("modelSelection");
+        let restored: RunRecord = serde_json::from_value(json).unwrap();
+        assert_eq!(restored.child_model_policy, "inherit");
+        assert!(restored.model_selection.is_none());
     }
 
     #[test]
@@ -2928,5 +3183,126 @@ esac
             parse_analyze_output("{\"verifyCommands\":[]}").is_err(),
             "빈 description은 실패"
         );
+    }
+}
+
+/// Compose a workflow with the installed agent. Only the returned, validated
+/// definition crosses into the studio; generation never publishes or runs it.
+#[tauri::command]
+pub async fn workflow_generate(
+    request: String,
+    definition: Option<WorkflowDefinition>,
+    agent: String,
+) -> Result<WorkflowDefinition, String> {
+    if request.trim().is_empty() || request.len() > 32_000 {
+        return Err("워크플로 요청은 1~32000 바이트로 작성해 주세요".into());
+    }
+    if agent != "claude" && agent != "codex" {
+        return Err("지원하지 않는 에이전트입니다".into());
+    }
+    let scratch = std::env::temp_dir().join(format!("sawhorse-workflow-{}", Uuid::new_v4()));
+    fs::create_dir_all(&scratch).map_err(|error| error.to_string())?;
+    let last_message = scratch.join("result.json");
+    let example =
+        serde_json::to_string(&workflow::builtins::sdd()).map_err(|error| error.to_string())?;
+    let current = serde_json::to_string(&definition).map_err(|error| error.to_string())?;
+    let prompt = format!(
+        "Create or revise a Sawhorse workflow from the user request. Return ONLY a complete WorkflowDefinition JSON object, without markdown. Use the user's language for labels and instructions. Do not execute the workflow or use any tools.\n\
+        The example defines the exact JSON shape: {example}\n\
+        Node kinds: artifact, agent, check, human, condition, subworkflow, end. Prefer a simple flow with agent nodes, explicit human review nodes when requested, and an end node.\n\
+        All nodes must be reachable from entry. Agent/check nodes require actionRef, human nodes require decision (use approval), artifact nodes require artifactRole. Use unique ASCII ids. Every referenced artifact role must exist in artifacts, with paths work/{{workId}}/<role>.md. Allowed agent roles: research, planner, implementer, verifier, reviewer. Use completed events for agent steps, approved for human steps. Avoid loops and subworkflows unless already present in the provided definition. Preserve the id and version when revising. New workflows use a unique descriptive id and version 1.0.0. Describe the intended outcome in description.\n\
+        Current definition (null means new): {current}\n\
+        User request: {request}"
+    );
+    let plan = if agent == "codex" {
+        AnalyzePlan {
+            program: "codex",
+            args: vec![
+                "exec".into(),
+                "-s".into(),
+                "read-only".into(),
+                "--skip-git-repo-check".into(),
+                "-o".into(),
+                last_message.display().to_string(),
+                "-".into(),
+            ],
+            cwd: scratch.clone(),
+            stdin_text: Some(prompt),
+            last_message_path: Some(last_message.clone()),
+        }
+    } else {
+        AnalyzePlan {
+            program: "claude",
+            args: vec![
+                "-p".into(),
+                "--output-format".into(),
+                "json".into(),
+                "--tools".into(),
+                "".into(),
+            ],
+            cwd: scratch.clone(),
+            stdin_text: Some(prompt),
+            last_message_path: None,
+        }
+    };
+    let result = async {
+        let output = run_analyze_plan(&plan).await?;
+        if !output.success {
+            return Err(format!(
+                "초안 작성 실패: {}",
+                tail_chars(output.stderr.trim(), 200)
+            ));
+        }
+        let raw = if agent == "codex" {
+            fs::read_to_string(&last_message).map_err(|error| error.to_string())?
+        } else {
+            claude_result(&output.stdout)?
+        };
+        parse_workflow_draft(&raw)
+    }
+    .await;
+    let _ = fs::remove_dir_all(&scratch);
+    result
+}
+
+fn parse_workflow_draft(raw: &str) -> Result<WorkflowDefinition, String> {
+    let start = raw
+        .find('{')
+        .ok_or("에이전트가 워크플로 JSON을 반환하지 않았습니다")?;
+    let end = raw
+        .rfind('}')
+        .filter(|end| *end >= start)
+        .ok_or("워크플로 JSON이 완성되지 않았습니다")?;
+    let definition: WorkflowDefinition = serde_json::from_str(&raw[start..=end])
+        .map_err(|error| format!("워크플로 초안을 읽을 수 없습니다: {error}"))?;
+    let report = workflow::validation::validate(&definition);
+    if !report.valid {
+        return Err(format!(
+            "에이전트 초안 검증 실패: {}",
+            report
+                .issues
+                .iter()
+                .map(|issue| issue.message.as_str())
+                .collect::<Vec<_>>()
+                .join("; ")
+        ));
+    }
+    Ok(definition)
+}
+
+#[cfg(test)]
+mod workflow_draft_tests {
+    use super::*;
+    #[test]
+    fn accepts_valid_fenced_workflow_and_rejects_incomplete_or_invalid_output() {
+        let expected = workflow::builtins::sdd();
+        let raw = format!(
+            "```json\n{}\n```",
+            serde_json::to_string(&expected).unwrap()
+        );
+        assert_eq!(parse_workflow_draft(&raw).unwrap(), expected);
+        for invalid in ["no JSON", "{", "}{", "{}", "{\"nodes\":null}"] {
+            assert!(parse_workflow_draft(invalid).is_err(), "{invalid}");
+        }
     }
 }

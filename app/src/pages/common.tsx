@@ -209,7 +209,7 @@ export function PageHeader({
   children?: ReactNode;
 }) {
   return (
-    <div className="sticky top-0 z-20 flex min-h-[58px] flex-wrap items-center gap-2 border-b bg-background/90 px-4 py-3 backdrop-blur-xl lg:px-5">
+    <div className="app-page-header sticky top-0 z-20 flex min-h-[58px] flex-wrap items-center gap-2 border-b bg-background px-4 py-3 lg:px-5">
       <div className="mr-auto">
         <h1 className="text-[15px] font-bold leading-tight tracking-tight">
           {title}

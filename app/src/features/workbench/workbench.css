@@ -1,24 +1,15 @@
 .wb-page {
-  --wb-ink: #263331;
-  --wb-muted: #74817e;
-  --wb-line: #e4e9e5;
-  --wb-paper: #fffefb;
-  --wb-teal: #17776f;
-  --wb-teal-soft: #e4f2ed;
-  --wb-warm: #f7f5ef;
+  --wb-ink: var(--foreground);
+  --wb-muted: var(--muted-foreground);
+  --wb-line: var(--border);
+  --wb-paper: var(--card);
+  --wb-teal: var(--brand);
+  --wb-teal-soft: var(--brand-soft);
+  --wb-warm: var(--muted);
   max-width: 1440px;
   margin: 0 auto;
   padding: 24px 28px 48px;
   color: var(--wb-ink);
-}
-.dark .wb-page {
-  --wb-ink: #ecf2ef;
-  --wb-muted: #9ba8a4;
-  --wb-line: #34433f;
-  --wb-paper: #1a2422;
-  --wb-teal: #68c3b7;
-  --wb-teal-soft: #183b37;
-  --wb-warm: #17201e;
 }
 .wb-page * {
   box-sizing: border-box;
@@ -31,11 +22,11 @@
   margin-bottom: 24px;
 }
 .wb-header h1 {
-  font-size: 20px;
-  letter-spacing: -0.025em;
+  font-size: 24px;
+  letter-spacing: -0.035em;
   line-height: 1.15;
   margin: 0;
-  font-weight: 720;
+  font-weight: 650;
 }
 .wb-header p:not(.wb-eyebrow) {
   color: var(--wb-muted);
@@ -102,7 +93,7 @@
   gap: 9px;
   color: var(--wb-muted);
   border: 1px dashed var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   background: color-mix(in srgb, var(--wb-paper) 70%, transparent);
   padding: 25px;
 }
@@ -152,25 +143,11 @@
 .wb-metric {
   position: relative;
   border: 1px solid var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   padding: 18px;
   background: var(--wb-paper);
   min-height: 148px;
   overflow: hidden;
-}
-.wb-metric:after {
-  content: "";
-  position: absolute;
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  right: -27px;
-  top: -29px;
-  background: var(--wb-teal-soft);
-  opacity: 0.55;
-}
-.wb-metric.is-warn:after {
-  background: #ffebc4;
 }
 .wb-metric-icon {
   position: relative;
@@ -207,7 +184,7 @@
 .wb-panel {
   background: var(--wb-paper);
   border: 1px solid var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   min-height: 300px;
 }
 .wb-panel-title {
@@ -284,30 +261,30 @@
   line-height: 1;
   white-space: nowrap;
   padding: 5px 6px;
-  border-radius: 999px;
-  background: #edf0ee;
-  color: #65706c;
-  font-weight: 700;
+  border-radius: 4px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-weight: 550;
 }
 .wb-status-running {
-  background: #dff2ed;
-  color: #147164;
+  background: var(--brand-soft);
+  color: var(--primary);
 }
 .wb-status-ready {
-  background: #e5edf9;
-  color: #3c649c;
+  background: var(--secondary);
+  color: var(--secondary-foreground);
 }
 .wb-status-review {
-  background: #f9edd5;
-  color: #976a19;
+  background: color-mix(in srgb, var(--warning) 13%, var(--card));
+  color: var(--warning-foreground);
 }
 .wb-status-blocked {
-  background: #f9e2e0;
-  color: #aa4b42;
+  background: color-mix(in srgb, var(--destructive) 10%, var(--card));
+  color: var(--destructive);
 }
 .wb-status-done {
-  background: #e3f0e5;
-  color: #427e4c;
+  background: color-mix(in srgb, var(--success) 10%, var(--card));
+  color: var(--success);
 }
 .wb-stage-tiles {
   display: grid;
@@ -458,16 +435,16 @@
   margin-left: auto;
 }
 .wb-priority.is-urgent {
-  color: #ad4540;
+  color: var(--destructive);
 }
 .wb-priority.is-high {
-  color: #a87518;
+  color: var(--warning-foreground);
 }
 .wb-priority.is-normal {
-  color: #477768;
+  color: var(--muted-foreground);
 }
 .wb-priority.is-low {
-  color: #78847f;
+  color: var(--muted-foreground);
 }
 .wb-board-card > button {
   background: none;
@@ -521,7 +498,7 @@
 .wb-calendar {
   background: var(--wb-paper);
   border: 1px solid var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   overflow: hidden;
 }
 .wb-calendar-toolbar {
@@ -747,7 +724,7 @@
 .wb-project-card {
   background: var(--wb-paper);
   border: 1px solid var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   padding: 18px;
   min-height: 224px;
   display: flex;
@@ -1196,7 +1173,7 @@
 }
 .wb-harness {
   border: 1px solid var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   overflow: hidden;
   background: var(--wb-paper);
   display: grid;
@@ -2288,7 +2265,7 @@ bind every visible surface to the workbench palette. */
 .wb-today.is-compact {
   padding: 14px 16px;
   border: 1px solid var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   background: var(--wb-paper);
   margin-bottom: 16px;
 }
@@ -2413,8 +2390,8 @@ bind every visible surface to the workbench palette. */
  * 아니므로 상태 칩·중요도 칩은 칸반의 것을 그대로 쓴다.
  */
 .wb-status-cancelled {
-  background: #ecebe8;
-  color: #77726a;
+  background: var(--muted);
+  color: var(--muted-foreground);
   text-decoration: line-through;
 }
 .wb-issue-table {
@@ -2422,7 +2399,7 @@ bind every visible surface to the workbench palette. */
   border-collapse: collapse;
   background: var(--wb-paper);
   border: 1px solid var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   overflow: hidden;
   font-size: 13px;
 }
@@ -2565,7 +2542,7 @@ bind every visible surface to the workbench palette. */
 .wb-milestone-rail {
   background: var(--wb-paper);
   border: 1px solid var(--wb-line);
-  border-radius: 13px;
+  border-radius: 8px;
   padding-bottom: 10px;
 }
 .wb-milestone-rail .wb-panel-title {

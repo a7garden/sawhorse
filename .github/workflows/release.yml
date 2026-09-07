@@ -15,13 +15,21 @@ jobs:
         include:
           - platform: macos-latest
             args: --target aarch64-apple-darwin
+            cliTarget: aarch64-apple-darwin
+            cliBinary: sawhorse
           - platform: macos-latest
             args: --target x86_64-apple-darwin
+            cliTarget: x86_64-apple-darwin
+            cliBinary: sawhorse
           - platform: ubuntu-latest
             args: ""
+            cliTarget: x86_64-unknown-linux-gnu
+            cliBinary: sawhorse
           - platform: windows-latest
             # WiX(msi)는 비 ASCII productName 을 못 묶는다 — nsis 는 유니코드 지원.
             args: "--bundles nsis"
+            cliTarget: x86_64-pc-windows-msvc
+            cliBinary: sawhorse.exe
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -43,9 +51,26 @@ jobs:
           workspaces: app/src-tauri
       - run: npm ci
         working-directory: app
+      - name: Build assets shared by the desktop library
+        working-directory: app
+        run: npm run build
+      - name: Verify console CLI on the native host
+        working-directory: app/src-tauri
+        env:
+          AWS_LC_SYS_PREBUILT_NASM: 1
+        run: cargo test --locked --test cli
+      - name: Build standalone CLI
+        working-directory: app/src-tauri
+        env:
+          AWS_LC_SYS_PREBUILT_NASM: 1
+        run: cargo build --locked --release --bin sawhorse --target ${{ matrix.cliTarget }}
+      - name: Package standalone CLI and authoring skill
+        shell: bash
+        run: python scripts/cli/package.py --binary app/src-tauri/target/${{ matrix.cliTarget }}/release/${{ matrix.cliBinary }} --target ${{ matrix.cliTarget }} --version "$GITHUB_REF_NAME" --output cli-release
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AWS_LC_SYS_PREBUILT_NASM: 1
         with:
           projectPath: app
           tagName: ${{ github.ref_name }}
@@ -54,3 +79,8 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+      - name: Attach CLI archives and checksums
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" cli-release/* --clobber

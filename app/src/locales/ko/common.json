@@ -52,7 +52,9 @@
       "select": "사이드바 프로젝트 선택",
       "appliesBelow": "아래 화면에 적용",
       "sharedSettings": "앱 공통 설정"
-    }
+    },
+    "collapseSidebar": "사이드바 접기",
+    "expandSidebar": "사이드바 펼치기"
   },
   "toolbar": {
     "search": "전체 검색",
@@ -70,7 +72,17 @@
     "brokenPack": "확장을 불러오지 못했습니다",
     "runningStop": "실행 중 · 중단",
     "pendingCancel": "대기 중 · 취소",
-    "stopHint": "실행 중입니다. 누르면 중단합니다."
+    "stopHint": "실행 중입니다. 누르면 중단합니다.",
+    "location": "현재 위치"
+  },
+  "attention": {
+    "dismiss": "닫기",
+    "schemaConflicts": "스키마 {{id}} r{{revision}}: 사람이 고쳐야 할 문서 {{count}}건 — 마이그레이션이 막혀 있습니다",
+    "schemaConflictsCta": "스키마 스튜디오에서 확인",
+    "schemaMoves": "스키마 {{id}} r{{revision}}: 이동 대기 문서 {{count}}건",
+    "schemaMovesCta": "마이그레이션 진행",
+    "legacyIssues": "개발 항목으로 이관하지 않은 이슈 노트 {{count}}건",
+    "legacyIssuesCta": "작업대에서 이관"
   },
   "palette": {
     "hint": "작업, 프로젝트, 문서를 검색해 보세요",

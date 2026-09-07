@@ -3,65 +3,65 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(0.995 0.002 260);
-  --foreground: oklch(0.141 0.005 285.823);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.141 0.005 285.823);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.141 0.005 285.823);
-  --primary: oklch(0.48 0.095 179);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.21 0.006 285.885);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.55 0.17 149.2);
-  --warning: oklch(0.769 0.16 70.08);
-  --warning-foreground: oklch(0.55 0.14 70);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.55 0.1 179);
-  --sidebar: oklch(0.97 0.006 85);
-  --sidebar-foreground: oklch(0.141 0.005 285.823);
-  --brand: oklch(0.48 0.095 179);
-  --brand-soft: oklch(0.95 0.035 259);
-  --brand-border: oklch(0.82 0.08 259);
-  --workspace: oklch(0.98 0.004 85);
+  --background: #ffffff;
+  --foreground: #252a28;
+  --card: #ffffff;
+  --card-foreground: #252a28;
+  --popover: #ffffff;
+  --popover-foreground: #252a28;
+  --primary: #365e4e;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ede9;
+  --secondary-foreground: #283b31;
+  --muted: #f1f2ef;
+  --muted-foreground: #737b76;
+  --accent: #eceeeb;
+  --accent-foreground: #252a28;
+  --destructive: #b64d40;
+  --destructive-foreground: #ffffff;
+  --success: #41765a;
+  --warning: #c58b37;
+  --warning-foreground: #89611f;
+  --border: #e3e6e1;
+  --input: #d9ded8;
+  --ring: #557e69;
+  --sidebar: #f4f5f2;
+  --sidebar-foreground: #252a28;
+  --brand: #365e4e;
+  --brand-soft: #edf3ee;
+  --brand-border: #becfc2;
+  --workspace: #ffffff;
 }
 
 .dark {
-  --background: oklch(0.141 0.005 285.823);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.21 0.006 285.885);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.21 0.006 285.885);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.69 0.15 259);
-  --primary-foreground: oklch(0.16 0.02 259);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.274 0.006 286.033);
-  --muted-foreground: oklch(0.705 0.015 286.067);
-  --accent: oklch(0.274 0.006 286.033);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.6 0.19 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --success: oklch(0.58 0.17 149.2);
-  --warning: oklch(0.83 0.13 75);
-  --warning-foreground: oklch(0.87 0.12 80);
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.552 0.016 285.938);
-  --sidebar: oklch(0.18 0.012 270);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --brand: oklch(0.72 0.14 259);
-  --brand-soft: oklch(0.27 0.05 259);
-  --brand-border: oklch(0.47 0.09 259);
-  --workspace: oklch(0.125 0.008 270);
+  --background: #1a1d1b;
+  --foreground: #e7eae5;
+  --card: #202420;
+  --card-foreground: #e7eae5;
+  --popover: #252a25;
+  --popover-foreground: #e7eae5;
+  --primary: #a0c5aa;
+  --primary-foreground: #182b1e;
+  --secondary: #303b32;
+  --secondary-foreground: #d1e3d2;
+  --muted: #272c28;
+  --muted-foreground: #9da59d;
+  --accent: #2c332d;
+  --accent-foreground: #e7eae5;
+  --destructive: #e08270;
+  --destructive-foreground: #201b19;
+  --success: #84b893;
+  --warning: #d8ac65;
+  --warning-foreground: #dfb97f;
+  --border: #353c35;
+  --input: #424b42;
+  --ring: #a0c5aa;
+  --sidebar: #171a17;
+  --sidebar-foreground: #e7eae5;
+  --brand: #a0c5aa;
+  --brand-soft: #25362a;
+  --brand-border: #49614d;
+  --workspace: #1a1d1b;
 }
 
 @theme inline {
@@ -128,15 +128,11 @@
   }
 }
 
-/* Hide scrollbar chrome while preserving wheel, touch, and keyboard scrolling. */
-* {
-  scrollbar-width: none;
-}
-::-webkit-scrollbar {
-  display: none;
-  width: 0;
-  height: 0;
-}
+/* Scroll affordances stay visible in long lists and horizontally scrolling boards. */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted-foreground) 30%, transparent) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted-foreground) 30%, transparent); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
 
 /* Terminal — agent status indicators. The dot itself is colored by `data-tone`;
  * a wrapper `.term-dot-pulse` adds a soft halo we animate so the inner dot stays steady. */

@@ -2,12 +2,26 @@ import ScheduleCard from "./settings/ScheduleCard";
 // TasksPage — 자동화의 자동화 작업(TaskDef)를 관리한다: 승인대기 요청, 예약된 정의,
 // 필요할 때 직접 실행하는 정의. 개발 보드의 개발 항목(WorkItem)과는 다른 개념이다.
 import { useCallback, useEffect, useState } from "react";
-import { ClipboardCopy, Pencil, Plus, Trash2 } from "lucide-react";
+import {
+  CalendarClock,
+  ClipboardCopy,
+  Pencil,
+  Plus,
+  Repeat,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { api, EVENTS } from "@/lib/api";
 import { useApp } from "@/lib/store";
+import {
+  CollectionEmpty,
+  CollectionFilters,
+  CollectionIntro,
+  CollectionSearch,
+} from "@/components/CollectionTools";
 import { RunButton } from "@/components/RunButton";
 import type {
   PackAction,
@@ -52,6 +66,9 @@ export default function TasksPage({
 }) {
   const { t } = useTranslation("settings");
   const [filter, setFilter] = useState("all");
+  const [category, setCategory] = useState("all");
+  const [query, setQuery] = useState("");
+  const { t: tc } = useTranslation("collections");
   const [choosing, setChoosing] = useState(false);
   const [view, setView] = useState<TasksView | null>(null);
   const [busy, setBusy] = useState(false);
@@ -124,6 +141,35 @@ export default function TasksPage({
     return pack && action ? { pack, action } : null;
   };
 
+  const candidates =
+    mode === "library"
+      ? all.filter(
+          (row) =>
+            category === "all" ||
+            (category === "builtin" ? row.def.builtin : !row.def.builtin),
+        )
+      : scheduled;
+  const visible = candidates.filter((row) =>
+    [
+      row.def.title,
+      row.def.prompt,
+      row.def.project,
+      packActionFor(row)?.pack.name,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase()
+      .includes(query.trim().toLocaleLowerCase()),
+  );
+  const filtered =
+    query.trim().length > 0 ||
+    (mode === "library" ? category !== "all" : filter !== "all");
+  function resetFilters() {
+    setQuery("");
+    setCategory("all");
+    setFilter("all");
+  }
+
   async function runRow(row: TaskRow) {
     const target = packActionFor(row);
     if (target && target.action.params.length > 0) {
@@ -138,7 +184,13 @@ export default function TasksPage({
 
   return (
     <div>
-      <PageHeader title={mode === "library" ? t("tasks.title.library") : t("tasks.title.schedules")}>
+      <PageHeader
+        title={
+          mode === "library"
+            ? t("tasks.title.library")
+            : t("tasks.title.schedules")
+        }
+      >
         <Button
           size="sm"
           onClick={() => {
@@ -154,7 +206,26 @@ export default function TasksPage({
         </Button>
       </PageHeader>
 
-      <div className="space-y-4 p-4">
+      <div className="mx-auto max-w-6xl space-y-6 p-4 lg:p-6">
+        <CollectionIntro
+          description={tc(
+            mode === "library"
+              ? "tasks.libraryDescription"
+              : "tasks.schedulesDescription",
+          )}
+        >
+          {view && (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {mode === "library"
+                ? tc("tasks.count", { count: all.length })
+                : tc("tasks.enabled", {
+                    count: all.filter(
+                      (row) => row.def.schedule && row.def.enabled,
+                    ).length,
+                  })}
+            </span>
+          )}
+        </CollectionIntro>
         {err && (
           <div className="rounded-md border border-destructive/40 px-2 py-1 text-[11px] text-destructive">
             {err}
@@ -164,7 +235,9 @@ export default function TasksPage({
         {view && view.pending.length > 0 && (
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-[13px]">{t("tasks.pendingTitle")}</CardTitle>
+              <CardTitle className="text-[13px]">
+                {t("tasks.pendingTitle")}
+              </CardTitle>
               <Badge variant="secondary">{view.pending.length}</Badge>
             </CardHeader>
             <CardContent className="space-y-2">
@@ -241,63 +314,123 @@ export default function TasksPage({
           </Card>
         )}
 
-        {mode === "schedules" && (
-          <div className="flex gap-2">
-            {[
-              ["all", t("tasks.filter.all")],
-              ["once", t("tasks.filter.once")],
-              ["repeat", t("tasks.filter.repeat")],
-            ].map(([id, label]) => (
-              <Button
-                key={id}
-                size="sm"
-                variant={filter === id ? "secondary" : "ghost"}
-                onClick={() => setFilter(id)}
-              >
-                {label}
-              </Button>
-            ))}
+        <section
+          className="overflow-hidden rounded-xl border bg-background"
+          aria-label={
+            mode === "library"
+              ? t("tasks.listTitle.library")
+              : t("tasks.listTitle.schedules")
+          }
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
+            <CollectionFilters
+              value={mode === "library" ? category : filter}
+              onChange={mode === "library" ? setCategory : setFilter}
+              label={tc("tasks.filters")}
+              options={
+                mode === "library"
+                  ? [
+                      {
+                        value: "all",
+                        label: tc("tasks.all"),
+                        count: all.length,
+                      },
+                      {
+                        value: "custom",
+                        label: tc("tasks.custom"),
+                        count: all.filter((row) => !row.def.builtin).length,
+                      },
+                      {
+                        value: "builtin",
+                        label: tc("tasks.builtin"),
+                        count: all.filter((row) => row.def.builtin).length,
+                      },
+                    ]
+                  : [
+                      { value: "all", label: t("tasks.filter.all") },
+                      { value: "once", label: t("tasks.filter.once") },
+                      { value: "repeat", label: t("tasks.filter.repeat") },
+                    ]
+              }
+            />
+            <CollectionSearch
+              value={query}
+              onChange={setQuery}
+              label={tc("tasks.search")}
+            />
           </div>
-        )}
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {mode === "library"
-                ? t("tasks.listTitle.library")
-                : t("tasks.listTitle.schedules")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {(mode === "library" ? all : scheduled).map((row) => (
-              <TaskLine
-                key={row.def.id}
-                row={row}
-                busy={busy}
-                guard={guard}
-                packName={packActionFor(row)?.pack.name}
-                hasParameters={
-                  (packActionFor(row)?.action.params.length ?? 0) > 0
-                }
-                onRun={() => void runRow(row)}
-                onEdit={
-                  row.def.builtin
-                    ? undefined
-                    : (d) => {
-                        setEditing(d);
-                        setOpen(true);
+          {!view ? (
+            <Empty>{err ?? tc("loading")}</Empty>
+          ) : (
+            <>
+              <div className="divide-y">
+                {visible.map((row) => (
+                  <TaskLine
+                    key={row.def.id}
+                    row={row}
+                    busy={busy}
+                    guard={guard}
+                    packName={packActionFor(row)?.pack.name}
+                    hasParameters={
+                      (packActionFor(row)?.action.params.length ?? 0) > 0
+                    }
+                    onRun={() => void runRow(row)}
+                    onEdit={
+                      row.def.builtin
+                        ? undefined
+                        : (d) => {
+                            setEditing(d);
+                            setOpen(true);
+                          }
+                    }
+                  />
+                ))}
+              </div>
+              {visible.length === 0 && (
+                <CollectionEmpty
+                  icon={
+                    filtered
+                      ? Search
+                      : mode === "library"
+                        ? Repeat
+                        : CalendarClock
+                  }
+                  title={
+                    filtered
+                      ? tc("noResults")
+                      : mode === "library"
+                        ? t("tasks.empty.library")
+                        : t("tasks.empty.schedules")
+                  }
+                  description={
+                    filtered ? tc("noResultsHint") : tc("tasks.emptyHint")
+                  }
+                >
+                  {filtered ? (
+                    <Button variant="outline" size="sm" onClick={resetFilters}>
+                      {tc("reset")}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        mode === "schedules"
+                          ? setChoosing(true)
+                          : (setEditing(null), setOpen(true))
                       }
-                }
-              />
-            ))}
-            {(mode === "library" ? all : scheduled).length === 0 && (
-              <Empty>
-                {mode === "library"
-                  ? t("tasks.empty.library")
-                  : t("tasks.empty.schedules")}
-              </Empty>
-            )}
-          </CardContent>
-        </Card>
+                    >
+                      <Plus />
+                      {mode === "library"
+                        ? tc("tasks.createFirst")
+                        : tc("tasks.chooseForSchedule")}
+                    </Button>
+                  )}
+                </CollectionEmpty>
+              )}
+            </>
+          )}
+        </section>
         {mode === "schedules" && (
           <details className="rounded-lg border p-3">
             <summary className="cursor-pointer text-sm">
@@ -332,9 +465,7 @@ export default function TasksPage({
             </small>
           </button>
         ))}
-        {!view?.tasks.length && (
-          <Empty>{t("tasks.chooseEmpty")}</Empty>
-        )}
+        {!view?.tasks.length && <Empty>{t("tasks.chooseEmpty")}</Empty>}
       </Dialog>
       <TaskDialog
         error={err}
@@ -393,10 +524,19 @@ function TaskLine({
   const def = row.def;
   const { t } = useTranslation("settings");
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/15 p-3">
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate text-[13px] font-semibold">{def.title}</span>
+    <div className="flex flex-wrap items-center gap-4 px-4 py-4 transition-colors hover:bg-muted/30">
+      <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
+        {def.schedule ? (
+          <CalendarClock className="size-4" />
+        ) : (
+          <Repeat className="size-4" />
+        )}
+      </div>
+      <div className="min-w-48 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="truncate text-[13px] font-semibold">
+            {def.title}
+          </span>
           {def.builtin && (
             <Badge variant="outline">
               {def.source.kind === "pack" || packName
@@ -407,25 +547,39 @@ function TaskLine({
           {hasParameters && (
             <Badge variant="secondary">{t("tasks.badge.needsInput")}</Badge>
           )}
-          {!def.enabled && <Badge variant="warning">{t("tasks.badge.off")}</Badge>}
+          {!def.enabled && (
+            <Badge variant="warning">{t("tasks.badge.off")}</Badge>
+          )}
         </div>
-        <p className="mt-0.5 text-[10px] text-muted-foreground">
+        {def.prompt && (
+          <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+            {def.prompt}
+          </p>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">
           {scheduleLabel(def)}
           {packName ? ` · ${packName}` : ""}
           {row.lastRun ? ` · ${t("tasks.lastRun", { time: row.lastRun })}` : ""}
         </p>
       </div>
       {(!def.builtin || def.schedule) && (
-        <Switch
-          checked={def.enabled}
-          disabled={busy}
-          onCheckedChange={(v) => void guard(() => api.setTaskEnabled(def.id, v))}
-        />
+        <label className="flex items-center gap-2">
+          <span className="sr-only">
+            {t("collections:tasks.enabledLabel", { title: def.title })}
+          </span>
+          <Switch
+            checked={def.enabled}
+            disabled={busy}
+            onCheckedChange={(v) =>
+              void guard(() => api.setTaskEnabled(def.id, v))
+            }
+          />
+        </label>
       )}
       <RunButton
         size="xs"
-        variant="ghost"
-        label=""
+        variant="outline"
+        label={t("actions.runNow")}
         ariaLabel={t("actions.runNow")}
         title={t("actions.runNow")}
         jobKey={row.jobKey}
@@ -438,6 +592,7 @@ function TaskLine({
           variant="ghost"
           aria-label={t("actions.edit")}
           title={t("actions.edit")}
+          disabled={busy}
           onClick={() => onEdit(def)}
         >
           <Pencil />
@@ -552,7 +707,9 @@ function PackActionTaskDialog({
                 <Input
                   value={values[param.key] ?? ""}
                   placeholder={
-                    param.type === "list" ? t("tasks.dialog.listPlaceholder") : undefined
+                    param.type === "list"
+                      ? t("tasks.dialog.listPlaceholder")
+                      : undefined
                   }
                   onChange={(event) =>
                     setValues({ ...values, [param.key]: event.target.value })
@@ -656,7 +813,9 @@ function TaskDialog({
           ? t("tasks.ask.once", { date, time })
           : t("tasks.ask.exec", {
               cycle:
-                kind === "daily" ? t("tasks.ask.daily") : t("tasks.ask.weekdays"),
+                kind === "daily"
+                  ? t("tasks.ask.daily")
+                  : t("tasks.ask.weekdays"),
               time,
             });
     const text = t("tasks.ask.body", {

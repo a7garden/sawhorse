@@ -9,6 +9,7 @@ pub mod github;
 pub mod github_outbound;
 pub mod manifest;
 pub mod package;
+mod resolver;
 pub mod signing;
 
 pub mod github_management;

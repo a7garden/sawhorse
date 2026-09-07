@@ -395,6 +395,14 @@ export default function PackViewPage({
   }
 
   async function openRow(row: NoteRow) {
+    if (row.fields.type === "mockup") {
+      const workId = asList(row.fields.workId ?? row.fields.id)[0];
+      if (workId) {
+        setPage("work");
+        useApp.getState().openWork({ workId, artifact: "mockup" });
+        return;
+      }
+    }
     setSel(row);
     setBody(null);
     try {

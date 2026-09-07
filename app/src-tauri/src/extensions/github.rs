@@ -190,11 +190,7 @@ fn stored_cursor(store: &Store, instance_id: &str) -> (String, String) {
 /// 「가져오기」 후보 수락: 선택한 프로젝트에 새 작업 항목을 만들고 ExternalLink로
 /// 묶는다. 사람의 수락이 승인이며, work.md 기록은 코어의 file WAL 절차를 탄다
 /// (설계 696줄·566-571줄).
-pub fn accept_import(
-    store: &Store,
-    inbound_id: &str,
-    project_id: &str,
-) -> Result<String, String> {
+pub fn accept_import(store: &Store, inbound_id: &str, project_id: &str) -> Result<String, String> {
     accept_import_at(store, &crate::sdlc::vault_root()?, inbound_id, project_id)
 }
 
@@ -495,8 +491,8 @@ mod tests {
             },
         )
         .unwrap();
-        let store = crate::collab::store::Store::open_at(root.join(".collab").join("store.db"))
-            .unwrap();
+        let store =
+            crate::collab::store::Store::open_at(root.join(".collab").join("store.db")).unwrap();
         (root, store)
     }
 
@@ -518,10 +514,20 @@ mod tests {
     fn import_lands_in_project_work_and_rejects_duplicate() {
         let (root, store) = fixture("import");
         store
-            .insert_inbound_change("ic1", "", "inst", "issue-1", &issue_payload().to_string(), "")
+            .insert_inbound_change(
+                "ic1",
+                "",
+                "inst",
+                "issue-1",
+                &issue_payload().to_string(),
+                "",
+            )
             .unwrap();
         let note_path = accept_import_at(&store, &root, "ic1", "p1").unwrap();
-        assert!(note_path.contains("/work/"), "work/ 아래여야 한다: {note_path}");
+        assert!(
+            note_path.contains("/work/"),
+            "work/ 아래여야 한다: {note_path}"
+        );
         assert!(note_path.ends_with("/work.md"));
 
         let snapshot = crate::sdlc::snapshot(&root).unwrap();
@@ -539,7 +545,14 @@ mod tests {
 
         // 같은 외부 이슈의 두 번째 수락은 거절된다.
         store
-            .insert_inbound_change("ic2", "", "inst", "issue-1", &issue_payload().to_string(), "")
+            .insert_inbound_change(
+                "ic2",
+                "",
+                "inst",
+                "issue-1",
+                &issue_payload().to_string(),
+                "",
+            )
             .unwrap();
         let error = accept_import_at(&store, &root, "ic2", "p1").unwrap_err();
         assert!(error.contains("이미 가져온"), "{error}");
@@ -551,7 +564,14 @@ mod tests {
     fn field_update_patches_mirrors_and_keeps_local_status() {
         let (root, store) = fixture("update");
         store
-            .insert_inbound_change("ic1", "", "inst", "issue-1", &issue_payload().to_string(), "")
+            .insert_inbound_change(
+                "ic1",
+                "",
+                "inst",
+                "issue-1",
+                &issue_payload().to_string(),
+                "",
+            )
             .unwrap();
         let note_path = accept_import_at(&store, &root, "ic1", "p1").unwrap();
 
@@ -586,7 +606,13 @@ mod tests {
     #[test]
     fn repository_slug_validation_matches_clone_rules() {
         assert!(crate::sdlc::validate_repository_slug("octocat/Hello-World").is_ok());
-        for bad in ["../repo", "owner/..", "--help", "owner/repo/extra", "owner/repo\n"] {
+        for bad in [
+            "../repo",
+            "owner/..",
+            "--help",
+            "owner/repo/extra",
+            "owner/repo\n",
+        ] {
             assert!(crate::sdlc::validate_repository_slug(bad).is_err(), "{bad}");
         }
     }

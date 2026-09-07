@@ -137,3 +137,81 @@ test("deleting an embedded image does not append it again when saving", async ({
   await expect(page.locator(".wb-intent-review-document")).toHaveText("keep this note");
   await expect(page.locator(".wb-intent-review-document img")).toHaveCount(0);
 });
+
+test("a rejected launch keeps the captured intent in intake", async ({page}) => {
+  await open(page); await project(page);
+  await page.getByRole("dialog").getByRole("textbox").fill("실행 접수 실패 상태");
+  await page.getByRole("button",{name:"설계 요청",exact:true}).click();
+  await expect(page.getByRole("alert")).toContainText("의도는 저장됐지만");
+  await page.getByRole("button",{name:"저장된 의도 열기",exact:true}).click();
+  await expect(page.locator(".wb-detail-title")).toContainText("접수");
+  await expect(page.getByText("설계를 요청하면 AI가 설계와 작업 단위를 작성합니다.", {exact:false})).toBeVisible();
+  const item = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).snapshot.work.find((w:{title:string}) => w.title === "실행 접수 실패 상태"), KEY);
+  expect(item.status).toBe("backlog");
+  expect(item.decisions).toEqual([]);
+});
+
+test("review checkpoints survive later edits and cannot be used to approve", async ({page}) => {
+  await design(page);
+  await page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true}).click();
+  await expect(page.getByRole("alert")).toContainText("설계 승인은 기록됐지만");
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key)!);
+    const work = state.snapshot.work.find((w:{workflowId:string}) => w.workflowId === "intent-flow");
+    state.documents[`${work.id}/spec`].markdown = "# New scope\n\nChanged after review";
+    state.documents[`${work.id}/spec`].revision = "new-scope";
+    localStorage.setItem(key, JSON.stringify(state));
+  }, KEY);
+  await page.getByRole("button",{name:"문서 새로고침",exact:true}).click();
+  await page.getByRole("tab",{name:"설계",exact:true}).click();
+  await expect(page.getByRole("tabpanel")).toContainText("Changed after review");
+  await page.getByText(/단계별 문서 기록 ·/).click();
+  await page.getByRole("button",{name:/설계 검토 시점/}).click();
+  await expect(page.getByRole("tabpanel")).toContainText("원본을 보존합니다");
+  await expect(page.getByRole("button",{name:"구현 계속하기",exact:true})).toBeDisabled();
+  await page.getByRole("button",{name:"현재 문서로 돌아가기",exact:true}).click();
+  await expect(page.getByRole("tabpanel")).toContainText("Changed after review");
+});
+
+test("unsent feedback blocks approval and completion until resolved", async ({page}) => {
+  await design(page);
+  await page.getByLabel("에이전트에게 남길 메모",{exact:true}).fill("접근성 검증을 추가하세요");
+  await expect(page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true})).toBeDisabled();
+  await expect(page.getByText(/아직 전달하지 않은 메모가 있습니다/)).toBeVisible();
+  await page.getByLabel("에이전트에게 남길 메모",{exact:true}).fill("");
+  await page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true}).click();
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key)!);
+    const work = state.snapshot.work.find((w:{workflowId:string}) => w.workflowId === "intent-flow");
+    state.documents[`${work.id}/verification`] = {workId:work.id,artifact:"verification",path:`work/${work.id}/verification.md`,revision:"verified",markdown:"# Result\n\nUNIT-1: tests passed"};
+    localStorage.setItem(key, JSON.stringify(state));
+  }, KEY);
+  await page.getByRole("button",{name:"문서 새로고침",exact:true}).click();
+  await expect(page.getByRole("button",{name:"결과 확인·완료",exact:true})).toBeEnabled();
+  await page.getByLabel("에이전트에게 남길 메모",{exact:true}).fill("모바일 결과도 필요합니다");
+  await expect(page.getByRole("button",{name:"결과 확인·완료",exact:true})).toBeDisabled();
+  await page.getByLabel("에이전트에게 남길 메모",{exact:true}).fill("");
+  await page.getByRole("button",{name:"결과 확인·완료",exact:true}).click();
+  await expect(page.locator(".wb-detail-title")).toContainText("완료");
+  await page.getByText(/단계별 문서 기록 ·/).click();
+  await page.getByRole("button",{name:/결과 검토 시점/}).click();
+  await expect(page.getByRole("tabpanel")).toContainText("UNIT-1: tests passed");
+});
+
+test("a blocked run opens the exact execution from the intent detail", async ({page}) => {
+  await design(page);
+  await page.evaluate((key) => {
+    const state = JSON.parse(localStorage.getItem(key)!);
+    const work = state.snapshot.work.find((w:{workflowId:string}) => w.workflowId === "intent-flow");
+    const base = {workId:work.id,projectId:work.projectId,role:"planner",agent:"codex",model:"",parentRunId:null,stage:"design",workflowId:"intent-flow",workflowVersion:"1.0.0",workflowDigest:"",workflowInstanceId:null,nodeRunId:null,status:"blocked",agentName:"review-agent",paneId:null,workspaceId:null,session:"default",prompt:"Human response needed",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),error:null,agentSession:null,tabClosedAt:null,finalReport:null,resumable:false};
+    state.runs = [{...base,id:"another-run",workId:"work-intent"},{...base,id:"target-run"}];
+    localStorage.setItem(key,JSON.stringify(state));
+  },KEY);
+  await page.getByRole("dialog").getByRole("button",{name:"닫기",exact:true}).click();
+  await page.getByRole("button",{name:/설계 검토/}).first().click();
+  await expect(page.getByRole("button",{name:"이 실행 열기",exact:true})).toBeVisible();
+  await expect(page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true})).toBeDisabled();
+  await page.getByRole("button",{name:"이 실행 열기",exact:true}).click();
+  await expect(page.locator(".wb-run-detail h2")).toHaveText("설계 검토");
+  await expect(page.locator(".wb-run-detail")).toContainText("Human response needed");
+});

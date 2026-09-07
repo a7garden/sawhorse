@@ -107,7 +107,10 @@
     "title": "Workbench",
     "addWidgets": "Add widgets",
     "layoutDone": "Done arranging",
-    "layoutEdit": "Arrange"
+    "layoutEdit": "Arrange",
+    "description": "Your work in progress, and what needs your attention next.",
+    "workspaceSummary": "At a glance",
+    "manageProjects": "Manage"
   },
   "widgets": {
     "today": "Today",
@@ -437,7 +440,8 @@
     "stopHint": "A run for this role is in progress. Click to stop it.",
     "stop": "Running · Stop",
     "start": "Start run",
-    "needsProject": "Link a project to run."
+    "needsProject": "Link a project to run.",
+    "childModelHint": "Model for this parent run. Skills assess child tasks using the configured policy."
   },
   "harness": {
     "outputReadFailed": "Could not read output: {{error}}",
@@ -468,7 +472,24 @@
     "terminalKeysHint": "Nothing is sent automatically. Press only the keys you need.",
     "terminalKeyAria": "Terminal key {{key}}",
     "launchChild": "Launch child research",
-    "childHint": "Child runs keep their own record and output."
+    "childHint": "Child runs keep their own record and output.",
+    "modelAuto": "Auto selected",
+    "modelSource": {
+      "auto": "Model selected from skill assessment",
+      "explicit": "Explicit model",
+      "inherited": "Inherited model · CLI default when agent differs",
+      "default": "CLI default model"
+    },
+    "modelComplexity": {
+      "routine": "Routine",
+      "standard": "Standard",
+      "complex": "Complex"
+    },
+    "childModelPolicy": "Child model policy: {{policy}}",
+    "childPolicy": {
+      "auto": "Automatic · assessed by skills",
+      "inherit": "Inherit parent model"
+    }
   },
   "preview": {
     "projectNotFound": "Could not find the project.",
@@ -564,6 +585,37 @@
       "failed": "Run failed. Check the error and retry.",
       "stopped": "Run stopped",
       "unknown": "Run status is unknown"
-    }
+    },
+    "progress": "From intent to result",
+    "humanIntent": "Human · intent",
+    "aiDesign": "AI · design",
+    "humanApproval": "Human · approval",
+    "aiBuild": "AI · build and verify",
+    "humanResult": "Human · accept result",
+    "completedHint": "Revisit the result, verification evidence, design and decisions behind this work.",
+    "designMissing": "Request a design. The AI prepares a design and work units; review both before approving implementation.",
+    "designReady": "The design and work units are ready. Review scope, acceptance criteria and verification, then approve or request changes.",
+    "resultMissing": "Continue implementation to receive a report with verification evidence. A result document is required before completion.",
+    "resultReady": "The result is ready. Review the approved scope and verification evidence, then accept it or request changes.",
+    "feedbackPending": "Your feedback has not been sent. Send it for revisions or clear it before approving or completing the work.",
+    "pausedHint": "This work is paused. Resume it before continuing the design or implementation.",
+    "resume": "Resume work",
+    "resumeNote": "Reviewed the records and resumed work.",
+    "openRun": "Open this run",
+    "stopRun": "Stop run",
+    "history": "Document history",
+    "historyHint": "You are viewing an earlier record. Return to current documents to approve or run.",
+    "currentDocuments": "Return to current documents",
+    "historyDescription": "Document copies from capture, edits, review and execution. Actual approvals and completion decisions are recorded in the work decision history.",
+    "agentReport": "Agent report",
+    "runHistory": "Linked runs",
+    "historyEvents": {
+      "captured": "Intent captured",
+      "before-edit": "Before editing",
+      "design-review": "Design review snapshot",
+      "result-review": "Result review snapshot",
+      "run-input": "Execution input snapshot"
+    },
+    "flowHint": "Notes follow intent → AI design → human approval → AI implementation and report."
   }
 }

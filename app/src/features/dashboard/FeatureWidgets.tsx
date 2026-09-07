@@ -161,6 +161,7 @@ export function MiniAction({
       type="button"
       className={cx("wb-mini-action", primary && "is-primary")}
       title={label}
+      aria-label={label}
       disabled={busy || disabled}
       onClick={(event) => {
         event.stopPropagation();
@@ -268,7 +269,7 @@ export function IssuesWidget({ work, onOpen }: {
                 onClick={() => onOpen(item.id)}
                 title={item.title}
               >
-                <span className={`wb-dot is-${group}`} />
+                <span className={`wb-dot is-${ISSUE_GROUPS.find((entry) => entry.key === group)?.tone ?? "hold"}`} aria-hidden />
                 <span className="wb-action-text">
                   <strong>{item.title}</strong>
                   <small>
@@ -620,14 +621,12 @@ export function ChecklistWidget({ onOpen }: { onOpen: () => void }) {
   const percent = items.length ? Math.round(done / items.length * 100) : 0;
   const ordered = [...items].sort((a, b) => Number(a.checked) - Number(b.checked));
   return (
-    <div className="journal-checklist">
-      <div className="journal-checklist-summary">
-        <div className="journal-checklist-ring" role="progressbar" aria-label={jt("checklistTitle")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
-          <svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" fill="none" stroke="var(--border)" strokeWidth="3" /><circle cx="26" cy="26" r="22" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${percent * 1.3823} 138.23`} /></svg>
-          <span>{percent}%</span>
-        </div>
-        <div><strong>{jt(!items.length ? "checklistTitle" : done === items.length ? "allDone" : "remaining", { count: items.length - done })}</strong><small>{new Date().toLocaleDateString(i18n.language, { month: "long", day: "numeric", weekday: "short" })} · {jt("checklistProgress", { done, total: items.length })}</small></div>
+    <div className="journal-checklist wb-checklist-widget">
+      <div className="wb-checklist-summary">
+        <div><strong>{jt(!items.length ? "checklistTitle" : done === items.length ? "allDone" : "remaining", { count: items.length - done })}</strong><small>{new Date().toLocaleDateString(i18n.language, { month: "long", day: "numeric", weekday: "short" })}</small></div>
+        <span className="wb-checklist-fraction" aria-label={jt("checklistProgress", { done, total: items.length })}><strong>{done}</strong> / {items.length}</span>
       </div>
+      <div className="wb-checklist-progress" role="progressbar" aria-label={jt("checklistTitle")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}><span style={{ width: `${percent}%` }} /></div>
       {error && <p className="wb-widget-note" role="alert">{error}</p>}
       {!items.length && <p className="journal-empty">{todos ? t(todos.fileExists ? "checklist.empty" : "checklist.noJournal") : jt("loading")}</p>}
       {ordered.slice(0, 5).map((item) => <label key={item.index} className={cx("journal-checklist-row", item.checked && "is-done")}>
@@ -855,6 +854,7 @@ export function TodayActivity({
       </div>
 
       <div className="wb-today-timeline">
+        <div className="wb-today-timeline-label"><span>{t("today.timeline")}</span><time>{t("today.now", { time: clockText(Date.now()) })}</time></div>
         <div className="wb-today-track">
           {[6, 12, 18].map((hour) => (
             <span

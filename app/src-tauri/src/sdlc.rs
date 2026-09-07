@@ -16,6 +16,9 @@ use uuid::Uuid;
 
 use crate::workflow::{self, ActiveNode, WorkflowDefinition};
 
+#[path = "intent_history.rs"]
+mod intent_history;
+
 static DOMAIN_MUTATION_LOCK: OnceLock<parking_lot::Mutex<()>> = OnceLock::new();
 
 const SCHEMA_VERSION: u32 = 1;
@@ -197,6 +200,7 @@ pub struct LaunchInput {
     pub model: String,
     pub instructions: String,
     pub parent_run_id: Option<String>,
+    pub model_assessment: Option<crate::model_policy::ModelAssessment>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -208,6 +212,8 @@ pub struct HarnessRun {
     pub role: String,
     pub agent: String,
     pub model: String,
+    pub model_selection: Option<crate::model_policy::ModelSelection>,
+    pub child_model_policy: String,
     pub parent_run_id: Option<String>,
     pub stage: String,
     pub workflow_id: String,
@@ -1414,6 +1420,7 @@ pub fn save_project_at(root: &Path, mut input: Project) -> Result<Project, Strin
     }
     normalize_project_workflow(&mut input);
     validate_project(&input)?;
+    let _file_guard = crate::workspace_io::lock(root, &format!("project-{}", input.id))?;
     let definition = workflow::resolve(Some(root), &input.workflow_id, &input.workflow_version)?;
     input.workflow_digest = workflow::definition_digest(&definition)?;
     validate_project_graph(root, &input)?;
@@ -1434,12 +1441,50 @@ pub fn activate_project_workflow_at(
     workflow_id: &str,
     workflow_version: &str,
 ) -> Result<Project, String> {
+    activate_project_workflow_checked_at(root, project_id, workflow_id, workflow_version, None)
+}
+
+pub fn project_revision_at(root: &Path, project_id: &str) -> Result<String, String> {
     validate_id(project_id)?;
-    let _ = workflow::resolve(Some(root), workflow_id, workflow_version)?;
-    let mut project = project_by_id(root, project_id)?;
-    project.workflow_id = workflow_id.into();
-    project.workflow_version = workflow_version.into();
-    save_project_at(root, project)
+    let path = project_path(root, project_id);
+    safe_path(root, &path)?;
+    fs::read_to_string(path).map(|text| revision(&text)).map_err(|e| format!("project-read: {e}"))
+}
+
+pub fn activate_project_workflow_checked_at(
+    root: &Path,
+    project_id: &str,
+    workflow_id: &str,
+    workflow_version: &str,
+    expected_revision: Option<&str>,
+) -> Result<Project, String> {
+    validate_id(project_id)?;
+    let _guard = mutation_lock();
+    ensure_initialized(root)?;
+    let _file_guard = crate::workspace_io::lock(root, &format!("project-{project_id}"))?;
+    if let Some(expected) = expected_revision {
+        if project_revision_at(root, project_id)? != expected {
+            return Err("revision-conflict: project changed; read it again before applying".into());
+        }
+    }
+    let definition = workflow::resolve(Some(root), workflow_id, workflow_version)?;
+    let path = project_path(root, project_id);
+    // Change only the workflow selection. Preserve user-defined metadata and body.
+    let (mut header, body) = read_markdown::<serde_yaml::Mapping>(root, &path)?;
+    for (key, value) in [
+        ("workflowId", workflow_id.to_string()),
+        ("workflowVersion", workflow_version.to_string()),
+        ("workflowDigest", workflow::definition_digest(&definition)?),
+    ] {
+        header.insert(serde_yaml::Value::String(key.into()), serde_yaml::Value::String(value));
+    }
+    let content = markdown(&header, &body)?;
+    let (mut project, _) = parse_markdown::<Project>(&content)?;
+    validate_project(&project)?;
+    validate_project_graph(root, &project)?;
+    write_atomic(root, &path, &content)?;
+    project.description = body;
+    Ok(project)
 }
 
 fn save_work_at(root: &Path, input: WorkItem) -> Result<WorkItem, String> {
@@ -1741,6 +1786,9 @@ fn write_document_at(
     let mut work = work_by_id(root, work_id)?;
     let definition = workflow_definition_for_work(root, &work)?;
     let path = resolved_artifact_path(root, &work, &definition, artifact)?;
+    if current.markdown != markdown_value {
+        intent_history::capture(root, &work, "before-edit", artifact)?;
+    }
     write_atomic(root, &path, &markdown_value)?;
     work.artifacts = existing_artifacts(root, &work, &definition);
     work.updated_at = now();
@@ -2079,6 +2127,7 @@ fn work_lifecycle_at(
         _ => return Err("현재 작업에서 할 수 없는 결정입니다".into()),
     };
     if matches!(action, "submit" | "complete") {
+        ensure_intent_approval(root, &work)?;
         let node = definition
             .nodes
             .iter()
@@ -2092,6 +2141,9 @@ fn work_lifecycle_at(
             }
         }
         ensure_dependencies_complete(root, &work)?;
+        if action == "complete" {
+            intent_history::capture(root, &work, "result-review", &input.note)?;
+        }
     }
     let timestamp = now();
     work.status = status.into();
@@ -2204,6 +2256,7 @@ fn workflow_command_at(root: &Path, input: WorkflowCommandInput) -> Result<WorkI
             return Err("Read the design version before approving".into());
         }
         let revisions = intent_design_revisions(root, &work.id)?;
+        intent_history::capture(root, &work, "design-review", note)?;
         write_atomic(
             root,
             &work_path(root, &work.id).with_file_name("approved-design.json"),
@@ -2578,7 +2631,7 @@ fn migration_item(root: &Path, note: &crate::vault::ImprovementNote) -> IssueMig
     }
 }
 
-fn legacy_issue_notes(root: &Path) -> Vec<crate::vault::ImprovementNote> {
+pub(crate) fn legacy_issue_notes(root: &Path) -> Vec<crate::vault::ImprovementNote> {
     let names: Vec<String> = crate::vault::project_pairs(root, &[])
         .into_iter()
         .map(|(name, _)| name)
@@ -3166,6 +3219,7 @@ fn capture_intent_at(root: &Path, mut input: CaptureIntentInput) -> Result<WorkI
             fs::write(attachments.join(name), bytes).map_err(|e| e.to_string())?;
         }
         write_atomic(root, &directory.join("intent.md"), &input.markdown)?;
+        intent_history::capture(root, &work, "captured", "")?;
         work_by_id(root, &work.id)
     })();
     if result.is_err() {
@@ -3248,6 +3302,7 @@ pub fn ensure_intent_approval(root: &Path, work: &WorkItem) -> Result<(), String
 pub struct IntentReview {
     pub documents: Vec<Document>,
     pub input_digest: String,
+    pub history: Vec<intent_history::IntentCheckpoint>,
 }
 
 #[tauri::command]
@@ -3269,7 +3324,40 @@ pub fn sdd_intent_review(work_id: String) -> Result<IntentReview, String> {
     Ok(IntentReview {
         documents,
         input_digest: before,
+        history: intent_history::list(&root, &work_id)?,
     })
+}
+
+#[tauri::command]
+pub fn sdd_intent_checkpoint(work_id: String, checkpoint_id: String) -> Result<Vec<Document>, String> {
+    let root = vault_root()?;
+    let _guard = mutation_lock();
+    intent_history::read(&root, &work_id, &checkpoint_id)
+}
+
+/// A queued execution must exist before the UI may describe an intent as started.
+pub fn record_intent_launch(root: &Path, work_id: &str, project_id: &str, stage: &str, run_id: &str) -> Result<(), String> {
+    let work = work_by_id(root, work_id)?;
+    if work.workflow_id != "intent-flow" { return Ok(()); }
+    if work.stage != stage || work.project_id != project_id {
+        return Err("작업이 변경되었습니다. 새 상태를 읽고 다시 시작하세요".into());
+    }
+    if !matches!(work.status.as_str(), "backlog" | "ready" | "running") {
+        return Err("보류·검토·종료된 작업은 실행할 수 없습니다".into());
+    }
+    {
+        let _guard = mutation_lock();
+        intent_history::capture(root, &work, "run-input", run_id)?;
+    }
+    if matches!(work.status.as_str(), "backlog" | "ready") {
+        workflow_command_at(root, WorkflowCommandInput {
+            work_id: work.id, event: "work:start".into(), expected_node_id: stage.into(),
+            note: format!("에이전트 실행 접수: {run_id}"),
+            facts: [("expectedStatus".into(), serde_json::json!(work.status))].into_iter().collect(),
+            ..Default::default()
+        })?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -3432,6 +3520,65 @@ mod tests {
         missing.markdown = "removed the image".into();
         assert!(capture_intent_at(&root, missing).is_err());
         assert!(!root.join("work/missing").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn intent_history_preserves_original_design_and_accepted_result() {
+        let root = tempdir("intent-history");
+        initialize(&root).unwrap();
+        let captured = capture_intent_at(&root, CaptureIntentInput {
+            work: work("history", ""), markdown: "Original human intent".into(), attachments: vec![],
+        }).unwrap();
+        let original = intent_history::list(&root, &captured.id).unwrap();
+        assert_eq!(original.len(), 1);
+        for (role, text) in [("intent", "Refined human intent"), ("spec", "Approved scope"), ("plan", "UNIT-1: implement and test")] {
+            let document = read_document(&root, &captured.id, role).unwrap();
+            write_document_at(&root, &captured.id, role, text.into(), &document.revision).unwrap();
+        }
+        assert_eq!(intent_history::read(&root, &captured.id, &original[0].id).unwrap()[0].markdown, "Original human intent");
+        let digest = work_input_digest(&root, &work_by_id(&root, &captured.id).unwrap()).unwrap();
+        workflow_command_at(&root, WorkflowCommandInput {
+            work_id: captured.id.clone(), event: "approved".into(), expected_node_id: "design".into(),
+            target_node_id: Some("build".into()), note: "Human approved UNIT-1".into(), input_digest: digest,
+            ..Default::default()
+        }).unwrap();
+        let history = intent_history::list(&root, &captured.id).unwrap();
+        let design = history.iter().find(|entry| entry.event == "design-review").unwrap();
+        fs::write(root.join("work/history/spec.md"), "Unapproved expanded scope").unwrap();
+        assert_eq!(intent_history::read(&root, &captured.id, &design.id).unwrap()[1].markdown, "Approved scope");
+        fs::write(root.join("work/history/verification.md"), "UNIT-1 completed; cargo test passed").unwrap();
+        let command = |event: &str| WorkflowCommandInput {
+            work_id: captured.id.clone(), event: event.into(), expected_node_id: "build".into(),
+            note: "Human checked the result and evidence".into(), ..Default::default()
+        };
+        assert!(workflow_command_at(&root, command("work:submit")).is_err());
+        fs::write(root.join("work/history/spec.md"), "Approved scope").unwrap();
+        workflow_command_at(&root, command("work:submit")).unwrap();
+        let done = workflow_command_at(&root, command("work:complete")).unwrap();
+        assert_eq!(done.status, "done");
+        let history = intent_history::list(&root, &captured.id).unwrap();
+        let result = history.iter().find(|entry| entry.event == "result-review").unwrap();
+        assert_eq!(intent_history::read(&root, &captured.id, &result.id).unwrap()[3].markdown, "UNIT-1 completed; cargo test passed");
+        assert!(intent_history::read(&root, &captured.id, "../escape").is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn intent_launch_records_start_only_for_the_queued_stage() {
+        let root = tempdir("intent-launch-record");
+        initialize(&root).unwrap();
+        let item = capture_intent_at(&root, CaptureIntentInput {
+            work: work("launch", ""), markdown: "Human request".into(), attachments: vec![],
+        }).unwrap();
+        assert_eq!(work_by_id(&root, &item.id).unwrap().status, "backlog");
+        assert!(record_intent_launch(&root, &item.id, "", "build", "queued-run").is_err());
+        assert_eq!(work_by_id(&root, &item.id).unwrap().status, "backlog");
+        record_intent_launch(&root, &item.id, "", "design", "queued-run").unwrap();
+        let started = work_by_id(&root, &item.id).unwrap();
+        assert_eq!(started.status, "running");
+        assert!(started.decisions.last().unwrap().note.contains("queued-run"));
+        assert!(intent_history::list(&root, &item.id).unwrap().iter().any(|entry| entry.event == "run-input" && entry.note == "queued-run"));
         fs::remove_dir_all(root).unwrap();
     }
 

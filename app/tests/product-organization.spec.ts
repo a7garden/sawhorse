@@ -101,7 +101,8 @@ test("tasks are defined once and scheduled by reference without duplicating cont
     .getByRole("button", { name: /매일 자료 정리/ })
     .click();
   await expect(page.getByLabel("실행 내용")).toHaveCount(0);
-  await page.getByLabel("실행 주기").selectOption("daily");
+  await page.getByRole("combobox", { name: "실행 주기" }).click();
+  await page.getByRole("option", { name: "매일", exact: true }).click();
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "저장", exact: true })
@@ -263,8 +264,9 @@ test("workflow edges are editable without JSON and schema is nested under settin
     fullPage: true,
   });
   await nav(page, "설정");
+  await page.getByRole("navigation", { name: "설정", exact: true }).getByRole("button", { name: "볼트", exact: true }).click();
   await page
-    .getByRole("button", { name: "볼트 문서 구조", exact: true })
+    .getByRole("button", { name: "열기", exact: true })
     .click();
   await expect(
     page.getByRole("heading", { name: "볼트 문서 구조" }),

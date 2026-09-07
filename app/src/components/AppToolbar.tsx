@@ -4,7 +4,7 @@ import { sddApi } from "@/features/workbench/api";
 import type { HarnessRun } from "@/features/workbench/types";
 import type { PendingTaskRequest } from "@/lib/types";
 import { useEffect, useState } from "react";
-import { Bell, Search } from "lucide-react";
+import { Bell, Search, ChevronRight } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { useCoreExtensions } from "@/lib/core-extensions";
 import { Dialog } from "./ui/dialog";
@@ -13,7 +13,7 @@ import { CommandPalette } from "./CommandPalette";
 
 const isMac = /mac/i.test(navigator.platform);
 
-export function AppToolbar() {
+export function AppToolbar({ contextLabel, pageLabel }: { contextLabel?: string; pageLabel?: string }) {
   const { t } = useTranslation("common");
   const [runs, setRuns] = useState<HarnessRun[]>([]);
   const [pending, setPending] = useState<PendingTaskRequest[]>([]);
@@ -85,7 +85,7 @@ export function AppToolbar() {
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [search]);
-  const items = [
+  const items: Array<{ id: string; title: string; text: string; page: string; run?: HarnessRun }> = [
     ...pending.map((p) => ({
       id: `pending:${p.id}`,
       title: p.targetTitle,
@@ -105,6 +105,7 @@ export function AppToolbar() {
               ? t("toolbar.reviewRun")
               : t("toolbar.runFailed")),
         page: "harness",
+        run: r,
       })),
     ...jobs
       .filter((j) => j.finishedAtMs || j.status === "failed")
@@ -141,9 +142,14 @@ export function AppToolbar() {
   }
   return (
     <>
-      <div className="flex h-12 shrink-0 items-center justify-between gap-4 border-b bg-background px-5">
+      <div className="app-toolbar">
+        <div className="app-location" aria-label={t("toolbar.location")}>
+          <span>{contextLabel}</span>
+          {pageLabel && <><ChevronRight size={12} aria-hidden /><strong>{pageLabel}</strong></>}
+        </div>
         <button
-          className="flex h-8 w-60 items-center gap-2 rounded-md border bg-muted/40 px-3 text-xs text-muted-foreground transition-colors hover:bg-accent"
+          className="app-search-trigger"
+          aria-label={t("toolbar.search")}
           onClick={() => setSearch(true)}
         >
           <Search size={14} className="shrink-0" />
@@ -153,7 +159,7 @@ export function AppToolbar() {
           </kbd>
         </button>
         <button
-          className="relative rounded-md p-2 hover:bg-accent"
+          className="app-notification-trigger relative rounded-md p-2 hover:bg-accent"
           aria-label={
             unread
               ? t("toolbar.notificationsUnread", { count: unread })
@@ -202,7 +208,8 @@ export function AppToolbar() {
               )
                 return;
               mark([item.id]);
-              setPage(item.page);
+              if (item.run) useApp.getState().openRun(item.run.id, item.run.projectId);
+              else setPage(item.page);
               setNotifications(false);
             }}
           >

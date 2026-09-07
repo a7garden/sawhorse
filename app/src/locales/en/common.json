@@ -52,7 +52,9 @@
       "select": "Sidebar project selection",
       "appliesBelow": "Applies to the views below",
       "sharedSettings": "App settings · shared"
-    }
+    },
+    "collapseSidebar": "Collapse sidebar",
+    "expandSidebar": "Expand sidebar"
   },
   "toolbar": {
     "search": "Search everything",
@@ -70,7 +72,17 @@
     "brokenPack": "Failed to load extension",
     "runningStop": "Running · Stop",
     "pendingCancel": "Pending · Cancel",
-    "stopHint": "Running. Click to stop."
+    "stopHint": "Running. Click to stop.",
+    "location": "Current location"
+  },
+  "attention": {
+    "dismiss": "Dismiss",
+    "schemaConflicts": "Schema {{id}} r{{revision}}: {{count}} documents need manual fixes — migration is blocked",
+    "schemaConflictsCta": "Review in schema studio",
+    "schemaMoves": "Schema {{id}} r{{revision}}: {{count}} documents await migration moves",
+    "schemaMovesCta": "Run migration",
+    "legacyIssues": "{{count}} issue notes not yet migrated to work items",
+    "legacyIssuesCta": "Migrate in workbench"
   },
   "palette": {
     "hint": "Search work, projects, and documents",

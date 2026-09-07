@@ -1,9 +1,11 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import i18n from "@/i18n";
+import type { Mockup } from "@/features/mockups/types";
 import type {
   ArtifactKind,
   CalendarEvent,
   Document,
+  IntentCheckpoint,
   HarnessRun,
   IssueMigrationItem,
   IssueMigrationReport,
@@ -38,11 +40,15 @@ async function call<T>(
   return invoke<T>(command, args);
 }
 export const sddApi = {
+  readMockup: (workId: string): Promise<Mockup> => call("sdd_read_mockup", { workId }),
+  readMockupHtml: (workId: string, screenId: string): Promise<string> => call("sdd_read_mockup_html", { workId, screenId }),
   captureImage: (path: string): Promise<string> => call("sdd_capture_image", { path }),
   captureIntent: (work: WorkItem, markdown: string, attachments: Array<{ name: string; dataUrl: string; reference?: string }>): Promise<WorkItem> =>
     call("sdd_capture_intent", { input: { work, markdown, attachments } }),
-  intentReview: (workId: string): Promise<{ documents: Document[]; inputDigest: string }> =>
+  intentReview: (workId: string): Promise<{ documents: Document[]; inputDigest: string; history: IntentCheckpoint[] }> =>
     call("sdd_intent_review", { workId }),
+  intentCheckpoint: (workId: string, checkpointId: string): Promise<Document[]> =>
+    call("sdd_intent_checkpoint", { workId, checkpointId }),
   snapshot: (): Promise<WorkspaceSnapshot> => call("sdd_snapshot"),
   initialize: (): Promise<WorkspaceSnapshot> => call("sdd_initialize"),
   saveProject: (input: Project): Promise<Project> =>
@@ -111,6 +117,8 @@ export const sddApi = {
 
 /** General workflow API. The sddApi methods above remain compatibility wrappers. */
 export const workflowApi = {
+  generate: (request: string, definition: WorkflowDefinition | null, agent: string): Promise<WorkflowDefinition> =>
+    call("workflow_generate", { request, definition, agent }),
   catalog: (): Promise<WorkflowDefinition[]> => call("workflow_catalog"),
   validate: (definition: WorkflowDefinition): Promise<ValidationReport> =>
     call("workflow_validate", { definition }),
@@ -120,8 +128,9 @@ export const workflowApi = {
   saveDraft: (
     draftId: string,
     definition: WorkflowDefinition,
+    expectedRevision?: string,
   ): Promise<WorkflowDraftRecord> =>
-    call("workflow_draft_save", { input: { draftId, definition } }),
+    call("workflow_draft_save", { input: { draftId, definition, expectedRevision } }),
   deleteDraft: (draftId: string): Promise<void> =>
     call("workflow_draft_delete", { draftId }),
   publish: (definition: WorkflowDefinition): Promise<WorkflowDefinition> =>

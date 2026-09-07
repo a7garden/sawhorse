@@ -92,16 +92,16 @@ function sizeOf(
   if (isMetricWidgetId(id))
     return {
       w: breakpoint === "lg" ? 3 : 2,
-      h: 4,
+      h: 3,
       minW: 2,
-      minH: 3,
+      minH: 2,
     };
   const full = id === "today";
   const half = breakpoint === "lg" ? cols / 2 : cols;
   if (breakpoint === "lg")
     return {
       w: full ? cols : half,
-      h: id === "today" ? 9 : 8,
+      h: id === "today" ? 7 : 8,
       minW: 3,
       minH: 3,
     };
@@ -123,8 +123,14 @@ function packLayout(
   let x = 0;
   let y = 0;
   let rowHeight = 0;
-  for (const id of ids) {
+  for (const [index, id] of ids.entries()) {
     const size = sizeOf(id, breakpoint);
+    // The personal desk pairs a broad work list with a smaller project index.
+    // Project desks and catalog additions keep the regular two-column rhythm.
+    if (breakpoint === "lg") {
+      if (id === "next" && ids[index + 1] === "projects") size.w = 8;
+      if (id === "projects" && ids[index - 1] === "next") size.w = 4;
+    }
     if (x > 0 && x + size.w > cols) {
       y += rowHeight;
       x = 0;
@@ -163,16 +169,14 @@ export const WIDGET_BY_ID = Object.fromEntries(
 /** 예전 '핵심 지표' 묶음이 채우던 네 장. 이관과 기본 배치가 같은 목록을 본다. */
 export const DEFAULT_METRIC_WIDGET_IDS: MetricWidgetId[] =
   DEFAULT_METRIC_KEYS.map(metricWidgetId);
-/** 기본 표시 위젯 — 지표 네 장 뒤에 오늘·개발·이슈·기한·일정과 볼트 할 일. */
+/** Start with actionable work beside project context; extra widgets remain in the catalog. */
 export const DEFAULT_WIDGET_IDS: DashboardWidgetId[] = [
   ...DEFAULT_METRIC_WIDGET_IDS,
+  "next",
   "projects",
   "today",
-  "next",
-  "issues",
   "due",
   "events",
-  "checklist",
 ];
 export function createDefaultLayouts(ids: DashboardWidgetId[] = DEFAULT_WIDGET_IDS): ResponsiveLayouts<DashboardBreakpoint> {
   return Object.fromEntries(

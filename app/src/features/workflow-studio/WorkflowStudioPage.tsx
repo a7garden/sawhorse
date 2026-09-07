@@ -1,9 +1,14 @@
 import { useApp } from "@/lib/store";
+import { EVENTS } from "@/lib/api";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { WorkflowCanvas } from "./WorkflowCanvas";
-import { useEffect, useMemo, useState } from "react";
+import { WorkflowBrief } from "./WorkflowBrief";
+import "./studio.css";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CheckCircle2,
+  ArrowLeft,
   Copy,
   Download,
   GitBranch,
@@ -11,18 +16,18 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/pages/common";
-import { workflowApi, sddApi, isWorkbenchPreview } from "@/features/workbench/api";
 import {
-  compareWorkflowVersions,
-  latestWorkflowVersions,
-} from "@/features/workbench/workflow-version";
+  workflowApi,
+  sddApi,
+  isWorkbenchPreview,
+} from "@/features/workbench/api";
+import { compareWorkflowVersions } from "@/features/workbench/workflow-version";
 import type {
   SimulationResult,
   AgentRole,
@@ -100,13 +105,19 @@ function comma(value: string): string[] {
 export default function WorkflowStudioPage() {
   const { t } = useTranslation("dashboard");
   const initial = useApp((s) => s.workflowToEdit);
+  const mainRef = useRef<HTMLElement>(null);
   const [catalog, setCatalog] = useState<WorkflowDefinition[]>([]);
   const [drafts, setDrafts] = useState<WorkflowDraftRecord[]>([]);
   const [draftId, setDraftId] = useState(`draft-${crypto.randomUUID()}`);
+  const [draftRevision, setDraftRevision] = useState<string>();
   const [definition, setDefinition] = useState<WorkflowDefinition>(() =>
     initial ? clone(initial) : freshDefinition(),
   );
   const [selected, setSelected] = useState(initial?.entry ?? "start");
+  const [editing, setEditing] = useState(false);
+  const [hasDraft, setHasDraft] = useState(!!initial);
+  const [request, setRequest] = useState("");
+  const [agent, setAgent] = useState("claude");
   const [advanced, setAdvanced] = useState(false);
   const [source, setSource] = useState("");
   const [events, setEvents] = useState("approved");
@@ -115,8 +126,10 @@ export default function WorkflowStudioPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
+  const loadSequence = useRef(0);
 
   async function load() {
+    const sequence = ++loadSequence.current;
     const [nextCatalog, nextDrafts, nextSnapshot] = await Promise.all([
       workflowApi.catalog(),
       workflowApi.drafts().catch((error) => {
@@ -129,13 +142,31 @@ export default function WorkflowStudioPage() {
       // 라이브러리의 "어디에 쓰이는지" 표시용. 실패해도 편집은 계속된다.
       sddApi.snapshot().catch(() => null),
     ]);
+    if (sequence !== loadSequence.current) return;
     setCatalog(nextCatalog);
     setDrafts(nextDrafts);
     setSnapshot(nextSnapshot);
   }
 
   useEffect(() => {
-    void load().catch((error) => setMessage(String(error)));
+    const refresh = () => void load().catch((error) => setMessage(String(error)));
+    refresh();
+    // External CLI edits refresh the library, preserving the current editor and
+    // its observed revision so unsaved changes still receive conflict checks.
+    window.addEventListener("focus", refresh);
+    let disposed = false;
+    let unlisten: UnlistenFn | undefined;
+    if (!isWorkbenchPreview) {
+      void listen(EVENTS.vaultChanged, refresh).then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      }).catch((error) => setMessage(String(error)));
+    }
+    return () => {
+      disposed = true;
+      window.removeEventListener("focus", refresh);
+      unlisten?.();
+    };
   }, []);
   useEffect(() => {
     setSource(`${JSON.stringify(definition, null, 2)}\n`);
@@ -160,7 +191,6 @@ export default function WorkflowStudioPage() {
       versions.sort((a, b) => compareWorkflowVersions(a.version, b.version));
     return [...groups.entries()];
   }, [catalog]);
-  const latestVersion = useMemo(() => latestWorkflowVersions(catalog), [catalog]);
 
   // 프로젝트 기본 워크플로와 개별 작업의 고정 버전을 한 번에 센다.
   const usage = useMemo(() => {
@@ -226,665 +256,855 @@ export default function WorkflowStudioPage() {
   function selectDefinition(
     next: WorkflowDefinition,
     nextDraftId = `draft-${crypto.randomUUID()}`,
+    nextRevision = nextDraftId === draftId ? draftRevision : undefined,
   ) {
     const value = clone(next);
     setDefinition(value);
     setDraftId(nextDraftId);
+    setDraftRevision(nextRevision);
     setSelected(value.entry);
+    setHasDraft(true);
+    setEditing(false);
+    setRequest("");
+    setMessage(null);
     setValidation(null);
     setSimulation(null);
+    mainRef.current?.scrollTo({ top: 0 });
+  }
+
+  async function generate() {
+    if (!request.trim() || busy) return;
+    await action(async () => {
+      const next = await workflowApi.generate(
+        request.trim(),
+        hasDraft ? definition : null,
+        agent,
+      );
+      // Keep the current draft untouched until a complete response has arrived.
+      const report = await workflowApi.validate(next);
+      if (!report.valid) {
+        setValidation(report);
+        setMessage(t("studio.generationInvalid"));
+        return;
+      }
+      // Preserve a complete generated design before navigating to another screen.
+      const saved = await workflowApi.saveDraft(draftId, next, draftRevision);
+      selectDefinition(next, draftId, saved.revision);
+      setValidation(report);
+      await load();
+      setMessage(
+        t(isWorkbenchPreview ? "studio.previewGenerated" : "studio.generated"),
+      );
+    });
+  }
+
+  async function publish() {
+    await action(async () => {
+      const report = await workflowApi.validate(definition);
+      setValidation(report);
+      if (!report.valid) return;
+      let next = definition;
+      const existing = catalog.find(
+        (item) => item.id === next.id && item.version === next.version,
+      );
+      if (existing && JSON.stringify(existing) !== JSON.stringify(next)) {
+        const versions = catalog
+          .filter((item) => item.id === next.id)
+          .map((item) => item.version)
+          .sort(compareWorkflowVersions);
+        const last = versions[versions.length - 1] || next.version;
+        const parts = last.split(".").map(Number);
+        next = {
+          ...next,
+          version: `${parts[0] || 1}.${parts[1] || 0}.${(parts[2] || 0) + 1}`,
+        };
+      }
+      await workflowApi.publish(next);
+      setDefinition(next);
+      await load();
+      setMessage(t("workflowStudio.publishedNew"));
+    });
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+    <div className="studio flex h-full min-h-0 flex-col overflow-hidden">
       <PageHeader title={t("workflowStudio.title")}>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() =>
-            void action(async () => {
-              const text = await workflowApi.export(definition);
-              await navigator.clipboard.writeText(text);
-              setMessage(t("workflowStudio.copied"));
-            })
-          }
-        >
-          <Download className="size-3" /> {t("workflowStudio.export")}
-        </Button>
+        {hasDraft && (
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() =>
+              void action(async () => {
+                await navigator.clipboard.writeText(
+                  await workflowApi.export(definition),
+                );
+                setMessage(t("workflowStudio.copied"));
+              })
+            }
+          >
+            <Download />
+            {t("workflowStudio.export")}
+          </Button>
+        )}
       </PageHeader>
-      <div className="min-h-0 flex-1 overflow-auto p-5">
-        <div className="mx-auto grid max-w-7xl gap-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
-          <aside>
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("workflowStudio.library")}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Button
-                  className="w-full"
-                  variant="secondary"
-                  onClick={() => selectDefinition(freshDefinition())}
+      <div className="studio-layout">
+        <aside
+          className="studio-library"
+          aria-label={t("workflowStudio.library")}
+        >
+          <Button
+            className="w-full"
+            variant="outline"
+            disabled={busy}
+            onClick={() => {
+              selectDefinition(freshDefinition());
+              setHasDraft(false);
+              setEditing(false);
+            }}
+          >
+            <Plus />
+            {t("workflowStudio.newWorkflow")}
+          </Button>
+          <div className="studio-library-heading">
+            {t("workflowStudio.published")}
+            <span>{publishedGroups.length}</span>
+          </div>
+          {publishedGroups.map(([id, versions]) => {
+            const item = versions[versions.length - 1];
+            return (
+              <div key={id}>
+                <button
+                  disabled={busy}
+                  className={`studio-library-item ${hasDraft && definition.id === id ? "is-selected" : ""}`}
+                  onClick={() => selectDefinition(item)}
                 >
-                  <Plus /> {t("workflowStudio.newWorkflow")}
+                  <GitBranch />
+                  <span>
+                    <strong>{item.label}</strong>
+                    <small>{usageText(item.id, item.version)}</small>
+                  </span>
+                </button>
+                {versions.length > 1 && (
+                  <details className="studio-versions">
+                    <summary>{t("studio.versionHistory")}</summary>
+                    {versions
+                      .slice(0, -1)
+                      .reverse()
+                      .map((version) => (
+                        <button
+                          disabled={busy}
+                          key={version.version}
+                          onClick={() => selectDefinition(version)}
+                        >
+                          v{version.version} · {usageText(id, version.version)}
+                        </button>
+                      ))}
+                  </details>
+                )}
+              </div>
+            );
+          })}
+          <div className="studio-library-heading">
+            {t("workflowStudio.drafts")}
+            <span>{drafts.length}</span>
+          </div>
+          {drafts.length === 0 && (
+            <p className="studio-library-empty">{t("studio.noDrafts")}</p>
+          )}
+          {drafts.map((item) => (
+            <button
+              disabled={busy}
+              key={item.draftId}
+              className={`studio-library-item ${hasDraft && draftId === item.draftId ? "is-selected" : ""}`}
+              onClick={() => selectDefinition(item.definition, item.draftId, item.revision)}
+            >
+              <span className="studio-draft-dot" />
+              <span>
+                <strong>{item.definition.label}</strong>
+                <small>
+                  {t(
+                    item.validation.valid
+                      ? "workflowStudio.valid"
+                      : "workflowStudio.needsFix",
+                  )}
+                </small>
+              </span>
+            </button>
+          ))}
+        </aside>
+        <main ref={mainRef} className="studio-main">
+          {editing ? (
+            <>
+              <div className="studio-editor-header">
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() => setEditing(false)}
+                >
+                  <ArrowLeft />
+                  {t("studio.backToOverview")}
                 </Button>
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    {t("workflowStudio.published")}
-                  </p>
-                  {publishedGroups.map(([id, versions]) => (
-                    <div key={id} className="space-y-1">
-                      <p className="truncate font-mono text-[10px] text-muted-foreground">
-                        {id}
-                      </p>
-                      {versions.map((item) => {
-                        const isLatest = latestVersion.get(item.id) === item.version;
-                        return (
-                          <button
-                            key={`${item.id}@${item.version}`}
-                            className="w-full rounded-md border p-2 text-left text-xs hover:bg-accent"
-                            onClick={() => selectDefinition(item)}
+                <span>{t("studio.advancedHint")}</span>
+              </div>
+              <fieldset disabled={busy} className="studio-editor-grid">
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t("workflowStudio.definition")}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid gap-3 md:grid-cols-2">
+                      <label className="text-xs">
+                        ID
+                        <Input
+                          value={definition.id}
+                          onChange={(e) =>
+                            updateDefinition({ id: e.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="text-xs">
+                        {t("workflowStudio.version")}
+                        <Input
+                          value={definition.version}
+                          onChange={(e) =>
+                            updateDefinition({ version: e.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="text-xs">
+                        {t("workflowStudio.name")}
+                        <Input
+                          aria-label={t("workflowStudio.nameAria")}
+                          value={definition.label}
+                          onChange={(e) =>
+                            updateDefinition({ label: e.target.value })
+                          }
+                        />
+                      </label>
+                      <label className="text-xs">
+                        {t("workflowStudio.entryStep")}
+                        <Select
+                          className="mt-1"
+                          value={definition.entry}
+                          onChange={(v) => updateDefinition({ entry: v })}
+                          options={definition.nodes.map((n) => ({
+                            value: n.id,
+                            label: n.label,
+                          }))}
+                        />
+                      </label>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        {t("workflowStudio.documents")}
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() =>
+                            updateDefinition({
+                              artifacts: [
+                                ...definition.artifacts,
+                                blankArtifact(definition.artifacts.length + 1),
+                              ],
+                            })
+                          }
+                        >
+                          <Plus /> {t("workflowStudio.addDocument")}
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {definition.artifacts.length === 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {t("workflowStudio.noDocuments")}
+                        </p>
+                      )}
+                      {definition.artifacts.map((artifact, index) => (
+                        <div
+                          key={`${artifact.role}-${index}`}
+                          className="grid gap-2 rounded-md border p-3 md:grid-cols-2"
+                        >
+                          <label className="text-xs">
+                            {t("workflowStudio.roleId")}
+                            <Input
+                              value={artifact.role}
+                              onChange={(e) =>
+                                updateDefinition({
+                                  artifacts: definition.artifacts.map(
+                                    (item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, role: e.target.value }
+                                        : item,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="text-xs">
+                            {t("workflowStudio.displayName")}
+                            <Input
+                              value={artifact.label}
+                              onChange={(e) =>
+                                updateDefinition({
+                                  artifacts: definition.artifacts.map(
+                                    (item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, label: e.target.value }
+                                        : item,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="text-xs md:col-span-2">
+                            {t("workflowStudio.docPath")}
+                            <Input
+                              value={artifact.path}
+                              onChange={(e) =>
+                                updateDefinition({
+                                  artifacts: definition.artifacts.map(
+                                    (item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, path: e.target.value }
+                                        : item,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <label className="text-xs md:col-span-2">
+                            {t("workflowStudio.initialTemplate")}
+                            <Textarea
+                              className="min-h-24 font-mono text-xs"
+                              value={artifact.template}
+                              onChange={(e) =>
+                                updateDefinition({
+                                  artifacts: definition.artifacts.map(
+                                    (item, itemIndex) =>
+                                      itemIndex === index
+                                        ? { ...item, template: e.target.value }
+                                        : item,
+                                  ),
+                                })
+                              }
+                            />
+                          </label>
+                          <Button
+                            className="justify-self-start"
+                            size="xs"
+                            variant="ghost"
+                            onClick={() =>
+                              updateDefinition({
+                                artifacts: definition.artifacts.filter(
+                                  (_, itemIndex) => itemIndex !== index,
+                                ),
+                              })
+                            }
                           >
-                            <span className="flex items-baseline justify-between gap-2">
-                              <strong className="truncate">{item.label}</strong>
-                              <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
-                                {isLatest && (
-                                  <span className="mr-1 rounded bg-primary/10 px-1 font-sans text-primary">
-                                    {t("workflowStudio.latestBadge")}
-                                  </span>
-                                )}
-                                v{item.version}
-                              </span>
-                            </span>
-                            <span className="mt-0.5 block text-[10px] text-muted-foreground">
-                              {usageText(item.id, item.version)}
-                            </span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ))}
+                            <Trash2 /> {t("workflowStudio.delete")}
+                          </Button>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <GitBranch className="size-4" />{" "}
+                        {t("workflowStudio.stepsAndEdges")}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <WorkflowCanvas
+                        key={draftId}
+                        layoutKey={draftId}
+                        definition={definition}
+                        selected={selected}
+                        onSelect={setSelected}
+                        onChange={updateDefinition}
+                      />
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          let index = definition.nodes.length + 1;
+                          while (
+                            definition.nodes.some(
+                              (n) => n.id === `step-${index}`,
+                            )
+                          )
+                            index++;
+                          const next = blankNode(index);
+                          updateDefinition({
+                            nodes: [...definition.nodes, next],
+                          });
+                          setSelected(next.id);
+                        }}
+                      >
+                        <Plus /> {t("workflowStudio.addStep")}
+                      </Button>
+                    </CardContent>
+                  </Card>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold text-muted-foreground">
-                    {t("workflowStudio.drafts")}
-                  </p>
-                  {drafts.map((item) => (
-                    <button
-                      key={item.draftId}
-                      className="w-full rounded-md border p-2 text-left text-xs hover:bg-accent"
-                      onClick={() =>
-                        selectDefinition(item.definition, item.draftId)
-                      }
-                    >
-                      <strong>{item.definition.label || item.draftId}</strong>
-                      <Badge
-                        className="ml-2"
-                        variant={
-                          item.validation.valid ? "success" : "destructive"
+
+                <div className="space-y-4">
+                  {node && (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>
+                          {t("workflowStudio.selectedStep")}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        <label className="text-xs">
+                          ID
+                          <Input
+                            value={node.id}
+                            onChange={(e) => {
+                              const old = node.id;
+                              const id = e.target.value;
+                              setSelected(id);
+                              setDefinition((current) => ({
+                                ...current,
+                                entry:
+                                  current.entry === old ? id : current.entry,
+                                nodes: current.nodes.map((n) =>
+                                  n.id === old ? { ...n, id } : n,
+                                ),
+                                edges: current.edges.map((edge) => ({
+                                  ...edge,
+                                  from: edge.from === old ? id : edge.from,
+                                  to: edge.to === old ? id : edge.to,
+                                })),
+                              }));
+                            }}
+                          />
+                        </label>
+                        <label className="text-xs">
+                          {t("workflowStudio.name")}
+                          <Input
+                            value={node.label}
+                            onChange={(e) =>
+                              updateNode({ label: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          {t("workflowStudio.kind")}
+                          <Select
+                            className="mt-1"
+                            value={node.kind}
+                            onChange={(v) =>
+                              updateNode({
+                                kind: v as WorkflowNode["kind"],
+                              })
+                            }
+                            options={[
+                              "artifact",
+                              "agent",
+                              "check",
+                              "human",
+                              "condition",
+                              "subworkflow",
+                              "end",
+                            ].map((kind) => ({
+                              value: kind,
+                              label: t(`canvas.nodeKinds.${kind}`),
+                            }))}
+                          />
+                        </label>
+                        {node.kind === "artifact" && (
+                          <label className="text-xs">
+                            {t("workflowStudio.artifactRole")}
+                            <Input
+                              value={node.artifactRole ?? ""}
+                              onChange={(e) =>
+                                updateNode({
+                                  artifactRole: e.target.value || null,
+                                })
+                              }
+                            />
+                          </label>
+                        )}
+                        {(node.kind === "agent" || node.kind === "check") && (
+                          <label className="text-xs">
+                            {t("workflowStudio.actionRef")}
+                            <Input
+                              value={node.actionRef ?? ""}
+                              onChange={(e) =>
+                                updateNode({
+                                  actionRef: e.target.value || null,
+                                })
+                              }
+                            />
+                          </label>
+                        )}
+                        {node.kind === "human" && (
+                          <label className="text-xs">
+                            {t("workflowStudio.decisionKey")}
+                            <Input
+                              value={node.decision ?? ""}
+                              onChange={(e) =>
+                                updateNode({ decision: e.target.value || null })
+                              }
+                            />
+                          </label>
+                        )}
+                        {node.kind === "subworkflow" && (
+                          <div className="grid grid-cols-2 gap-2 rounded-md border p-2">
+                            <label className="text-xs">
+                              {t("workflowStudio.subworkflowId")}
+                              <Input
+                                list="workflow-library"
+                                value={node.workflowRef?.id ?? ""}
+                                onChange={(e) =>
+                                  updateNode({
+                                    workflowRef: {
+                                      id: e.target.value,
+                                      version:
+                                        node.workflowRef?.version ?? "1.0.0",
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                            <label className="text-xs">
+                              {t("workflowStudio.exactVersion")}
+                              <Input
+                                value={node.workflowRef?.version ?? ""}
+                                onChange={(e) =>
+                                  updateNode({
+                                    workflowRef: {
+                                      id: node.workflowRef?.id ?? "",
+                                      version: e.target.value,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                            <datalist id="workflow-library">
+                              {catalog.map((item) => (
+                                <option
+                                  key={`${item.id}@${item.version}`}
+                                  value={item.id}
+                                >
+                                  {item.version}
+                                </option>
+                              ))}
+                            </datalist>
+                          </div>
+                        )}
+                        <label className="text-xs">
+                          {t("workflowStudio.allowedRoles")}
+                          <Input
+                            value={node.allowedRoles.join(", ")}
+                            onChange={(e) =>
+                              updateNode({
+                                allowedRoles: comma(
+                                  e.target.value,
+                                ) as AgentRole[],
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          {t("workflowStudio.inputRoles")}
+                          <Input
+                            value={node.inputs.join(", ")}
+                            onChange={(e) =>
+                              updateNode({ inputs: comma(e.target.value) })
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          {t("workflowStudio.outputRoles")}
+                          <Input
+                            value={node.outputs.join(", ")}
+                            onChange={(e) =>
+                              updateNode({ outputs: comma(e.target.value) })
+                            }
+                          />
+                        </label>
+                        <label className="text-xs">
+                          {t("workflowStudio.instructions")}
+                          <Textarea
+                            value={node.instructions}
+                            onChange={(e) =>
+                              updateNode({ instructions: e.target.value })
+                            }
+                          />
+                        </label>
+                        <label className="flex items-center gap-2 text-xs">
+                          <Switch
+                            checked={node.requiresCompletedDependencies}
+                            onCheckedChange={(value) =>
+                              updateNode({
+                                requiresCompletedDependencies: value,
+                              })
+                            }
+                          />{" "}
+                          {t("workflowStudio.requiresDeps")}
+                        </label>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={definition.nodes.length <= 1}
+                          onClick={() => {
+                            updateDefinition({
+                              entry:
+                                definition.entry === node.id
+                                  ? definition.nodes.find(
+                                      (item) => item.id !== node.id,
+                                    )!.id
+                                  : definition.entry,
+                              nodes: definition.nodes.filter(
+                                (item) => item.id !== node.id,
+                              ),
+                              edges: definition.edges.filter(
+                                (edge) =>
+                                  edge.from !== node.id && edge.to !== node.id,
+                              ),
+                            });
+                            setSelected(
+                              definition.nodes.find(
+                                (item) => item.id !== node.id,
+                              )?.id ?? "",
+                            );
+                          }}
+                        >
+                          <Trash2 /> {t("workflowStudio.delete")}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>
+                        {t("workflowStudio.validatePublish")}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <label className="text-xs">
+                        {t("workflowStudio.draftId")}
+                        <Input
+                          value={draftId}
+                          onChange={(e) => { setDraftId(e.target.value); setDraftRevision(undefined); }}
+                        />
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() =>
+                            void action(async () => {
+                              const saved = await workflowApi.saveDraft(
+                                draftId,
+                                definition,
+                                draftRevision,
+                              );
+                              setDraftRevision(saved.revision);
+                              setValidation(saved.validation);
+                              await load();
+                            })
+                          }
+                        >
+                          <Save /> {t("workflowStudio.saveDraft")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={busy}
+                          onClick={() =>
+                            void action(async () =>
+                              setValidation(
+                                await workflowApi.validate(definition),
+                              ),
+                            )
+                          }
+                        >
+                          {t("workflowStudio.validate")}
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={busy || validation?.valid === false}
+                          onClick={() => void publish()}
+                        >
+                          <CheckCircle2 /> {t("workflowStudio.publish")}
+                        </Button>
+                      </div>
+                      {validation?.issues.map((issue, index) => (
+                        <p
+                          key={index}
+                          className={`text-xs ${issue.severity === "error" ? "text-destructive" : "text-muted-foreground"}`}
+                        >
+                          {issue.path}: {issue.message}
+                        </p>
+                      ))}
+                      <label className="text-xs">
+                        {t("workflowStudio.simulationEvents")}
+                        <Input
+                          value={events}
+                          onChange={(e) => setEvents(e.target.value)}
+                        />
+                      </label>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() =>
+                          void action(async () =>
+                            setSimulation(
+                              await workflowApi.simulate({
+                                definition,
+                                definitions: catalog,
+                                events: comma(events).map((event) => ({
+                                  event,
+                                })),
+                              }),
+                            ),
+                          )
                         }
                       >
-                        {item.validation.valid
-                          ? t("workflowStudio.valid")
-                          : t("workflowStudio.needsFix")}
-                      </Badge>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </aside>
-
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("workflowStudio.definition")}</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-2">
-                <label className="text-xs">
-                  ID
-                  <Input
-                    value={definition.id}
-                    onChange={(e) => updateDefinition({ id: e.target.value })}
-                  />
-                </label>
-                <label className="text-xs">
-                  {t("workflowStudio.version")}
-                  <Input
-                    value={definition.version}
-                    onChange={(e) =>
-                      updateDefinition({ version: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="text-xs">
-                  {t("workflowStudio.name")}
-                  <Input
-                    aria-label={t("workflowStudio.nameAria")}
-                    value={definition.label}
-                    onChange={(e) =>
-                      updateDefinition({ label: e.target.value })
-                    }
-                  />
-                </label>
-                <label className="text-xs">
-                  {t("workflowStudio.entryStep")}
-                  <Select
-                    className="mt-1"
-                    value={definition.entry}
-                    onChange={(v) => updateDefinition({ entry: v })}
-                    options={definition.nodes.map((n) => ({
-                      value: n.id,
-                      label: n.label,
-                    }))}
-                  />
-                </label>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  {t("workflowStudio.documents")}
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    onClick={() =>
-                      updateDefinition({
-                        artifacts: [
-                          ...definition.artifacts,
-                          blankArtifact(definition.artifacts.length + 1),
-                        ],
-                      })
-                    }
-                  >
-                    <Plus /> {t("workflowStudio.addDocument")}
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {definition.artifacts.length === 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    {t("workflowStudio.noDocuments")}
-                  </p>
-                )}
-                {definition.artifacts.map((artifact, index) => (
-                  <div
-                    key={`${artifact.role}-${index}`}
-                    className="grid gap-2 rounded-md border p-3 md:grid-cols-2"
-                  >
-                    <label className="text-xs">
-                      {t("workflowStudio.roleId")}
-                      <Input
-                        value={artifact.role}
-                        onChange={(e) =>
-                          updateDefinition({
-                            artifacts: definition.artifacts.map(
-                              (item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, role: e.target.value }
-                                  : item,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="text-xs">
-                      {t("workflowStudio.displayName")}
-                      <Input
-                        value={artifact.label}
-                        onChange={(e) =>
-                          updateDefinition({
-                            artifacts: definition.artifacts.map(
-                              (item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, label: e.target.value }
-                                  : item,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="text-xs md:col-span-2">
-                      {t("workflowStudio.docPath")}
-                      <Input
-                        value={artifact.path}
-                        onChange={(e) =>
-                          updateDefinition({
-                            artifacts: definition.artifacts.map(
-                              (item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, path: e.target.value }
-                                  : item,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <label className="text-xs md:col-span-2">
-                      {t("workflowStudio.initialTemplate")}
-                      <Textarea
-                        className="min-h-24 font-mono text-xs"
-                        value={artifact.template}
-                        onChange={(e) =>
-                          updateDefinition({
-                            artifacts: definition.artifacts.map(
-                              (item, itemIndex) =>
-                                itemIndex === index
-                                  ? { ...item, template: e.target.value }
-                                  : item,
-                            ),
-                          })
-                        }
-                      />
-                    </label>
-                    <Button
-                      className="justify-self-start"
-                      size="xs"
-                      variant="ghost"
-                      onClick={() =>
-                        updateDefinition({
-                          artifacts: definition.artifacts.filter(
-                            (_, itemIndex) => itemIndex !== index,
-                          ),
-                        })
-                      }
-                    >
-                      <Trash2 /> {t("workflowStudio.delete")}
-                    </Button>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <GitBranch className="size-4" />{" "}
-                  {t("workflowStudio.stepsAndEdges")}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <WorkflowCanvas
-                  key={draftId}
-                  layoutKey={draftId}
-                  definition={definition}
-                  selected={selected}
-                  onSelect={setSelected}
-                  onChange={updateDefinition}
-                />
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    let index = definition.nodes.length + 1;
-                    while (
-                      definition.nodes.some((n) => n.id === `step-${index}`)
-                    )
-                      index++;
-                    const next = blankNode(index);
-                    updateDefinition({ nodes: [...definition.nodes, next] });
-                    setSelected(next.id);
-                  }}
-                >
-                  <Plus /> {t("workflowStudio.addStep")}
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-4">
-            {node && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>{t("workflowStudio.selectedStep")}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <label className="text-xs">
-                    ID
-                    <Input
-                      value={node.id}
-                      onChange={(e) => {
-                        const old = node.id;
-                        const id = e.target.value;
-                        setSelected(id);
-                        setDefinition((current) => ({
-                          ...current,
-                          entry: current.entry === old ? id : current.entry,
-                          nodes: current.nodes.map((n) =>
-                            n.id === old ? { ...n, id } : n,
-                          ),
-                          edges: current.edges.map((edge) => ({
-                            ...edge,
-                            from: edge.from === old ? id : edge.from,
-                            to: edge.to === old ? id : edge.to,
-                          })),
-                        }));
-                      }}
-                    />
-                  </label>
-                  <label className="text-xs">
-                    {t("workflowStudio.name")}
-                    <Input
-                      value={node.label}
-                      onChange={(e) => updateNode({ label: e.target.value })}
-                    />
-                  </label>
-                  <label className="text-xs">
-                    {t("workflowStudio.kind")}
-                    <Select
-                      className="mt-1"
-                      value={node.kind}
-                      onChange={(v) =>
-                        updateNode({
-                          kind: v as WorkflowNode["kind"],
-                        })
-                      }
-                      options={[
-                        "artifact",
-                        "agent",
-                        "check",
-                        "human",
-                        "condition",
-                        "subworkflow",
-                        "end",
-                      ].map((kind) => ({
-                        value: kind,
-                        label: t(`canvas.nodeKinds.${kind}`),
-                      }))}
-                    />
-                  </label>
-                  {node.kind === "artifact" && (
-                    <label className="text-xs">
-                      {t("workflowStudio.artifactRole")}
-                      <Input
-                        value={node.artifactRole ?? ""}
-                        onChange={(e) =>
-                          updateNode({ artifactRole: e.target.value || null })
-                        }
-                      />
-                    </label>
-                  )}
-                  {(node.kind === "agent" || node.kind === "check") && (
-                    <label className="text-xs">
-                      {t("workflowStudio.actionRef")}
-                      <Input
-                        value={node.actionRef ?? ""}
-                        onChange={(e) =>
-                          updateNode({ actionRef: e.target.value || null })
-                        }
-                      />
-                    </label>
-                  )}
-                  {node.kind === "human" && (
-                    <label className="text-xs">
-                      {t("workflowStudio.decisionKey")}
-                      <Input
-                        value={node.decision ?? ""}
-                        onChange={(e) =>
-                          updateNode({ decision: e.target.value || null })
-                        }
-                      />
-                    </label>
-                  )}
-                  {node.kind === "subworkflow" && (
-                    <div className="grid grid-cols-2 gap-2 rounded-md border p-2">
-                      <label className="text-xs">
-                        {t("workflowStudio.subworkflowId")}
-                        <Input
-                          list="workflow-library"
-                          value={node.workflowRef?.id ?? ""}
-                          onChange={(e) =>
-                            updateNode({
-                              workflowRef: {
-                                id: e.target.value,
-                                version: node.workflowRef?.version ?? "1.0.0",
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                      <label className="text-xs">
-                        {t("workflowStudio.exactVersion")}
-                        <Input
-                          value={node.workflowRef?.version ?? ""}
-                          onChange={(e) =>
-                            updateNode({
-                              workflowRef: {
-                                id: node.workflowRef?.id ?? "",
-                                version: e.target.value,
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                      <datalist id="workflow-library">
-                        {catalog.map((item) => (
-                          <option
-                            key={`${item.id}@${item.version}`}
-                            value={item.id}
+                        {t("workflowStudio.simulate")}
+                      </Button>
+                      {simulation && (
+                        <div className="rounded-md bg-muted p-3 text-xs">
+                          <strong>{simulation.status}</strong>
+                          {simulation.issues.map((issue, index) => (
+                            <p
+                              key={`issue-${index}`}
+                              className={
+                                issue.severity === "error" ? "text-destructive" : ""
+                              }
+                            >
+                              {issue.path} · {issue.message}
+                            </p>
+                          ))}
+                          <p>
+                            {t("workflowStudio.activeNodes", {
+                              nodes:
+                                simulation.activeNodes.join(", ") ||
+                                t("workflowStudio.none"),
+                            })}
+                          </p>
+                          {simulation.trace.map((row, index) => (
+                            <p key={index}>
+                              {row.event ?? "start"} · {row.nodeId} ·{" "}
+                              {row.outcome}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setAdvanced((value) => !value)}
+                      >
+                        <Copy />{" "}
+                        {advanced
+                          ? t("workflowStudio.toVisual")
+                          : t("workflowStudio.advancedJson")}
+                      </Button>
+                      {advanced && (
+                        <>
+                          <Textarea
+                            aria-label="Workflow JSON"
+                            className="min-h-72 font-mono text-xs"
+                            value={source}
+                            onChange={(event) => setSource(event.target.value)}
+                          />
+                          <Button
+                            size="sm"
+                            disabled={busy}
+                            onClick={() =>
+                              void action(async () => {
+                                const parsed = JSON.parse(
+                                  source,
+                                ) as WorkflowDefinition;
+                                if (
+                                  !parsed ||
+                                  !Array.isArray(parsed.nodes) ||
+                                  !Array.isArray(parsed.edges) ||
+                                  !Array.isArray(parsed.artifacts) ||
+                                  !Array.isArray(parsed.loops) ||
+                                  parsed.nodes.some(
+                                    (item) =>
+                                      !item ||
+                                      !Array.isArray(item.inputs) ||
+                                      !Array.isArray(item.outputs) ||
+                                      !Array.isArray(item.allowedRoles),
+                                  )
+                                )
+                                  throw new Error(
+                                    t("workflowStudio.jsonSyntaxError"),
+                                  );
+                                const report =
+                                  await workflowApi.validate(parsed);
+                                setValidation(report);
+                                if (report.valid) {
+                                  updateDefinition(parsed);
+                                  setSelected(parsed.entry);
+                                }
+                              })
+                            }
                           >
-                            {item.version}
-                          </option>
-                        ))}
-                      </datalist>
-                    </div>
-                  )}
-                  <label className="text-xs">
-                    {t("workflowStudio.allowedRoles")}
-                    <Input
-                      value={node.allowedRoles.join(", ")}
-                      onChange={(e) =>
-                        updateNode({
-                          allowedRoles: comma(e.target.value) as AgentRole[],
-                        })
-                      }
-                    />
-                  </label>
-                  <label className="text-xs">
-                    {t("workflowStudio.inputRoles")}
-                    <Input
-                      value={node.inputs.join(", ")}
-                      onChange={(e) =>
-                        updateNode({ inputs: comma(e.target.value) })
-                      }
-                    />
-                  </label>
-                  <label className="text-xs">
-                    {t("workflowStudio.outputRoles")}
-                    <Input
-                      value={node.outputs.join(", ")}
-                      onChange={(e) =>
-                        updateNode({ outputs: comma(e.target.value) })
-                      }
-                    />
-                  </label>
-                  <label className="text-xs">
-                    {t("workflowStudio.instructions")}
-                    <Textarea
-                      value={node.instructions}
-                      onChange={(e) =>
-                        updateNode({ instructions: e.target.value })
-                      }
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-xs">
-                    <Switch
-                      checked={node.requiresCompletedDependencies}
-                      onCheckedChange={(value) =>
-                        updateNode({ requiresCompletedDependencies: value })
-                      }
-                    />{" "}
-                    {t("workflowStudio.requiresDeps")}
-                  </label>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={definition.nodes.length <= 1}
-                    onClick={() => {
-                      updateDefinition({
-                        entry:
-                          definition.entry === node.id
-                            ? definition.nodes.find(
-                                (item) => item.id !== node.id,
-                              )!.id
-                            : definition.entry,
-                        nodes: definition.nodes.filter(
-                          (item) => item.id !== node.id,
-                        ),
-                        edges: definition.edges.filter(
-                          (edge) =>
-                            edge.from !== node.id && edge.to !== node.id,
-                        ),
-                      });
-                      setSelected(
-                        definition.nodes.find((item) => item.id !== node.id)
-                          ?.id ?? "",
-                      );
-                    }}
-                  >
-                    <Trash2 /> {t("workflowStudio.delete")}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("workflowStudio.validatePublish")}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <label className="text-xs">
-                  {t("workflowStudio.draftId")}
-                  <Input
-                    value={draftId}
-                    onChange={(e) => setDraftId(e.target.value)}
-                  />
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() =>
-                      void action(async () => {
-                        const saved = await workflowApi.saveDraft(
-                          draftId,
-                          definition,
-                        );
-                        setValidation(saved.validation);
-                        await load();
-                      })
-                    }
-                  >
-                    <Save /> {t("workflowStudio.saveDraft")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() =>
-                      void action(async () =>
-                        setValidation(await workflowApi.validate(definition)),
-                      )
-                    }
-                  >
-                    {t("workflowStudio.validate")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={busy || validation?.valid === false}
-                    onClick={() =>
-                      void action(async () => {
-                        await workflowApi.publish(definition);
-                        await load();
-                        setMessage(t("workflowStudio.publishedNew"));
-                      })
-                    }
-                  >
-                    <CheckCircle2 /> {t("workflowStudio.publish")}
-                  </Button>
+                            {t("studio.applyJson")}
+                          </Button>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
                 </div>
-                {validation?.issues.map((issue, index) => (
-                  <p
-                    key={index}
-                    className={`text-xs ${issue.severity === "error" ? "text-destructive" : "text-muted-foreground"}`}
-                  >
-                    {issue.path}: {issue.message}
-                  </p>
-                ))}
-                <label className="text-xs">
-                  {t("workflowStudio.simulationEvents")}
-                  <Input
-                    value={events}
-                    onChange={(e) => setEvents(e.target.value)}
-                  />
-                </label>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() =>
-                    void action(async () =>
-                      setSimulation(
-                        await workflowApi.simulate({
-                          definition,
-                          definitions: catalog,
-                          events: comma(events).map((event) => ({ event })),
-                        }),
-                      ),
-                    )
-                  }
-                >
-                  {t("workflowStudio.simulate")}
-                </Button>
-                {simulation && (
-                  <div className="rounded-md bg-muted p-3 text-xs">
-                    <strong>{simulation.status}</strong>
-                    <p>
-                      {t("workflowStudio.activeNodes", {
-                        nodes:
-                          simulation.activeNodes.join(", ") ||
-                          t("workflowStudio.none"),
-                      })}
-                    </p>
-                    {simulation.trace.map((row, index) => (
-                      <p key={index}>
-                        {row.event ?? "start"} · {row.nodeId} · {row.outcome}
-                      </p>
-                    ))}
-                  </div>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setAdvanced((value) => !value)}
-                >
-                  <Copy />{" "}
-                  {advanced
-                    ? t("workflowStudio.toVisual")
-                    : t("workflowStudio.advancedJson")}
-                </Button>
-                {advanced && (
-                  <Textarea
-                    className="min-h-72 font-mono text-xs"
-                    value={source}
-                    onChange={(e) => {
-                      setSource(e.target.value);
-                      try {
-                        setDefinition(
-                          JSON.parse(e.target.value) as WorkflowDefinition,
-                        );
-                        setMessage(null);
-                      } catch {
-                        setMessage(t("workflowStudio.jsonSyntaxError"));
-                      }
-                    }}
-                  />
-                )}
-                {message && (
-                  <p className="text-xs text-muted-foreground">{message}</p>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+              </fieldset>
+            </>
+          ) : (
+            <WorkflowBrief
+              definition={hasDraft ? definition : null}
+              request={request}
+              onRequest={setRequest}
+              agent={agent}
+              onAgent={setAgent}
+              busy={busy}
+              onGenerate={() => void generate()}
+              onEdit={() => {
+                setHasDraft(true);
+                setEditing(true);
+              }}
+              onSave={() =>
+                void action(async () => {
+                  const saved = await workflowApi.saveDraft(
+                    draftId,
+                    definition,
+                    draftRevision,
+                  );
+                  setDraftRevision(saved.revision);
+                  setValidation(saved.validation);
+                  await load();
+                  setMessage(t("studio.saved"));
+                })
+              }
+              onPublish={() => void publish()}
+              onName={(label) => updateDefinition({ label })}
+            />
+          )}
+          {validation && !validation.valid && (
+            <div className="studio-notice" role="alert">
+              {validation.issues.map((issue, i) => (
+                <p key={i}>
+                  {issue.path}: {issue.message}
+                </p>
+              ))}
+            </div>
+          )}
+          {message && (
+            <p className="studio-notice" role="status">
+              {message}
+            </p>
+          )}
+        </main>
       </div>
     </div>
   );

@@ -198,6 +198,7 @@ const previewConfigBase: ConfigView = {
       startTimeoutSec: 60,
       jobTimeoutMin: 120,
       notify: true,
+      childModelPolicy: "auto",
     },
     customAgents: [],
     collaboration: {
@@ -866,6 +867,14 @@ export async function corePreview(
     case "list_schedules":
     case "ingestion_list":
       return [];
+    case "vault_attention":
+      return {
+        pendingSchemaMoves: 0,
+        schemaConflicts: 0,
+        schemaId: "",
+        schemaRevision: 0,
+        pendingLegacyIssues: 0,
+      };
     case "extension_package_list":
       return structuredClone(previewExtensionPackages);
     case "extension_package_workflows":

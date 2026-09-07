@@ -1,0 +1,43 @@
+{
+  "clearSearch": "검색 지우기",
+  "reset": "필터 초기화",
+  "noResults": "조건에 맞는 항목이 없습니다.",
+  "noResultsHint": "다른 검색어를 입력하거나 필터를 초기화해 보세요.",
+  "loading": "목록을 불러오는 중…",
+  "tasks": {
+    "libraryDescription": "반복하는 업무를 저장해 두고, 필요할 때 실행하세요.",
+    "schedulesDescription": "저장한 자동화 작업에 실행 시간을 지정하고 반복 일정을 관리하세요.",
+    "search": "자동화 작업 검색",
+    "filters": "자동화 작업 분류",
+    "all": "전체",
+    "custom": "내가 만든 작업",
+    "builtin": "기본·확장 작업",
+    "count": "{{count}}개 작업",
+    "enabled": "활성 예약 {{count}}개",
+    "emptyHint": "자동화 작업을 먼저 만든 다음, 원하는 시간에 예약할 수 있습니다.",
+    "enabledLabel": "{{title}} 활성화",
+    "createFirst": "첫 작업 만들기",
+    "chooseForSchedule": "예약할 작업 선택"
+  },
+  "jobs": {
+    "description": "진행 중인 실행을 확인하고, 완료된 작업의 로그와 결과를 찾아보세요.",
+    "search": "실행 이름·프로젝트 검색",
+    "filters": "실행 결과 필터",
+    "all": "전체",
+    "history": "지난 실행",
+    "idle": "지금은 실행 중인 작업이 없습니다",
+    "idleHint": "자동화 작업을 실행하면 진행 상황과 결과가 여기에 표시됩니다.",
+    "openLibrary": "자동화 작업 보기",
+    "actions": "실행 결과",
+    "cancelFailed": "실행을 취소하지 못했습니다: {{error}}",
+    "cancelRun": "{{label}} 취소"
+  },
+  "reading": {
+    "description": "연결한 피드의 새 소식을 읽고, 다시 볼 기사를 보관하세요.",
+    "search": "기사 제목·내용 검색",
+    "filters": "기사 상태 필터",
+    "source": "읽을거리 소스 선택",
+    "unread": "안 읽은 기사 {{count}}개"
+  },
+  "loadFailed": "목록을 불러오지 못했습니다."
+}

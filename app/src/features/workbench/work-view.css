@@ -20,7 +20,7 @@
 }
 .wb-work-header { justify-content: space-between; gap: 20px; margin-bottom: 24px; }
 .wb-work-heading { gap: 10px; }
-.wb-work-heading h1 { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.04em; }
+.wb-work-heading h1 { margin: 0; font-size: 26px; font-weight: 650; letter-spacing: -0.04em; }
 .wb-work-heading > span {
   border: 1px solid var(--wb-line);
   border-radius: 6px;
@@ -74,7 +74,7 @@
 .wb-work-toolbar > button { height: 34px; font-size: 12px; }
 .wb-work-toolbar > button[aria-expanded="true"] { background: var(--wb-teal-soft); color: var(--wb-teal); border-color: color-mix(in srgb, var(--wb-teal) 30%, var(--wb-line)); }
 .wb-work-filter-count { font-size: 10px; padding: 0 5px; border-radius: 4px; background: var(--wb-teal-soft); color: var(--wb-teal); }
-.wb-work-filters { display: grid; grid-template-columns: minmax(180px, 1.5fr) repeat(4, minmax(110px, 1fr)); gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid var(--wb-line); border-radius: 10px; background: var(--wb-warm); }
+.wb-work-filters { display: grid; grid-template-columns: minmax(180px, 1.5fr) repeat(4, minmax(110px, 1fr)); gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid var(--wb-line); border-radius: 7px; background: var(--wb-warm); }
 .wb-work-filters > label { min-width: 0; }
 .wb-work-filters > label > span { display: block; font-size: 11px; margin-bottom: 6px; color: var(--wb-muted); }
 .wb-work-results { min-height: 52px; gap: 12px; font-size: 11px; color: var(--wb-muted); flex-wrap: wrap; }
@@ -89,7 +89,7 @@
 .wb-work-page .wb-process-group > h2 small { margin-left: 0; font-size: 10px; font-weight: 400; }
 .wb-work-process-count { margin-left: auto; color: var(--wb-muted); font-size: 11px; font-weight: 400; }
 .wb-work-page .wb-process-group .wb-board { grid-auto-columns: minmax(184px, 1fr); gap: 10px; padding-bottom: 10px; }
-.wb-work-page .wb-board-column { min-height: 340px; background: var(--wb-warm); padding: 10px 8px; border: 1px solid var(--wb-line); border-radius: 10px; }
+.wb-work-page .wb-board-column { min-height: 340px; background: color-mix(in srgb, var(--wb-warm) 60%, var(--wb-paper)); padding: 10px 8px; border: 0; border-radius: 6px; }
 .wb-work-page .wb-column-head { padding: 2px 4px 10px; margin: 0 0 8px; border-bottom: 1px solid var(--wb-line); font-size: 12px; }
 .wb-work-page .wb-column-head strong { display: flex; align-items: center; gap: 7px; font-weight: 600; }
 .wb-work-page .wb-column-head strong::before { content: ""; width: 6px; height: 6px; border: 1.5px solid var(--wb-muted); border-radius: 50%; }
@@ -108,7 +108,7 @@
 .wb-work-page .wb-board-card footer > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .wb-work-page .wb-board-card footer time { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .wb-work-page .wb-drop-hint { border: 0; min-height: 70px; font-size: 11px; opacity: 0.7; }
-.wb-work-page .wb-milestone-rail { margin-top: 14px; padding: 0 14px 14px; border-radius: 10px; }
+.wb-work-page .wb-milestone-rail { margin-top: 14px; padding: 0 14px 14px; border-radius: 7px; }
 .wb-work-page .wb-milestone-rail .wb-panel-title { padding: 10px 0; }
 .wb-work-page .wb-milestone-rail h2 { font-size: 12px; }
 .wb-work-milestones { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
@@ -116,7 +116,7 @@
 .wb-work-page .wb-milestone-row.is-active { border-color: color-mix(in srgb, var(--wb-teal) 35%, var(--wb-line)); }
 .wb-work-page .wb-milestone-row strong { font-size: 12px; overflow-wrap: anywhere; }
 .wb-work-page .wb-milestone-row small { margin-top: 4px; }
-.wb-work-page .wb-issue-table { font-size: 12px; border-radius: 10px; }
+.wb-work-page .wb-issue-table { font-size: 12px; border-radius: 7px; }
 .wb-work-page .wb-issue-table th { background: var(--wb-warm); font-size: 11px; font-weight: 500; }
 .wb-work-page .wb-issue-table td { padding-top: 14px; padding-bottom: 14px; }
 .wb-work-page .wb-issue-table td:not(.wb-work-title-cell) { white-space: nowrap; }

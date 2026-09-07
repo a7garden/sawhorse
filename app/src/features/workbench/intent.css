@@ -23,3 +23,23 @@
 @media (max-width: 640px) { .wb-intent-heading h2 { font-size: 20px; } .wb-intent-route { gap: 5px; } .wb-intent-footer > :first-child { width: 100%; } }
 .wb-intent-editor .cm-atomic-image img, .wb-intent-review-document .cm-atomic-image img { max-width: 100%; max-height: 480px; object-fit: contain; border-radius: 6px; }
 .wb-intent-editor .wb-atomic-editor[hidden] { display: none; }
+.wb-intent-progress { display: flex; flex-wrap: wrap; gap: 8px 18px; list-style: none; padding: 0; margin: 0; font-size: 12px; color: var(--muted-foreground); }
+.wb-intent-progress li { display: flex; align-items: center; gap: 6px; }
+.wb-intent-progress li > span { display: grid; place-items: center; width: 20px; height: 20px; border: 1px solid var(--border); border-radius: 50%; }
+.wb-intent-progress [aria-current=step] { color: var(--foreground); font-weight: 650; }
+.wb-intent-progress [aria-current=step] > span, .wb-intent-progress .is-complete > span { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.wb-intent-action-box { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); }
+.wb-intent-feedback-label { display: grid; gap: 6px; font-size: 12px; color: var(--muted-foreground); }
+.wb-intent-feedback-label textarea { width: 100%; min-height: 44px; color: var(--foreground); }
+.wb-intent-run { flex-wrap: wrap; }
+.wb-intent-run > span { flex: 1; min-width: 180px; }
+.wb-intent-run small { display: block; margin-top: 4px; overflow-wrap: anywhere; }
+.wb-intent-history { border-top: 1px solid var(--border); padding-top: 12px; font-size: 12px; }
+.wb-intent-history summary { cursor: pointer; font-weight: 600; }
+.wb-intent-history p { margin-top: 8px; color: var(--muted-foreground); }
+.wb-intent-history button { display: flex; flex-wrap: wrap; gap: 6px 12px; width: 100%; padding: 10px 0; text-align: left; border-bottom: 1px solid var(--border); }
+.wb-intent-history button:hover { color: var(--primary); }
+.wb-intent-history time { margin-left: auto; color: var(--muted-foreground); }
+.wb-intent-history small { width: 100%; overflow-wrap: anywhere; }
+.wb-intent-history-notice { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--muted-foreground); }
+.wb-intent-history-notice > span { flex: 1; }

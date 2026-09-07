@@ -6,6 +6,8 @@ const ALLOWED_ROLES: [&str; 5] = ["research", "planner", "implementer", "verifie
 
 fn valid_id(value: &str) -> bool {
     !value.is_empty()
+        && crate::workspace_io::portable_component(value)
+        && !matches!(value, "." | "..")
         && value.len() <= 128
         && value
             .bytes()
@@ -13,12 +15,7 @@ fn valid_id(value: &str) -> bool {
 }
 
 fn valid_version(value: &str) -> bool {
-    let core = value.split_once('-').map(|part| part.0).unwrap_or(value);
-    let pieces: Vec<_> = core.split('.').collect();
-    pieces.len() == 3
-        && pieces
-            .iter()
-            .all(|piece| !piece.is_empty() && piece.bytes().all(|byte| byte.is_ascii_digit()))
+    semver::Version::parse(value).is_ok()
 }
 
 fn issue(
@@ -51,6 +48,13 @@ fn validate_artifact_path(path: &str) -> Result<(), &'static str> {
     without_allowed = without_allowed.replace("{projectId}", "project");
     if without_allowed.contains('{') || without_allowed.contains('}') {
         return Err("지원하지 않는 artifact path placeholder입니다");
+    }
+    if without_allowed.contains('\\')
+        || !without_allowed
+            .split('/')
+            .all(crate::workspace_io::portable_component)
+    {
+        return Err("artifact path는 / 구분자와 Windows/macOS 공통 파일명을 사용해야 합니다");
     }
     let first = without_allowed
         .split(['/', '\\'])
@@ -100,7 +104,7 @@ pub fn validate(definition: &WorkflowDefinition) -> ValidationReport {
             IssueSeverity::Error,
             "invalid-version",
             "version",
-            "workflow version은 x.y.z 형식이어야 합니다",
+            "workflow version은 유효한 SemVer(x.y.z)여야 합니다",
         );
     }
 
@@ -142,7 +146,7 @@ pub fn validate(definition: &WorkflowDefinition) -> ValidationReport {
                 format!("{path}.path"),
                 message,
             );
-        } else if !artifact_paths.insert(artifact.path.as_str()) {
+        } else if !artifact_paths.insert(artifact.path.to_lowercase()) {
             issue(
                 &mut issues,
                 IssueSeverity::Error,
@@ -533,8 +537,67 @@ pub fn validate_registry(definitions: &[WorkflowDefinition]) -> Vec<ValidationIs
         .map(|definition| (definition.id.as_str(), definition.version.as_str()))
         .collect();
     let mut issues = Vec::new();
+    let mut revisions = HashMap::new();
+    let mut portable_revisions = HashMap::new();
+    let mut portable_ids = HashMap::new();
     for definition in definitions {
+        let key = (definition.id.as_str(), definition.version.as_str());
+        if let Some(previous) =
+            portable_ids.insert(definition.id.to_ascii_lowercase(), definition.id.as_str())
+        {
+            if previous != definition.id {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "nonportable-workflow-id",
+                    &definition.id,
+                    "대소문자만 다른 workflow ID는 Windows/macOS에서 충돌합니다",
+                );
+            }
+        }
+        let portable_key = (
+            definition.id.to_ascii_lowercase(),
+            definition.version.to_ascii_lowercase(),
+        );
+        if let Some(previous) = portable_revisions.insert(portable_key, key) {
+            if previous != key {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "nonportable-workflow-version",
+                    format!("{}@{}", definition.id, definition.version),
+                    "대소문자만 다른 ID/version은 Windows/macOS에서 충돌합니다",
+                );
+            }
+        }
+        if let Some(existing) = revisions.insert(key, definition) {
+            if existing != definition {
+                issue(
+                    &mut issues,
+                    IssueSeverity::Error,
+                    "conflicting-workflow-version",
+                    format!("{}@{}", definition.id, definition.version),
+                    "같은 workflow id/version에 서로 다른 정의가 있습니다",
+                );
+            }
+            continue;
+        }
+        issues.extend(
+            validate(definition)
+                .issues
+                .into_iter()
+                .filter_map(|mut entry| {
+                    if entry.severity != IssueSeverity::Error {
+                        return None;
+                    }
+                    entry.path = format!("{}@{}.{}", definition.id, definition.version, entry.path);
+                    Some(entry)
+                }),
+        );
         for (index, node) in definition.nodes.iter().enumerate() {
+            if node.kind != NodeKind::Subworkflow {
+                continue;
+            }
             if let Some(reference) = &node.workflow_ref {
                 if !available.contains(&(reference.id.as_str(), reference.version.as_str())) {
                     issue(
@@ -551,7 +614,80 @@ pub fn validate_registry(definitions: &[WorkflowDefinition]) -> Vec<ValidationIs
             }
         }
     }
+    if let Err(cycle) = dependency_order(definitions) {
+        issues.push(cycle);
+    }
     issues
+}
+
+/// Children precede their callers. Use an explicit stack so deeply composed definitions
+/// cannot overflow the host stack during validation or publication.
+pub(crate) fn dependency_order(
+    definitions: &[WorkflowDefinition],
+) -> Result<Vec<usize>, ValidationIssue> {
+    let indices: HashMap<_, _> = definitions
+        .iter()
+        .enumerate()
+        .map(|(index, definition)| ((definition.id.as_str(), definition.version.as_str()), index))
+        .collect();
+    let mut state = vec![0u8; definitions.len()];
+    let mut order = Vec::new();
+    for start in 0..definitions.len() {
+        if state[start] != 0 {
+            continue;
+        }
+        state[start] = 1;
+        let mut stack = vec![(start, 0usize)];
+        while let Some((index, next_node)) = stack.last_mut() {
+            let definition = &definitions[*index];
+            if *next_node == definition.nodes.len() {
+                state[*index] = 2;
+                order.push(*index);
+                stack.pop();
+                continue;
+            }
+            let node_index = *next_node;
+            *next_node += 1;
+            let node = &definition.nodes[node_index];
+            if node.kind != NodeKind::Subworkflow {
+                continue;
+            }
+            let Some(child) = node.workflow_ref.as_ref().and_then(|reference| {
+                indices
+                    .get(&(reference.id.as_str(), reference.version.as_str()))
+                    .copied()
+            }) else {
+                // Missing references are reported separately by validate_registry.
+                continue;
+            };
+            if state[child] == 1 {
+                let cycle_start = stack.iter().position(|(index, _)| *index == child).unwrap();
+                let chain = stack[cycle_start..]
+                    .iter()
+                    .map(|(index, _)| *index)
+                    .chain(std::iter::once(child))
+                    .map(|index| {
+                        format!("{}@{}", definitions[index].id, definitions[index].version)
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" → ");
+                return Err(ValidationIssue {
+                    severity: IssueSeverity::Error,
+                    code: "recursive-subworkflow".into(),
+                    path: format!(
+                        "{}@{}.nodes[{node_index}].workflowRef",
+                        definition.id, definition.version
+                    ),
+                    message: format!("하위 workflow 순환 참조는 실행할 수 없습니다: {chain}"),
+                });
+            }
+            if state[child] == 0 {
+                state[child] = 1;
+                stack.push((child, 0));
+            }
+        }
+    }
+    Ok(order)
 }
 
 #[cfg(test)]
@@ -567,6 +703,86 @@ mod tests {
             assert!(report.valid, "{}: {:?}", definition.id, report.issues);
         }
         assert!(validate_registry(&definitions).is_empty());
+    }
+
+    #[test]
+    fn registry_rejects_recursive_subworkflows_and_conflicting_revisions() {
+        let mut parent = builtins::sdd_with_tdd();
+        parent.id = "parent".into();
+        let child_node = parent
+            .nodes
+            .iter_mut()
+            .find(|node| node.kind == NodeKind::Subworkflow)
+            .unwrap();
+        child_node.workflow_ref = Some(WorkflowRef {
+            id: "child".into(),
+            version: parent.version.clone(),
+        });
+        let mut child = parent.clone();
+        child.id = "child".into();
+        child
+            .nodes
+            .iter_mut()
+            .find(|node| node.kind == NodeKind::Subworkflow)
+            .unwrap()
+            .workflow_ref
+            .as_mut()
+            .unwrap()
+            .id = "parent".into();
+        let issues = validate_registry(&[parent.clone(), child]);
+        assert!(
+            issues
+                .iter()
+                .any(|issue| issue.code == "recursive-subworkflow"),
+            "{issues:?}"
+        );
+        assert!(issues
+            .iter()
+            .any(|issue| issue.message.contains("parent@") && issue.message.contains("child@")));
+
+        let mut conflict = parent.clone();
+        conflict.label = "different payload".into();
+        assert!(validate_registry(&[parent, conflict])
+            .iter()
+            .any(|issue| issue.code == "conflicting-workflow-version"));
+    }
+
+    #[test]
+    fn registry_validates_child_definitions_and_allows_shared_children() {
+        let parent = builtins::sdd_with_tdd();
+        let mut sibling = parent.clone();
+        sibling.id = "sibling".into();
+        let child = builtins::tdd();
+        assert!(
+            validate_registry(&[parent.clone(), sibling, child.clone(), child.clone()]).is_empty()
+        );
+        let mut invalid = child;
+        invalid.entry = "missing".into();
+        assert!(!validate_registry(&[parent, invalid]).is_empty());
+    }
+
+    #[test]
+    fn workflow_storage_keys_reject_traversal_and_accept_semver_metadata() {
+        for id in [".", "..", "../outside", "team/flow"] {
+            let mut definition = builtins::tdd();
+            definition.id = id.into();
+            assert!(!validate(&definition).valid, "{id}");
+        }
+        for version in [
+            "1.0.0-../../outside",
+            "1.0.0-",
+            "01.0.0",
+            "1.0.0-alpha/../../outside",
+        ] {
+            let mut definition = builtins::tdd();
+            definition.version = version.into();
+            assert!(!validate(&definition).valid, "{version}");
+        }
+        for version in ["1.0.0", "1.0.0-rc.1", "1.0.0+team.1", "1.0.0-rc.1+team.1"] {
+            let mut definition = builtins::tdd();
+            definition.version = version.into();
+            assert!(validate(&definition).valid, "{version}");
+        }
     }
 
     #[test]

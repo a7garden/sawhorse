@@ -1,111 +1,189 @@
-// ReadingPage — 읽을거리. feed instance의 기사 목록을 읽음/보관 상태와 함께 본다(설계 721-786줄).
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Archive, ExternalLink, Inbox, RefreshCw } from "lucide-react";
-import { api } from "@/lib/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Archive,
+  BookOpen,
+  ExternalLink,
+  Inbox,
+  RefreshCw,
+  Rss,
+  Search,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
-import SourcesPage from "./SourcesPage";
-import { isFeedCfg } from "@/lib/types";
-import type { ArticleRow, SourceInstanceRow } from "@/lib/types";
+import { api } from "@/lib/api";
+import {
+  isFeedCfg,
+  type ArticleRow,
+  type SourceInstanceRow,
+} from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
+import {
+  CollectionEmpty,
+  CollectionFilters,
+  CollectionIntro,
+  CollectionSearch,
+} from "@/components/CollectionTools";
 import { cn } from "@/lib/utils";
-import { Empty, PageHeader } from "./common";
+import { PageHeader } from "./common";
+import SourcesPage from "./SourcesPage";
 
 type ArticleFilter = "all" | "unread" | "archived";
-
 const FILTERS: ArticleFilter[] = ["all", "unread", "archived"];
 
-function parseTags(a: ArticleRow): string[] {
+function parseTags(article: ArticleRow): string[] {
   try {
-    const v = JSON.parse(a.tags);
-    return Array.isArray(v) ? v.map(String) : [];
+    const value = JSON.parse(article.tags);
+    return Array.isArray(value) ? [...new Set(value.map(String))] : [];
   } catch {
     return [];
   }
 }
 
-function fmtWhen(iso: string): string {
+function fmtWhen(iso: string, language: string): string {
   if (!iso) return "-";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime())
+    ? iso
+    : date.toLocaleString(language, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
 }
 
 export default function ReadingPage() {
+  const { t, i18n } = useTranslation("sessions");
+  const { t: tc } = useTranslation("collections");
   const [sourcesOpen, setSourcesOpen] = useState(false);
   const [instances, setInstances] = useState<SourceInstanceRow[]>([]);
   const [selId, setSelId] = useState("");
+  const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ArticleFilter>("all");
   const [articles, setArticles] = useState<ArticleRow[]>([]);
+  const [loadingSources, setLoadingSources] = useState(true);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
-  const { t } = useTranslation("sessions");
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const articleRequest = useRef(0);
 
   const reloadInstances = useCallback(async () => {
-    const v = await api.sourcesListInstances().catch(() => null);
-    const feeds = (v?.instances ?? []).filter((i) => isFeedCfg(i.config));
-    setInstances(feeds);
-    setSelId((cur) =>
-      cur && feeds.some((f) => f.instanceId === cur)
-        ? cur
-        : (feeds[0]?.instanceId ?? ""),
-    );
+    setLoadingSources(true);
+    setMsg(null);
+    try {
+      const view = await api.sourcesListInstances();
+      const feeds = view.instances.filter((instance) =>
+        isFeedCfg(instance.config),
+      );
+      setInstances(feeds);
+      setSelId((cur) =>
+        cur && feeds.some((feed) => feed.instanceId === cur)
+          ? cur
+          : (feeds[0]?.instanceId ?? ""),
+      );
+    } catch (error) {
+      setMsg(String(error));
+    } finally {
+      setLoadingSources(false);
+    }
   }, []);
 
   const reloadArticles = useCallback(async (id: string) => {
+    const request = ++articleRequest.current;
     if (!id) {
       setArticles([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const v = await api.articlesList(id).catch(() => null);
-    setArticles(v?.articles ?? []);
-    setLoading(false);
+    try {
+      const view = await api.articlesList(id);
+      if (request === articleRequest.current) setArticles(view.articles);
+    } catch (error) {
+      if (request === articleRequest.current) {
+        setArticles([]);
+        setMsg(String(error));
+      }
+    } finally {
+      if (request === articleRequest.current) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     void reloadInstances();
   }, [reloadInstances]);
-
   useEffect(() => {
     void reloadArticles(selId);
+    return () => {
+      articleRequest.current += 1;
+    };
   }, [selId, reloadArticles]);
 
-  /** 낙관적으로 상태를 바꾸고 서버 기록. 실패면 되돌린다. */
   function setArticleState(
-    a: ArticleRow,
+    article: ArticleRow,
     patch: { read?: boolean; archived?: boolean },
   ) {
+    const request = articleRequest.current;
+    setPendingIds((ids) => new Set(ids).add(article.id));
     setArticles((rows) =>
-      rows.map((r) =>
-        r.id === a.id
+      rows.map((row) =>
+        row.id === article.id
           ? {
-              ...r,
-              read: patch.read === undefined ? r.read : patch.read ? 1 : 0,
+              ...row,
+              read: patch.read === undefined ? row.read : patch.read ? 1 : 0,
               archived:
                 patch.archived === undefined
-                  ? r.archived
+                  ? row.archived
                   : patch.archived
                     ? 1
                     : 0,
             }
-          : r,
+          : row,
       ),
     );
-    api.articleSetState({ articleId: a.id, ...patch }).catch((e) => {
-      setMsg(String(e));
-      void reloadArticles(selId);
-    });
+    void api
+      .articleSetState({ articleId: article.id, ...patch })
+      .catch((error) => {
+        if (request === articleRequest.current) {
+          setMsg(String(error));
+          void reloadArticles(selId);
+        }
+      })
+      .finally(() =>
+        setPendingIds((ids) => {
+          const next = new Set(ids);
+          next.delete(article.id);
+          return next;
+        }),
+      );
   }
 
-  const filtered = useMemo(() => {
-    if (filter === "unread")
-      return articles.filter((a) => a.read === 0 && a.archived === 0);
-    if (filter === "archived") return articles.filter((a) => a.archived === 1);
-    return articles;
-  }, [articles, filter]);
+  const counts = {
+    all: articles.length,
+    unread: articles.filter(
+      (article) => article.read === 0 && article.archived === 0,
+    ).length,
+    archived: articles.filter((article) => article.archived === 1).length,
+  };
+  const filtered = useMemo(
+    () =>
+      articles.filter((article) => {
+        const matchesState =
+          filter === "unread"
+            ? article.read === 0 && article.archived === 0
+            : filter === "archived"
+              ? article.archived === 1
+              : true;
+        return (
+          matchesState &&
+          `${article.title} ${article.summary} ${parseTags(article).join(" ")}`
+            .toLocaleLowerCase()
+            .includes(query.trim().toLocaleLowerCase())
+        );
+      }),
+    [articles, filter, query],
+  );
+  const hasFilters = filter !== "all" || query.trim().length > 0;
 
   if (sourcesOpen)
     return (
@@ -125,143 +203,235 @@ export default function ReadingPage() {
     );
 
   return (
-    <div className="flex h-full flex-col">
+    <div>
       <PageHeader title={t("reading.title")}>
         <Button
           size="sm"
           variant="outline"
           onClick={() => setSourcesOpen(true)}
         >
+          <Rss />
           {t("reading.manageSources")}
         </Button>
-        {instances.length > 0 && (
-          <>
-            <Select
-              value={selId}
-              onChange={(v) => setSelId(v)}
-              options={instances.map((i) => ({
-                value: i.instanceId,
-                label: i.instanceId,
-              }))}
-            />
-            <Select
-              value={filter}
-              onChange={(v) => setFilter(v as ArticleFilter)}
-              options={FILTERS.map((f) => ({
-                value: f,
-                label: t(`filter.${f}`),
-              }))}
-            />
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                void reloadInstances();
-                void reloadArticles(selId);
-              }}
-            >
-              <RefreshCw className="size-3" /> {t("actions.refresh")}
-            </Button>
-          </>
-        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={loadingSources || loading}
+          onClick={() => {
+            void reloadInstances();
+            void reloadArticles(selId);
+          }}
+        >
+          <RefreshCw
+            className={cn(
+              "size-3",
+              (loadingSources || loading) && "animate-spin",
+            )}
+          />
+          {t("actions.refresh")}
+        </Button>
       </PageHeader>
-
-      {msg && (
-        <div className="border-b px-4 py-1.5 text-xs text-destructive">
-          {msg}
-        </div>
-      )}
-
-      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-4">
-        {instances.length === 0 && (
-          <Empty className="pt-16">
-            <div className="space-y-3 text-center">
-              <p>{t("reading.emptyNoSources")}</p>
-              <p className="text-[11px]">
-                {t("reading.emptyNoSourcesHint")}
-              </p>
-              <Button size="sm" onClick={() => setSourcesOpen(true)}>
-                <Inbox /> {t("reading.openSources")}
-              </Button>
+      <div className="mx-auto max-w-5xl space-y-6 p-4 lg:p-6">
+        <CollectionIntro description={tc("reading.description")}>
+          {instances.length > 0 && !loading && (
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {tc("reading.unread", { count: counts.unread })}
+            </span>
+          )}
+        </CollectionIntro>
+        {msg && (
+          <p
+            role="alert"
+            className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive"
+          >
+            {msg}
+          </p>
+        )}
+        {instances.length === 0 ? (
+          <section className="rounded-xl border bg-background">
+            <CollectionEmpty
+              icon={loadingSources ? RefreshCw : Inbox}
+              title={
+                loadingSources
+                  ? tc("loading")
+                  : msg
+                    ? tc("loadFailed")
+                    : t("reading.emptyNoSources")
+              }
+              description={
+                loadingSources || msg
+                  ? undefined
+                  : t("reading.emptyNoSourcesHint")
+              }
+            >
+              {!loadingSources && !msg && (
+                <Button size="sm" onClick={() => setSourcesOpen(true)}>
+                  <Rss />
+                  {t("reading.openSources")}
+                </Button>
+              )}
+            </CollectionEmpty>
+          </section>
+        ) : (
+          <section
+            className="overflow-hidden rounded-xl border bg-background"
+            aria-label={t("reading.title")}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b p-4">
+              <Select
+                aria-label={tc("reading.source")}
+                value={selId}
+                onChange={(value) => {
+                  if (value === selId) return;
+                  articleRequest.current += 1;
+                  setSelId(value);
+                  setArticles([]);
+                  setLoading(true);
+                  setMsg(null);
+                }}
+                options={instances.map((instance) => ({
+                  value: instance.instanceId,
+                  label: instance.instanceId,
+                }))}
+              />
+              <CollectionSearch
+                value={query}
+                onChange={setQuery}
+                label={tc("reading.search")}
+              />
             </div>
-          </Empty>
-        )}
-
-        {instances.length > 0 && !selId && (
-          <Empty>{t("reading.selectInstance")}</Empty>
-        )}
-
-        {instances.length > 0 && selId && loading && (
-          <Empty>{t("reading.loading")}</Empty>
-        )}
-
-        {instances.length > 0 && selId && !loading && filtered.length === 0 && (
-          <Empty>
-            {filter === "all"
-              ? t("reading.emptyNoArticles")
-              : t("reading.emptyNoArticlesFiltered", {
-                  filter: t(`filter.${filter}`),
+            <div className="border-b px-3 py-2">
+              <CollectionFilters
+                value={filter}
+                onChange={setFilter}
+                label={tc("reading.filters")}
+                options={FILTERS.map((f) => ({
+                  value: f,
+                  label: t(`filter.${f}`),
+                  count: loading ? undefined : counts[f],
+                }))}
+              />
+            </div>
+            {loading ? (
+              <CollectionEmpty icon={BookOpen} title={t("reading.loading")} />
+            ) : filtered.length === 0 ? (
+              <CollectionEmpty
+                icon={hasFilters ? Search : BookOpen}
+                title={
+                  hasFilters ? tc("noResults") : t("reading.emptyNoArticles")
+                }
+                description={hasFilters ? tc("noResultsHint") : undefined}
+              >
+                {hasFilters && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setQuery("");
+                      setFilter("all");
+                    }}
+                  >
+                    {tc("reset")}
+                  </Button>
+                )}
+              </CollectionEmpty>
+            ) : (
+              <div className="divide-y">
+                {filtered.map((article) => {
+                  const tags = parseTags(article);
+                  const read = article.read === 1;
+                  const archived = article.archived === 1;
+                  return (
+                    <article
+                      key={article.id}
+                      className="px-5 py-5 transition-colors hover:bg-muted/20 sm:px-6"
+                      aria-label={article.title || article.url}
+                    >
+                      <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        {!read && (
+                          <span className="inline-flex items-center gap-1.5 text-primary">
+                            <span className="size-1.5 rounded-full bg-primary" />
+                            {t("filter.unread")}
+                          </span>
+                        )}
+                        {archived && (
+                          <span className="inline-flex items-center gap-1">
+                            <Archive className="size-3" />
+                            {t("filter.archived")}
+                          </span>
+                        )}
+                        <time dateTime={article.publishedAt}>
+                          {fmtWhen(article.publishedAt, i18n.language)}
+                        </time>
+                      </div>
+                      <h2>
+                        <button
+                          className={cn(
+                            "inline-flex items-start gap-2 text-left text-base font-semibold leading-relaxed hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            read && "font-medium text-muted-foreground",
+                          )}
+                          title={article.url}
+                          onClick={() =>
+                            void api
+                              .openExternal(article.url)
+                              .catch((error) => setMsg(String(error)))
+                          }
+                        >
+                          <span className="min-w-0 break-words">
+                            {article.title || article.url}
+                          </span>
+                          <ExternalLink className="mt-1.5 size-3.5 shrink-0 text-muted-foreground" />
+                        </button>
+                      </h2>
+                      {article.summary && (
+                        <p className="mt-2 max-w-3xl line-clamp-3 text-sm leading-7 text-muted-foreground">
+                          {article.summary}
+                        </p>
+                      )}
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap gap-1.5">
+                          {tags.map((tag) => (
+                            <Badge key={tag} variant="secondary">
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            disabled={pendingIds.has(article.id)}
+                            size="xs"
+                            variant="ghost"
+                            onClick={() =>
+                              setArticleState(article, { read: !read })
+                            }
+                          >
+                            <BookOpen />
+                            {read
+                              ? t("reading.markUnread")
+                              : t("reading.markRead")}
+                          </Button>
+                          <Button
+                            disabled={pendingIds.has(article.id)}
+                            size="xs"
+                            variant="ghost"
+                            onClick={() =>
+                              setArticleState(article, { archived: !archived })
+                            }
+                          >
+                            <Archive />
+                            {archived
+                              ? t("reading.unarchive")
+                              : t("reading.archive")}
+                          </Button>
+                        </div>
+                      </div>
+                    </article>
+                  );
                 })}
-          </Empty>
+              </div>
+            )}
+          </section>
         )}
-
-        {filtered.map((a) => {
-          const tags = parseTags(a);
-          const read = a.read === 1;
-          const archived = a.archived === 1;
-          return (
-            <Card key={a.id} className={cn(read && "opacity-70")}>
-              <CardContent className="space-y-1">
-                <div className="flex items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <button
-                      className="flex items-start gap-1.5 text-left text-[13px] font-medium hover:underline"
-                      title={a.url}
-                      onClick={() => void api.openExternal(a.url)}
-                    >
-                      <ExternalLink className="mt-0.5 size-3 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0">{a.title || a.url}</span>
-                    </button>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                      {!read && <Badge variant="default">{t("filter.unread")}</Badge>}
-                      {archived && <Badge variant="warning">{t("filter.archived")}</Badge>}
-                      <span>{fmtWhen(a.publishedAt)}</span>
-                      {tags.map((t) => (
-                        <Badge key={t} variant="secondary">
-                          {t}
-                        </Badge>
-                      ))}
-                    </div>
-                    {a.summary && (
-                      <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
-                        {a.summary}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 flex-col gap-1.5">
-                    <Button
-                      size="xs"
-                      variant={read ? "ghost" : "outline"}
-                      onClick={() => setArticleState(a, { read: !read })}
-                    >
-                      {read ? t("reading.markUnread") : t("reading.markRead")}
-                    </Button>
-                    <Button
-                      size="xs"
-                      variant={archived ? "ghost" : "outline"}
-                      onClick={() =>
-                        setArticleState(a, { archived: !archived })
-                      }
-                    >
-                      <Archive className="size-3" />{" "}
-                      {archived ? t("reading.unarchive") : t("reading.archive")}
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
       </div>
     </div>
   );

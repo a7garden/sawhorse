@@ -6,11 +6,11 @@ type Variant =
 type Size = "default" | "sm" | "xs" | "icon";
 
 const variantClasses: Record<Variant, string> = {
-  default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+  default: "bg-primary text-primary-foreground hover:bg-primary/90",
   secondary:
-    "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
+    "bg-secondary text-secondary-foreground hover:bg-secondary/80",
   outline:
-    "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
+    "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
   ghost: "hover:bg-accent hover:text-accent-foreground",
   destructive:
     "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",

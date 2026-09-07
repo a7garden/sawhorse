@@ -9,6 +9,7 @@ import {
 } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+import "./widgets.css";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -105,13 +106,14 @@ function CatalogCard({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-xl border",
+        "widget-catalog-card overflow-hidden rounded-lg border",
         enabled && "border-[var(--brand)]",
         widget.defaultLayout.lg.w >= DASHBOARD_COLS.lg && "sm:col-span-2",
       )}
     >
       <div
         className="dashboard-grid widget-catalog-preview"
+        ref={(element) => element?.setAttribute("inert", "")}
         style={previewGeometry(widget)}
         aria-hidden
       >
@@ -181,7 +183,7 @@ export function DashboardBoard({
   return (
     <>
       {editing && (
-        <div className="mb-2.5 flex flex-wrap items-center gap-2 rounded-xl border border-[var(--brand-border)] bg-[var(--brand-soft)] px-3 py-2 text-xs">
+        <div className="widget-edit-notice mb-2.5 flex flex-wrap items-center gap-2 rounded-lg border border-[var(--brand-border)] bg-[var(--brand-soft)] px-3 py-2 text-xs">
           <SlidersHorizontal className="size-3.5 text-[var(--brand)]" />
           <span className="font-medium">{t("board.editMode")}</span>
           <span className="text-muted-foreground">
@@ -207,7 +209,7 @@ export function DashboardBoard({
             breakpoints={DASHBOARD_BREAKPOINTS}
             cols={DASHBOARD_COLS}
             rowHeight={30}
-            margin={[12, 12]}
+            margin={[24, 12]}
             containerPadding={[0, 0]}
             compactor={verticalCompactor}
             dragConfig={{
@@ -221,7 +223,7 @@ export function DashboardBoard({
             onLayoutChange={(_, nextLayouts) => setLayouts(nextLayouts)}
           >
             {enabled.map((id) => (
-              <div key={id} className="widget-grid-item">
+              <div key={id} className="widget-grid-item" data-widget={id}>
                 {editing && (
                   <div className="widget-edit-bar">
                     <button

@@ -47,6 +47,7 @@ import type {
   TodoSection,
   TodoSections,
   UnpromotedItem,
+  VaultAttention,
   VaultAudit,
   VaultCandidate,
   VaultNode,
@@ -90,6 +91,7 @@ export const api = {
   inboxCount: (project?: string): Promise<number> =>
     invoke("list_inbox_count", { project: project ?? null }),
   auditVault: (): Promise<VaultAudit> => invoke("audit_vault"),
+  vaultAttention: (): Promise<VaultAttention> => invoke("vault_attention"),
   listUnpromoted: (): Promise<UnpromotedItem[]> => invoke("list_unpromoted"),
 
   listTodos: (): Promise<TodoSections> => invoke("list_todos"),

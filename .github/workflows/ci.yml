@@ -86,3 +86,6 @@ jobs:
           # windows 러너엔 NASM이 없다 — aws-lc-sys의 사전 빌드 어셈블리를 쓴다.
           AWS_LC_SYS_PREBUILT_NASM: 1
         run: cargo test
+      - name: Standalone CLI packaging and installer smoke test
+        shell: bash
+        run: python ../scripts/cli/smoke.py --binary src-tauri/target/debug/sawhorse${{ runner.os == 'Windows' && '.exe' || '' }}

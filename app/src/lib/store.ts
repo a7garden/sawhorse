@@ -1,5 +1,6 @@
 import type { WorkflowDefinition } from "@/features/workbench/types";
 import { create } from "zustand";
+import { useProjectScope } from "@/features/workbench/project-scope";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api, EVENTS } from "./api";
 import type {
@@ -17,9 +18,13 @@ import type {
   CollabSession,
   TodoSections,
   UnpromotedItem,
+  VaultAttention,
   VaultAudit,
   VaultNode,
 } from "./types";
+
+// vault-changed 마다 볼트 전체 스캔을 하지 않도록 어텐션 갱신을 모은다.
+let attentionTimer: number | undefined;
 
 /**
  * 코어 페이지는 호스트가 항상 들고 있고, 그 사이의 화면은 팩이 기여한다.
@@ -89,6 +94,9 @@ interface AppState {
   openWorkRequest: OpenWorkRequest | null;
   openWork: (request: OpenWorkRequest) => void;
   clearOpenWork: () => void;
+  openRunRequest: { id: string; projectId: string } | null;
+  openRun: (id: string, projectId: string) => void;
+  clearOpenRun: () => void;
 
   nav: NavEntry[];
   packs: PackRegistryView | null;
@@ -110,6 +118,7 @@ interface AppState {
   vaultTree: VaultNode[];
   inboxCount: number;
   audit: VaultAudit | null;
+  attention: VaultAttention | null;
   unpromoted: UnpromotedItem[];
   wizardOpen: boolean;
 
@@ -129,6 +138,7 @@ interface AppState {
   refreshDiagnostics: () => Promise<void>;
   refreshTree: () => Promise<void>;
   refreshAudit: () => Promise<void>;
+  refreshAttention: () => Promise<void>;
   pushProgress: (jobId: string, entry: ProgressEntry) => void;
 }
 
@@ -161,6 +171,12 @@ export const useApp = create<AppState>((set, get) => ({
   openWorkRequest: null,
   openWork: (request) => set({ openWorkRequest: request }),
   clearOpenWork: () => set({ openWorkRequest: null }),
+  openRunRequest: null,
+  openRun: (id, projectId) => {
+    useProjectScope.getState().selectProject(projectId);
+    set({ openRunRequest: { id, projectId }, page: "harness" });
+  },
+  clearOpenRun: () => set({ openRunRequest: null }),
 
   nav: [],
   packs: null,
@@ -180,6 +196,7 @@ export const useApp = create<AppState>((set, get) => ({
   jobs: [],
   progress: {},
   missed: [],
+  attention: null,
   vaultTree: [],
   inboxCount: 0,
   audit: null,
@@ -226,6 +243,12 @@ export const useApp = create<AppState>((set, get) => ({
         void get().refreshImprovements();
         void get().refreshTodos();
         void get().refreshTree();
+        // 어텐션 프로브는 볼트 전체를 읽는다. 워처 이벤트가 몰려도 스캔은 한 번만.
+        clearTimeout(attentionTimer);
+        attentionTimer = window.setTimeout(
+          () => void get().refreshAttention(),
+          1500,
+        );
       }),
     );
     unlisteners.push(
@@ -251,6 +274,7 @@ export const useApp = create<AppState>((set, get) => ({
       get().refreshTodos(),
       get().refreshTree(),
       get().refreshAudit(),
+      get().refreshAttention(),
       get().refreshDiagnostics(),
     ]);
     void get().refreshAgents();
@@ -307,6 +331,8 @@ export const useApp = create<AppState>((set, get) => ({
     ]);
     set({ audit, unpromoted });
   },
+  refreshAttention: async () =>
+    set({ attention: await api.vaultAttention().catch(() => null) }),
 
   pushProgress: (jobId, entry) =>
     set((s) => {

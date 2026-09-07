@@ -60,4 +60,16 @@ SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID npm run tauri build
 읽기 요청과 Git clone으로 제한한다. 기존 버전에서 저장한 PAT는 연결 해제 전까지 읽을 수 있지만,
 새 로그인 화면에서는 PAT 입력을 제공하지 않는다.
 
+GitHub 자격 증명은 OS 보안 저장소에 보관하고, 한 번 읽은 값은 앱 프로세스 메모리에서
+재사용한다. 화면 재진입·저장소 페이지 이동·동시 요청은 키체인을 반복해서 열지 않는다.
+로그인과 토큰 갱신은 저장에 성공한 뒤 메모리 값을 교체하고, 연결 해제는 메모리 값을
+지운 뒤 보안 저장소에서도 삭제한다. 접근 거부나 삭제 실패는 연결 해제로 숨기지 않고 오류로 표시한다.
+
+macOS 개발 실행은 `src-tauri/scripts/dev-codesign.sh`로 같은 코드 서명 식별자를 유지한다.
+앱을 다시 빌드할 때마다 키체인 승인을 요구하면 개발 터미널의 `dev-codesign` 오류를 확인한다.
+`unable to build chain to self-signed root`가 나오면 발급자 인증서 설치 여부와 개발자 인증서의
+신뢰 설정을 확인한다. Apple 코드 서명 인증서는 `항상 신뢰`를 지정하지 않고 시스템 기본값을
+사용해야 한다. [Apple 문제 해결 안내](https://developer.apple.com/forums/thread/712043)를 참고한다.
+기존 임시 서명에서 정상 서명으로 처음 전환하면 키체인 접근을 한 번 더 승인해야 할 수 있다.
+
 [전체 설계](../docs/architecture/sdd-workbench.md) · [API 계약](../docs/architecture/sdd-contract.md)

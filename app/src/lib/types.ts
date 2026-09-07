@@ -26,6 +26,7 @@ export interface HerdrCfg {
   startTimeoutSec: number;
   jobTimeoutMin: number; // 0 = 무제한
   notify: boolean;
+  childModelPolicy: "auto" | "inherit";
 }
 
 /** 카탈로그에 없는 CLI 를 사용자가 직접 등록하는 항목. */
@@ -165,6 +166,15 @@ export interface VaultAudit {
   issues: AuditIssue[];
   journal: JournalAudit;
   scannedAtMs: number;
+}
+
+/** 작업대 상단 1급 스트립이 읽는 "사용자가 진행해야 할 일" 집계. */
+export interface VaultAttention {
+  pendingSchemaMoves: number;
+  schemaConflicts: number;
+  schemaId: string;
+  schemaRevision: number;
+  pendingLegacyIssues: number;
 }
 
 export interface UnpromotedItem {

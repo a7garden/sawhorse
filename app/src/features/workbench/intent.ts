@@ -1,4 +1,4 @@
-import { sddApi, workflowApi } from "./api";
+import { sddApi } from "./api";
 import type { Project, WorkItem } from "./types";
 export const INTENT_WORKFLOW = "intent-flow";
 export interface IntentAttachment { name: string; dataUrl: string; reference?: string }
@@ -10,10 +10,6 @@ export async function launchIntent(work: WorkItem, project: Project, instruction
   if (!current || current.stage !== work.stage || current.projectId !== project.id)
     throw new Error("The work changed. Refresh before starting the agent.");
   work = current;
-  if (work.status === "backlog" || work.status === "ready") {
-    await workflowApi.command({ workId: work.id, event: "work:start", expectedNodeId: work.stage,
-      note: "의도를 바탕으로 에이전트 작업 시작", eventId: crypto.randomUUID(), facts: { expectedStatus: work.status } });
-  }
   return sddApi.launch({ workId: work.id, projectId: project.id,
     role: work.stage === "build" ? "implementer" : "planner",
     agent: project.defaultAgent === "codex" ? "codex" : "claude", model: project.defaultModel,

@@ -1,0 +1,236 @@
+/* One frame and one scroll area per widget, on the desk and in the catalog. */
+.dashboard-grid {
+  --widget-ink: var(--foreground);
+  --widget-muted: var(--muted-foreground);
+  --widget-line: var(--border);
+  --widget-surface: var(--card);
+  --widget-hover: color-mix(in srgb, var(--muted) 65%, var(--card));
+  /* Catalog previews live in a portal outside .wb-page. */
+  --wb-ink: var(--foreground);
+  --wb-muted: var(--muted-foreground);
+  --wb-line: var(--border);
+  --wb-paper: var(--card);
+  --wb-teal: var(--brand);
+  --wb-teal-soft: var(--brand-soft);
+  --wb-warm: var(--muted);
+}
+.dashboard-grid .widget-grid-item > .widget-host,
+.dashboard-grid.widget-catalog-preview .widget-host {
+  container: widget / size;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 9px;
+}
+.dashboard-grid .widget-host > .wb-slot-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--widget-line);
+  border-radius: 9px;
+  background: var(--widget-surface);
+}
+.dashboard-grid .wb-slot-panel > .wb-panel-title {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  min-height: 62px;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--widget-line);
+}
+.dashboard-grid .wb-widget-heading { min-width: 0; flex: 1; }
+.dashboard-grid .wb-widget-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.dashboard-grid .wb-widget-title h2 { margin: 0; color: var(--widget-ink); font-size: 13px; font-weight: 650; line-height: 1.4; letter-spacing: -.02em; }
+.dashboard-grid .wb-widget-title .wb-widget-count { margin: 0; color: var(--widget-muted); font-size: 11px; font-weight: 450; font-variant-numeric: tabular-nums; }
+.dashboard-grid .wb-widget-description { overflow: hidden; margin: 4px 0 0; color: var(--widget-muted); font-size: 11px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-grid .wb-panel-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 26px; min-height: 28px; padding: 4px 0 4px 6px; color: var(--widget-muted); font-size: 10px; font-weight: 450; text-decoration: none; border-radius: 4px; }
+.dashboard-grid .wb-panel-link span { margin: 0; font-size: inherit; color: inherit; }
+.dashboard-grid .wb-panel-link:hover { color: var(--primary); text-decoration: none; }
+.dashboard-grid .wb-slot-panel > .wb-slot-content { flex: 1; min-height: 0; overflow: auto; padding: 0; }
+.dashboard-grid .wb-slot-content:focus-visible { outline: 2px solid var(--ring); outline-offset: -3px; border-radius: 4px; }
+.dashboard-grid .wb-slot-content .wb-action-list,
+.dashboard-grid .wb-slot-content .wb-today-list { overflow: visible; }
+.dashboard-grid .wb-slot-panel .wb-widget-body { padding: 0; }
+.dashboard-grid .wb-slot-empty { display: grid; place-content: center; min-height: 120px; height: 100%; margin: 0; padding: 24px; border: 0; border-radius: 0; background: transparent; color: var(--widget-muted); font-size: 12px; line-height: 1.8; text-wrap: balance; }
+
+/* Totals stay quiet; color appears only when a value needs attention. */
+.dashboard-grid .wb-metric.is-solo {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  height: 100%;
+  width: 100%;
+  padding: 14px 18px;
+  border: 1px solid var(--widget-line);
+  border-radius: 9px;
+  background: var(--widget-surface);
+  text-align: left;
+}
+.dashboard-grid .wb-metric.is-clickable:hover { background: var(--widget-hover); border-color: var(--input); }
+.dashboard-grid .wb-metric-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; color: var(--widget-muted); font-size: 11px; }
+.dashboard-grid .wb-metric .wb-metric-icon { position: static; margin: 0; color: var(--widget-muted); }
+.dashboard-grid .wb-metric-icon svg { width: 15px; height: 15px; stroke-width: 1.6; }
+.dashboard-grid .wb-metric.is-solo > strong { margin: 0; font-size: 29px; font-weight: 550; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.dashboard-grid .wb-metric.is-solo > small { margin: 0; font-size: 10px; line-height: 1.5; color: var(--widget-muted); }
+.dashboard-grid .wb-metric.is-warn { border-color: color-mix(in srgb, var(--warning) 35%, var(--widget-line)); }
+.dashboard-grid .wb-metric.is-warn > strong, .dashboard-grid .wb-metric.is-warn .wb-metric-icon { color: var(--warning-foreground); }
+
+/* Work lists share a baseline, predictable row actions and readable metadata. */
+.dashboard-grid .wb-work-row, .dashboard-grid .wb-action-row, .dashboard-grid .wb-dense-row, .dashboard-grid .wb-project-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 13px 18px;
+  border: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--widget-line) 65%, transparent);
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+.dashboard-grid :is(.wb-work-row, .wb-action-row, .wb-dense-row, .wb-project-summary):last-child { border-bottom: 0; }
+.dashboard-grid :is(.wb-work-row, .wb-action-row, .wb-dense-row, .wb-project-summary):hover { background: var(--widget-hover); }
+.dashboard-grid .wb-work-main { flex: 1; gap: 11px; align-items: center; min-width: 0; }
+.dashboard-grid .wb-work-state { width: 8px; height: 8px; border: 1.5px solid var(--widget-muted); border-radius: 50%; flex-shrink: 0; }
+.dashboard-grid .wb-work-state[data-status="running"] { border-color: var(--primary); background: var(--primary); box-shadow: inset 0 0 0 1.5px var(--card); }
+.dashboard-grid .wb-work-state[data-status="review"] { border-color: var(--warning); background: var(--warning); }
+.dashboard-grid .wb-work-state[data-status="blocked"] { border-color: var(--destructive); background: var(--destructive); }
+.dashboard-grid .wb-work-main strong, .dashboard-grid .wb-action-text strong, .dashboard-grid .wb-dense-title { display: block; font-size: 12px; font-weight: 550; line-height: 1.6; color: var(--widget-ink); }
+.dashboard-grid .wb-work-main small, .dashboard-grid .wb-action-text small { margin-top: 3px; font-size: 10px; line-height: 1.5; color: var(--widget-muted); }
+.dashboard-grid .wb-row-meta { gap: 7px; flex-shrink: 0; font-size: 10px; }
+.dashboard-grid .wb-row-meta > time { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dashboard-grid .wb-row-meta > time.is-overdue { color: var(--destructive); }
+.dashboard-grid .wb-mini-action { display: inline-flex; align-items: center; justify-content: center; min-width: 28px; height: 28px; padding: 5px 6px; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--widget-muted); font-weight: 450; }
+.dashboard-grid .wb-mini-action.is-primary { color: var(--primary); border-color: var(--widget-line); }
+.dashboard-grid .wb-mini-action:hover:not(:disabled) { border-color: var(--input); background: var(--muted); color: var(--foreground); }
+.dashboard-grid .wb-mini-action > svg { flex-shrink: 0; }
+.dashboard-grid .wb-mini-action > span { display: none; }
+.dashboard-grid .wb-icon-button { display: grid; place-items: center; min-width: 28px; min-height: 28px; padding: 4px; border-radius: 5px; }
+.dashboard-grid .wb-action-buttons { gap: 3px; }
+.dashboard-grid .wb-action-list { gap: 0; }
+.dashboard-grid .wb-action-text small { white-space: normal; overflow-wrap: anywhere; }
+.dashboard-grid .wb-action-main > .wb-dot { width: 7px; height: 7px; }
+
+/* Projects and dates get their own visual anchors, using real content. */
+.dashboard-grid .wb-overview-project { gap: 12px; padding-top: 17px; padding-bottom: 17px; }
+.dashboard-grid .wb-project-initial { display: grid; place-items: center; flex-shrink: 0; width: 32px; height: 32px; border: 1px solid var(--widget-line); border-radius: 6px; background: var(--muted); color: var(--widget-ink); font-size: 13px; font-weight: 550; }
+.dashboard-grid .wb-project-info { display: block; flex: 1; min-width: 0; }
+.dashboard-grid .wb-project-info strong { display: block; min-width: 0; color: var(--widget-ink); font-size: 12px; font-weight: 550; }
+.dashboard-grid .wb-project-info > span { display: block; margin-top: 5px; font-size: 10px; line-height: 1.7; }
+.dashboard-grid .wb-overview-project > svg { flex-shrink: 0; color: var(--widget-muted); }
+.dashboard-grid .wb-project-summary:not(.wb-overview-project) { flex-wrap: wrap; gap: 4px 12px; }
+.dashboard-grid .wb-project-summary:not(.wb-overview-project) strong { flex-basis: 100%; font-size: 12px; }
+.dashboard-grid .wb-project-summary:not(.wb-overview-project) > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.dashboard-grid .wb-dense-open { flex: 1; display: flex; align-items: center; gap: 12px; min-width: 0; }
+.dashboard-grid .wb-due-copy, .dashboard-grid .wb-agenda-copy { flex: 1; min-width: 0; }
+.dashboard-grid .wb-due-copy .wb-dense-meta, .dashboard-grid .wb-agenda-copy .wb-dense-meta { display: block; margin-top: 3px; font-size: 10px; }
+.dashboard-grid .wb-date-chip { display: grid; place-items: center; min-width: 40px; height: 30px; padding: 0 5px; border-radius: 5px; background: var(--muted); color: var(--widget-muted); font-family: ui-monospace, monospace; font-size: 10px; font-weight: 500; }
+.dashboard-grid .wb-date-chip.is-overdue { background: color-mix(in srgb, var(--destructive) 8%, var(--card)); color: var(--destructive); }
+.dashboard-grid .wb-agenda-date { display: flex; align-items: center; flex-direction: column; justify-content: center; min-width: 40px; min-height: 46px; border: 1px solid var(--widget-line); border-radius: 5px; background: var(--muted); }
+.dashboard-grid .wb-agenda-date > span { color: var(--widget-muted); font-size: 9px; line-height: 1.5; }
+.dashboard-grid .wb-agenda-date > strong { font-size: 19px; line-height: 1.1; font-weight: 550; font-variant-numeric: tabular-nums; }
+.dashboard-grid .wb-agenda-row > svg { color: var(--widget-muted); flex-shrink: 0; }
+
+/* A small distribution legend is easier to scan than a row of pill buttons. */
+.dashboard-grid .wb-dist { padding: 16px 18px 14px; gap: 12px; border-bottom: 1px solid var(--widget-line); }
+.dashboard-grid .wb-dist-bar { height: 5px; border-radius: 2px; gap: 2px; background: transparent; }
+.dashboard-grid .wb-dist-seg { border-radius: 1px; }
+.dashboard-grid .wb-dist-legend { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px 8px; }
+.dashboard-grid .wb-dist-chip { display: flex; gap: 6px; min-width: 0; padding: 5px 4px; border: 1px solid transparent; border-radius: 4px; font-size: 10px; white-space: nowrap; }
+.dashboard-grid .wb-dist-chip > i { flex-shrink: 0; width: 5px; height: 5px; }
+.dashboard-grid .wb-dist-chip > strong { margin-left: auto; font-size: 11px; font-weight: 550; }
+.dashboard-grid .wb-dist-chip.is-active { border-color: var(--brand-border); background: var(--brand-soft); }
+.dashboard-grid .wb-dist-chip:disabled { opacity: 1; }
+.dashboard-grid :is(.wb-dist-seg.is-run, .wb-dist-chip.is-run i, .wb-dot.is-run) { background: var(--primary); }
+.dashboard-grid :is(.wb-dist-seg.is-ready, .wb-dist-chip.is-ready i, .wb-dot.is-ready) { background: #8c9fba; }
+.dashboard-grid :is(.wb-dist-seg.is-done, .wb-dist-chip.is-done i, .wb-dot.is-done) { background: var(--success); }
+.dashboard-grid :is(.wb-dist-seg.is-wait, .wb-dist-chip.is-wait i, .wb-dot.is-wait) { background: var(--warning); }
+.dashboard-grid :is(.wb-dist-seg.is-fail, .wb-dist-chip.is-fail i, .wb-dot.is-fail) { background: var(--destructive); }
+
+/* Activity and checklists use compact summaries, leaving room for actual entries. */
+.dashboard-grid .wb-slot-panel .wb-today { gap: 16px; padding: 16px 18px; }
+.dashboard-grid .wb-today-stats { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.dashboard-grid .wb-today-stat { flex-direction: row; align-items: baseline; gap: 7px; padding: 0 16px 0 0; border: 0; border-right: 1px solid var(--widget-line); border-radius: 0; background: transparent; }
+.dashboard-grid .wb-today-stat:last-child { border-right: 0; padding-right: 0; }
+.dashboard-grid .wb-today-stat strong { font-size: 20px; font-weight: 550; }
+.dashboard-grid .wb-today-stat > span { font-size: 10px; }
+.dashboard-grid .wb-today-stat.is-warn strong { color: var(--destructive); }
+.wb-today-timeline-label { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 5px; color: var(--muted-foreground); font-size: 10px; }
+.wb-today-timeline-label time { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.dashboard-grid .wb-today-track { height: 26px; border-radius: 4px; background: var(--muted); }
+.dashboard-grid .wb-today-bar { top: 5px; height: 14px; border-radius: 2px; background: var(--primary); }
+.dashboard-grid .wb-today-bar.is-done { background: var(--success); }
+.dashboard-grid .wb-today-bar.is-fail { background: var(--destructive); }
+.dashboard-grid .wb-today-now { box-shadow: none; width: 1px; }
+.dashboard-grid .wb-today-todos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 18px; }
+.dashboard-grid .wb-today-todos > .wb-progress { grid-column: 1 / -1; flex: none; height: 3px; }
+.dashboard-grid .wb-today-todo { padding: 3px 0; font-size: 11px; }
+.dashboard-grid .wb-checklist-widget { padding: 16px 18px; }
+.dashboard-grid .wb-checklist-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.dashboard-grid .wb-checklist-summary > div > strong { display: block; font-size: 13px; font-weight: 550; }
+.dashboard-grid .wb-checklist-summary small { display: block; margin-top: 5px; color: var(--widget-muted); font-size: 10px; }
+.dashboard-grid .wb-checklist-fraction { flex-shrink: 0; font-size: 12px; color: var(--widget-muted); font-variant-numeric: tabular-nums; }
+.dashboard-grid .wb-checklist-fraction strong { font-size: 23px; font-weight: 550; color: var(--widget-ink); }
+.dashboard-grid .wb-checklist-progress { height: 4px; margin: 16px 0 12px; overflow: hidden; border-radius: 2px; background: var(--muted); }
+.dashboard-grid .wb-checklist-progress > span { display: block; height: 100%; background: var(--primary); }
+.dashboard-grid .journal-checklist-row { padding: 9px 0; font-size: 12px; }
+.dashboard-grid .journal-checklist-footer { margin-top: 12px; padding: 10px 0 0; border-radius: 0; font-size: 11px; }
+.dashboard-grid .journal-widget { padding: 16px 18px; gap: 18px; }
+.dashboard-grid .journal-widget-heading strong { font-size: 13px; }
+.dashboard-grid .journal-widget-icon { width: 30px; height: 30px; border-radius: 5px; background: var(--muted); }
+.dashboard-grid .journal-widget-icon > svg { width: 16px; height: 16px; }
+.dashboard-grid .journal-week > div { border: 0; border-radius: 5px; padding: 9px 0; }
+.dashboard-grid .journal-week .is-today { background: var(--brand-soft); }
+.dashboard-grid .journal-week strong { font-size: 15px; }
+.dashboard-grid .journal-widget-latest { flex-wrap: wrap; border: 0; border-top: 1px solid var(--widget-line); border-radius: 0; padding: 13px 0 0; }
+.dashboard-grid .wb-workflow-summary { padding: 16px 18px; }
+.dashboard-grid .wb-workflow-summary .wb-project-summary { padding: 10px 0; }
+.dashboard-grid .wb-stage-tile { padding: 10px; border-radius: 5px; box-shadow: none; }
+
+/* Widget dimensions, rather than window width, control detail density. */
+@container widget (max-width: 420px) {
+  .dashboard-grid .wb-panel-link > span { display: none; }
+  .dashboard-grid .wb-work-row { flex-wrap: wrap; gap: 4px; }
+  .dashboard-grid .wb-work-main { flex-basis: 100%; }
+  .dashboard-grid .wb-row-meta { padding-left: 19px; width: 100%; justify-content: flex-end; }
+  .dashboard-grid .wb-row-meta > time { margin-right: auto; }
+  .dashboard-grid .wb-work-main strong, .dashboard-grid .wb-action-text strong, .dashboard-grid .wb-dense-title { white-space: normal; overflow-wrap: anywhere; }
+  .dashboard-grid .wb-today-todos { grid-template-columns: minmax(0, 1fr); }
+  .dashboard-grid .wb-dist-legend { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container widget (min-width: 421px) {
+  .dashboard-grid .wb-mini-action.is-primary { gap: 5px; padding-inline: 8px; }
+  .dashboard-grid .wb-mini-action.is-primary > span { display: inline; font-size: 10px; }
+}
+@container widget (max-width: 260px) {
+  .dashboard-grid .wb-slot-panel > .wb-panel-title { padding: 12px; }
+  .dashboard-grid :is(.wb-work-row, .wb-action-row, .wb-dense-row, .wb-project-summary) { padding: 10px 12px; }
+  .dashboard-grid .wb-metric.is-solo { padding: 12px; }
+  .dashboard-grid .wb-action-row { flex-wrap: wrap; gap: 7px; }
+  .dashboard-grid .wb-action-row .wb-action-main { flex-basis: 100%; }
+  .dashboard-grid .wb-action-row .wb-action-buttons { margin-left: auto; }
+  .dashboard-grid .wb-due-row { flex-wrap: wrap; }
+  .dashboard-grid .wb-due-row .wb-dense-open { flex-basis: 100%; }
+  .dashboard-grid .wb-due-row .wb-action-buttons { margin-left: auto; }
+}
+@container widget (max-height: 90px) {
+  .dashboard-grid .wb-metric.is-solo { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-content: center; column-gap: 12px; }
+  .dashboard-grid .wb-metric-top { font-size: 11px; }
+  .dashboard-grid .wb-metric-icon { display: none; }
+  .dashboard-grid .wb-metric.is-solo > small { display: none; }
+  .dashboard-grid .wb-metric.is-solo > strong { font-size: 25px; }
+}
+.dashboard-grid-editing .widget-host > .wb-slot-panel { border-color: transparent; }
+.dashboard-grid-editing .react-grid-item.widget-grid-item { border-radius: 10px; box-shadow: none; }
+.dashboard-grid.widget-catalog-preview { padding: 12px; background: var(--muted); }
+.widget-catalog-card { background: var(--card); }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-grid .wb-dist-seg { transition: none; }
+}

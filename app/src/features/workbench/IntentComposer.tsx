@@ -126,6 +126,7 @@ export function IntentComposer({ initial, projects, onClose, onSaved }: {
     <div className="wb-intent-composer">
       <div className="wb-intent-heading"><h2>{t("intent.heading")}</h2><p>{t("intent.hint")}</p></div>
       <div className="wb-intent-route"><span>{t("intent.note")}</span><span>→</span><span>{t("intent.design")}</span><span>→</span><span>{t("intent.approval")}</span><span>→</span><span>{t("intent.build")}</span></div>
+      <p className="wb-intent-help">{t("intent.flowHint")}</p>
       <div className="wb-intent-editor" onPasteCapture={(event) => {
         const incoming = Array.from(event.clipboardData.files);
         if (incoming.length) { event.preventDefault(); event.stopPropagation(); void addImages(incoming); }

@@ -9,6 +9,8 @@ The harness prompt is the authority for the workflow version, current node, repo
 
 Keep each cycle tied to one observable behavior and the exact code/test revision:
 
+Apply the sibling [delegate skill](../delegate/SKILL.md) when a bounded implementation or verification task benefits from delegation. Assess complexity yourself and let the host choose the child model. Preserve the Red → Green → refactor → reverify order: never parallelize dependent phases, and verify the revision after integrating a child's changes. Children report in their own run evidence file; the parent updates canonical TDD evidence. The harness's child-specific output and role limits take precedence over the general artifact instructions below.
+
 - Test intent: state the behavior, relevant acceptance criterion, and regression boundary.
 - Red: add or change the smallest useful assertion, then run it. Record the command, target assertion, exit result, and enough output to show that the assertion failed for the intended missing behavior. A test discovery failure, build error, dependency failure, timeout, or environment error is not Red evidence.
 - Green: make the minimum implementation change that satisfies the approved test. Run the target test and relevant nearby regression checks. Record commands, results, and the tested revision in `green-evidence`.

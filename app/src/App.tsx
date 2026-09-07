@@ -21,6 +21,9 @@ import {
   Repeat,
   SquareCheckBig,
   Workflow,
+  PanelLeftClose,
+  PanelLeftOpen,
+  FlaskConical,
 } from "lucide-react";
 import { useApp, parseViewPage, viewPageId, type PageId } from "@/lib/store";
 import { icon as packIcon, type IconComponent } from "@/lib/icons";
@@ -31,6 +34,7 @@ import WorkbenchPage from "@/features/workbench/WorkbenchPage";
 import { useProjectScope } from "@/features/workbench/project-scope";
 import { ensureWorkspaceSnapshot, useWorkspaceSnapshot } from "@/features/workbench/snapshot-store";
 import { isWorkbenchPreview } from "@/features/workbench/api";
+import { AttentionStrip } from "@/components/AttentionStrip";
 import { AppToolbar } from "@/components/AppToolbar";
 import { useCoreExtensions } from "@/lib/core-extensions";
 import JobsPage from "@/pages/JobsPage";
@@ -144,6 +148,20 @@ export default function App() {
   const theme = useTheme((s) => s.theme);
   const resolved = useTheme((s) => s.resolved);
   const cycleTheme = useTheme((s) => s.cycle);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem("sawhorse.sidebar-collapsed") === "true"; }
+    catch { return false; }
+  });
+  const toggleSidebar = () => setSidebarCollapsed((current) => {
+    try { localStorage.setItem("sawhorse.sidebar-collapsed", String(!current)); } catch { /* Optional preference. */ }
+    return !current;
+  });
+  const navPage = page === "board" || page === "issues" ? "work" : page;
+  const pageLabelKey = TOP_NAV.find((item) => item.id === navPage)?.labelKey
+    ?? group?.tabs.find((tab) => tab.id === page)?.labelKey
+    ?? BOTTOM_NAV.find((item) => item.id === page)?.labelKey;
+  const pageLabel = pageLabelKey ? t(pageLabelKey) : nav.find((item) => viewPageId(item.packId, item.viewId) === page)?.label;
+  const projectScoped = TOP_NAV.some((item) => item.id === navPage && item.group === "project-scope");
 
   useEffect(() => {
     void init();
@@ -229,7 +247,7 @@ export default function App() {
     Icon: IconComponent;
     badge?: number;
   }) {
-    const active = page === id || group?.root === id;
+    const active = navPage === id || group?.root === id;
     return (
       <button
         onClick={() => {
@@ -241,15 +259,17 @@ export default function App() {
             setPage(id);
         }}
         aria-current={active ? "page" : undefined}
+        aria-label={label}
+        title={label}
         className={cn(
-          "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+          "app-nav-item flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
           active
             ? "bg-secondary text-secondary-foreground"
             : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
         )}
       >
         <Icon className="size-3.5" />
-        <span className="min-w-0 truncate">{label}</span>
+        <span className="app-nav-label min-w-0 truncate">{label}</span>
         {badge != null && badge > 0 && (
           <span className="ml-auto rounded-full bg-warning/20 px-1.5 text-[10px] font-semibold text-warning-foreground">
             {badge}
@@ -260,15 +280,18 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden">
-      <aside className="app-sidebar flex w-[208px] shrink-0 flex-col border-r bg-sidebar px-3 py-5">
-        <div className="mb-6 flex items-center gap-2.5 px-2">
-          <img src={appIcon} alt="" className="size-8 shrink-0" />
-          <div className="text-[16px] font-bold tracking-tight leading-tight">
+    <div className={cn("app-shell flex h-screen w-screen overflow-hidden", sidebarCollapsed && "is-sidebar-collapsed")}>
+      <aside className="app-sidebar">
+        <div className="app-brand">
+          <img src={appIcon} alt="" className="size-7 shrink-0" />
+          <div className="app-wordmark">
             sawhorse
           </div>
+          <button className="app-sidebar-toggle" onClick={toggleSidebar} aria-label={t(sidebarCollapsed ? "nav.expandSidebar" : "nav.collapseSidebar")} aria-expanded={!sidebarCollapsed} title={t(sidebarCollapsed ? "nav.expandSidebar" : "nav.collapseSidebar")}>
+            {sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          </button>
         </div>
-        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+        <nav className="app-navigation">
           {SECTIONS.map(({ id, labelKey }, index) => {
             const core = TOP_NAV.filter(
               (n) =>
@@ -294,14 +317,13 @@ export default function App() {
                 key={id}
                 aria-label={t(labelKey)}
                 data-nav-scope={id === "project-scope" ? "project" : "workspace"}
-                className={cn("flex shrink-0 flex-col gap-0.5", index > 0 && "mt-5", index === 1 && "border-t border-border/60 pt-4")}
+                className={cn("app-nav-section", index === 1 && "app-workspace-section")}
               >
-                <div className="mb-1 flex items-center justify-between gap-2 px-2 pt-1 text-[10px] font-semibold tracking-wider text-muted-foreground">
+                <div className="app-section-caption">
                   <span>{t(labelKey)}</span>
-                  {id !== "project-scope" && <span className="text-[9px] font-normal tracking-normal text-muted-foreground/60">{t("nav.scope.shared")}</span>}
                 </div>
                 {id === "project-scope" && (
-                  <div className="mb-2">
+                  <div className="app-project-picker" title={selectedProject?.name ?? t("workbench:scope.all")}>
                     <label htmlFor="sidebar-project" className="sr-only">{t("nav.scope.select")}</label>
                     <Select
                       id="sidebar-project"
@@ -320,7 +342,6 @@ export default function App() {
                         if (window.dispatchEvent(new Event("sawhorse:navigate", { cancelable: true }))) selectProject(next);
                       }}
                     />
-                    <p className="mt-1.5 px-2 text-[10px] leading-relaxed text-muted-foreground/70">{t("nav.scope.appliesBelow")}</p>
                   </div>
                 )}
                 {core.map((n) => (
@@ -349,7 +370,7 @@ export default function App() {
               !SECTIONS.some((s) => s.id !== "project-scope" && s.id === n.group),
           ) && (
             <Fragment>
-              <div className="mb-1 mt-4 flex items-center justify-between px-2 text-[10px] font-semibold tracking-wider text-muted-foreground">
+              <div className="app-section-caption">
                 {t("nav.other")}<span>{t("nav.scope.shared")}</span>
               </div>
               {nav
@@ -369,8 +390,7 @@ export default function App() {
             </Fragment>
           )}
 
-          <div className="my-1.5 h-px bg-border" />
-          <div className="px-2 text-[10px] text-muted-foreground">{t("nav.scope.sharedSettings")}</div>
+          <div className="app-nav-settings">
           {BOTTOM_NAV.map((n) => (
             <NavButton
               key={n.id}
@@ -380,9 +400,10 @@ export default function App() {
               badge={n.id === "packs" ? brokenCount : undefined}
             />
           ))}
+          </div>
         </nav>
-        <div className="mt-2 flex items-center justify-between px-2">
-          <div className="text-[10px] text-muted-foreground">
+        <div className="app-sidebar-footer">
+          <div className="app-version">
             {version ? `v${version}` : ""}
           </div>
           <button
@@ -402,11 +423,11 @@ export default function App() {
         </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--workspace)]">
-        <AppToolbar />
+        <AppToolbar contextLabel={projectScoped ? selectedProject?.name ?? t("workbench:scope.all") : t("nav.section.work")} pageLabel={pageLabel} />
         <DetailNavigation />
         {group && (
           <div
-            className="flex shrink-0 flex-wrap gap-1 border-b bg-background px-5 py-2"
+            className="app-page-tabs flex shrink-0 flex-wrap gap-1 border-b bg-background px-5 py-2"
             aria-label={t("nav.viewPicker")}
           >
             {group.tabs.map((tab) => (
@@ -433,9 +454,11 @@ export default function App() {
             ))}
           </div>
         )}
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <AttentionStrip />
+        <div className="app-content min-h-0 flex-1 overflow-y-auto">
           {isWorkbenchPreview && (
-            <div className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-xs text-amber-900">
+            <div className="app-preview-notice">
+              <FlaskConical size={13} aria-hidden />
               {t("nav.previewNotice")}
             </div>
           )}

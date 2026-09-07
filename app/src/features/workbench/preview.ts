@@ -1,5 +1,8 @@
 // Opt-in browser tour only. Failed desktop IPC never falls back to this store.
 import i18n from "@/i18n";
+import { demoHtml, mockupDemo } from "@/features/mockups/preview";
+import mockupWorkflow from "../../../../plugin/extension-packages/ui-mockup/workflows/mockup-review.json";
+import type { Mockup } from "@/features/mockups/types";
 import { isFinalWorkNode, workActions } from "./lifecycle";
 import {
   ARTIFACTS,
@@ -9,6 +12,9 @@ import {
   type WorkItem,
   type WorkspaceSnapshot,
   type WorkflowDefinition,
+  type WorkflowDraftRecord,
+  type HarnessRun,
+  type IntentCheckpoint,
 } from "./types";
 const KEY = "sawhorse.workflow.preview.v2";
 const now = () => new Date().toISOString();
@@ -341,8 +347,14 @@ const seed: WorkspaceSnapshot = {
   ],
 };
 type Store = {
+  mockups?: Record<string, { manifest: Mockup; html: Record<string, string> }>;
   snapshot: WorkspaceSnapshot;
   documents: Record<string, Document>;
+  drafts?: WorkflowDraftRecord[];
+  /** Optional historical fixtures for the browser tour; execution stays desktop-only. */
+  runs?: HarnessRun[];
+  history?: Record<string, Array<IntentCheckpoint & { documents: Document[] }>>;
+  approvals?: Record<string, string[]>;
 };
 function load(): Store {
   try {
@@ -357,7 +369,17 @@ function load(): Store {
   } catch {
     /* disposable tour */
   }
-  return { snapshot: structuredClone(seed), documents: {} };
+  const snapshot = structuredClone(seed);
+  const documents: Record<string, Document> = {};
+  if (new URLSearchParams(window.location.search).get("mockups") === "1") {
+    snapshot.workflows.push(mockupWorkflow as WorkflowDefinition);
+    for (const id of ["mockup-demo", "mockup-v1"]) {
+      snapshot.work.unshift({ ...work(id, id === "mockup-demo" ? mockupDemo.title : "작업 검토 경험 개선 · 첫 개정", "review", "review", "sawhorse", 0), status: "review", workflowId: "mockup-review", workflowVersion: "1.1.0", workflowDigest: "", artifacts: mockupWorkflow.artifacts.map((artifact) => artifact.role), dueDate: null, priority: "normal" });
+      for (const artifact of mockupWorkflow.artifacts) documents[`${id}/${artifact.role}`] = { workId: id, artifact: artifact.role, path: `work/${id}/${artifact.role}.md`, markdown: artifact.template, revision: "0" };
+    }
+    localStorage.setItem(KEY, JSON.stringify({ snapshot, documents }));
+  }
+  return { snapshot, documents };
 }
 let state = load();
 const save = () => {
@@ -386,6 +408,13 @@ function doc(workId: string, artifact: string): Document {
   }
   return structuredClone(state.documents[key]);
 }
+function checkpoint(work: WorkItem, event: string, note = "") {
+  if (work.workflowId !== "intent-flow") return;
+  state.history ??= {};
+  state.history[work.id] ??= [];
+  state.history[work.id].unshift({ id: crypto.randomUUID(), event, note, at: now(), stage: work.stage,
+    documents: ["intent", "spec", "plan", "verification"].map((role) => doc(work.id, role)) });
+}
 export async function previewInvoke(
   command: string,
   args: Record<string, unknown> = {},
@@ -394,6 +423,23 @@ export async function previewInvoke(
   const s = state.snapshot;
   const id = String(args.id ?? "");
   switch (command) {
+    case "sdd_read_mockup": {
+      const workId = String(args.workId);
+      if (state.mockups?.[workId]) return structuredClone(state.mockups[workId].manifest);
+      if (!s.work.some((work) => work.id === workId && work.workflowId === "mockup-review") || !["mockup-demo", "mockup-v1"].includes(workId)) throw new Error("목업 정보를 찾을 수 없습니다");
+      return { ...structuredClone(mockupDemo), id: workId, revision: workId === "mockup-v1" ? 1 : 2, parentMockupId: workId === "mockup-v1" ? "" : "mockup-v1" };
+    }
+    case "sdd_read_mockup_html": {
+      const workId = String(args.workId);
+      const screenId = String(args.screenId);
+      if (state.mockups?.[workId]) {
+        const source = state.mockups[workId].html[screenId];
+        if (source == null) throw new Error("목업 HTML 파일을 찾을 수 없습니다");
+        return source;
+      }
+      if (!s.work.some((work) => work.id === workId && work.workflowId === "mockup-review") || !["mockup-demo", "mockup-v1"].includes(workId)) throw new Error("목업 정보를 찾을 수 없습니다");
+      return demoHtml(screenId);
+    }
     case "sdd_snapshot":
     case "workflow_snapshot":
       return structuredClone(s);
@@ -404,6 +450,31 @@ export async function previewInvoke(
       return { migrated: [], skipped: [] };
     case "workflow_catalog":
       return structuredClone(s.workflows);
+    case "workflow_generate": {
+      const { previewDraft } = await import("../workflow-studio/preview-draft");
+      return previewDraft(String(args.request), args.definition as WorkflowDefinition | null);
+    }
+    case "workflow_draft_list":
+      return structuredClone(state.drafts ?? []);
+    case "workflow_draft_save": {
+      const input = args.input as { draftId: string; definition: WorkflowDefinition; expectedRevision?: string };
+      const existing = state.drafts?.find(draft => draft.draftId === input.draftId);
+      if (existing && input.expectedRevision !== existing.revision) throw new Error("revision-conflict: draft changed; read it again before saving");
+      const record = { draftId: input.draftId, definition: structuredClone(input.definition), revision: crypto.randomUUID(), validation: { valid: true, issues: [] }, updatedAt: now() };
+      state.drafts = [record, ...(state.drafts ?? []).filter(draft => draft.draftId !== input.draftId)];
+      save();
+      return record;
+    }
+    case "workflow_publish": {
+      const definition = structuredClone(args.definition) as WorkflowDefinition;
+      const existing = s.workflows.find(item => item.id === definition.id && item.version === definition.version);
+      if (existing && JSON.stringify(existing) !== JSON.stringify(definition)) throw new Error("This version is already published.");
+      if (!existing) s.workflows.push(definition);
+      save();
+      return definition;
+    }
+    case "workflow_export":
+      return JSON.stringify(args.definition, null, 2);
     case "workflow_validate":
       return { valid: true, issues: [] };
     case "workflow_activate": {
@@ -453,11 +524,18 @@ export async function previewInvoke(
       }
       const work = await previewInvoke("sdd_save_work", { input: { ...input.work, description: input.markdown.slice(0, 180), workflowId: "intent-flow", workflowVersion: "1.0.0" } }) as WorkItem;
       state.documents[`${work.id}/intent`] = { workId: work.id, artifact: "intent", path: `work/${work.id}/intent.md`, markdown, revision: crypto.randomUUID() };
+      checkpoint(work, "captured");
       save(); return work;
     }
     case "sdd_intent_review": {
       const documents = ["intent", "spec", "plan", "verification"].map((role) => doc(String(args.workId), role));
-      return { documents, inputDigest: documents.map((document) => document.revision).join(":") };
+      return { documents, inputDigest: documents.map((document) => document.revision).join(":"),
+        history: (state.history?.[String(args.workId)] ?? []).map(({ documents: _, ...entry }) => entry) };
+    }
+    case "sdd_intent_checkpoint": {
+      const entry = state.history?.[String(args.workId)]?.find((entry) => entry.id === args.checkpointId);
+      if (!entry) throw new Error("기록을 찾을 수 없습니다");
+      return structuredClone(entry.documents);
     }
     case "sdd_save_work": {
       const w = structuredClone(args.input) as WorkItem;
@@ -539,6 +617,8 @@ export async function previewInvoke(
         if ((input.facts?.expectedStatus && input.facts.expectedStatus !== w.status) || !workActions(w, definition).includes(action))
           throw new Error(i18n.t("workbench:work.invalidAction"));
         if (["submit", "complete"].includes(action)) {
+          if (w.workflowId === "intent-flow" && JSON.stringify(state.approvals?.[w.id]) !== JSON.stringify(["intent", "spec", "plan"].map((role) => doc(w.id, role).revision)))
+            throw new Error("The intent or design changed after approval. Revisit and approve the design.");
           if (!isFinalWorkNode(w, definition)) throw new Error(i18n.t("workbench:work.invalidAction"));
           const node = definition!.nodes.find((node) => node.id === w.stage)!;
           for (const role of [...node.inputs, ...node.outputs]) {
@@ -548,6 +628,7 @@ export async function previewInvoke(
             throw new Error(i18n.t("workbench:work.invalidAction"));
         }
         const statuses: Record<string, WorkItem["status"]> = { accept: "ready", start: "running", reject: "rejected", cancel: "cancelled", pause: "blocked", resume: "running", revise: "running", submit: "review", complete: "done" };
+        if (action === "complete") checkpoint(w, "result-review", input.note);
         w.status = statuses[action];
         if (["accept", "start"].includes(action)) { w.approve = true; w.approved ||= now().slice(0, 10); }
         w.updatedAt = now();
@@ -570,6 +651,13 @@ export async function previewInvoke(
       }
       if (target.requiresCompletedDependencies && w.dependsOn.some((id) => s.work.find((item) => item.id === id)?.status !== "done"))
         throw new Error(i18n.t("workbench:work.invalidAction"));
+      if (input.event === "approved") {
+        checkpoint(w, "design-review", input.note);
+        if (w.workflowId === "intent-flow") {
+          state.approvals ??= {};
+          state.approvals[w.id] = ["intent", "spec", "plan"].map((role) => doc(w.id, role).revision);
+        }
+      }
       w.status = target.kind === "end" ? "done" : "running";
       w.approve = true;
       w.approvalRequired = false;
@@ -588,6 +676,8 @@ export async function previewInvoke(
         throw new Error(
           i18n.t("workbench:preview.documentChangedElsewhere"),
         );
+      const work = s.work.find((work) => work.id === d.workId);
+      if (work && d.markdown !== String(args.markdown)) checkpoint(work, "before-edit", d.artifact);
       d.markdown = String(args.markdown);
       d.revision = crypto.randomUUID();
       state.documents[`${d.workId}/${d.artifact}`] = d;
@@ -635,7 +725,12 @@ export async function previewInvoke(
         }));
     }
     case "sdd_runs":
-      return [];
+      return state.runs ?? [];
+    case "sdd_refresh_run": {
+      const run = state.runs?.find((run) => run.id === id);
+      if (!run) throw new Error("실행 기록을 찾을 수 없습니다");
+      return structuredClone(run);
+    }
     case "sdd_launch":
       throw new Error(i18n.t("workbench:preview.launchNeedsDesktop"));
     case "sdd_run_output":

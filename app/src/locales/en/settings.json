@@ -18,7 +18,7 @@
     "diagnostics": "Diagnostics"
   },
   "sectionsDesc": {
-    "app": "Language and system startup",
+    "app": "Make Sawhorse feel at home in your workflow.",
     "vault": "Vault location and project registration",
     "execution": "How agents run, and herdr",
     "collaboration": "Multi-agent approval and integration",
@@ -260,7 +260,13 @@
     "saved": "Settings saved.",
     "saveFailed": "Save failed: {{error}}",
     "autoStartFailed": "Failed to update launch-at-login: {{error}}",
-    "dirty": "Unsaved changes"
+    "dirty": "Unsaved changes",
+    "scope": "All workspaces",
+    "preferences": "PREFERENCES",
+    "unsaved": "Unsaved changes",
+    "upToDate": "No pending changes",
+    "setupTitle": "Setting up a workspace?",
+    "setupHint": "Walk through your tools and connections with the setup wizard."
   },
   "validate": {
     "vaultPathRequired": "Enter the vault path.",
@@ -408,7 +414,12 @@
     "startTimeout": "Startup wait (s)",
     "jobTimeout": "Max run time (min, 0 = unlimited)",
     "notify": "herdr notify on approval wait or failure",
-    "workspaceHint": "Each job gets one tab in the \"{{workspace}}\" workspace. For approval waits to be useful, keep the permission mode at `default` or `acceptEdits`."
+    "workspaceHint": "Each job gets one tab in the \"{{workspace}}\" workspace. For approval waits to be useful, keep the permission mode at `default` or `acceptEdits`.",
+    "childModelPolicy": "Child agent model policy",
+    "childModelHint": "Skills assess complexity: Sonnet for bounded tasks, Opus for complex work. Explicit models take precedence. Applies to new root runs. Codex and custom models inherit within the same agent.",
+    "childModelAuto": "Automatic · assessed by skills",
+    "childModelInherit": "Inherit parent model",
+    "childModelCapacity": "With a concurrency limit of 1, the parent works locally. Delegation needs at least 2 slots including the parent."
   },
   "schedule": {
     "title": "Schedules",
@@ -417,5 +428,23 @@
     "daily": "Daily",
     "timeAria": "Scheduled time for {{label}}",
     "hint": "Schedules are declared by extensions; values changed here are overrides on top. If the app was closed when the time passed, it won't auto-run and will notify on Home instead. Automation tasks created by the agent are handled under Schedules & repeats in Automation."
+  },
+  "navDesc": {
+    "app": "Appearance and behavior",
+    "vault": "Storage and projects",
+    "execution": "Agents and run policies",
+    "collaboration": "Approval and integration",
+    "diagnostics": "Connections and tools"
+  },
+  "appearance": {
+    "title": "Appearance",
+    "desc": "Choose the theme that works best for you.",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System",
+    "immediate": "Theme and language changes apply immediately.",
+    "general": "General",
+    "languageHint": "Choose the language used throughout the app.",
+    "launchHint": "Open Sawhorse when you sign in to your computer."
   }
 }

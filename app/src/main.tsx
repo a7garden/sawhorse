@@ -5,6 +5,7 @@ import App from "./App";
 import { UpgradeGate } from "@/features/upgrade/UpgradeGate";
 import { useTheme } from "@/lib/theme";
 import "./index.css";
+import "./app-shell.css";
 
 useTheme.getState().init();
 ReactDOM.createRoot(document.getElementById("root")!).render(

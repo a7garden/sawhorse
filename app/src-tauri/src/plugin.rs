@@ -121,15 +121,24 @@ pub fn list_skills(root: &Path) -> Vec<SkillInfo> {
         };
         // A pack manifest owns its public skill catalog. Old directories left by
         // an earlier installation must not reappear just because they still exist.
-        let declared = dir.parent().filter(|parent| parent.join("pack.json").is_file())
+        let declared = dir
+            .parent()
+            .filter(|parent| parent.join("pack.json").is_file())
             .map(|parent| -> Vec<String> {
-                std::fs::read_to_string(parent.join("pack.json")).ok()
+                std::fs::read_to_string(parent.join("pack.json"))
+                    .ok()
                     .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
                     .and_then(|value| value.get("skills")?.as_array().cloned())
-                    .unwrap_or_default().iter().filter_map(|value| value.as_str().map(str::to_owned)).collect()
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|value| value.as_str().map(str::to_owned))
+                    .collect()
             });
         for entry in rd.flatten() {
-            if declared.as_ref().is_some_and(|names| !names.iter().any(|name| entry.file_name() == name.as_str())) {
+            if declared
+                .as_ref()
+                .is_some_and(|names| !names.iter().any(|name| entry.file_name() == name.as_str()))
+            {
                 continue;
             }
             let p = entry.path();
@@ -323,11 +332,21 @@ mod tests {
         for name in ["issues", "improve", "improve-excel"] {
             let path = root.join("packs/si/skills").join(name);
             fs::create_dir_all(&path).unwrap();
-            fs::write(path.join("SKILL.md"), format!("---\nname: {name}\ndescription: example\n---\n")).unwrap();
+            fs::write(
+                path.join("SKILL.md"),
+                format!("---\nname: {name}\ndescription: example\n---\n"),
+            )
+            .unwrap();
         }
         fs::write(root.join("packs/si/pack.json"), r#"{"skills":["issues"]}"#).unwrap();
         let skills = list_skills(&root);
-        assert_eq!(skills.iter().map(|skill| skill.name.as_str()).collect::<Vec<_>>(), vec!["issues"]);
+        assert_eq!(
+            skills
+                .iter()
+                .map(|skill| skill.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["issues"]
+        );
         fs::remove_dir_all(root).unwrap();
     }
 
