@@ -265,6 +265,20 @@ fn status_for_agent(agent_status: &str) -> &'static str {
     }
 }
 
+/// `agent prompt` returns after queuing terminal input, while Herdr can still report
+/// the pre-prompt `idle` state for a moment. Treating that snapshot as completion
+/// closes the just-created tab before Claude receives the delayed Enter key.
+/// `done` is not held: unlike `idle`, it proves unseen background work settled.
+fn prompt_activation_pending(record: &RunRecord, agent_status: &str) -> bool {
+    if record.status != "running" || agent_status != "idle" {
+        return false;
+    }
+    const GRACE_SECONDS: i64 = 10;
+    chrono::DateTime::parse_from_rfc3339(&record.updated_at)
+        .map(|updated| (Utc::now() - updated.with_timezone(&Utc)).num_seconds() < GRACE_SECONDS)
+        .unwrap_or(false)
+}
+
 fn can_continue(record_status: &str, agent_status: &str) -> bool {
     record_status == "review" && matches!(agent_status, "idle" | "done")
 }
@@ -1572,6 +1586,9 @@ async fn refresh_record_with(
             None
         }
     };
+    if prompt_activation_pending(&record, &info.status) {
+        return Ok(record);
+    }
     let status = status_for_agent(&info.status);
     update(&mut record, status, None);
     // A settled turn has nothing left to show in a terminal. Keep the closing
@@ -1744,7 +1761,13 @@ pub async fn sdd_launch(input: LaunchInput) -> Result<HarnessRun, String> {
     let root = sdlc::vault_root()?;
     let mut record = record_launch(&root, &input)?;
     if input.parent_run_id.is_none() {
-        if let Err(error) = sdlc::record_intent_launch(&root, &input.work_id, &input.project_id, &record.stage, &record.id) {
+        if let Err(error) = sdlc::record_intent_launch(
+            &root,
+            &input.work_id,
+            &input.project_id,
+            &record.stage,
+            &record.id,
+        ) {
             update(&mut record, "failed", Some(error.clone()));
             save_record(&root, &record)?;
             return Err(error);
@@ -2636,6 +2659,18 @@ mod tests {
         assert_eq!(status_for_agent("idle"), "review");
         assert_eq!(status_for_agent("done"), "review");
         assert_ne!(status_for_agent("idle"), "done");
+    }
+
+    #[test]
+    fn fresh_running_prompt_does_not_settle_on_initial_idle() {
+        let mut run = record(Uuid::new_v4().to_string(), None, "running");
+        run.updated_at = now();
+        assert!(prompt_activation_pending(&run, "idle"));
+        assert!(!prompt_activation_pending(&run, "done"));
+        assert!(!prompt_activation_pending(&run, "working"));
+
+        run.updated_at = "2000-01-01T00:00:00Z".into();
+        assert!(!prompt_activation_pending(&run, "idle"));
     }
 
     #[test]
