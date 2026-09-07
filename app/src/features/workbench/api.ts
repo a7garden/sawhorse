@@ -90,6 +90,18 @@ export const sddApi = {
     call("issue_migration_plan"),
   issueMigrate: (paths: string[]): Promise<IssueMigrationReport> =>
     call("issue_migrate", { paths }),
+  /** 에이전트별 모델 후보. 카탈로그가 먼저, 최근 사용이 다음이며 순서는 보존된다. */
+  agentModels: (
+    agent: string,
+  ): Promise<{
+    options: Array<{ id: string; label: string; source: "catalog" | "recent" }>;
+  }> => call("agent_models", { agent }),
+  /**
+   * 프로젝트 분석을 백그라운드로 돌린다. 커맨드는 즉시 돌아오고 완료는
+   * `project-analyzed` 이벤트로 온다.
+   */
+  analyzeProject: (projectId: string): Promise<void> =>
+    call("sdd_analyze_project", { projectId }),
 };
 
 /** General workflow API. The sddApi methods above remain compatibility wrappers. */

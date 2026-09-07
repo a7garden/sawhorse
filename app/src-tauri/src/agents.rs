@@ -627,6 +627,62 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
     },
 ];
 
+// ---------- 모델 카탈로그 ----------
+
+/// 카탈로그가 내보낼 모델 하나.
+pub struct ModelSpec {
+    pub id: &'static str,
+    pub label: &'static str,
+}
+
+/// 에이전트별 모델 정본. CLI 라인업은 앱 업데이트 때 바뀌는 값이므로 이 줄이
+/// 정본이다. 사용자가 최근에 실제로 쓴 모델은 실행 기록(runs/)에서 수집해
+/// 이 카탈로그 뒤에 붙인다 — 두 출처의 합이 화면의 선택지다.
+pub const MODEL_CATALOGS: &[(&str, &[ModelSpec])] = &[
+    (
+        CLAUDE,
+        &[
+            ModelSpec {
+                id: "opus",
+                label: "Opus (alias)",
+            },
+            ModelSpec {
+                id: "sonnet",
+                label: "Sonnet (alias)",
+            },
+            ModelSpec {
+                id: "fable",
+                label: "Fable (alias)",
+            },
+            ModelSpec {
+                id: "haiku",
+                label: "Haiku (alias)",
+            },
+        ],
+    ),
+    (
+        CODEX,
+        &[
+            ModelSpec {
+                id: "gpt-5.1-codex-max",
+                label: "GPT-5.1 Codex Max",
+            },
+            ModelSpec {
+                id: "gpt-5.1-codex",
+                label: "GPT-5.1 Codex",
+            },
+            ModelSpec {
+                id: "gpt-5-codex",
+                label: "GPT-5 Codex",
+            },
+            ModelSpec {
+                id: "o3",
+                label: "o3",
+            },
+        ],
+    ),
+];
+
 pub fn spec(id: &str) -> Option<&'static AgentSpec> {
     AGENT_CATALOG.iter().find(|s| s.id == id)
 }

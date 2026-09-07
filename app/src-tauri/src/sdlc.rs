@@ -49,6 +49,9 @@ pub struct Project {
     pub name: String,
     pub description: String,
     pub repo_path: String,
+    /// 메인 저장소 옆에 같이 열어 둘 추가 디렉터리. 에이전트 실행 때 `--add-dir` 로
+    /// 그대로 전달되고, 비어 있으면 직전 동작과 완전히 같다.
+    pub extra_paths: Vec<String>,
     pub depends_on: Vec<String>,
     pub verify_commands: Vec<String>,
     pub default_agent: String,
@@ -215,6 +218,9 @@ pub struct HarnessRun {
     pub workspace_id: Option<String>,
     pub session: String,
     pub prompt: String,
+    /// 프로젝트가 launch 때 신뢰한 추가 디렉터리. 재시작 뒤 같은 스코프로
+    /// 이어하기 위해 실행 기록과 함께 화면까지 실려 나간다.
+    pub extra_paths: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
     pub error: Option<String>,
@@ -634,6 +640,23 @@ fn validate_project(project: &Project) -> Result<(), String> {
     }
     if project.verify_commands.iter().any(|v| v.trim().is_empty()) {
         return Err("빈 검증 명령은 저장할 수 없습니다".into());
+    }
+    if project.extra_paths.len() > 8 {
+        return Err("추가 디렉터리는 최대 8개까지 지정할 수 있습니다".into());
+    }
+    let repo = project.repo_path.trim();
+    let mut seen_paths = HashSet::new();
+    for path in &project.extra_paths {
+        let path = path.trim();
+        if path.is_empty() {
+            return Err("빈 추가 디렉터리는 저장할 수 없습니다".into());
+        }
+        if path == repo {
+            return Err(format!("추가 디렉터리는 repoPath와 같을 수 없습니다: {path}"));
+        }
+        if !seen_paths.insert(path) {
+            return Err(format!("중복된 추가 디렉터리: {path}"));
+        }
     }
     Ok(())
 }
@@ -1202,7 +1225,7 @@ fn initialize(root: &Path) -> Result<WorkspaceSnapshot, String> {
     snapshot(root)
 }
 
-fn project_by_id(root: &Path, id: &str) -> Result<Project, String> {
+pub fn project_by_id(root: &Path, id: &str) -> Result<Project, String> {
     validate_id(id)?;
     let (mut project, body) = read_markdown::<Project>(root, &project_path(root, id))?;
     normalize_project_workflow(&mut project);
@@ -1303,7 +1326,8 @@ fn validate_work_graph(root: &Path, candidate: &WorkItem) -> Result<(), String> 
     )
 }
 
-fn save_project_at(root: &Path, mut input: Project) -> Result<Project, String> {
+/// harness 의 프로젝트 자동 분석도 description 교체 저장에 이 입구를 쓴다.
+pub fn save_project_at(root: &Path, mut input: Project) -> Result<Project, String> {
     let _guard = mutation_lock();
     ensure_initialized(root)?;
     if input.id.trim().is_empty() {
@@ -2515,6 +2539,53 @@ mod tests {
             priority: "normal".into(),
             ..Default::default()
         }
+    }
+    /// extraPaths 는 frontmatter 에 실려 저장·복원되고, 필드가 아예 없는 기존
+    /// project.md 도 그대로 읽혀야 한다(serde default).
+    #[test]
+    fn project_extra_paths_round_trip_and_default() {
+        let root = tempdir("extra-paths");
+        initialize(&root).unwrap();
+        let mut saved = project("p");
+        saved.repo_path = "/repo".into();
+        saved.extra_paths = vec!["/lib".into(), "/docs".into()];
+        save_project_at(&root, saved).unwrap();
+        let loaded = project_by_id(&root, "p").unwrap();
+        assert_eq!(loaded.extra_paths, vec!["/lib".to_string(), "/docs".to_string()]);
+
+        // extraPaths 줄이 없던 시절의 project.md 시뮬레이션.
+        let path = project_path(&root, "p");
+        let legacy: String = fs::read_to_string(&path)
+            .unwrap()
+            .lines()
+            .filter(|line| !line.contains("extraPaths") && !line.trim().starts_with("- /"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(&path, legacy).unwrap();
+        assert!(project_by_id(&root, "p").unwrap().extra_paths.is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn project_rejects_bad_extra_paths() {
+        let base = |extra_paths: Vec<String>| Project {
+            repo_path: "/repo".into(),
+            extra_paths,
+            ..project("p")
+        };
+        assert!(validate_project(&base(vec!["  ".into()])).is_err(), "빈 항목");
+        assert!(
+            validate_project(&base(vec!["/a".into(), " /a ".into()])).is_err(),
+            "trim 으로 정규화한 중복"
+        );
+        assert!(
+            validate_project(&base(vec!["/repo".into()])).is_err(),
+            "repoPath 와 동일"
+        );
+        let many: Vec<String> = (0..9).map(|i| format!("/d{i}")).collect();
+        assert!(validate_project(&base(many)).is_err(), "9개는 한도 초과");
+        let ok: Vec<String> = (0..8).map(|i| format!("/d{i}")).collect();
+        assert!(validate_project(&base(ok)).is_ok());
     }
     /// 이슈와 개발 항목이 한 저장소가 된 뒤로 `status` 하나가 열림·닫힘의 정본이다.
     /// 손으로 `state` 를 적어 넣어도 저장하면 상태에서 다시 파생되어야 한다.

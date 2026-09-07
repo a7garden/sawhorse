@@ -101,6 +101,8 @@ export interface Project {
   name: string;
   description: string;
   repoPath: string;
+  /** 기본 폴더 외에 프로젝트가 같이 보는 폴더들. 비어 있으면 단일 폴더 프로젝트다. */
+  extraPaths: string[];
   dependsOn: string[];
   verifyCommands: string[];
   defaultAgent: string;

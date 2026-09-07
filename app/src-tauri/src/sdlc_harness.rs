@@ -9,7 +9,7 @@ use std::{
     collections::HashSet,
     fs,
     path::{Path, PathBuf},
-    sync::{Mutex, OnceLock},
+    sync::{LazyLock, Mutex, OnceLock},
     time::Duration,
 };
 
@@ -70,6 +70,10 @@ struct RunRecord {
     agent_session: Option<String>,
     prompt: String,
     repo_path: String,
+    /// 프로젝트가 launch 때 신뢰한 추가 디렉터리. `--add-dir` 인자는 여기서
+    /// 다시 조립하므로 재시작 뒤에도 같은 스코프가 유지된다.
+    #[serde(default)]
+    extra_paths: Vec<String>,
     output_path: String,
     created_at: String,
     updated_at: String,
@@ -187,6 +191,7 @@ impl RunRecord {
             workspace_id: self.workspace_id.clone(),
             session: self.session.clone(),
             prompt: self.prompt.clone(),
+            extra_paths: self.extra_paths.clone(),
             created_at: self.created_at.clone(),
             updated_at: self.updated_at.clone(),
             error: self.error.clone(),
@@ -468,6 +473,7 @@ struct LaunchContext {
     node: WorkflowNode,
     definition: WorkflowDefinition,
     repo_path: String,
+    extra_paths: Vec<String>,
     verification: Vec<String>,
     dependencies: String,
     project_dependencies: String,
@@ -715,6 +721,7 @@ fn launch_gate(root: &Path, input: &LaunchInput) -> Result<LaunchContext, String
         node,
         definition,
         repo_path: repo_path.display().to_string(),
+        extra_paths: project.extra_paths.clone(),
         verification: project.verify_commands.clone(),
         dependencies: if dependencies.is_empty() {
             "- 없음".into()
@@ -849,6 +856,7 @@ fn record_launch_with_request(
         agent_session: None,
         prompt,
         repo_path: context.repo_path,
+        extra_paths: context.extra_paths,
         output_path: format!("runs/{id}.transcript.md"),
         created_at: timestamp.clone(),
         updated_at: timestamp,
@@ -1086,6 +1094,17 @@ async fn settle_pane(root: &Path, record: &mut RunRecord, h: &Herdr, captured: O
     }
 }
 
+/// 프로젝트가 추가로 신뢰하는 디렉터리를 vault 와 같은 방식으로 스코프에 넣는다.
+/// launch 때 기록해 둔 값이라 빈 항목 방어만 하면 된다.
+fn push_extra_dirs(extra: &mut Vec<String>, extra_paths: &[String]) {
+    for dir in extra_paths {
+        let dir = dir.trim();
+        if !dir.is_empty() {
+            extra.extend(["--add-dir".to_string(), dir.to_string()]);
+        }
+    }
+}
+
 /// Reopen a closed run's agent session in herdr as the same conversation.
 ///
 /// `claude --resume <id>` restores the transcript the run was recorded with, so
@@ -1125,6 +1144,7 @@ async fn reopen_session(
     if let Ok(vault) = root.canonicalize() {
         extra.extend(["--add-dir".to_string(), vault.display().to_string()]);
     }
+    push_extra_dirs(&mut extra, &record.extra_paths);
     if !record.model.is_empty() {
         extra.extend(["--model".to_string(), record.model.clone()]);
     }
@@ -1292,8 +1312,10 @@ async fn start_record(root: PathBuf, id: String) {
         }
     };
     // Both supported native CLIs accept this explicit scope. The project repo is
-    // their cwd; this grants only the canonical vault required for artifacts.
+    // their cwd; the canonical vault is required for artifacts, and the project's
+    // own extra directories complete the trusted workspace.
     extra.extend(["--add-dir".to_string(), vault_dir.display().to_string()]);
+    push_extra_dirs(&mut extra, &record.extra_paths);
     if !record.model.is_empty() {
         extra.extend(["--model".to_string(), record.model.clone()]);
     }
@@ -1725,6 +1747,408 @@ pub fn sdd_run_output(id: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| format!("실행 출력을 읽을 수 없습니다: {e}"))
 }
 
+// ---------- 에이전트별 모델 목록 ----------
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelOption {
+    pub id: String,
+    pub label: String,
+    pub source: ModelSource,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ModelSource {
+    Catalog,
+    Recent,
+}
+
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentModels {
+    pub options: Vec<ModelOption>,
+}
+
+/// 최근 사용 모델은 제안일 뿐이다. 8개를 넘으면 소음이지 선택지가 아니다.
+const MAX_RECENT_MODELS: usize = 8;
+
+/// runs/ 기록에서 같은 에이전트가 최근에 쓴 모델을 모은다. created_at 내림차순으로
+/// 중복을 걷어내고 최대 8개다. 손상된 기록 파일은 조용히 건너뛴다 — 모델 제안은
+/// 사소한 부가 기능이라 기록 하나 때문에 함께 실패하지 않는다. runs/ 가 없으면
+/// 빈 목록이고, 디렉터리를 만들지 않는다(읽기 전용 조회라서).
+fn recent_models(root: &Path, agent: &str) -> Vec<String> {
+    let Ok(entries) = fs::read_dir(root.join("runs")) else {
+        return Vec::new();
+    };
+    let mut used: Vec<(String, String)> = Vec::new();
+    for entry in entries.filter_map(Result::ok) {
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        let Some(id) = name.strip_suffix(".md") else {
+            continue;
+        };
+        if name.ends_with(".transcript.md") || Uuid::parse_str(id).is_err() {
+            continue;
+        }
+        let path = entry.path();
+        if reject_symlink(&path).is_err() {
+            continue;
+        }
+        let Ok(body) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Some(rest) = body.strip_prefix("---\n") else {
+            continue;
+        };
+        let Some((yaml, _)) = rest.split_once("\n---\n") else {
+            continue;
+        };
+        let Ok(record) = serde_yaml::from_str::<RunRecord>(yaml) else {
+            continue;
+        };
+        if record.agent != agent {
+            continue;
+        }
+        let model = record.model.trim().to_string();
+        if !model.is_empty() {
+            used.push((record.created_at, model));
+        }
+    }
+    used.sort_by(|a, b| b.0.cmp(&a.0));
+    let mut seen = HashSet::new();
+    used.into_iter()
+        .filter(|(_, model)| seen.insert(model.clone()))
+        .take(MAX_RECENT_MODELS)
+        .map(|(_, model)| model)
+        .collect()
+}
+
+fn agent_models_at(root: &Path, agent: &str) -> AgentModels {
+    let mut options: Vec<ModelOption> = Vec::new();
+    if let Some((_, catalog)) = crate::agents::MODEL_CATALOGS
+        .iter()
+        .find(|(id, _)| *id == agent)
+    {
+        for spec in *catalog {
+            options.push(ModelOption {
+                id: spec.id.to_string(),
+                label: spec.label.to_string(),
+                source: ModelSource::Catalog,
+            });
+        }
+    }
+    for model in recent_models(root, agent) {
+        if options.iter().any(|option| option.id == model) {
+            continue;
+        }
+        options.push(ModelOption {
+            id: model.clone(),
+            label: model,
+            source: ModelSource::Recent,
+        });
+    }
+    AgentModels { options }
+}
+
+/// 에이전트별 모델 선택지. 정본 카탈로그 먼저, 그 뒤에 최근 사용 순으로.
+/// vault 가 아직 초기화되지 않았어도 카탈로그는 답해야 한다 — recent 는 부가 정보다.
+#[tauri::command]
+pub fn agent_models(agent: String) -> Result<AgentModels, String> {
+    let agent = agent.trim().to_lowercase();
+    let models = match sdlc::vault_root() {
+        Ok(root) => agent_models_at(&root, &agent),
+        Err(_) => agent_models_at(Path::new(""), &agent),
+    };
+    Ok(models)
+}
+
+// ---------- 프로젝트 자동 분석 ----------
+
+/// 분석 에이전트는 읽기만 한다. claude 의 variadic `--disallowedTools` 는 단일
+/// 인자로 넘긴다 — 펼치면 뒤따르는 위치 인자를 삼킨다.
+const ANALYZE_DISALLOWED_TOOLS: &str = "Bash,Write,Edit";
+const ANALYZE_TIMEOUT: Duration = Duration::from_secs(180);
+
+/// 프롬프트는 한국어로 고정한다. 프로젝트 설명은 한국어 볼트에서 읽힌다.
+const ANALYZE_PROMPT: &str = "이 저장소를 분석해 1~2문장 한국어 프로젝트 설명과 검증 커맨드 후보를 JSON으로만 반환하라. 다른 텍스트 금지. 형식: {\"description\": string, \"verifyCommands\": string[]}";
+
+/// 분석이 지금 돌고 있는 프로젝트. 같은 프로젝트를 두 번 띄우면 두 에이전트가
+/// 같은 description을 경쟁하며 쓰게 되므로 애초에 막는다.
+static ANALYZE_IN_FLIGHT: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// 분석 에이전트를 띄우기 위한 완성된 계획. 프로그램, 인자, 작업 디렉터리와
+/// 입력·출력 경로가 어디로 가는지를 한데 모은다.
+struct AnalyzePlan {
+    program: &'static str,
+    args: Vec<String>,
+    cwd: PathBuf,
+    /// claude 는 위치 프롬프트 대신 stdin 으로 프롬프트를 받는다.
+    stdin_text: Option<String>,
+    /// codex 만 최종 메시지를 파일로 받는다 — stdout 은 JSONL 이벤트 스트림이라
+    /// 최종 답이 어느 줄인지 알 수 없다.
+    last_message_path: Option<PathBuf>,
+}
+
+/// 분석 커맨드 조립. 프로젝트 필드만 보고 결정하는 순수 함수라 단위 테스트 대상이다.
+/// 기본 에이전트가 비면 claude, 모델이 비면 모델 플래그를 뺀다.
+fn analyze_plan(project: &sdlc::Project, last_message: &Path) -> AnalyzePlan {
+    let repo = PathBuf::from(project.repo_path.trim());
+    let model = project.default_model.trim().to_string();
+    if project.default_agent.trim() == "codex" {
+        let mut args = vec!["exec".to_string()];
+        if !model.is_empty() {
+            args.extend(["-m".to_string(), model]);
+        }
+        args.extend([
+            "-C".to_string(),
+            repo.display().to_string(),
+            "-s".to_string(),
+            "read-only".to_string(),
+            // repoPath 가 git 저장소가 아닌 경우가 있어서 검사를 건너뛴다.
+            "--skip-git-repo-check".to_string(),
+            "-o".to_string(),
+            last_message.display().to_string(),
+            ANALYZE_PROMPT.to_string(),
+        ]);
+        AnalyzePlan {
+            program: "codex",
+            args,
+            cwd: repo,
+            // stdin 을 닫아야 codex 가 "Reading additional input from stdin..."
+            // 에서 대기하지 않는다.
+            stdin_text: None,
+            last_message_path: Some(last_message.to_path_buf()),
+        }
+    } else {
+        let mut args = vec![
+            "-p".to_string(),
+            "--output-format".to_string(),
+            "json".to_string(),
+        ];
+        if !model.is_empty() {
+            args.extend(["--model".to_string(), model]);
+        }
+        args.extend([
+            "--disallowedTools".to_string(),
+            ANALYZE_DISALLOWED_TOOLS.to_string(),
+        ]);
+        AnalyzePlan {
+            program: "claude",
+            args,
+            cwd: repo,
+            stdin_text: Some(ANALYZE_PROMPT.to_string()),
+            last_message_path: None,
+        }
+    }
+}
+
+/// `claude -p --output-format json` 의 stdout 에서 최종 텍스트(`.result`)를 뽑는다.
+fn claude_result(stdout: &str) -> Result<String, String> {
+    let value: Value = serde_json::from_str(stdout.trim())
+        .map_err(|e| format!("claude 응답을 JSON으로 읽을 수 없습니다: {e}"))?;
+    value
+        .get("result")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| "claude 응답에 result 필드가 없습니다".to_string())
+}
+
+/// 에이전트 응답 텍스트에서 분석 JSON을 뽑아낸다. 코드펜스를 벗기고, 앞뒤 잡답
+/// 사이의 JSON 도 찾아내며, description 이 비면 실패로 본다.
+fn parse_analyze_output(raw: &str) -> Result<(String, Vec<String>), String> {
+    let text = raw.trim();
+    let text = text
+        .strip_prefix("```")
+        .map(|rest| {
+            let without_lang = rest.split_once('\n').map(|(_, body)| body).unwrap_or(rest);
+            without_lang.strip_suffix("```").unwrap_or(without_lang)
+        })
+        .unwrap_or(text)
+        .trim();
+    let value: Value = match serde_json::from_str(text) {
+        Ok(value) => value,
+        Err(_) => {
+            let Some(start) = text.find('{') else {
+                return Err("분석 결과가 JSON이 아닙니다".into());
+            };
+            let Some(end) = text.rfind('}') else {
+                return Err("분석 결과가 JSON이 아닙니다".into());
+            };
+            serde_json::from_str(&text[start..=end])
+                .map_err(|e| format!("분석 결과가 JSON이 아닙니다: {e}"))?
+        }
+    };
+    let description = value
+        .get("description")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or("");
+    if description.is_empty() {
+        return Err("분석 결과에 description이 비어 있습니다".into());
+    }
+    let verify = value
+        .get("verifyCommands")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|row| !row.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
+    Ok((description.to_string(), verify))
+}
+
+struct AnalyzeOutput {
+    stdout: String,
+    stderr: String,
+    success: bool,
+}
+
+/// 커맨드를 타임아웃 180초로 돌린다. 타임아웃으로 미래가 버려질 때
+/// `kill_on_drop` 이 자식 프로세스도 함께 정리한다.
+async fn run_analyze_plan(plan: &AnalyzePlan) -> Result<AnalyzeOutput, String> {
+    let mut cmd = tokio::process::Command::new(plan.program);
+    cmd.args(&plan.args)
+        .current_dir(&plan.cwd)
+        .stdin(if plan.stdin_text.is_some() {
+            std::process::Stdio::piped()
+        } else {
+            std::process::Stdio::null()
+        })
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .kill_on_drop(true);
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("분석 에이전트 실행 실패: {e}"))?;
+    if let Some(prompt) = &plan.stdin_text {
+        use tokio::io::AsyncWriteExt;
+        let mut stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| "분석 에이전트 stdin을 열 수 없습니다".to_string())?;
+        stdin
+            .write_all(prompt.as_bytes())
+            .await
+            .map_err(|e| format!("분석 프롬프트 전송 실패: {e}"))?;
+        stdin
+            .shutdown()
+            .await
+            .map_err(|e| format!("분석 프롬프트 전송 실패: {e}"))?;
+        drop(stdin);
+    }
+    let output = match tokio::time::timeout(ANALYZE_TIMEOUT, child.wait_with_output()).await {
+        Ok(Ok(output)) => output,
+        Ok(Err(e)) => return Err(format!("분석 에이전트 실행 실패: {e}")),
+        Err(_) => {
+            return Err(format!(
+                "분석이 {}초 안에 끝나지 않았습니다",
+                ANALYZE_TIMEOUT.as_secs()
+            ))
+        }
+    };
+    Ok(AnalyzeOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        success: output.status.success(),
+    })
+}
+
+/// 프로젝트를 읽고, 읽기 전용 에이전트로 돌려, description 만 교체 저장한다.
+/// verifyCommands 후보는 저장하지 않고 이벤트로만 전달한다.
+async fn analyze_project(project_id: String) -> Result<(String, Vec<String>), String> {
+    let root = sdlc::vault_root()?;
+    let project = sdlc::project_by_id(&root, &project_id)?;
+    if project.repo_path.trim().is_empty() {
+        return Err("프로젝트 repoPath가 비어 있어 분석할 수 없습니다".into());
+    }
+    if !Path::new(&project.repo_path.trim()).is_dir() {
+        return Err(format!(
+            "프로젝트 저장소 경로가 디렉터리가 아닙니다: {}",
+            project.repo_path.trim()
+        ));
+    }
+    let last_message =
+        std::env::temp_dir().join(format!("sawhorse-analyze-{}.md", Uuid::new_v4()));
+    let plan = analyze_plan(&project, &last_message);
+    let output = match run_analyze_plan(&plan).await {
+        Ok(output) => output,
+        Err(error) => {
+            let _ = fs::remove_file(&last_message);
+            return Err(error);
+        }
+    };
+    if !output.success {
+        let _ = fs::remove_file(&last_message);
+        return Err(format!(
+            "분석 에이전트가 실패로 끝났습니다: {}",
+            tail_chars(output.stderr.trim(), 200)
+        ));
+    }
+    let raw = match plan.last_message_path.as_deref() {
+        Some(path) => {
+            let read = fs::read_to_string(path)
+                .map_err(|e| format!("codex 최종 메시지 파일을 읽을 수 없습니다: {e}"));
+            let _ = fs::remove_file(path);
+            read?
+        }
+        None => claude_result(&output.stdout)?,
+    };
+    let (description, verify) = parse_analyze_output(&raw)?;
+    // 방금 읽은 프로젝트를 그대로 되저장해 description 외의 필드가 보존된다.
+    let mut updated = project;
+    updated.description = description.clone();
+    sdlc::save_project_at(&root, updated)?;
+    Ok((description, verify))
+}
+
+/// 프로젝트 설명 자동 생성. 백그라운드로 스폰하고 완료 때 `project-analyzed`
+/// 이벤트를 앱에 보낸다 — 분석은 분 단위로 걸릴 수 있으므로 커맨드는 즉시 돌아온다.
+#[tauri::command]
+pub async fn sdd_analyze_project(app: tauri::AppHandle, project_id: String) -> Result<(), String> {
+    let project_id = project_id.trim().to_string();
+    sdlc::validate_id(&project_id)?;
+    let acquired = ANALYZE_IN_FLIGHT
+        .lock()
+        .map(|mut set| set.insert(project_id.clone()))
+        .unwrap_or(false);
+    if !acquired {
+        return Err(format!("이미 분석이 진행 중입니다: {project_id}"));
+    }
+    tauri::async_runtime::spawn(async move {
+        let outcome = analyze_project(project_id.clone()).await;
+        let payload = match &outcome {
+            Ok((description, verify)) => serde_json::json!({
+                "projectId": project_id,
+                "ok": true,
+                "error": Value::Null,
+                "description": description,
+                "verifyCommands": verify,
+            }),
+            Err(error) => serde_json::json!({
+                "projectId": project_id,
+                "ok": false,
+                "error": error,
+                "description": Value::Null,
+                "verifyCommands": Value::Null,
+            }),
+        };
+        use tauri::Emitter;
+        let _ = app.emit("project-analyzed", payload);
+        if let Ok(mut set) = ANALYZE_IN_FLIGHT.lock() {
+            set.remove(&project_id);
+        }
+    });
+    Ok(())
+}
+
 /// Parent-owned app setup may call this periodically. It performs no UI action,
 /// sends no approval response, and bounds child inbox processing to eight files.
 pub async fn tick() -> Result<(), String> {
@@ -1778,6 +2202,7 @@ mod tests {
             agent_session: None,
             prompt: "do work".into(),
             repo_path: "/repo".into(),
+            extra_paths: Vec::new(),
             output_path: "runs/x.transcript.md".into(),
             created_at: now(),
             updated_at: now(),
@@ -2103,5 +2528,181 @@ esac
         let parsed: RunRecord = serde_yaml::from_str(yaml).unwrap();
         assert_eq!(parsed.id, record.id);
         assert_eq!(parsed.agent, "codex");
+    }
+
+    #[test]
+    fn run_record_extra_paths_round_trip_and_default() {
+        let root = tempdir("record-extra-paths");
+        let mut run = record(Uuid::new_v4().to_string(), None, "starting");
+        run.extra_paths = vec!["/lib".into(), " /docs ".into()];
+        save_record(&root, &run).unwrap();
+        assert_eq!(
+            load_record(&root, &run.id).unwrap().extra_paths,
+            vec!["/lib".to_string(), " /docs ".to_string()]
+        );
+        let legacy: String = fs::read_to_string(record_path(&root, &run.id).unwrap())
+            .unwrap()
+            .lines()
+            .filter(|line| {
+                !line.contains("extraPaths") && !line.contains("/lib") && !line.contains("/docs")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        fs::write(record_path(&root, &run.id).unwrap(), legacy).unwrap();
+        assert!(load_record(&root, &run.id).unwrap().extra_paths.is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn recent_models_scan_runs_descending_and_deduplicate() {
+        let root = tempdir("recent-models");
+        // runs/ 가 없으면 디렉터리를 만들지 않고 빈 목록이다.
+        assert!(recent_models(&root, "claude").is_empty());
+        fs::create_dir_all(root.join("runs")).unwrap();
+
+        let claude_run = |model: &str, at: &str| {
+            let mut run = record(Uuid::new_v4().to_string(), None, "review");
+            run.agent = "claude".into();
+            run.model = model.into();
+            run.created_at = at.into();
+            save_record(&root, &run).unwrap();
+        };
+        claude_run("opus", "2026-01-01T00:00:00+00:00");
+        claude_run("sonnet", "2026-01-02T00:00:00+00:00");
+        claude_run("opus", "2026-01-03T00:00:00+00:00");
+        claude_run("   ", "2026-01-04T00:00:00+00:00");
+        let mut codex_run = record(Uuid::new_v4().to_string(), None, "review");
+        codex_run.agent = "codex".into();
+        codex_run.model = "gpt-5-codex".into();
+        save_record(&root, &codex_run).unwrap();
+        // 파싱이 깨진 파일 하나는 목록 전체를 망가뜨리지 않는다.
+        fs::write(root.join("runs/not-a-record.md"), "깨진 내용").unwrap();
+
+        assert_eq!(
+            recent_models(&root, "claude"),
+            vec!["opus".to_string(), "sonnet".to_string()]
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn agent_models_lists_catalog_first_then_recent_without_duplicates() {
+        let root = tempdir("agent-models");
+        fs::create_dir_all(root.join("runs")).unwrap();
+        let mut run = record(Uuid::new_v4().to_string(), None, "review");
+        run.agent = "claude".into();
+        run.model = "opus".into();
+        save_record(&root, &run).unwrap();
+        let mut run = record(Uuid::new_v4().to_string(), None, "review");
+        run.agent = "claude".into();
+        run.model = "my-finetune".into();
+        save_record(&root, &run).unwrap();
+
+        let models = agent_models_at(&root, "claude");
+        let catalog: Vec<&str> = models
+            .options
+            .iter()
+            .filter(|option| option.source == ModelSource::Catalog)
+            .map(|option| option.id.as_str())
+            .collect();
+        assert_eq!(
+            catalog,
+            vec!["opus", "sonnet", "fable", "haiku"],
+            "정본 카탈로그가 순서대로 먼저 온다"
+        );
+        assert_eq!(
+            serde_json::to_value(&models.options[0]).unwrap()["source"],
+            "catalog"
+        );
+        let recent: Vec<&str> = models
+            .options
+            .iter()
+            .filter(|option| option.source == ModelSource::Recent)
+            .map(|option| option.id.as_str())
+            .collect();
+        assert_eq!(recent, vec!["my-finetune"], "카탈로그에 있는 opus 는 중복 제거");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn analyze_plan_builds_read_only_commands() {
+        let base = |default_agent: &str, default_model: &str| sdlc::Project {
+            repo_path: "/repo".into(),
+            default_agent: default_agent.into(),
+            default_model: default_model.into(),
+            ..Default::default()
+        };
+
+        let plan = analyze_plan(&base("codex", "gpt-5.1-codex"), Path::new("/tmp/last.md"));
+        assert_eq!(plan.program, "codex");
+        assert_eq!(
+            plan.args,
+            vec![
+                "exec",
+                "-m",
+                "gpt-5.1-codex",
+                "-C",
+                "/repo",
+                "-s",
+                "read-only",
+                "--skip-git-repo-check",
+                "-o",
+                "/tmp/last.md",
+                ANALYZE_PROMPT,
+            ]
+        );
+        assert!(plan.stdin_text.is_none(), "codex 는 stdin 을 닫아야 대기하지 않는다");
+        assert_eq!(plan.cwd, PathBuf::from("/repo"));
+        assert_eq!(plan.last_message_path.as_deref(), Some(Path::new("/tmp/last.md")));
+
+        let plan = analyze_plan(&base("claude", "opus"), Path::new("/tmp/last.md"));
+        assert_eq!(plan.program, "claude");
+        assert_eq!(
+            plan.args,
+            vec![
+                "-p",
+                "--output-format",
+                "json",
+                "--model",
+                "opus",
+                "--disallowedTools",
+                ANALYZE_DISALLOWED_TOOLS,
+            ]
+        );
+        assert_eq!(plan.stdin_text.as_deref(), Some(ANALYZE_PROMPT));
+        assert!(plan.last_message_path.is_none(), "claude 답은 stdout .result 로 온다");
+
+        // 기본 에이전트·모델이 비면 claude 로 가고 모델 플래그를 생략한다.
+        let plan = analyze_plan(&base("", ""), Path::new("/tmp/last.md"));
+        assert_eq!(plan.program, "claude");
+        assert!(!plan.args.contains(&"--model".to_string()));
+    }
+
+    #[test]
+    fn claude_print_json_yields_result_field() {
+        let stdout = r#"{"type":"result","result":"{\"description\":\"한줄 설명\",\"verifyCommands\":[\"cargo test\"]}","is_error":false}"#;
+        let raw = claude_result(stdout).unwrap();
+        let (description, verify) = parse_analyze_output(&raw).unwrap();
+        assert_eq!(description, "한줄 설명");
+        assert_eq!(verify, vec!["cargo test".to_string()]);
+        assert!(claude_result("출력이 JSON이 아니다").is_err());
+        assert!(claude_result(r#"{"is_error":false}"#).is_err());
+    }
+
+    #[test]
+    fn analyze_parser_strips_code_fences_and_rejects_garbage() {
+        let (description, verify) =
+            parse_analyze_output("```json\n{\"description\":\"설명\",\"verifyCommands\":[\"a\",\" \"]}\n```")
+                .unwrap();
+        assert_eq!(description, "설명");
+        assert_eq!(verify, vec!["a".to_string()], "빈 후보는 버린다");
+
+        // 답 앞뒤로 잡답이 섞여도 JSON 만 뽑는다.
+        let (description, _) = parse_analyze_output("여기 결과입니다:\n{\"description\":\"  설명  \"}")
+            .unwrap();
+        assert_eq!(description, "설명");
+
+        assert!(parse_analyze_output("완전히 엉터리 답").is_err());
+        assert!(parse_analyze_output("{\"verifyCommands\":[]}").is_err(), "빈 description은 실패");
     }
 }

@@ -4,6 +4,7 @@ mod collab;
 mod commands;
 mod config;
 mod detect;
+mod error;
 mod extensions;
 mod herdr;
 mod ingestion;
@@ -34,6 +35,7 @@ use tauri::{
 };
 use tauri_plugin_autostart::MacosLauncher;
 
+use notify::Watcher as _;
 #[allow(dead_code)] // held so the watcher is not dropped
 struct WatchKeeper(Mutex<Vec<Box<dyn notify::Watcher + Send>>>);
 fn show_main(app: &tauri::AppHandle) {
@@ -171,6 +173,28 @@ pub fn run() {
                 }
             }
 
+            // config.json 외부 변경(수동 편집) → 설정 스냅샷 갱신. 앱 내 저장은
+            // save_patch가 직접 갱신하므로 감시는 외부 변경만 담당한다.
+            {
+                let cfg_path = config::config_path();
+                if let Some(dir) = cfg_path.parent().map(std::path::Path::to_path_buf) {
+                    if let Ok(mut w) = notify::recommended_watcher(|_: Result<
+                        notify::Event,
+                        notify::Error,
+                    >| {
+                        config::refresh_view();
+                    }) {
+                        if w.watch(&dir, notify::RecursiveMode::NonRecursive).is_ok() {
+                            if let Some(keeper) = app.try_state::<WatchKeeper>() {
+                                keeper.0.lock().push(Box::new(w));
+                            } else {
+                                app.manage(WatchKeeper(Mutex::new(vec![Box::new(w)])));
+                            }
+                        }
+                    }
+                }
+            }
+
             // Durable SDD runs and bounded child requests share the desktop lifetime.
             tauri::async_runtime::spawn(async {
                 let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
@@ -291,6 +315,8 @@ pub fn run() {
             sdlc_harness::sdd_continue_run,
             sdlc_harness::sdd_run_key,
             sdlc_harness::sdd_resume_run,
+            sdlc_harness::agent_models,
+            sdlc_harness::sdd_analyze_project,
             commands::get_config,
             commands::save_config,
             commands::diagnostics,

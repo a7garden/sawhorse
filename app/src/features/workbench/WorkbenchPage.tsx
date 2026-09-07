@@ -8,12 +8,13 @@ import {
   TodayActivity,
 } from "@/features/dashboard/FeatureWidgets";
 import OnboardingPage from "@/pages/OnboardingPage";
-import { PathInput } from "@/components/ui/path-input";
+import { BrowseButton, PathInput } from "@/components/ui/path-input";
 import i18n from "@/i18n";
 import { useTranslation } from "react-i18next";
 import {
   useCallback,
   useEffect,
+  useId,
   useRef,
   useState,
   type DragEvent,
@@ -21,6 +22,8 @@ import {
 } from "react";
 import { AtomicCodeMirrorEditor } from "@atomic-editor/editor";
 import "@atomic-editor/editor/styles.css";
+import { isTauri } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   AlertCircle,
   ArrowLeft,
@@ -46,6 +49,7 @@ import {
   SquareTerminal,
   StopCircle,
   SlidersHorizontal,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
@@ -180,6 +184,11 @@ function dueChip(days: number) {
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
+/** 경로의 마지막 세그먼트. 끝의 구분자는 먼저 떼고 본다. */
+function pathBasename(path: string) {
+  const trimmed = path.replace(/[\\/]+$/, "");
+  return trimmed.split(/[\\/]/).pop() ?? "";
+}
 function blankWork(): WorkItem {
   const now = new Date().toISOString();
   return {
@@ -221,15 +230,16 @@ function blankWork(): WorkItem {
     githubUpdated: "",
   };
 }
-function blankProject(): Project {
+function blankProject(defaultAgent: string): Project {
   return {
     id: "",
     name: "",
     description: "",
     repoPath: "",
+    extraPaths: [],
     dependsOn: [],
     verifyCommands: [],
-    defaultAgent: "codex",
+    defaultAgent,
     defaultModel: "",
     workflowId: "sdd-main",
     workflowVersion: "1.0.0",
@@ -434,6 +444,8 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
   const loading = useWorkspaceSnapshot((state) => state.loading);
   const error = useWorkspaceSnapshot((state) => state.error);
   const { t } = useTranslation("workbench");
+  // 새 프로젝트 초안의 기본 에이전트는 앱 설정의 기본 에이전트를 따른다.
+  const defaultAgent = useApp((s) => s.defaultAgent);
   // 알림은 화면 상단 토스트로 띄운다 — 페이지 레이아웃을 밀지 않는다.
   const setNotice = useCallback((next: Notice) => {
     if (next) toast(next);
@@ -458,6 +470,37 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     void ensureWorkspaceSnapshot();
     return watchWorkspaceSnapshot();
   }, []);
+  // 백그라운드 프로젝트 분석 완료. 스냅샷을 다시 읽고 결과를 토스트로 알린다.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let disposed = false;
+    let unlisten: UnlistenFn | undefined;
+    void listen<{ projectId: string; ok: boolean; error: string | null }>(
+      "project-analyzed",
+      (event) => {
+        if (event.payload.ok) {
+          void reload();
+          setNotice({ tone: "success", text: t("toast.projectAnalyzed") });
+        } else {
+          setNotice({
+            tone: "error",
+            text: t("toast.projectAnalyzeFailed", {
+              error: event.payload.error ?? "",
+            }),
+          });
+        }
+      },
+    )
+      .then((stop) => {
+        if (disposed) stop();
+        else unlisten = stop;
+      })
+      .catch(() => undefined);
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, [reload, setNotice, t]);
   const work = snapshot?.work ?? [];
   const projects = snapshot?.projects ?? [];
   const workflows = snapshot?.workflows ?? [];
@@ -595,7 +638,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
       )}
       <ProjectFormDialog
         open={projectModal !== undefined}
-        initial={projectModal ?? blankProject()}
+        initial={projectModal ?? blankProject(defaultAgent)}
         projects={projects}
         workflows={workflows}
         onClose={() => setProjectModal(undefined)}
@@ -2931,6 +2974,90 @@ function WorkFormDialog({
     </Dialog>
   );
 }
+type AgentModelOption = {
+  id: string;
+  label: string;
+  source: "catalog" | "recent";
+};
+/**
+ * 에이전트 모델 후보를 읽어 온다. 최초 적재 때는 기존 값을 존중하고, 이후
+ * 에이전트를 옮겨서 목록이 바뀌면 그 쪽에 없는 모델은 비운다.
+ */
+function useAgentModelOptions(
+  agent: string,
+  value: string,
+  onValueChange: (value: string) => void,
+): AgentModelOption[] {
+  const [options, setOptions] = useState<AgentModelOption[]>([]);
+  const stateRef = useRef({ value, onValueChange, initialized: false });
+  stateRef.current.value = value;
+  stateRef.current.onValueChange = onValueChange;
+  useEffect(() => {
+    if (!isTauri()) return;
+    let alive = true;
+    const wasInitialized = stateRef.current.initialized;
+    stateRef.current.initialized = true;
+    sddApi
+      .agentModels(agent)
+      .then((result) => {
+        if (!alive) return;
+        setOptions(result.options);
+        const current = stateRef.current;
+        if (
+          wasInitialized &&
+          current.value &&
+          !result.options.some((option) => option.id === current.value)
+        )
+          current.onValueChange("");
+      })
+      .catch(() => {
+        if (alive) setOptions([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [agent]);
+  return options;
+}
+/**
+ * 자유 입력에 모델 후보 datalist 를 얹은 필드. 임의의 모델 이름도 그대로
+ * 적을 수 있고, 에이전트별 카탈로그·최근 사용 항목을 고를 수 있다.
+ */
+function ModelInput({
+  agent,
+  value,
+  onValueChange,
+  placeholder,
+}: {
+  agent: string;
+  value: string;
+  onValueChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const { t } = useTranslation("workbench");
+  const options = useAgentModelOptions(agent, value, onValueChange);
+  const listId = useId();
+  return (
+    <>
+      <Input
+        value={value}
+        onChange={(event) => onValueChange(event.target.value)}
+        placeholder={placeholder}
+        list={listId}
+      />
+      <datalist id={listId}>
+        {options.map((option) => (
+          <option key={option.id} value={option.id}>
+            {option.label}
+            {option.source === "recent"
+              ? t("form.modelRecentSuffix")
+              : undefined}
+          </option>
+        ))}
+      </datalist>
+    </>
+  );
+}
 function ProjectFormDialog({
   open,
   initial,
@@ -2958,6 +3085,19 @@ function ProjectFormDialog({
   }, [open, initial]);
   const set = <K extends keyof Project>(key: K, value: Project[K]) =>
     setDraft((previous) => ({ ...previous, [key]: value }));
+  const [analyzing, setAnalyzing] = useState(false);
+  // 다시 분석은 발사만 한다 — 완료는 `project-analyzed` 이벤트로 온다.
+  const reanalyze = async () => {
+    if (!isTauri() || !draft.id) return;
+    setAnalyzing(true);
+    try {
+      await sddApi.analyzeProject(draft.id);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setAnalyzing(false);
+    }
+  };
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!draft.name.trim()) {
@@ -2994,23 +3134,110 @@ function ProjectFormDialog({
             autoFocus
           />
         </label>
+        {draft.id ? (
+          <div className="wb-field is-wide">
+            <div className="flex items-center justify-between gap-2">
+              <span>{t("form.description")}</span>
+              <Button
+                type="button"
+                size="xs"
+                variant="outline"
+                disabled={analyzing}
+                onClick={() => void reanalyze()}
+              >
+                {analyzing ? (
+                  <Loader2 className="wb-spin" />
+                ) : (
+                  <RefreshCw size={13} />
+                )}{" "}
+                {t("form.reanalyze")}
+              </Button>
+            </div>
+            <textarea
+              value={draft.description}
+              onChange={(event) => set("description", event.target.value)}
+              placeholder={t("form.descriptionPlaceholder")}
+            />
+          </div>
+        ) : (
+          // 새 프로젝트는 설명을 직접 적지 않는다. 저장 뒤 분석이 채워 준다.
+          <div className="wb-field is-wide">
+            <small className="wb-muted">{t("form.analyzeHint")}</small>
+          </div>
+        )}
         <label className="wb-field is-wide">
-          {t("form.description")}
-          <textarea
-            value={draft.description}
-            onChange={(event) => set("description", event.target.value)}
-            placeholder={t("form.descriptionPlaceholder")}
-          />
-        </label>
-        <label className="wb-field is-wide">
-          {t("form.repoPath")}
+          {t("form.basePath")}
           <PathInput
             aria-label={t("form.repoPathAria")}
             value={draft.repoPath}
-            onValueChange={(value) => set("repoPath", value)}
+            onValueChange={(value) =>
+              setDraft((previous) => {
+                const next = { ...previous, repoPath: value };
+                // 이름이 비어 있거나 이전 경로의 basename을 그대로 미러링하는
+                // 동안은 따라간다. 글자별 입력 이벤트에도 이름이 중간 조각("U" 등)으로
+                // 굳지 않게 하고, 사용자가 이름을 손대는 순간부터는 덮지 않는다.
+                if (
+                  !previous.name.trim() ||
+                  previous.name === pathBasename(previous.repoPath)
+                )
+                  next.name = pathBasename(value);
+                return next;
+              })
+            }
             placeholder="/path/to/repository"
           />
         </label>
+        <div className="wb-field is-wide">
+          <span>{t("form.extraPaths")}</span>
+          {draft.extraPaths.map((path, index) => (
+            <div key={index} className="flex items-start gap-2">
+              <div className="min-w-0 flex-1">
+                <PathInput
+                  aria-label={t("form.extraPathAria")}
+                  value={path}
+                  onValueChange={(value) =>
+                    set(
+                      "extraPaths",
+                      draft.extraPaths.map((candidate, at) =>
+                        at === index ? value : candidate,
+                      ),
+                    )
+                  }
+                  placeholder="/path/to/folder"
+                />
+              </div>
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                aria-label={t("form.removeExtraPath")}
+                onClick={() =>
+                  set(
+                    "extraPaths",
+                    draft.extraPaths.filter((_, at) => at !== index),
+                  )
+                }
+              >
+                <Trash2 size={14} />
+              </Button>
+            </div>
+          ))}
+          <div>
+            <BrowseButton
+              multiple
+              label={t("form.addFolders")}
+              onSelect={(paths) => {
+                const additions = paths.filter(
+                  (candidate) =>
+                    candidate !== draft.repoPath &&
+                    !draft.extraPaths.includes(candidate),
+                );
+                if (additions.length)
+                  set("extraPaths", [...draft.extraPaths, ...additions]);
+              }}
+            />
+          </div>
+        </div>
         <label className="wb-field">
           {t("form.defaultAgent")}
           <select
@@ -3024,9 +3251,10 @@ function ProjectFormDialog({
         </label>
         <label className="wb-field">
           {t("form.defaultModel")}
-          <Input
+          <ModelInput
+            agent={draft.defaultAgent}
             value={draft.defaultModel}
-            onChange={(event) => set("defaultModel", event.target.value)}
+            onValueChange={(value) => set("defaultModel", value)}
             placeholder={t("form.optional")}
           />
         </label>
@@ -4084,9 +4312,10 @@ function RunLauncher({
       </label>
       <label>
         {t("launcher.model")}
-        <Input
+        <ModelInput
+          agent={agent}
           value={model}
-          onChange={(event) => setModel(event.target.value)}
+          onValueChange={setModel}
           placeholder={t("launcher.modelPlaceholder")}
         />
       </label>
