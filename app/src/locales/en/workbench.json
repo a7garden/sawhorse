@@ -437,7 +437,8 @@
     "stopHint": "A run for this role is in progress. Click to stop it.",
     "stop": "Running · Stop",
     "start": "Start run",
-    "needsProject": "Link a project to run."
+    "needsProject": "Link a project to run.",
+    "childModelHint": "Model for this parent run. Skills assess child tasks using the configured policy."
   },
   "harness": {
     "outputReadFailed": "Could not read output: {{error}}",
@@ -468,7 +469,24 @@
     "terminalKeysHint": "Nothing is sent automatically. Press only the keys you need.",
     "terminalKeyAria": "Terminal key {{key}}",
     "launchChild": "Launch child research",
-    "childHint": "Child runs keep their own record and output."
+    "childHint": "Child runs keep their own record and output.",
+    "modelAuto": "Auto selected",
+    "modelSource": {
+      "auto": "Model selected from skill assessment",
+      "explicit": "Explicit model",
+      "inherited": "Inherited model · CLI default when agent differs",
+      "default": "CLI default model"
+    },
+    "modelComplexity": {
+      "routine": "Routine",
+      "standard": "Standard",
+      "complex": "Complex"
+    },
+    "childModelPolicy": "Child model policy: {{policy}}",
+    "childPolicy": {
+      "auto": "Automatic · assessed by skills",
+      "inherit": "Inherit parent model"
+    }
   },
   "preview": {
     "projectNotFound": "Could not find the project.",

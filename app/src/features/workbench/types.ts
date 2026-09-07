@@ -223,8 +223,16 @@ export interface LaunchInput {
   model: string;
   instructions: string;
   parentRunId: string | null;
+  modelAssessment?: { complexity: "routine" | "standard" | "complex"; reason: string };
 }
 export interface HarnessRun {
+  modelSelection?: {
+    source: "auto" | "explicit" | "inherited" | "default";
+    requestedModel: string;
+    assessment: { complexity: "routine" | "standard" | "complex"; reason: string } | null;
+    reason: string;
+  } | null;
+  childModelPolicy?: "auto" | "inherit";
   id: string;
   workId: string;
   projectId: string;

@@ -9,6 +9,7 @@ mod extensions;
 mod herdr;
 mod ingestion;
 mod jobs;
+mod model_policy;
 mod notes;
 mod packs;
 mod plugin;

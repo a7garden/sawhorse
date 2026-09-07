@@ -26,6 +26,7 @@ export interface HerdrCfg {
   startTimeoutSec: number;
   jobTimeoutMin: number; // 0 = 무제한
   notify: boolean;
+  childModelPolicy: "auto" | "inherit";
 }
 
 /** 카탈로그에 없는 CLI 를 사용자가 직접 등록하는 항목. */

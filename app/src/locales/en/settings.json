@@ -408,7 +408,12 @@
     "startTimeout": "Startup wait (s)",
     "jobTimeout": "Max run time (min, 0 = unlimited)",
     "notify": "herdr notify on approval wait or failure",
-    "workspaceHint": "Each job gets one tab in the \"{{workspace}}\" workspace. For approval waits to be useful, keep the permission mode at `default` or `acceptEdits`."
+    "workspaceHint": "Each job gets one tab in the \"{{workspace}}\" workspace. For approval waits to be useful, keep the permission mode at `default` or `acceptEdits`.",
+    "childModelPolicy": "Child agent model policy",
+    "childModelHint": "Skills assess complexity: Sonnet for bounded tasks, Opus for complex work. Explicit models take precedence. Applies to new root runs. Codex and custom models inherit within the same agent.",
+    "childModelAuto": "Automatic · assessed by skills",
+    "childModelInherit": "Inherit parent model",
+    "childModelCapacity": "With a concurrency limit of 1, the parent works locally. Delegation needs at least 2 slots including the parent."
   },
   "schedule": {
     "title": "Schedules",

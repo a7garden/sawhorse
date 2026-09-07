@@ -7,6 +7,8 @@ description: Execute a Sawhorse TDD workflow node using revision-bound Red, Gree
 
 The harness prompt is the authority for the workflow version, current node, repository, allowed output artifacts, validation commands, and user scope. Read the named task and artifact paths before changing code. Do not infer a different workflow from filenames or modify host-managed workflow, stage, decision, schema, or run records.
 
+Apply the sibling [delegate skill](../delegate/SKILL.md) when a bounded implementation or verification task benefits from delegation. Assess complexity yourself and let the host choose the child model. Preserve the Red → Green → refactor → reverify order: never parallelize dependent phases, and verify the revision after integrating a child's changes. Children report in their own run evidence file; the parent updates canonical TDD evidence. The harness's child-specific output and role limits take precedence over the general artifact instructions below.
+
 Keep each cycle tied to one observable behavior and the exact code/test revision:
 
 - Test intent: state the behavior, relevant acceptance criterion, and regression boundary.

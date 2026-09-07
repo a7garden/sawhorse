@@ -89,6 +89,8 @@ pub struct HerdrCfg {
     pub job_timeout_min: u32,
     /// herdr toast when a job needs approval or finishes
     pub notify: bool,
+    /// Automatic skill assessment or parent model inheritance for children.
+    pub child_model_policy: String,
 }
 
 impl Default for HerdrCfg {
@@ -99,10 +101,11 @@ impl Default for HerdrCfg {
             session: String::new(),
             workspace_label: "sawhorse".into(),
             cleanup: "closeAlways".into(),
-            max_parallel: 1,
+            max_parallel: 2,
             start_timeout_sec: 60,
             job_timeout_min: 120,
             notify: true,
+            child_model_policy: "auto".into(),
         }
     }
 }
@@ -127,6 +130,9 @@ impl HerdrCfg {
             c.workspace_label = "sawhorse".into();
         }
         c.max_parallel = c.max_parallel.clamp(1, 8);
+        if !matches!(c.child_model_policy.as_str(), "auto" | "inherit") {
+            c.child_model_policy = "auto".into();
+        }
         c.start_timeout_sec = c.start_timeout_sec.clamp(10, 600);
         c
     }
@@ -358,6 +364,11 @@ fn validate_hhmm(s: &str) -> Result<(), String> {
 
 fn validate_herdr_key(key: &str, v: &Value) -> Result<(), String> {
     match key {
+        "childModelPolicy" => {
+            if !matches!(v.as_str(), Some("auto" | "inherit")) {
+                return Err("하위 모델 정책은 auto 또는 inherit이어야 합니다".into());
+            }
+        }
         "mode" => {
             let m = v
                 .as_str()
@@ -805,6 +816,35 @@ mod tests {
         assert_eq!(v.dashboard.permission_mode, "bypassPermissions");
         assert_eq!(v.dashboard.claude_bin, "claude");
         assert_eq!(v.dashboard.schedules.morning.time, "09:00");
+    }
+
+    #[test]
+    fn child_model_policy_patch_preserves_explicit_capacity_and_unknown_keys() {
+        assert_eq!(HerdrCfg::default().max_parallel, 2);
+        assert_eq!(HerdrCfg::default().child_model_policy, "auto");
+        let path = temp_path("child-model");
+        write_atomic(
+            &path,
+            br#"{"dashboard":{"herdr":{"maxParallel":1,"customKey":"keep"}}}"#,
+        )
+        .unwrap();
+        let v = save_patch_at(
+            &path,
+            &serde_json::json!({"dashboard":{"herdr":{"childModelPolicy":"inherit"}}}),
+        )
+        .unwrap();
+        assert_eq!(v.dashboard.herdr.child_model_policy, "inherit");
+        assert_eq!(v.dashboard.herdr.max_parallel, 1);
+        assert_eq!(
+            load_raw_at(&path)["dashboard"]["herdr"]["customKey"],
+            "keep"
+        );
+        assert!(save_patch_at(
+            &path,
+            &serde_json::json!({"dashboard":{"herdr":{"childModelPolicy":"cheap"}}})
+        )
+        .is_err());
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

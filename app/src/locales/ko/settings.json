@@ -410,7 +410,12 @@
     "startTimeout": "기동 대기 (초)",
     "jobTimeout": "최대 실행 (분, 0=무제한)",
     "notify": "승인 대기·실패 시 herdr 알림",
-    "workspaceHint": "잡마다 「{{workspace}}」 워크스페이스에 탭 하나가 생깁니다. 승인 대기가 실제로 쓸모 있으려면 권한 모드를 `default` 또는 `acceptEdits`로 두세요."
+    "workspaceHint": "잡마다 「{{workspace}}」 워크스페이스에 탭 하나가 생깁니다. 승인 대기가 실제로 쓸모 있으려면 권한 모드를 `default` 또는 `acceptEdits`로 두세요.",
+    "childModelPolicy": "하위 에이전트 모델 정책",
+    "childModelHint": "내부 스킬이 난이도를 판단합니다. 작은 작업은 Sonnet, 복잡한 작업은 Opus를 사용하며 명시한 모델은 우선합니다. 새 루트 실행부터 적용됩니다. Codex·사용자 정의 모델은 같은 에이전트의 부모 모델을 상속합니다.",
+    "childModelAuto": "자동 · 스킬이 판단",
+    "childModelInherit": "부모 모델 상속",
+    "childModelCapacity": "동시 실행 한도가 1이면 부모가 직접 처리합니다. 하위 위임에는 부모를 포함해 최소 2개가 필요합니다."
   },
   "schedule": {
     "title": "예약",

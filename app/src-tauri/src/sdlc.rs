@@ -197,11 +197,14 @@ pub struct LaunchInput {
     pub model: String,
     pub instructions: String,
     pub parent_run_id: Option<String>,
+    pub model_assessment: Option<crate::model_policy::ModelAssessment>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HarnessRun {
+    pub model_selection: Option<crate::model_policy::ModelSelection>,
+    pub child_model_policy: String,
     pub id: String,
     pub work_id: String,
     pub project_id: String,

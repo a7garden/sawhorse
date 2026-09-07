@@ -198,6 +198,7 @@ const previewConfigBase: ConfigView = {
       startTimeoutSec: 60,
       jobTimeoutMin: 120,
       notify: true,
+      childModelPolicy: "auto",
     },
     customAgents: [],
     collaboration: {

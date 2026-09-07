@@ -9,6 +9,7 @@ import {
   type WorkItem,
   type WorkspaceSnapshot,
   type WorkflowDefinition,
+  type HarnessRun,
 } from "./types";
 const KEY = "sawhorse.workflow.preview.v2";
 const now = () => new Date().toISOString();
@@ -343,6 +344,8 @@ const seed: WorkspaceSnapshot = {
 type Store = {
   snapshot: WorkspaceSnapshot;
   documents: Record<string, Document>;
+  /** Historical fixtures only; execution remains desktop-only. */
+  runs?: HarnessRun[];
 };
 function load(): Store {
   try {
@@ -635,7 +638,7 @@ export async function previewInvoke(
         }));
     }
     case "sdd_runs":
-      return [];
+      return state.runs ?? [];
     case "sdd_launch":
       throw new Error(i18n.t("workbench:preview.launchNeedsDesktop"));
     case "sdd_run_output":

@@ -4333,6 +4333,7 @@ function RunLauncher({
           onValueChange={setModel}
           placeholder={t("launcher.modelPlaceholder")}
         />
+        <small>{t("launcher.childModelHint")}</small>
       </label>
       <label>
         {t("launcher.instructions")}
@@ -4540,7 +4541,7 @@ function HarnessView({
         projectId: item.projectId,
         role: "research",
         agent: selected.agent === "claude" ? "claude" : "codex",
-        model: selected.model,
+        model: "",
         instructions: "상위 실행을 위한 조사 결과와 근거를 정리해 주세요.",
         parentRunId: selected.id,
       });
@@ -4588,6 +4589,8 @@ function HarnessView({
                   </strong>
                   <small>
                     {roleText(run.role)} · {run.agentName || run.agent}
+                    {run.model && ` · ${run.model}`}
+                    {run.modelSelection?.source === "auto" && ` · ${t("harness.modelAuto")}`}
                   </small>
                 </div>
                 {run.parentRunId && <span className="wb-child-mark">↳</span>}
@@ -4612,6 +4615,18 @@ function HarnessView({
                       selected.workflowId,
                       selected.workflowVersion,
                     )}
+                  </p>
+                  {selected.modelSelection && (
+                    <p data-testid="model-selection" className="text-sm text-muted-foreground">
+                      {t(`harness.modelSource.${selected.modelSelection.source}`)}
+                      {selected.modelSelection.assessment && (
+                        <> · {t(`harness.modelComplexity.${selected.modelSelection.assessment.complexity}`)}
+                          {" — "}{selected.modelSelection.assessment.reason}</>
+                      )}
+                    </p>
+                  )}
+                  <p className="text-sm text-muted-foreground">
+                    {t("harness.childModelPolicy", { policy: t(`harness.childPolicy.${selected.childModelPolicy ?? "inherit"}`) })}
                   </p>
                 </div>
                 <div>
