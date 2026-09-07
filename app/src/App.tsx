@@ -44,6 +44,7 @@ import SourcesPage from "@/pages/SourcesPage";
 import ReadingPage from "@/pages/ReadingPage";
 import VaultPage from "@/pages/VaultPage";
 import PacksPage from "@/pages/PacksPage";
+import JournalPage from "@/features/journal/JournalPage";
 import PackViewPage from "@/pages/PackViewPage";
 import TerminalPage from "@/pages/TerminalPage";
 import SchemaStudioPage from "@/features/schema-studio/SchemaStudioPage";
@@ -213,6 +214,7 @@ export default function App() {
       const Native = NATIVE[entry.component];
       return Native ? <Native /> : <WorkbenchPage view="overview" />;
     }
+    if (entry.packId === "starter" && entry.viewId === "logs") return <JournalPage />;
     return <PackViewPage packId={entry.packId} viewId={entry.viewId} />;
   })();
 

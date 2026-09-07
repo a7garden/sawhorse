@@ -1,0 +1,668 @@
+/* Journal (일지) — vault page. Uses global theme tokens so light/dark follow
+ * the app theme automatically. Layout: calendar+index left, reader right. */
+
+.journal-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  container-type: inline-size;
+  flex: 1;
+}
+
+.journal-layout {
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 18px;
+  align-items: stretch;
+  padding: 24px;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ---------- index: calendar + entry list ---------- */
+
+.journal-index {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.journal-calendar {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 12px;
+}
+
+.journal-calendar-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+
+.journal-calendar-heading svg {
+  color: var(--primary);
+}
+
+.journal-calendar-heading strong {
+  font-weight: 600;
+}
+
+.journal-calendar-heading button {
+  margin-left: auto;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  border-radius: 6px;
+  padding: 3px;
+  cursor: pointer;
+}
+
+.journal-calendar-heading button:last-of-type {
+  margin-left: 0;
+}
+
+.journal-calendar-heading button:hover {
+  color: var(--foreground);
+  background: var(--accent);
+}
+
+.journal-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+
+.journal-weekday {
+  font-size: 9px;
+  color: var(--muted-foreground);
+  text-align: center;
+  padding-bottom: 2px;
+}
+
+.journal-day {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.journal-day:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.journal-day:not(:disabled):hover {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+
+.journal-day.has-entry {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.journal-day.is-selected {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* recording dot under the day number */
+.journal-day.has-entry i {
+  position: absolute;
+  bottom: 2px;
+  width: 3px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.journal-day.is-selected i {
+  background: var(--primary-foreground);
+}
+
+.journal-day.is-today {
+  box-shadow: inset 0 0 0 1px var(--primary);
+}
+
+.journal-calendar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+
+.journal-calendar-footer span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.journal-calendar-footer i {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--primary);
+}
+
+.journal-calendar-footer button {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.journal-calendar-footer button:hover {
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+}
+
+.journal-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--input);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 0 9px;
+  height: 30px;
+}
+
+.journal-search svg {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.journal-search input {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--foreground);
+  font: inherit;
+  font-size: 12px;
+  width: 100%;
+}
+
+.journal-list-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+  padding: 2px 2px 0;
+}
+
+.journal-entry-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 80px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.journal-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--card);
+  padding: 8px 10px;
+  text-align: left;
+  cursor: pointer;
+  color: var(--foreground);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.journal-entry:hover {
+  border-color: color-mix(in oklch, var(--primary) 45%, var(--border));
+}
+
+.journal-entry.is-selected {
+  border-color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 7%, var(--card));
+}
+
+.journal-entry > svg:last-child {
+  color: var(--muted-foreground);
+  flex-shrink: 0;
+}
+
+.journal-date-tile {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.journal-date-tile strong {
+  font-size: 15px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.journal-date-tile small {
+  font-size: 8px;
+  line-height: 1.4;
+}
+
+.journal-entry-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.journal-entry-copy strong {
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journal-entry-copy small {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journal-limit {
+  font-size: 10px;
+  color: var(--muted-foreground);
+  margin: 6px 0 0;
+}
+
+/* ---------- shared empty / loading ---------- */
+
+.journal-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--card) 60%, transparent);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-align: center;
+  padding: 22px 12px;
+  margin: 0;
+}
+
+.journal-empty > svg {
+  color: var(--primary);
+}
+
+.journal-empty button {
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.journal-empty button:hover {
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+}
+
+/* ---------- reader ---------- */
+
+.journal-reader {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.journal-back {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  cursor: pointer;
+  margin-bottom: 10px;
+  padding: 2px 4px;
+  border-radius: 5px;
+}
+
+.journal-back:hover {
+  color: var(--foreground);
+}
+
+.journal-paper {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  padding: clamp(24px, 3vw, 44px);
+  max-width: 850px;
+  margin: 0 auto;
+  min-height: 100%;
+}
+
+.journal-paper-header h2 {
+  margin: 4px 0 0;
+  font-size: clamp(24px, 2.4vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.journal-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+}
+
+.journal-eyebrow span {
+  background: color-mix(in oklch, var(--primary) 14%, transparent);
+  color: var(--primary);
+  border-radius: 99px;
+  padding: 1px 7px;
+  letter-spacing: 0.02em;
+}
+
+.journal-paper-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+
+.journal-paper-meta span {
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 1px 8px;
+}
+
+.journal-file {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+
+.journal-file span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+}
+
+.journal-file button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--primary);
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.journal-file button:hover {
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+}
+
+.journal-prose {
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.journal-paper-footer {
+  margin-top: 18px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+
+.journal-reader-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 320px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--card) 60%, transparent);
+  color: var(--muted-foreground);
+  text-align: center;
+  padding: 24px;
+}
+
+.journal-reader-empty > svg {
+  color: var(--primary);
+  opacity: 0.7;
+}
+
+.journal-reader-empty h2 {
+  margin: 4px 0 0;
+  font-size: 15px;
+  color: var(--foreground);
+}
+
+.journal-reader-empty p {
+  margin: 0;
+  font-size: 12px;
+  max-width: 360px;
+}
+
+/* ---------- dashboard widget ---------- */
+
+.journal-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.journal-widget-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+  text-align: left;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 6px;
+}
+
+.journal-widget-heading > span:last-of-type {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.journal-widget-heading strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.journal-widget-heading small {
+  font-size: 10px;
+  color: var(--muted-foreground);
+}
+
+.journal-widget-heading > svg:last-child {
+  color: var(--muted-foreground);
+}
+
+.journal-widget-heading:hover > svg:last-child {
+  color: var(--primary);
+}
+
+.journal-widget-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--primary) 12%, transparent);
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.journal-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.journal-week > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 4px 0 6px;
+  font-size: 9px;
+  color: var(--muted-foreground);
+}
+
+.journal-week strong {
+  font-size: 11px;
+  color: var(--foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.journal-week i {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.journal-week .has-entry i {
+  background: var(--primary);
+}
+
+.journal-week .is-today {
+  border-color: var(--primary);
+}
+
+.journal-widget-latest {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  padding: 8px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--foreground);
+}
+
+.journal-widget-latest:hover {
+  border-color: color-mix(in oklch, var(--primary) 45%, var(--border));
+}
+
+.journal-widget-latest span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.journal-widget-latest span:last-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--primary);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ---------- responsive ---------- */
+@container (max-width: 700px) {
+  .journal-layout { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+  .journal-reader { display: none; }
+  .journal-layout.is-reading .journal-index { display: none; }
+  .journal-layout.is-reading .journal-reader { display: block; }
+  .journal-layout.is-reading .journal-back { display: inline-flex; }
+  .journal-calendar { max-width: 350px; width: 100%; align-self: center; }
+}
+.journal-prose > div { font-size: 14px; line-height: 1.9; overflow-wrap: anywhere; }
+.journal-prose h2 { margin-top: 28px; padding-bottom: 0; border-bottom: 0; font-size: 17px; }
+.journal-prose blockquote { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 5%, transparent); padding: 12px 16px; border-radius: 0 6px 6px 0; }
+.journal-prose ul.contains-task-list { list-style: none; padding-left: 0; }
+.journal-prose input[type=checkbox] { accent-color: var(--primary); margin-right: 6px; }
+.journal-page button:focus-visible, .journal-widget button:focus-visible, .journal-checklist button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.journal-search:focus-within { border-color: var(--primary); }
+.journal-widget { padding: 18px 20px 12px; gap: 18px; }
+.journal-widget-heading strong { font-size: 15px; }
+.journal-widget-heading small { font-size: 11px; margin-top: 4px; }
+.journal-widget-icon { width: 42px; height: 42px; }
+.journal-week > div { padding: 9px 0; gap: 5px; }
+.journal-week strong { font-size: 16px; }
+.journal-checklist { padding: 17px 20px; }
+.journal-checklist-summary { display: flex; align-items: center; gap: 15px; padding-bottom: 17px; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
+.journal-checklist-ring { position: relative; width: 52px; height: 52px; flex: 0 0 52px; }
+.journal-checklist-ring svg { transform: rotate(-90deg); width: 100%; height: 100%; }
+.journal-checklist-ring span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; font-weight: 600; }
+.journal-checklist-summary strong { display: block; font-size: 13px; }
+.journal-checklist-summary small { display: block; font-size: 10px; margin-top: 5px; color: var(--muted-foreground); }
+.journal-checklist-row { display: flex; gap: 10px; align-items: flex-start; padding: 10px 0; font-size: 12px; line-height: 1.6; cursor: pointer; }
+.journal-checklist-row input { accent-color: var(--primary); width: 15px; height: 15px; margin-top: 2px; flex-shrink: 0; }
+.journal-checklist-row span { overflow-wrap: anywhere; }
+.journal-checklist-row.is-done span { text-decoration: line-through; color: var(--muted-foreground); }
+.journal-checklist-footer { display: flex; align-items: center; justify-content: space-between; width: 100%; font-size: 10px; padding-top: 12px; margin-top: 5px; border-top: 1px solid var(--border); color: var(--primary); }

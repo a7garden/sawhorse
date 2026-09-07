@@ -20,7 +20,8 @@ export type PanelWidgetId =
   | "schedules"
   | "issues"
   | "reading"
-  | "checklist";
+  | "checklist"
+  | "journal";
 /** 목록형 패널 위젯과 낱개 지표 카드가 같은 보드 위에서 같은 자격으로 산다. */
 export type DashboardWidgetId = PanelWidgetId | MetricWidgetId;
 export interface DashboardWidgetDefinition {
@@ -66,6 +67,7 @@ const panelEntries: [PanelWidgetId, string, string, string, string][] = [
     "코어 확장",
     "extensions",
   ],
+  ["journal", "일지", "달력과 최근 일지 모아보기", "볼트", "vault"],
   ["checklist", "할 일", "오늘 일지에 적어 둔 체크리스트", "볼트", "vault"],
 ];
 const metricEntries: [DashboardWidgetId, string, string, string, string][] =
@@ -183,7 +185,7 @@ export function createDefaultLayouts(ids: DashboardWidgetId[] = DEFAULT_WIDGET_I
 
 /** Project dashboards use process context instead of personal feeds and daily checklists. */
 export const PROJECT_WIDGET_IDS = WIDGET_REGISTRY.map((widget) => widget.id)
-  .filter((id) => !["projects", "reading", "checklist", "schedules"].includes(id));
+  .filter((id) => !["projects", "reading", "checklist", "journal", "schedules"].includes(id));
 export const PROJECT_DEFAULT_WIDGET_IDS: DashboardWidgetId[] = [
   "metric:running", "metric:review", "metric:blocked", "metric:overdue",
   "stages", "next", "jobs", "documents", "due", "events",

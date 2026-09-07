@@ -15,6 +15,24 @@ import type {
 } from "./types";
 import { jobRequestKey } from "./jobs";
 
+
+function previewJournalRows() {
+  return [0, 1, 2, 4, 5, 7, 10].map((offset, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    return {
+      path: `/preview/일지/${key}.md`, rel: `일지/${key}.md`, title: key,
+      mtimeMs: date.getTime(), fields: {
+        date: key,
+        mood: index % 2 === 0 ? "집중" : "차분함",
+        tags: index % 2 === 0 ? ["sawhorse", "디자인"] : ["회고", "개발"],
+        summary: ["기록을 읽기 좋은 하루의 흐름으로", "작은 개선을 차곡차곡", "작업대에서 다음 할 일 찾기"][index % 3],
+      },
+    };
+  });
+}
+
 const PREVIEW_VAULT_VIEWS: Array<{
   packId: string;
   packName: string;
@@ -256,6 +274,87 @@ const previewRequirements: RequirementStatus[] = [
     installHint: "",
   },
 ];
+// 동봉 확장 패키지. 체험 화면이 실제 앱과 같은 설치 목록을 보게 한다.
+const previewExtensionPackages = [
+  {
+    manifest: {
+      manifestVersion: 2,
+      id: "ui-mockup",
+      publisher: "sawhorse",
+      name: "Issue-driven UI Mockup",
+      version: "1.1.0",
+      engineApi: "^1.0",
+      dependencies: [],
+      provides: ["generator:ui-mockup", "artifact:mockup"],
+      contributions: {
+        workflows: ["workflows/mockup-review.json"],
+        schemas: [],
+        templates: [],
+        views: ["views/candidates.json", "views/artifacts.json"],
+        actions: ["actions/generate.json", "actions/process-feedback.json"],
+        skills: ["skills/mockup-generator"],
+        analyzers: [],
+        exporters: [],
+      },
+      permissions: ["vault:read", "vault:write", "adapter:ui-mockup"],
+      fileDigests: {},
+    },
+    digest: "preview-ui-mockup",
+    path: "builtin",
+    source: "builtin",
+    commit: null,
+    installedAt: "",
+  },
+  {
+    manifest: {
+      manifestVersion: 2,
+      id: "xlsx-export",
+      publisher: "sawhorse",
+      name: "XLSX Export",
+      version: "1.0.0",
+      engineApi: "^1.0",
+      dependencies: [],
+      provides: ["exporter:xlsx"],
+      contributions: {
+        workflows: [],
+        schemas: [],
+        templates: [],
+        views: ["views/reports.json"],
+        actions: ["actions/export.json"],
+        skills: ["skills/xlsx-export"],
+        analyzers: [],
+        exporters: [],
+      },
+      permissions: ["vault:read", "vault:write", "adapter:xlsx-export"],
+      fileDigests: {},
+    },
+    digest: "preview-xlsx-export",
+    path: "builtin",
+    source: "builtin",
+    commit: null,
+    installedAt: "",
+  },
+];
+
+const previewExtensionWorkflows = [
+  {
+    packageId: "ui-mockup",
+    packageName: "Issue-driven UI Mockup",
+    packageVersion: "1.1.0",
+    source: "builtin",
+    workflows: [
+      {
+        id: "mockup-review",
+        label: "목업 검토",
+        version: "1.1.0",
+        description:
+          "거친 이슈를 화면별 제안으로 구체화하고, 목업 피드백과 개정본을 승인까지 추적합니다.",
+        nodes: 3,
+      },
+    ],
+  },
+];
+
 const previewAgents: AgentsView = {
   agents: [
     {
@@ -533,6 +632,31 @@ export async function corePreview(
         { rel: "문서", dir: true },
         { rel: "문서/프로젝트 개요.md", dir: false },
       ];
+    case "read_note": {
+      const row = previewJournalRows().find((item) => item.path === args.path);
+      if (!row) return { path: args.path, title: "정본", markdown: "# 정본\n\n프로젝트의 기준이 되는 문서를 한곳에 모읍니다." };
+      return { path: row.path, title: row.title, markdown: `## ${row.fields.summary}
+
+오늘은 작업의 속도보다, 지나온 과정을 다시 읽기 쉽게 만드는 데 집중했다. 흩어진 기록을 모으니 다음에 해야 할 일이 조금 더 선명해졌다.
+
+## 오늘 한 일
+
+- [x] 작업대의 진행 상황과 남은 항목 확인
+- [x] 일지에서 자주 읽는 내용을 정리
+- [ ] 새 화면을 작은 창에서도 확인하기
+
+## 생각과 발견
+
+기록은 길이보다 다시 꺼내 읽을 수 있는 모양이 중요하다. 날짜와 맥락을 함께 보여주면 짧은 메모도 하루의 흐름으로 이어진다.
+
+> 작은 개선을 하나씩 쌓아두자. 오늘의 기록이 내일의 출발점이 된다.
+
+## 내일 이어갈 일
+
+- 실제 일지를 읽으며 글의 간격과 정보 순서를 살펴보기
+- 이번 주 작업을 돌아보고 다음 우선순위 정하기
+` };
+    }
     case "read_vault_note":
       return {
         title:
@@ -548,15 +672,7 @@ export async function corePreview(
         ? {
             folders: ["일지", "기록"],
             truncated: false,
-            rows: [
-              {
-                path: "/preview/일지/2026-09-07.md",
-                rel: "일지/2026-09-07.md",
-                title: "2026-09-07",
-                mtimeMs: Date.now(),
-                fields: {},
-              },
-            ],
+            rows: previewJournalRows(),
           }
         : {
             folders: ["개념"],
@@ -588,7 +704,36 @@ export async function corePreview(
       return;
     }
     case "inbound_list":
-      return { inbound: [] };
+      // 깃허브 탭 체험용 staged 이슈 하나. sources 인스턴스와 같은 저장소 id.
+      return {
+        inbound: [
+          {
+            id: "preview-ic-1",
+            linkId: "",
+            sourceInstance: "github-1001",
+            externalId: "2001",
+            payload: JSON.stringify({
+              account: "preview-user",
+              repositoryId: "1001",
+              repository: "preview-user/workspace",
+              number: 12,
+              title: "미리보기 이슈",
+              body: "프리뷰에서 만든 가져오기 후보 이슈다.",
+              state: "open",
+              url: "https://github.com/preview-user/workspace/issues/12",
+              updatedAt: "2026-09-07T00:00:00Z",
+            }),
+            targetPath: "",
+            createdAt: "2026-09-07T00:00:00Z",
+          },
+        ],
+      };
+    case "inbound_accept_import":
+      return {
+        notePath: `/preview/work/${String(args.projectId ?? "p")}/work.md`,
+      };
+    case "inbound_accept_update":
+      return { notePath: "/preview/work/work.md" };
     case "remote_operations_list":
       return { operations: [] };
     case "list_packs":
@@ -719,9 +864,14 @@ export async function corePreview(
       return structuredClone(previewAgents);
     case "list_missed":
     case "list_schedules":
-    case "list_extension_packages":
     case "ingestion_list":
       return [];
+    case "extension_package_list":
+      return structuredClone(previewExtensionPackages);
+    case "extension_package_workflows":
+      return structuredClone(previewExtensionWorkflows);
+    case "extension_package_lock":
+      return { formatVersion: 1, projects: {} };
     default:
       throw new Error("이 기능은 데스크톱 앱에서 사용할 수 있습니다.");
   }

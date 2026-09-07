@@ -1,3 +1,4 @@
+import "@/features/journal/journal.css";
 import { jobsForProject } from "@/features/workbench/project-scope";
 import type { Project } from "@/features/workbench/types";
 import { useEffect, useMemo, useState } from "react";
@@ -613,60 +614,27 @@ export function ChecklistWidget({ onOpen }: { onOpen: () => void }) {
     }
   }
 
+  const { t: jt, i18n } = useTranslation("journal");
   const items = todos?.today ?? [];
-  if (!items.length)
-    return (
-      <div className="wb-slot-empty">
-        {error ||
-          (todos && !todos.fileExists
-            ? t("checklist.noJournal")
-            : t("checklist.empty"))}
-      </div>
-    );
   const done = items.filter((item) => item.checked).length;
+  const percent = items.length ? Math.round(done / items.length * 100) : 0;
+  const ordered = [...items].sort((a, b) => Number(a.checked) - Number(b.checked));
   return (
-    <div className="wb-widget-body">
-      <div className="wb-progress-row">
-        <div className="wb-progress" aria-hidden>
-          <span style={{ width: `${(done / items.length) * 100}%` }} />
+    <div className="journal-checklist">
+      <div className="journal-checklist-summary">
+        <div className="journal-checklist-ring" role="progressbar" aria-label={jt("checklistTitle")} aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent}>
+          <svg viewBox="0 0 52 52" aria-hidden="true"><circle cx="26" cy="26" r="22" fill="none" stroke="var(--border)" strokeWidth="3" /><circle cx="26" cy="26" r="22" fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${percent * 1.3823} 138.23`} /></svg>
+          <span>{percent}%</span>
         </div>
-        <span className="wb-progress-count">
-          {done}/{items.length}
-        </span>
+        <div><strong>{jt(!items.length ? "checklistTitle" : done === items.length ? "allDone" : "remaining", { count: items.length - done })}</strong><small>{new Date().toLocaleDateString(i18n.language, { month: "long", day: "numeric", weekday: "short" })} · {jt("checklistProgress", { done, total: items.length })}</small></div>
       </div>
-      {error && (
-        <p className="wb-widget-note" role="status">
-          {error}
-        </p>
-      )}
-      <div className="wb-action-list">
-        {items.slice(0, 10).map((item) => (
-          <div key={item.index} className="wb-action-row">
-            <label className="wb-action-main is-check">
-              <input
-                type="checkbox"
-                checked={item.checked}
-                disabled={busy === item.index}
-                onChange={(event) =>
-                  void toggle(item.index, event.target.checked)
-                }
-              />
-              <span className="wb-action-text">
-                <strong className={item.checked ? "is-done" : undefined}>
-                  {item.text}
-                </strong>
-              </span>
-            </label>
-            <div className="wb-action-buttons">
-              <MiniAction
-                label={t("checklist.openJournal")}
-                icon={<ChevronRight size={13} />}
-                onClick={onOpen}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
+      {error && <p className="wb-widget-note" role="alert">{error}</p>}
+      {!items.length && <p className="journal-empty">{todos ? t(todos.fileExists ? "checklist.empty" : "checklist.noJournal") : jt("loading")}</p>}
+      {ordered.slice(0, 5).map((item) => <label key={item.index} className={cx("journal-checklist-row", item.checked && "is-done")}>
+        <input type="checkbox" checked={item.checked} disabled={busy !== null} onChange={(event) => void toggle(item.index, event.target.checked)} />
+        <span>{item.text}</span>
+      </label>)}
+      <button className="journal-checklist-footer" onClick={onOpen}><span>{jt(items.length > 5 ? "more" : "viewChecklist", { count: items.length })}</span><ChevronRight size={14} /></button>
     </div>
   );
 }

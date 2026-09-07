@@ -289,12 +289,16 @@ mod tests {
         // SI 팩
         assert!(vault.join("일지").is_dir());
         assert!(vault.join("프로젝트").is_dir());
-        assert!(vault.join("템플릿/이슈.md").is_file());
-        assert!(vault.join("프로젝트/이슈.base").is_file());
+        assert!(vault.join("템플릿/일지.md").is_file());
+        assert!(!vault.join("템플릿/이슈.md").exists());
+        assert!(!vault.join("템플릿/개선.md").exists());
+        assert!(vault.join("프로젝트/프로젝트.base").is_file());
+        assert!(!vault.join("프로젝트/이슈.base").exists());
         assert!(vault.join("대시보드.md").is_file());
         // starter 팩
         assert!(vault.join("문서").is_dir());
-        assert!(vault.join("템플릿/문서.md").is_file());
+        assert!(vault.join("템플릿/starter/문서.md").is_file());
+        assert!(vault.join("템플릿/starter/일지.md").is_file());
 
         // 선언형 뷰가 갓 만든 작업공간에서 오류 없이 빈 결과를 낸다
         for pack in &enabled {
