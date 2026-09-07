@@ -787,7 +787,11 @@ fn validate_event(event: &CalendarEvent) -> Result<(), String> {
     if event.title.trim().is_empty() {
         return Err("일정 제목이 비어 있습니다".into());
     }
-    date(&event.date, "시작")?;
+    // Legacy milestones can group work before a deadline has been decided.
+    // Keep that state without inventing a date; dated events still validate strictly.
+    if !(event.kind == "milestone" && event.date.is_empty() && event.end_date.is_none()) {
+        date(&event.date, "시작")?;
+    }
     optional_date(&event.end_date, "종료")?;
     if let Some(end) = &event.end_date {
         if end < &event.date {
@@ -2850,6 +2854,7 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
     }
     let mut notes = Vec::new();
     let mut milestones = HashMap::new();
+    let mut reference_sources = Vec::new();
     let mut migrated_ids = HashMap::new();
     let mut reserved_work: HashSet<String> = list_work(root, &mut Vec::new())
         .iter()
@@ -2885,8 +2890,8 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
         let Some(split) = crate::vault::split_frontmatter(&raw) else {
             continue;
         };
-        let map =
-            serde_yaml::from_str::<serde_yaml::Mapping>(&split.yaml).map_err(|e| e.to_string())?;
+        let map = serde_yaml::from_str::<serde_yaml::Mapping>(&split.yaml)
+            .map_err(|e| format!("{rel}: {e}"))?;
         let value = |key: &str| {
             map.get(serde_yaml::Value::String(key.into()))
                 .and_then(serde_yaml::Value::as_str)
@@ -2894,6 +2899,9 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
                 .to_string()
         };
         let kind = value("type");
+        if matches!(kind.as_str(), "이슈" | "개선") || (parts[2] == "개선" && kind.is_empty()) {
+            reference_sources.push((parts[1].to_string(), value("id"), rel.clone()));
+        }
         let migrated = value("migrated_to");
         if !migrated.is_empty() {
             validate_id(&migrated)?;
@@ -2980,6 +2988,20 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
             ));
         }
     }
+    // Resolve wiki links by their actual target, never by the display alias.
+    let mut reference_ids = HashMap::new();
+    for (project, old_id, rel) in &reference_sources {
+        let id = ids.get(&(project.clone(), old_id.clone()))
+            .cloned().unwrap_or_else(|| stable_id("legacy", rel));
+        let path = Path::new(rel);
+        for target in [
+            path.file_stem().unwrap().to_string_lossy().to_string(),
+            rel.trim_end_matches(".md").to_string(),
+        ] {
+            reference_ids.insert((project.clone(), target), id.clone());
+        }
+    }
+    let mut pending_dependencies = Vec::new();
     for (note, raw, rel) in &mut notes {
         let id = ids
             .get(&(note.project.clone(), note.id.clone()))
@@ -2995,18 +3017,35 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
         fs::write(work_path(root, &id).with_file_name("legacy-source.md"), raw)
             .map_err(|e| e.to_string())?;
         let mut work = work_by_id(root, &id)?;
-        work.depends_on = note
+        let dependencies = note
             .depends_on
             .iter()
             .map(|dependency| {
+                if let Some(target) = dependency.trim().strip_prefix("[[").and_then(|v| v.strip_suffix("]]")) {
+                    let target = target.split('|').next().unwrap().split('#').next().unwrap().trim_end_matches(".md");
+                    if let Some(id) = reference_ids.get(&(note.project.clone(), target.into())) {
+                        return id.clone();
+                    }
+                    if let Some(id) = ids.get(&(note.project.clone(), target.into())) {
+                        return id.clone();
+                    }
+                }
                 ids.get(&(note.project.clone(), dependency.clone()))
                     .cloned()
                     .unwrap_or_else(|| dependency.clone())
             })
             .collect();
+        pending_dependencies.push((id.clone(), dependencies));
         let source_link = format!("원본: [이전 문서](../../{rel})\n");
         work.description = source_link.clone();
         write_atomic(root, &work_path(root, &id), &markdown(&work, &source_link)?)?;
+    }
+    // Create every target before adding edges; file order is not dependency order.
+    for (id, dependencies) in pending_dependencies {
+        let mut work = work_by_id(root, &id)?;
+        work.depends_on = dependencies;
+        let body = work.description.clone();
+        write_atomic(root, &work_path(root, &id), &markdown(&work, &body)?)?;
     }
     Ok(notes.len())
 }
@@ -4079,6 +4118,60 @@ mod tests {
         }
         fs::remove_dir_all(root).unwrap();
         fs::remove_dir_all(outside).unwrap();
+    }
+    #[test]
+    fn undated_milestones_preserve_membership_and_strict_date_validation() {
+        let root = tempdir("undated-milestone");
+        initialize(&root).unwrap();
+        save_project_at(&root, project("p")).unwrap();
+        let milestone = CalendarEvent {
+            id: "undated".into(),
+            title: "Schedule undecided".into(),
+            kind: "milestone".into(),
+            project_id: Some("p".into()),
+            ..Default::default()
+        };
+        save_event_at(&root, milestone.clone()).unwrap();
+        let mut member = work("member", "p");
+        member.milestone = milestone.id.clone();
+        save_work_at(&root, member).unwrap();
+        let result = snapshot(&root).unwrap();
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        assert!(result.events[0].date.is_empty());
+        assert_eq!(result.work[0].milestone, "undated");
+        for kind in ["meeting", "review", "release"] {
+            assert!(validate_event(&CalendarEvent {
+                kind: kind.into(),
+                ..milestone.clone()
+            })
+            .is_err());
+        }
+        for invalid in [" ", "2026-2-03", "2026-02-30"] {
+            assert!(validate_event(&CalendarEvent {
+                date: invalid.into(),
+                ..milestone.clone()
+            })
+            .is_err());
+        }
+        assert!(validate_event(&CalendarEvent {
+            end_date: Some("2026-10-01".into()),
+            ..milestone.clone()
+        })
+        .is_err());
+        assert!(validate_event(&CalendarEvent {
+            date: "2026-10-02".into(),
+            end_date: Some("2026-10-01".into()),
+            ..milestone.clone()
+        })
+        .is_err());
+        let mut scheduled = milestone;
+        scheduled.date = "2026-10-01".into();
+        save_event_at(&root, scheduled).unwrap();
+        assert_eq!(
+            milestone_by_id(&root, "undated").unwrap().date,
+            "2026-10-01"
+        );
+        fs::remove_dir_all(root).unwrap();
     }
     #[test]
     fn frontmatter_roundtrip_cycle_dates_and_gates() {

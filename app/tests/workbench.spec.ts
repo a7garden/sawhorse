@@ -138,6 +138,29 @@ test("calendar events render on the local day and refresh after save and delete"
   ).toHaveCount(0);
 });
 
+test("undated milestones can be saved and scheduled later", async ({ page }) => {
+  await nav(page, "캘린더");
+  await page.getByRole("button", { name: "일정 추가", exact: true }).click();
+  await page.getByLabel("일정 이름", { exact: true }).fill("일정 미정 마일스톤");
+  await page.getByRole("combobox", { name: "일정 종류" }).click();
+  await page.getByRole("option", { name: "마일스톤", exact: true }).click();
+  await page.getByLabel("날짜", { exact: true }).fill("");
+  await expect(page.getByLabel("날짜", { exact: true })).not.toHaveAttribute("required", "");
+  await expect(page.getByLabel("종료일", { exact: true })).toBeDisabled();
+  await page.locator("form").getByRole("button", { name: "저장", exact: true }).click();
+  await page.getByRole("button", { name: "목록", exact: true }).click();
+  const milestone = page.locator(".wb-agenda-row").filter({ hasText: "일정 미정 마일스톤" });
+  await expect(milestone).toContainText("날짜 없음");
+  await page.reload();
+  await nav(page, "캘린더");
+  await page.getByRole("button", { name: "목록", exact: true }).click();
+  await milestone.click();
+  await expect(page.getByLabel("날짜", { exact: true })).toHaveValue("");
+  await page.getByLabel("날짜", { exact: true }).fill("2026-10-01");
+  await page.locator("form").getByRole("button", { name: "저장", exact: true }).click();
+  await expect(milestone).not.toContainText("날짜 없음");
+});
+
 test("markdown edits save and remain after reopening", async ({ page }) => {
   await page
     .getByRole("button", {

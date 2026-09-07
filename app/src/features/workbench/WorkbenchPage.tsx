@@ -3470,8 +3470,12 @@ function EventFormDialog({
           <Input
             type="date"
             value={draft.date}
-            onChange={(event) => set("date", event.target.value)}
-            required
+            onChange={(event) => setDraft((previous) => ({
+              ...previous,
+              date: event.target.value,
+              endDate: event.target.value ? previous.endDate : null,
+            }))}
+            required={draft.kind !== "milestone"}
           />
         </label>
         <label className="wb-field">
@@ -3479,6 +3483,7 @@ function EventFormDialog({
           <Input
             type="date"
             value={draft.endDate ?? ""}
+            disabled={!draft.date}
             onChange={(event) => set("endDate", event.target.value || null)}
           />
         </label>

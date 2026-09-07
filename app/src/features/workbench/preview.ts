@@ -689,7 +689,7 @@ export async function previewInvoke(
         args.input,
       ) as WorkspaceSnapshot["events"][number];
       e.id ||= crypto.randomUUID();
-      if (!e.title.trim() || !e.date)
+      if (!e.title.trim() || (!e.date && (e.kind !== "milestone" || e.endDate != null)))
         throw new Error(i18n.t("workbench:preview.titleAndDateRequired"));
       const i = s.events.findIndex((v) => v.id === e.id);
       if (i < 0) s.events.push(e);
