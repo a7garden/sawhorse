@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { useCoreExtensions } from "@/lib/core-extensions";
-import type { GitHubRepository } from "@/lib/types";
+import { isGitHubCfg, type GitHubRepository } from "@/lib/types";
 import type { Project } from "@/features/workbench/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { PathInput } from "@/components/ui/path-input";
 import { toast } from "@/components/ui/toast";
 import { PageHeader } from "./common";
+import { sddApi } from "@/features/workbench/api";
 import SourcesPage from "./SourcesPage";
 import OnboardingPage from "./OnboardingPage";
 
@@ -50,6 +51,12 @@ export default function GitHubExtensionPage() {
   const [parentPath, setParentPath] = useState("");
   const [imported, setImported] = useState<Project | null>(null);
   const [documents, setDocuments] = useState(false);
+  // 이슈 연결은 프로젝트를 전제로 한다. 동기화 인스턴스는 어떤 프로젝트로
+  // 가져올지 기억하고, 프로젝트는 어느 저장소와 묶였는지 저장소 쪽에도 기록한다.
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [linkedRepoIds, setLinkedRepoIds] = useState<Set<string>>(new Set());
+  const [linkFor, setLinkFor] = useState<GitHubRepository | null>(null);
+  const [linkProjectId, setLinkProjectId] = useState("");
 
   async function run(work: () => Promise<void>) {
     setBusy(true);
@@ -78,6 +85,28 @@ export default function GitHubExtensionPage() {
     setPage(next);
     setHasMore(result.hasMore);
   }
+
+  // 연결 대상 프로젝트 목록과 이미 동기화 중인 저장소를 읽어 둔다.
+  useEffect(() => {
+    if (!core.github) return;
+    void sddApi
+      .snapshot()
+      .then((snapshot) => setProjects(snapshot.projects))
+      .catch(() => setProjects([]));
+    void api
+      .sourcesListInstances()
+      .then((view) =>
+        setLinkedRepoIds(
+          new Set(
+            view.instances
+              .map((row) => row.config)
+              .filter(isGitHubCfg)
+              .map((config) => config.repositoryId),
+          ),
+        ),
+      )
+      .catch(() => undefined);
+  }, [core.github]);
   useEffect(() => {
     if (!core.github) return;
     void run(async () => {
@@ -86,6 +115,56 @@ export default function GitHubExtensionPage() {
       if (user) await loadRepositories();
     });
   }, [core.github]);
+
+  function openLinkDialog(repo: GitHubRepository) {
+    setError("");
+    setLinkFor(repo);
+    // 이 저장소에 이미 묶인 프로젝트를 기본 선택으로 둔다.
+    const bound = projects.find((project) =>
+      (project.githubRepos ?? []).includes(repo.fullName),
+    );
+    setLinkProjectId(bound?.id ?? projects[0]?.id ?? "");
+  }
+
+  async function confirmLink() {
+    const repo = linkFor;
+    const project = projects.find((item) => item.id === linkProjectId);
+    if (!repo || !project || !account) return;
+    await run(async () => {
+      // 프로젝트 쪽에도 저장소 바인딩을 남긴다. 이슈 가져오기 목적지가
+      // 여기서 결정되므로 양쪽이 항상 같은 사실을 가리킨다.
+      if (!(project.githubRepos ?? []).includes(repo.fullName)) {
+        const nextRepos = [...(project.githubRepos ?? []), repo.fullName];
+        await sddApi.saveProject({ ...project, githubRepos: nextRepos });
+        setProjects((current) =>
+          current.map((item) =>
+            item.id === project.id ? { ...item, githubRepos: nextRepos } : item,
+          ),
+        );
+      }
+      await api.sourcesUpsertInstance({
+        instanceId: `github-${repo.id}`,
+        extensionId: "github",
+        componentId: "issues",
+        config: {
+          account: account.login,
+          repository: repo.fullName,
+          repositoryId: repo.id,
+          state: "open",
+          projectId: project.id,
+        },
+        network: ["api.github.com"],
+      });
+      setLinkedRepoIds((current) => new Set(current).add(repo.id));
+      setNotice(
+        t("github.issueLinked", {
+          repo: repo.fullName,
+          project: project.name,
+        }),
+      );
+      setLinkFor(null);
+    });
+  }
 
   useEffect(() => {
     if (!oauthFlow) return;
@@ -371,6 +450,11 @@ export default function GitHubExtensionPage() {
                             </p>
                           )}
                           <p className="mt-2 text-[11px] text-muted-foreground">
+                            {linkedRepoIds.has(repo.id) && (
+                              <span className="mr-1 rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
+                                {t("github.linkedBadge")}
+                              </span>
+                            )}
                             {repo.language ?? ""} ·{" "}
                             {t("github.updatedSuffix", {
                               date: new Date(
@@ -383,27 +467,7 @@ export default function GitHubExtensionPage() {
                           size="sm"
                           variant="outline"
                           disabled={busy}
-                          onClick={() =>
-                            void run(async () => {
-                              await api.sourcesUpsertInstance({
-                                instanceId: `github-${repo.id}`,
-                                extensionId: "github",
-                                componentId: "issues",
-                                config: {
-                                  account: account.login,
-                                  repository: repo.fullName,
-                                  repositoryId: repo.id,
-                                  state: "open",
-                                },
-                                network: ["api.github.com"],
-                              });
-                              setNotice(
-                                t("github.issueLinked", {
-                                  repo: repo.fullName,
-                                }),
-                              );
-                            })
-                          }
+                          onClick={() => openLinkDialog(repo)}
                         >
                           {t("github.linkIssues")}
                         </Button>
@@ -446,6 +510,89 @@ export default function GitHubExtensionPage() {
           </>
         )}
       </div>
+      <Dialog
+        open={!!linkFor}
+        onClose={() => {
+          if (!busy) {
+            setLinkFor(null);
+            setError("");
+          }
+        }}
+        title={t("github.linkIssues")}
+      >
+        <div className="space-y-4">
+          <p className="font-medium">{linkFor?.fullName}</p>
+          {projects.length === 0 ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {t("github.linkNeedsProject")}
+              </p>
+              <Button
+                disabled={busy}
+                onClick={() => {
+                  const repo = linkFor;
+                  setLinkFor(null);
+                  if (repo) setSelected(repo);
+                }}
+              >
+                {t("github.importProject")}
+              </Button>
+            </div>
+          ) : (
+            <>
+              <label className="block space-y-2 text-sm">
+                {t("github.linkTargetProject")}
+                <div className="max-h-64 space-y-1 overflow-y-auto">
+                  {projects.map((project) => (
+                    <label
+                      key={project.id}
+                      className="flex items-center gap-2 rounded-md border p-2 text-sm"
+                    >
+                      <input
+                        type="radio"
+                        name="link-project"
+                        checked={linkProjectId === project.id}
+                        onChange={() => setLinkProjectId(project.id)}
+                      />
+                      <span className="min-w-0 flex-1 truncate">
+                        {project.name}
+                      </span>
+                      {(project.githubRepos ?? []).includes(
+                        linkFor?.fullName ?? "",
+                      ) && (
+                        <span className="text-[11px] text-muted-foreground">
+                          {t("github.linkBoundBadge")}
+                        </span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </label>
+              <p className="text-xs text-muted-foreground">
+                {t("github.linkHint")}
+              </p>
+              {error && (
+                <p role="alert" className="text-sm text-destructive">
+                  {error}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setLinkFor(null)}>
+                  {t("actions.cancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={busy || !linkProjectId}
+                  onClick={() => void confirmLink()}
+                >
+                  {busy ? t("github.linking") : t("github.linkConfirm")}
+                </Button>
+              </div>
+            </>
+          )}
+        </div>
+      </Dialog>
+
       <Dialog
         open={!!selected}
         onClose={() => {

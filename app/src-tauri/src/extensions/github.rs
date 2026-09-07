@@ -26,6 +26,8 @@ pub struct GitHubSourceConfig {
     pub repository_id: String,
     /// 읽어올 issue 상태. 기본 open.
     pub state: String,
+    /// 이 동기화가 묶인 프로젝트(sdlc id). 가져오기 대상 미리 고르기에 쓴다.
+    pub project_id: String,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -185,14 +187,23 @@ fn stored_cursor(store: &Store, instance_id: &str) -> (String, String) {
 
 // ---------- 수락 적용 ----------
 
-/// 「가져오기」 후보 수락: 새 이슈 노트를 만든다. 사람의 수락이 승인이며,
-/// 코어가 file WAL 절차로 원자적으로 쓴다(설계 696줄·566-571줄).
+/// 「가져오기」 후보 수락: 선택한 프로젝트에 새 작업 항목을 만들고 ExternalLink로
+/// 묶는다. 사람의 수락이 승인이며, work.md 기록은 코어의 file WAL 절차를 탄다
+/// (설계 696줄·566-571줄).
 pub fn accept_import(
     store: &Store,
     inbound_id: &str,
     project_id: &str,
-    notes_dir: &std::path::Path,
-    id_prefix: &str,
+) -> Result<String, String> {
+    accept_import_at(store, &crate::sdlc::vault_root()?, inbound_id, project_id)
+}
+
+/// vault root를 주입받는 본체. 테스트가 임시 볼트로 돌릴 수 있게 분리했다.
+pub fn accept_import_at(
+    store: &Store,
+    root: &std::path::Path,
+    inbound_id: &str,
+    project_id: &str,
 ) -> Result<String, String> {
     let inbounds = store.list_inbound_changes("staged", 1000)?;
     let inbound = inbounds
@@ -202,54 +213,57 @@ pub fn accept_import(
     let payload: serde_json::Value =
         serde_json::from_str(inbound["payload"].as_str().unwrap_or("{}"))
             .map_err(|e| format!("payload 해석 실패: {e}"))?;
-    let title = payload["title"].as_str().unwrap_or("무제").to_string();
-    let next_number = next_note_number(notes_dir, id_prefix)?;
-    let note_id = format!("{id_prefix}-{next_number:03}");
-    crate::sdlc::validate_id(id_prefix)?;
-    let safe_title: String = title
-        .chars()
-        .map(|c| {
-            if c.is_control() || matches!(c, '/' | '\\' | ':') {
-                '-'
-            } else {
-                c
-            }
-        })
-        .take(100)
-        .collect();
-    let file_name = format!("{note_id} {safe_title}.md");
-    let target = notes_dir.join(&file_name);
-    if target.exists() {
-        return Err(format!("노트 파일이 이미 있다: {}", target.display()));
-    }
+    let external_id = inbound["externalId"].as_str().unwrap_or("").to_string();
     let repository_id = payload["repositoryId"].as_str().unwrap_or("").to_string();
-    let frontmatter = format!(
-        "---\ntype: 이슈\npriority: 보통\norigin: GitHub\nid: {note_id}\nurl: \"\"\nissue_type: 작업\nexecution_type: 코드\nlabels: []\nassignees: []\nmilestone: \"\"\nstatus: 제안\nstate: open\napproval_required: true\napprove: false\napproved: \"\"\nbase: \"\"\nbranch: \"\"\ncommits: []\nverified: 미확인\ndepends_on: []\ndependents: []\nrelated: []\nraised: \"\"\ndue: \"\"\nclosed: \"\"\ngithub_repo: \"\"\ngithub_number: \"{}\"\ngithub_url: \"{}\"\ngithub_state: \"{}\"\ngithub_updated: \"{}\"\n---\n\n## 배경 및 요청\n\nGitHub에서 가져온 이슈다. #{}\n\n## 근거 및 분석\n\n{}\n\n## 설계\n\n### 실행 대상\n\n| 대상 | 실행 내용 |\n|---|---|\n\n### 검증 방법\n\n### 위험 및 되돌리기\n\n### 검토 의견\n\n### 개정 이력\n\n## 결과\n\n### 적용 내역\n\n| 항목 | 값 |\n|---|---|\n",
-        payload["number"].as_i64().unwrap_or(0),
-        payload["url"].as_str().unwrap_or(""),
-        payload["state"].as_str().unwrap_or(""),
-        payload["updatedAt"].as_str().unwrap_or(""),
-        payload["number"].as_i64().unwrap_or(0),
-        payload["body"].as_str().unwrap_or(""),
-    );
-    apply_via_wal(store, &target, "", &frontmatter)?;
+    // 같은 외부 이슈는 하나의 작업 항목만 가진다.
+    if store
+        .find_external_link("github", &repository_id, &external_id)?
+        .is_some()
+    {
+        return Err("이미 가져온 이슈입니다. 연결된 이슈 갱신 후보를 확인하세요.".into());
+    }
+    let work = crate::sdlc::import_issue_work_at(
+        root,
+        project_id,
+        crate::sdlc::ExternalIssue {
+            title: payload["title"].as_str().unwrap_or("").to_string(),
+            body: payload["body"].as_str().unwrap_or("").to_string(),
+            repository: payload["repository"].as_str().unwrap_or("").to_string(),
+            number: payload["number"].as_i64().unwrap_or(0),
+            url: payload["url"].as_str().unwrap_or("").to_string(),
+            state: payload["state"].as_str().unwrap_or("").to_string(),
+            updated_at: payload["updatedAt"].as_str().unwrap_or("").to_string(),
+        },
+    )?;
+    let note_path = crate::sdlc::work_path(&root, &work.id)
+        .to_string_lossy()
+        .to_string();
 
     // ExternalLink 기록 — rename·번호 변화에도 유지되는 immutable identity.
     store.upsert_external_link(
         &new_id("el"),
         project_id,
-        &target.to_string_lossy().to_string(),
+        &note_path,
         "github",
         payload["account"].as_str().unwrap_or(""),
         &repository_id,
-        inbound["externalId"].as_str().unwrap_or(""),
+        &external_id,
     )?;
     store.set_inbound_state(inbound_id, "applied")?;
-    Ok(target.to_string_lossy().to_string())
+    Ok(note_path)
 }
 
 /// 연결된 이슈의 field 갱신 수락(제목·상태). 원문 body는 덮어쓰지 않는다(설계 702-703줄).
 pub fn accept_field_update(store: &Store, inbound_id: &str) -> Result<String, String> {
+    accept_field_update_at(store, &crate::sdlc::vault_root()?, inbound_id)
+}
+
+/// vault root를 주입받는 본체. 테스트가 임시 볼트로 돌릴 수 있게 분리했다.
+pub fn accept_field_update_at(
+    store: &Store,
+    root: &std::path::Path,
+    inbound_id: &str,
+) -> Result<String, String> {
     let inbounds = store.list_inbound_changes("staged", 1000)?;
     let inbound = inbounds
         .iter()
@@ -266,22 +280,43 @@ pub fn accept_field_update(store: &Store, inbound_id: &str) -> Result<String, St
     let current = std::fs::read_to_string(&target).unwrap_or_default();
     let expected = sha256_hex(&current);
     let mut updated = current.clone();
-    for field in ["title", "state", "github_state", "github_updated"] {
-        let value = match payload.get(field).and_then(|v| v.as_str()) {
-            Some(v) => v.to_string(),
-            None => continue,
-        };
-        let fm_field = match field {
-            "title" => "title",
-            "state" => "state",
-            "github_state" => "github_state",
-            _ => "github_updated",
-        };
-        updated = update_frontmatter_field(&updated, fm_field, &value)?;
+    if is_work_target(root, &target) {
+        // work.md 대상은 타입 모델로 갱신한다. 제목과 GitHub 미러 필드만 바꾸고
+        // 로컬 status는 사람 소유로 남긴다(설계 690-716줄).
+        let work_id = target
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        updated = crate::sdlc::apply_external_field_update(
+            &root,
+            &work_id,
+            payload["title"].as_str().unwrap_or(""),
+            payload["state"].as_str().unwrap_or(""),
+            payload["updatedAt"].as_str().unwrap_or(""),
+        )?;
+    } else {
+        for field in ["title", "state", "github_state", "github_updated"] {
+            let value = match payload.get(field).and_then(|v| v.as_str()) {
+                Some(v) => v.to_string(),
+                None => continue,
+            };
+            let fm_field = match field {
+                "title" => "title",
+                "state" => "state",
+                "github_state" => "github_state",
+                _ => "github_updated",
+            };
+            updated = update_frontmatter_field(&updated, fm_field, &value)?;
+        }
     }
     apply_via_wal(store, &target, &expected, &updated)?;
-    let link =
-        store.find_external_link("github", "", inbound["externalId"].as_str().unwrap_or(""))?;
+    let link = store.find_external_link(
+        "github",
+        payload["repositoryId"].as_str().unwrap_or(""),
+        inbound["externalId"].as_str().unwrap_or(""),
+    )?;
     if let Some((link_id, _, _)) = link {
         for field in ["state", "title"] {
             let value = payload.get(field).and_then(|v| v.as_str()).unwrap_or("");
@@ -290,6 +325,12 @@ pub fn accept_field_update(store: &Store, inbound_id: &str) -> Result<String, St
     }
     store.set_inbound_state(inbound_id, "applied")?;
     Ok(note_path)
+}
+
+/// 갱신 대상이 work/ 작업 항목이면 참. 레거시 볼트 노트는 기존 frontmatter
+/// 패치 경로를 그대로 유지한다.
+fn is_work_target(root: &std::path::Path, target: &std::path::Path) -> bool {
+    target.starts_with(root.join("work"))
 }
 
 /// frontmatter의 단일 필드만 교체한다. 본문은 절대 건드리지 않는다(vault.rs 3키 갱신 패턴과 동일).
@@ -441,5 +482,112 @@ mod tests {
         let note = "---\ntitle: \"옛 제목\"\n---\n본문";
         let updated = update_frontmatter_field(note, "title", "새 \"제목\"").unwrap();
         assert!(updated.contains("title: \"새 \\\"제목\\\"\""));
+    }
+    fn fixture(name: &str) -> (std::path::PathBuf, crate::collab::store::StoreHandle) {
+        let root = std::env::temp_dir().join(format!("swgh-{name}-{}", uuid::Uuid::new_v4()));
+        crate::sdlc::initialize(&root).unwrap();
+        crate::sdlc::save_project_at(
+            &root,
+            crate::sdlc::Project {
+                id: "p1".into(),
+                name: "프로젝트".into(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let store = crate::collab::store::Store::open_at(root.join(".collab").join("store.db"))
+            .unwrap();
+        (root, store)
+    }
+
+    fn issue_payload() -> serde_json::Value {
+        serde_json::json!({
+            "account": "octocat",
+            "repositoryId": "R_1",
+            "repository": "octocat/hello",
+            "number": 7,
+            "title": "검색 오류",
+            "body": "재현 절차:\n\n1. 검색 클릭",
+            "state": "open",
+            "url": "https://github.com/octocat/hello/issues/7",
+            "updatedAt": "2026-09-07T01:02:03Z"
+        })
+    }
+
+    #[test]
+    fn import_lands_in_project_work_and_rejects_duplicate() {
+        let (root, store) = fixture("import");
+        store
+            .insert_inbound_change("ic1", "", "inst", "issue-1", &issue_payload().to_string(), "")
+            .unwrap();
+        let note_path = accept_import_at(&store, &root, "ic1", "p1").unwrap();
+        assert!(note_path.contains("/work/"), "work/ 아래여야 한다: {note_path}");
+        assert!(note_path.ends_with("/work.md"));
+
+        let snapshot = crate::sdlc::snapshot(&root).unwrap();
+        assert_eq!(snapshot.work.len(), 1);
+        let work = &snapshot.work[0];
+        assert_eq!(work.title, "검색 오류");
+        assert_eq!(work.project_id, "p1");
+        assert_eq!(work.github_repo, "octocat/hello");
+        assert_eq!(work.github_number, "7");
+        assert_eq!(work.github_state, "open");
+        assert_eq!(work.status, "backlog");
+        assert!(work.description.contains("재현 절차"));
+        // 승인은 사람의 결정이므로 가져온 항목도 항상 꺼진 채 시작한다.
+        assert!(!work.approve);
+
+        // 같은 외부 이슈의 두 번째 수락은 거절된다.
+        store
+            .insert_inbound_change("ic2", "", "inst", "issue-1", &issue_payload().to_string(), "")
+            .unwrap();
+        let error = accept_import_at(&store, &root, "ic2", "p1").unwrap_err();
+        assert!(error.contains("이미 가져온"), "{error}");
+        assert_eq!(crate::sdlc::snapshot(&root).unwrap().work.len(), 1);
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn field_update_patches_mirrors_and_keeps_local_status() {
+        let (root, store) = fixture("update");
+        store
+            .insert_inbound_change("ic1", "", "inst", "issue-1", &issue_payload().to_string(), "")
+            .unwrap();
+        let note_path = accept_import_at(&store, &root, "ic1", "p1").unwrap();
+
+        let payload = serde_json::json!({
+            "repositoryId": "R_1",
+            "title": "검색 오류 (수정)",
+            "state": "closed",
+            "updatedAt": "2026-09-08T00:00:00Z"
+        });
+        store
+            .insert_inbound_change(
+                "ic2",
+                "el1",
+                "inst",
+                "issue-1",
+                &payload.to_string(),
+                &note_path,
+            )
+            .unwrap();
+        accept_field_update_at(&store, &root, "ic2").unwrap();
+
+        let work = &crate::sdlc::snapshot(&root).unwrap().work[0];
+        assert_eq!(work.title, "검색 오류 (수정)");
+        assert_eq!(work.github_state, "closed");
+        assert_eq!(work.github_updated, "2026-09-08T00:00:00Z");
+        // 로컬 status는 GitHub open/closed로 축소되지 않는다(설계 690-716줄).
+        assert_eq!(work.status, "backlog");
+        assert!(work.description.contains("재현 절차"), "본문 보존");
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn repository_slug_validation_matches_clone_rules() {
+        assert!(crate::sdlc::validate_repository_slug("octocat/Hello-World").is_ok());
+        for bad in ["../repo", "owner/..", "--help", "owner/repo/extra", "owner/repo\n"] {
+            assert!(crate::sdlc::validate_repository_slug(bad).is_err(), "{bad}");
+        }
     }
 }

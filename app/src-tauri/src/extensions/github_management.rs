@@ -445,23 +445,6 @@ pub async fn github_repositories(page: u32) -> Result<Value, String> {
         .collect();
     Ok(json!({ "repositories": repositories, "hasMore": rows.len() == 50 }))
 }
-fn repository_name(value: &str) -> Result<(), String> {
-    let parts: Vec<_> = value.split('/').collect();
-    if parts.len() != 2
-        || parts.iter().any(|p| {
-            p.is_empty()
-                || *p == "."
-                || *p == ".."
-                || p.starts_with('-')
-                || !p
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
-        })
-    {
-        return Err("저장소 이름은 소유자/저장소 형식이어야 합니다.".into());
-    }
-    Ok(())
-}
 
 #[tauri::command]
 pub async fn github_clone_project(
@@ -469,7 +452,7 @@ pub async fn github_clone_project(
     parent_path: String,
 ) -> Result<crate::sdlc::Project, String> {
     require_enabled()?;
-    repository_name(&repository)?;
+    crate::sdlc::validate_repository_slug(&repository)?;
     let snapshot = crate::sdlc::sdd_snapshot()?;
     if !snapshot.initialized {
         return Err("프로젝트를 가져오기 전에 작업공간을 초기화하세요.".into());
@@ -556,6 +539,9 @@ pub async fn github_clone_project(
         name: repository.split('/').nth(1).unwrap().into(),
         description: metadata["description"].as_str().unwrap_or("").into(),
         repo_path: target.to_string_lossy().into(),
+        // 클론한 저장소는 등록 즉시 프로젝트에 바인딩한다. 이슈 연결과
+        // 깃허브 화면이 이 바인딩으로 프로젝트를 찾는다.
+        github_repos: vec![repository.clone()],
         ..Default::default()
     };
     crate::sdlc::sdd_save_project(project).map_err(|e| {
@@ -601,7 +587,7 @@ mod tests {
 
     #[test]
     fn repository_names_cannot_inject_paths_or_git_options() {
-        assert!(repository_name("octocat/Hello-World").is_ok());
+        assert!(crate::sdlc::validate_repository_slug("octocat/Hello-World").is_ok());
         for bad in [
             "../repo",
             "owner/..",
@@ -610,7 +596,7 @@ mod tests {
             "owner/repo?token=x",
             "owner/repo\n",
         ] {
-            assert!(repository_name(bad).is_err(), "{bad}");
+            assert!(crate::sdlc::validate_repository_slug(bad).is_err(), "{bad}");
         }
     }
 }
