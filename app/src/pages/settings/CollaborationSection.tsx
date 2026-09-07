@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label, Textarea } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Empty } from "../common";
-import { Notice, SectionCard } from "./parts";
+import { Notice, SettingsGroup } from "./parts";
 
 const APPROVAL_OPTIONS: { value: LocalIntegrationApproval; key: string }[] = [
   { value: "required", key: "collab.approval.required" },
@@ -158,10 +158,10 @@ export default function CollaborationSection({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {msg && <Notice ok={msg.ok} text={msg.text} />}
 
-      <SectionCard
+      <SettingsGroup
         title={t("collab.approval.title")}
         desc={t("collab.approval.hint")}
       >
@@ -175,9 +175,9 @@ export default function CollaborationSection({
             label: t(o.key),
           }))}
         />
-      </SectionCard>
+      </SettingsGroup>
 
-      <SectionCard
+      <SettingsGroup
         title={t("collab.registeredTitle")}
         desc={t("collab.registeredDesc")}
         actions={
@@ -190,16 +190,16 @@ export default function CollaborationSection({
           )
         }
       >
-        <div className="space-y-2">
+        <div className="divide-y divide-border">
           {projects && projects.registered.length === 0 && (
             <Empty className="py-3">{t("collab.noRegistered")}</Empty>
           )}
           {(projects?.registered ?? []).map((p) => (
             <div
               key={p.id}
-              className="space-y-0.5 rounded-lg border p-2.5 text-xs"
+              className="space-y-0.5 py-2.5 text-xs first:pt-0 last:pb-0"
             >
-              <div className="font-medium">{p.name}</div>
+              <div className="text-[13px] font-medium">{p.name}</div>
               <div className="text-muted-foreground">
                 {t("collab.path", { path: p.path })}
               </div>
@@ -213,9 +213,9 @@ export default function CollaborationSection({
             </div>
           ))}
         </div>
-      </SectionCard>
+      </SettingsGroup>
 
-      <SectionCard
+      <SettingsGroup
         title={t("collab.profileTitle")}
         desc={t("collab.profileDesc")}
       >
@@ -283,7 +283,7 @@ export default function CollaborationSection({
               <Empty className="py-2">{t("collab.noChecks")}</Empty>
             )}
             {checks.map((c, i) => (
-              <div key={i} className="space-y-1 rounded-lg border p-2.5">
+              <div key={i} className="space-y-1 rounded-md bg-muted/40 p-2.5">
                 <div className="flex items-center gap-2">
                   <Select
                     value={c.kind}
@@ -418,13 +418,11 @@ export default function CollaborationSection({
             </Button>
           </div>
         </div>
-      </SectionCard>
+      </SettingsGroup>
 
-      <SectionCard
-        title={t("collab.legacyTitle")}
-        desc={t("collab.legacyDesc")}
-      >
-        <div className="space-y-2">
+      <SettingsGroup title={t("collab.legacyTitle")}
+      desc={t("collab.legacyDesc")}>
+        <div className="divide-y divide-border">
           {projects && projects.legacy.length === 0 && (
             <Empty className="py-3">
               {t("collab.noLegacy")}
@@ -433,10 +431,10 @@ export default function CollaborationSection({
           {(projects?.legacy ?? []).map((p) => (
             <div
               key={p.name}
-              className="flex items-center gap-2 rounded-lg border p-2.5 text-xs"
+              className="flex items-center gap-2 py-2.5 text-xs first:pt-0 last:pb-0"
             >
               <div className="min-w-0 flex-1">
-                <div className="font-medium">{p.name}</div>
+                <div className="text-[13px] font-medium">{p.name}</div>
                 <div className="text-muted-foreground">
                   {t("collab.legacyMeta", {
                     path: p.path,
@@ -458,7 +456,7 @@ export default function CollaborationSection({
             </div>
           ))}
         </div>
-      </SectionCard>
+      </SettingsGroup>
     </div>
   );
 }

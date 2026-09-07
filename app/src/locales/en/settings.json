@@ -259,7 +259,8 @@
     "loading": "Loading settings…",
     "saved": "Settings saved.",
     "saveFailed": "Save failed: {{error}}",
-    "autoStartFailed": "Failed to update launch-at-login: {{error}}"
+    "autoStartFailed": "Failed to update launch-at-login: {{error}}",
+    "dirty": "Unsaved changes"
   },
   "validate": {
     "vaultPathRequired": "Enter the vault path.",
@@ -279,8 +280,10 @@
   },
   "projects": {
     "title": "Projects",
-    "desc": "Register repositories to work on, with their verify commands.",
-    "empty": "No registered projects.",
+    "desc": "Register repositories to work on. Pick folders and names fill in.",
+    "emptyHint": "No projects yet. Choose folders and names fill in automatically.",
+    "pickFolders": "Choose folders",
+    "advanced": "Advanced",
     "namePlaceholder": "Project name",
     "nameAria": "Project name",
     "deleteAria": "Delete {{name}}",

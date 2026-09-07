@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { useTranslation } from "react-i18next";
 
 import { getLanguage, setLanguage, type Language } from "@/i18n";
-import { SectionCard, SettingRow } from "./parts";
+import { SettingsGroup, SettingRow } from "./parts";
 
 export default function AppSection({
   draft,
@@ -19,7 +19,7 @@ export default function AppSection({
   const { t } = useTranslation("common");
   const { t: ts } = useTranslation("settings");
   return (
-    <SectionCard>
+    <SettingsGroup>
       <div className="divide-y divide-border">
         <SettingRow
           label={t("language")}
@@ -49,6 +49,6 @@ export default function AppSection({
           }
         />
       </div>
-    </SectionCard>
+    </SettingsGroup>
   );
 }

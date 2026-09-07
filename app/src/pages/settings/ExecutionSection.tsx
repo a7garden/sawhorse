@@ -16,7 +16,7 @@ import {
   PERMISSION_OPTIONS,
   clampInt,
 } from "./constants";
-import { SectionCard, SettingRow } from "./parts";
+import { SettingsGroup, SettingRow } from "./parts";
 
 export default function ExecutionSection({
   draft,
@@ -27,11 +27,8 @@ export default function ExecutionSection({
 }) {
   const { t } = useTranslation("settings");
   return (
-    <div className="space-y-4">
-      <SectionCard
-        title={t("exec.runOptions")}
-        desc={t("exec.runOptionsDesc")}
-      >
+    <div className="space-y-6">
+      <SettingsGroup title={t("exec.runOptions")} desc={t("exec.runOptionsDesc")}>
         <div className="divide-y divide-border">
           <SettingRow
             stacked
@@ -72,9 +69,9 @@ export default function ExecutionSection({
             }
           />
         </div>
-      </SectionCard>
+      </SettingsGroup>
 
-      <SectionCard title={t("exec.herdrTitle")} desc={t("exec.herdrDesc")}>
+      <SettingsGroup title={t("exec.herdrTitle")} desc={t("exec.herdrDesc")}>
         <div className="divide-y divide-border">
           <SettingRow
             stacked
@@ -239,12 +236,12 @@ export default function ExecutionSection({
             }
           />
         </div>
-        <p className="mt-3 border-t pt-3 text-xs leading-snug text-muted-foreground">
+        <p className="mt-3 text-xs leading-snug text-muted-foreground">
           {t("exec.workspaceHint", {
             workspace: draft.dashboard.herdr.workspaceLabel,
           })}
         </p>
-      </SectionCard>
+      </SettingsGroup>
     </div>
   );
 }

@@ -246,6 +246,11 @@ export default function SettingsPage() {
   return (
     <div>
       <PageHeader title={t("page.title")}>
+        {dirty && (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 text-[11px] font-medium text-brand">
+            {t("page.dirty")}
+          </span>
+        )}
         <Button size="sm" variant="ghost" onClick={openWizard}>
           {t("page.wizard")}
         </Button>
@@ -284,10 +289,11 @@ export default function SettingsPage() {
       ) : (
         <div className="flex items-start">
           {/* 섹션 레일. 앵커 내비 — 누르면 해당 섹션으로 스크롤하고, 스크롤 위치를
-              따라 현재 섹션을 밝힌다. 진단에 문항이 있으면 점을 찍어 눈길을 끈다. */}
+              따라 현재 섹션을 밝힌다. 목차만 말하고 설명은 본문 머리에 한 번만 둔다.
+              진단에 문항이 있으면 점을 찍어 눈길을 끈다. */}
           <nav
             aria-label={t("page.title")}
-            className="sticky top-[58px] hidden max-h-[calc(100dvh-58px)] w-52 shrink-0 flex-col gap-0.5 self-start overflow-y-auto border-r p-3 md:flex"
+            className="sticky top-[58px] hidden max-h-[calc(100dvh-58px)] w-36 shrink-0 flex-col gap-0.5 self-start overflow-y-auto border-r p-3 md:flex"
           >
             {SECTION_IDS.map((id) => {
               const Icon = SECTION_ICONS[id];
@@ -298,27 +304,22 @@ export default function SettingsPage() {
                   aria-current={active === id ? "location" : undefined}
                   onClick={() => scrollToSection(id)}
                   className={cn(
-                    "flex items-start gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors",
+                    "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors",
                     active === id
-                      ? "bg-secondary text-secondary-foreground"
+                      ? "bg-secondary font-medium text-secondary-foreground"
                       : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
                   )}
                 >
-                  <Icon className="mt-0.5 size-3.5 shrink-0" />
-                  <span className="min-w-0">
-                    <span className="flex items-center gap-1.5 text-[13px] font-medium leading-tight">
-                      {t(`sections.${id}`)}
-                      {id === "diagnostics" && diagProblem && (
-                        <span
-                          className="size-1.5 shrink-0 rounded-full bg-warning"
-                          aria-hidden
-                        />
-                      )}
-                    </span>
-                    <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">
-                      {t(`sectionsDesc.${id}`)}
-                    </span>
+                  <Icon className="size-3.5 shrink-0" />
+                  <span className="min-w-0 flex-1 leading-tight">
+                    {t(`sections.${id}`)}
                   </span>
+                  {id === "diagnostics" && diagProblem && (
+                    <span
+                      className="size-1.5 shrink-0 rounded-full bg-warning"
+                      aria-hidden
+                    />
+                  )}
                 </button>
               );
             })}
@@ -337,7 +338,7 @@ export default function SettingsPage() {
                   ref={(el) => {
                     sectionEls.current[id] = el;
                   }}
-                  className="space-y-3 border-t pt-5 first:border-t-0 first:pt-0"
+                  className="space-y-4 border-t pt-6 first:border-t-0 first:pt-0"
                 >
                   <SectionHeader
                     title={t(`sections.${id}`)}
