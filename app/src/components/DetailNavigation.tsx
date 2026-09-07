@@ -1,14 +1,16 @@
+import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
 import { useApp } from "@/lib/store";
 
-const parents: Record<string, { page: string; label: string }> = {
-  workflows: { page: "packs", label: "확장 관리" },
-  schemas: { page: "settings", label: "설정" },
-  onboarding: { page: "projects", label: "프로젝트" },
-  sources: { page: "reading", label: "읽을거리" },
+const parents: Record<string, { page: string; labelKey: string }> = {
+  workflows: { page: "packs", labelKey: "nav.back.workflows" },
+  schemas: { page: "settings", labelKey: "nav.back.schemas" },
+  onboarding: { page: "projects", labelKey: "nav.back.onboarding" },
+  sources: { page: "reading", labelKey: "nav.back.sources" },
 };
 export function DetailNavigation() {
   const page = useApp((s) => s.page);
+  const { t } = useTranslation("common");
   const parent = parents[page];
   if (!parent) return null;
   return (
@@ -25,7 +27,7 @@ export function DetailNavigation() {
         }}
       >
         <ArrowLeft size={14} />
-        {parent.label}으로 돌아가기
+        {t(parent.labelKey)}
       </button>
     </div>
   );

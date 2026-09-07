@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "./button";
@@ -19,6 +20,7 @@ export function Dialog({
   wide?: boolean;
 }) {
   const titleId = React.useId();
+  const { t } = useTranslation("common");
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -49,7 +51,7 @@ export function Dialog({
                 variant="ghost"
                 size="icon"
                 onClick={onClose}
-                aria-label="닫기"
+                aria-label={t("dialog.close")}
               >
                 <X />
               </Button>

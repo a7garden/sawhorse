@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { Button } from "./ui/button";
@@ -32,18 +33,18 @@ export function ExtensionMarketplace({
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const { t } = useTranslation("common");
   return (
     <details className="border-b p-4">
       <summary className="cursor-pointer text-sm font-medium">
-        마켓플레이스 연결
+        {t("market.connect")}
       </summary>
       <p className="my-2 text-xs text-muted-foreground">
-        Sawhorse 카탈로그 주소를 연결해 기능·워크플로·스킬 패키지를 찾아
-        설치하세요.
+        {t("market.connectDesc")}
       </p>
       <div className="flex gap-2">
         <Input
-          aria-label="마켓플레이스 주소"
+          aria-label={t("market.urlAria")}
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="https://example.com/sawhorse-catalog.json"
@@ -72,7 +73,7 @@ export function ExtensionMarketplace({
             }
           }}
         >
-          목록 불러오기
+          {t("market.loadCatalog")}
         </Button>
       </div>
       {message && (
@@ -96,18 +97,16 @@ export function ExtensionMarketplace({
                   variant="outline"
                   onClick={() => {
                     onChoose(item.source);
-                    setMessage(
-                      `${item.name}을 선택했습니다. 아래에서 패키지를 검증·설치하세요.`,
-                    );
+                    setMessage(t("market.chosen", { name: item.name }));
                   }}
                 >
-                  설치할 패키지 선택
+                  {t("market.choosePackage")}
                 </Button>
               </article>
             ))}
           </div>
           {!catalog.packages.length && (
-            <p className="py-4 text-xs">등록된 패키지가 없습니다.</p>
+            <p className="py-4 text-xs">{t("market.noPackages")}</p>
           )}
         </div>
       )}

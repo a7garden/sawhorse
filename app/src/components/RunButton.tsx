@@ -10,6 +10,7 @@ import { activeJob } from "@/lib/jobs";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "react-i18next";
 
 export function RunButton({
   jobKey,
@@ -41,6 +42,7 @@ export function RunButton({
   const job = activeJob(jobs, jobKey);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const [busy, setBusy] = useState(false);
+  const { t } = useTranslation("common");
 
   async function click() {
     setBusy(true);
@@ -62,7 +64,7 @@ export function RunButton({
       variant={job ? "secondary" : variant}
       disabled={busy || (!job && disabled)}
       aria-label={ariaLabel || label || undefined}
-      title={job ? "실행 중입니다. 누르면 중단합니다." : title}
+      title={job ? t("toolbar.stopHint") : title}
       className={cn(className)}
       onClick={(event) => {
         event.stopPropagation();
@@ -76,7 +78,7 @@ export function RunButton({
       ) : (
         (icon ?? <Play />)
       )}
-      {job ? (running ? "실행 중 · 중단" : "대기 중 · 취소") : label}
+      {job ? (running ? t("toolbar.runningStop") : t("toolbar.pendingCancel")) : label}
     </Button>
   );
 }

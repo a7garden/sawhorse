@@ -1,3 +1,76 @@
 {
-  "language": "Language"
+  "language": "Language",
+  "nav": {
+    "section": { "work": "Workspace", "vault": "Vault", "reading": "Extensions" },
+    "overview": "Workbench",
+    "board": "Develop",
+    "taskLibrary": "Automation",
+    "calendar": "Calendar",
+    "projects": "Projects",
+    "issues": "Issues",
+    "terminal": "Agents",
+    "docs": "All docs",
+    "todos": "Todos",
+    "reading": "Reading",
+    "github": "GitHub",
+    "packs": "Extensions",
+    "settings": "Settings",
+    "tab": {
+      "taskLibrary": "Automation jobs",
+      "tasks": "Schedules & repeats",
+      "terminal": "Agent terminal",
+      "harness": "Dev runs",
+      "sessions": "Collab sessions",
+      "jobs": "Run history",
+      "review": "Review"
+    },
+    "other": "Other",
+    "back": {
+      "workflows": "Back to Extensions",
+      "schemas": "Back to Settings",
+      "onboarding": "Back to Projects",
+      "sources": "Back to Reading"
+    },
+    "theme": { "light": "Light", "dark": "Dark", "system": "System" },
+    "themeTitle": "Theme: {{theme}} (click to switch)",
+    "themeToggle": "Toggle theme",
+    "viewPicker": "View picker",
+    "previewNotice": "Browser preview · Sample data is stored in this browser only. Connect real agents and files from the desktop app."
+  },
+  "toolbar": {
+    "search": "Search everything",
+    "notifications": "Notifications",
+    "notificationsUnread": "Notifications · {{count}} unread",
+    "markAllRead": "Mark all read",
+    "noNotifications": "No new notifications.",
+    "pendingChange": "Review the pending automation job change.",
+    "waitingInput": "Waiting for your input.",
+    "reviewRun": "Review the run results.",
+    "runFailed": "The run failed.",
+    "jobFailed": "Run failed",
+    "jobFinished": "Run finished.",
+    "missedRun": "Missed scheduled run {{date}} {{time}}.",
+    "brokenPack": "Failed to load extension",
+    "runningStop": "Running · Stop",
+    "pendingCancel": "Pending · Cancel",
+    "stopHint": "Running. Click to stop."
+  },
+  "market": {
+    "connect": "Connect marketplace",
+    "connectDesc": "Connect a Sawhorse catalog URL to find and install feature, workflow, and skill packages.",
+    "urlAria": "Marketplace URL",
+    "loadCatalog": "Load catalog",
+    "chosen": "Selected {{name}}. Verify and install the package below.",
+    "choosePackage": "Choose package",
+    "noPackages": "No packages registered."
+  },
+  "browse": {
+    "desktopOnly": "The file picker is available in the desktop app.",
+    "pickFolder": "Choose folder",
+    "pickFile": "Choose file"
+  },
+  "toast": { "dismiss": "Dismiss notification" },
+  "dialog": { "close": "Close" },
+  "api": { "desktopOnly": "Open in the Sawhorse desktop app." },
+  "markdown": { "embed": "[Embed] {{inner}}" }
 }

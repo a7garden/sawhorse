@@ -1,4 +1,5 @@
 import * as React from "react";
+import { useTranslation } from "react-i18next";
 import { AlertCircle, CheckCircle2, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -81,6 +82,7 @@ const TONE_CLASS: Record<ToastTone, string> = {
 
 /** 앱 최상단에 한 번만 올려 둔다. */
 export function Toaster() {
+  const { t } = useTranslation("common");
   const toasts = useToasts();
   return (
     <div
@@ -104,7 +106,7 @@ export function Toaster() {
             </span>
             <button
               onClick={() => dismissToast(item.id)}
-              aria-label="알림 닫기"
+              aria-label={t("toast.dismiss")}
               className="-mr-1 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
             >
               <X className="size-3.5" />

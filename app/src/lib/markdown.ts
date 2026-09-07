@@ -1,3 +1,4 @@
+import i18n from "@/i18n";
 // Pre-process Obsidian-flavored markdown for react-markdown rendering:
 // - ![[image.png]] → real image node (MarkdownView resolves the file)
 // - ![[embed]] of anything else → chip placeholder
@@ -15,7 +16,7 @@ export function preprocessObsidianMd(src: string): string {
       // An angle-bracket destination keeps spaces and parens in file names intact.
       return `![${alt}](<${file.replace(/[<>]/g, "")}>)`;
     }
-    return `\`[임베드] ${inner}\``;
+    return `\`${i18n.t("common:markdown.embed", { inner })}\``;
   });
   return embed.replace(
     /\[\[([^\]|]+)(\|[^\]]+)?\]\]/g,

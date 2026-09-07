@@ -1,4 +1,5 @@
 import { invoke as tauriInvoke, isTauri } from "@tauri-apps/api/core";
+import i18n from "@/i18n";
 async function invoke<T>(
   command: string,
   args?: Record<string, unknown>,
@@ -10,7 +11,7 @@ async function invoke<T>(
     const { corePreview } = await import("./core-preview");
     return corePreview(command, args) as Promise<T>;
   }
-  if (!isTauri()) throw new Error("Sawhorse 데스크톱 앱에서 열어 주세요.");
+  if (!isTauri()) throw new Error(i18n.t("common:api.desktopOnly"));
   return tauriInvoke<T>(command, args);
 }
 import type {

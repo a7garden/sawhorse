@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
 import { sddApi } from "@/features/workbench/api";
 import type { HarnessRun } from "@/features/workbench/types";
@@ -11,6 +12,7 @@ import { Button } from "./ui/button";
 import WorkbenchPage from "@/features/workbench/WorkbenchPage";
 
 export function AppToolbar() {
+  const { t } = useTranslation("common");
   const [runs, setRuns] = useState<HarnessRun[]>([]);
   const [pending, setPending] = useState<PendingTaskRequest[]>([]);
   useEffect(() => {
@@ -85,7 +87,7 @@ export function AppToolbar() {
     ...pending.map((p) => ({
       id: `pending:${p.id}`,
       title: p.targetTitle,
-      text: "자동화 작업 변경 요청을 검토해 주세요.",
+      text: t("toolbar.pendingChange"),
       page: "task-library",
     })),
     ...runs
@@ -96,10 +98,10 @@ export function AppToolbar() {
         text:
           r.error ??
           (r.status === "blocked"
-            ? "사용자의 입력을 기다리고 있습니다."
+            ? t("toolbar.waitingInput")
             : r.status === "review"
-              ? "실행 결과를 검토해 주세요."
-              : "실행에 실패했습니다."),
+              ? t("toolbar.reviewRun")
+              : t("toolbar.runFailed")),
         page: "harness",
       })),
     ...jobs
@@ -109,18 +111,18 @@ export function AppToolbar() {
         title: j.label,
         text:
           j.error ||
-          (j.status === "failed" ? "실행 실패" : "실행이 종료되었습니다."),
+          (j.status === "failed" ? t("toolbar.jobFailed") : t("toolbar.jobFinished")),
         page: "jobs",
       })),
     ...missed.map((m) => ({
       id: `missed:${m.key}`,
       title: m.label ?? m.routine,
-      text: `${m.date} ${m.scheduledAt} 예약 실행을 놓쳤습니다.`,
+      text: t("toolbar.missedRun", { date: m.date, time: m.scheduledAt }),
       page: "tasks",
     })),
     ...(packs?.broken ?? []).map((p) => ({
       id: `pack:${p.dir}:${p.error}`,
-      title: "확장을 불러오지 못했습니다",
+      title: t("toolbar.brokenPack"),
       text: p.error,
       page: "packs",
     })),
@@ -142,12 +144,16 @@ export function AppToolbar() {
           className="flex items-center gap-2 text-xs text-muted-foreground"
           onClick={() => setSearch(true)}
         >
-          <Search size={15} /> 전체 검색{" "}
+          <Search size={15} /> {t("toolbar.search")}{" "}
           <kbd className="ml-6 rounded border px-1.5 py-0.5">⌘ / Ctrl K</kbd>
         </button>
         <button
           className="relative rounded-md p-2 hover:bg-accent"
-          aria-label={`알림센터${unread ? ` · 읽지 않은 알림 ${unread}개` : ""}`}
+          aria-label={
+            unread
+              ? t("toolbar.notificationsUnread", { count: unread })
+              : t("toolbar.notifications")
+          }
           onClick={() => setNotifications(true)}
         >
           <Bell size={17} />
@@ -168,7 +174,7 @@ export function AppToolbar() {
           )
             setSearch(false);
         }}
-        title="전체 검색"
+        title={t("toolbar.search")}
         className="max-w-5xl"
       >
         <WorkbenchPage view="knowledge" />
@@ -176,7 +182,7 @@ export function AppToolbar() {
       <Dialog
         open={notifications}
         onClose={() => setNotifications(false)}
-        title="알림센터"
+        title={t("toolbar.notifications")}
         className="absolute right-5 top-16 max-w-md"
       >
         <div className="mb-3 flex justify-end">
@@ -185,12 +191,12 @@ export function AppToolbar() {
             variant="ghost"
             onClick={() => mark(items.map((i) => i.id))}
           >
-            모두 읽음
+            {t("toolbar.markAllRead")}
           </Button>
         </div>
         {!items.length && (
           <p className="py-10 text-center text-sm text-muted-foreground">
-            새 알림이 없습니다.
+            {t("toolbar.noNotifications")}
           </p>
         )}
         {items.map((item) => (

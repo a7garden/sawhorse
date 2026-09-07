@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
 import {
   CalendarDays,
@@ -50,56 +51,56 @@ import { Toaster } from "@/components/ui/toast";
 import SetupWizard from "@/pages/SetupWizard";
 
 /** 사이드바 섹션 — 호스트가 섹션 목록·순서를 소유하고, 팩 뷰는 group 태그로 섹션을 고른다. */
-const SECTIONS = [
-  { id: "work", label: "작업공간" },
-  { id: "vault", label: "볼트" },
-  { id: "reading", label: "확장 기능" },
+const SECTIONS: { id: string; labelKey: string }[] = [
+  { id: "work", labelKey: "nav.section.work" },
+  { id: "vault", labelKey: "nav.section.vault" },
+  { id: "reading", labelKey: "nav.section.reading" },
 ];
 const TOP_NAV: {
   id: PageId;
-  label: string;
+  labelKey: string;
   icon: IconComponent;
   group: string;
 }[] = [
-  { id: "overview", label: "작업대", icon: LayoutDashboard, group: "work" },
+  { id: "overview", labelKey: "nav.overview", icon: LayoutDashboard, group: "work" },
   // 개발 = intent.md 로 시작하는 SDLC 단위(WorkItem).
   // 자동화 = 저장해 둔 자동화 작업(TaskDef). 저장 형식도 수명주기도 다르므로 갈라 둔다.
-  { id: "board", label: "개발", icon: KanbanSquare, group: "work" },
-  { id: "task-library", label: "자동화", icon: Repeat, group: "work" },
-  { id: "calendar", label: "캘린더", icon: CalendarDays, group: "work" },
-  { id: "projects", label: "프로젝트", icon: FolderGit2, group: "work" },
-  { id: "issues", label: "이슈", icon: CircleDot, group: "work" },
+  { id: "board", labelKey: "nav.board", icon: KanbanSquare, group: "work" },
+  { id: "task-library", labelKey: "nav.taskLibrary", icon: Repeat, group: "work" },
+  { id: "calendar", labelKey: "nav.calendar", icon: CalendarDays, group: "work" },
+  { id: "projects", labelKey: "nav.projects", icon: FolderGit2, group: "work" },
+  { id: "issues", labelKey: "nav.issues", icon: CircleDot, group: "work" },
   // `실행` 은 잡·하네스 런 한 가지만 가리킨다. 진입점 이름까지 실행이면 여섯 개가
   // 같은 낱말을 쓴다.
-  { id: "terminal", label: "에이전트", icon: Terminal, group: "work" },
-  { id: "docs", label: "모든 문서", icon: FileText, group: "vault" },
-  { id: "todos", label: "할 일", icon: SquareCheckBig, group: "vault" },
-  { id: "reading", label: "읽을거리", icon: Newspaper, group: "reading" },
-  { id: "github", label: "GitHub", icon: Github, group: "reading" },
-  { id: "packs", label: "확장 관리", icon: Puzzle, group: "reading" },
+  { id: "terminal", labelKey: "nav.terminal", icon: Terminal, group: "work" },
+  { id: "docs", labelKey: "nav.docs", icon: FileText, group: "vault" },
+  { id: "todos", labelKey: "nav.todos", icon: SquareCheckBig, group: "vault" },
+  { id: "reading", labelKey: "nav.reading", icon: Newspaper, group: "reading" },
+  { id: "github", labelKey: "nav.github", icon: Github, group: "reading" },
+  { id: "packs", labelKey: "nav.packs", icon: Puzzle, group: "reading" },
 ];
 const PAGE_GROUPS = [
   {
     root: "task-library",
     tabs: [
-      { id: "task-library", label: "자동화 작업" },
-      { id: "tasks", label: "예약과 반복" },
+      { id: "task-library", labelKey: "nav.tab.taskLibrary" },
+      { id: "tasks", labelKey: "nav.tab.tasks" },
     ],
   },
   {
     root: "terminal",
     tabs: [
-      { id: "terminal", label: "에이전트 터미널" },
-      { id: "harness", label: "개발 실행" },
-      { id: "sessions", label: "협업 세션" },
-      { id: "jobs", label: "실행 기록" },
-      { id: "review", label: "검토" },
+      { id: "terminal", labelKey: "nav.tab.terminal" },
+      { id: "harness", labelKey: "nav.tab.harness" },
+      { id: "sessions", labelKey: "nav.tab.sessions" },
+      { id: "jobs", labelKey: "nav.tab.jobs" },
+      { id: "review", labelKey: "nav.tab.review" },
     ],
   },
 ];
 
-const BOTTOM_NAV: { id: PageId; label: string; icon: IconComponent }[] = [
-  { id: "settings", label: "설정", icon: Settings },
+const BOTTOM_NAV: { id: PageId; labelKey: string; icon: IconComponent }[] = [
+  { id: "settings", labelKey: "nav.settings", icon: Settings },
 ];
 
 /** 선언형 뷰로 옮기지 않은 화면들. 팩이 `type: native` 로 이 이름을 가리킨다. */
@@ -110,10 +111,10 @@ const NATIVE: Record<string, () => JSX.Element> = {
   vault: VaultPage,
 };
 
-const THEME_LABEL: Record<Theme, string> = {
-  light: "라이트",
-  dark: "다크",
-  system: "시스템",
+const THEME_KEY: Record<Theme, string> = {
+  light: "theme.light",
+  dark: "theme.dark",
+  system: "theme.system",
 };
 
 export default function App() {
@@ -121,9 +122,10 @@ export default function App() {
   const setPage = useApp((s) => s.setPage);
   const init = useApp((s) => s.init);
   const nav = useApp((s) => s.nav);
+  const { t } = useTranslation("common");
   const coreExtensions = useCoreExtensions();
   const groups = PAGE_GROUPS;
-  const group = groups.find((g) => g.tabs.some((t) => t.id === page));
+  const group = groups.find((g) => g.tabs.some((tab) => tab.id === page));
   const brokenCount = useApp((s) => s.packs?.broken.length ?? 0);
   const [version, setVersion] = useState("");
   const theme = useTheme((s) => s.theme);
@@ -256,7 +258,7 @@ export default function App() {
           </div>
         </div>
         <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-          {SECTIONS.map(({ id, label }, index) => {
+          {SECTIONS.map(({ id, labelKey }, index) => {
             const core = TOP_NAV.filter(
               (n) =>
                 n.group === id &&
@@ -285,13 +287,13 @@ export default function App() {
                       : "mb-1 mt-4 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground"
                   }
                 >
-                  {label}
+                  {t(labelKey)}
                 </div>
                 {core.map((n) => (
                   <NavButton
                     key={n.id}
                     id={n.id}
-                    label={n.label}
+                    label={t(n.labelKey)}
                     Icon={n.icon}
                   />
                 ))}
@@ -314,7 +316,7 @@ export default function App() {
           ) && (
             <Fragment>
               <div className="mb-1 mt-4 px-2 text-[10px] font-semibold tracking-wider text-muted-foreground">
-                기타
+                {t("nav.other")}
               </div>
               {nav
                 .filter(
@@ -338,7 +340,7 @@ export default function App() {
             <NavButton
               key={n.id}
               id={n.id}
-              label={n.label}
+              label={t(n.labelKey)}
               Icon={n.icon}
               badge={n.id === "packs" ? brokenCount : undefined}
             />
@@ -350,8 +352,8 @@ export default function App() {
           </div>
           <button
             onClick={cycleTheme}
-            title={`테마: ${THEME_LABEL[theme]} (클릭하여 전환)`}
-            aria-label="테마 전환"
+            title={t("nav.themeTitle", { theme: t(THEME_KEY[theme]) })}
+            aria-label={t("nav.themeToggle")}
             className="rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-accent-foreground"
           >
             {theme === "system" ? (
@@ -370,7 +372,7 @@ export default function App() {
         {group && (
           <div
             className="flex shrink-0 flex-wrap gap-1 border-b bg-background px-5 py-2"
-            aria-label="화면 선택"
+            aria-label={t("nav.viewPicker")}
           >
             {group.tabs.map((tab) => (
               <button
@@ -391,7 +393,7 @@ export default function App() {
                     setPage(tab.id);
                 }}
               >
-                {tab.label}
+                {t(tab.labelKey)}
               </button>
             ))}
           </div>
@@ -399,8 +401,7 @@ export default function App() {
         <div className="min-h-0 flex-1 overflow-y-auto">
           {isWorkbenchPreview && (
             <div className="border-b border-amber-300 bg-amber-50 px-5 py-2 text-xs text-amber-900">
-              브라우저 체험 · 예제 데이터는 이 브라우저에만 저장됩니다. 실제
-              에이전트와 파일은 데스크톱 앱에서 연결됩니다.
+              {t("nav.previewNotice")}
             </div>
           )}
           {body}

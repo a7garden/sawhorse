@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { useState, type InputHTMLAttributes } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { isTauri } from "@tauri-apps/api/core";
@@ -18,6 +19,7 @@ export function BrowseButton({
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const { t } = useTranslation("common");
   return (
     <span className="inline-flex flex-col gap-1">
       <Button
@@ -28,7 +30,7 @@ export function BrowseButton({
         onClick={async () => {
           setError("");
           if (!isTauri()) {
-            setError("파일 탐색기는 데스크톱 앱에서 사용할 수 있습니다.");
+            setError(t("browse.desktopOnly"));
             return;
           }
           setBusy(true);
@@ -36,7 +38,7 @@ export function BrowseButton({
             const result = await open({
               directory,
               multiple,
-              title: directory ? "폴더 선택" : "파일 선택",
+              title: directory ? t("browse.pickFolder") : t("browse.pickFile"),
             });
             if (result) onSelect(Array.isArray(result) ? result : [result]);
           } catch (error) {
@@ -47,7 +49,7 @@ export function BrowseButton({
         }}
       >
         <FolderOpen />
-        {label ?? (directory ? "폴더 선택" : "파일 선택")}
+        {label ?? (directory ? t("browse.pickFolder") : t("browse.pickFile"))}
       </Button>
       {error && (
         <small role="alert" className="text-destructive">

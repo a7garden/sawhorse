@@ -1,3 +1,76 @@
 {
-  "language": "언어"
+  "language": "언어",
+  "nav": {
+    "section": { "work": "작업공간", "vault": "볼트", "reading": "확장 기능" },
+    "overview": "작업대",
+    "board": "개발",
+    "taskLibrary": "자동화",
+    "calendar": "캘린더",
+    "projects": "프로젝트",
+    "issues": "이슈",
+    "terminal": "에이전트",
+    "docs": "모든 문서",
+    "todos": "할 일",
+    "reading": "읽을거리",
+    "github": "GitHub",
+    "packs": "확장 관리",
+    "settings": "설정",
+    "tab": {
+      "taskLibrary": "자동화 작업",
+      "tasks": "예약과 반복",
+      "terminal": "에이전트 터미널",
+      "harness": "개발 실행",
+      "sessions": "협업 세션",
+      "jobs": "실행 기록",
+      "review": "검토"
+    },
+    "other": "기타",
+    "back": {
+      "workflows": "확장 관리으로 돌아가기",
+      "schemas": "설정으로 돌아가기",
+      "onboarding": "프로젝트으로 돌아가기",
+      "sources": "읽을거리으로 돌아가기"
+    },
+    "theme": { "light": "라이트", "dark": "다크", "system": "시스템" },
+    "themeTitle": "테마: {{theme}} (클릭하여 전환)",
+    "themeToggle": "테마 전환",
+    "viewPicker": "화면 선택",
+    "previewNotice": "브라우저 체험 · 예제 데이터는 이 브라우저에만 저장됩니다. 실제 에이전트와 파일은 데스크톱 앱에서 연결됩니다."
+  },
+  "toolbar": {
+    "search": "전체 검색",
+    "notifications": "알림센터",
+    "notificationsUnread": "알림센터 · 읽지 않은 알림 {{count}}개",
+    "markAllRead": "모두 읽음",
+    "noNotifications": "새 알림이 없습니다.",
+    "pendingChange": "자동화 작업 변경 요청을 검토해 주세요.",
+    "waitingInput": "사용자의 입력을 기다리고 있습니다.",
+    "reviewRun": "실행 결과를 검토해 주세요.",
+    "runFailed": "실행에 실패했습니다.",
+    "jobFailed": "실행 실패",
+    "jobFinished": "실행이 종료되었습니다.",
+    "missedRun": "{{date}} {{time}} 예약 실행을 놓쳤습니다.",
+    "brokenPack": "확장을 불러오지 못했습니다",
+    "runningStop": "실행 중 · 중단",
+    "pendingCancel": "대기 중 · 취소",
+    "stopHint": "실행 중입니다. 누르면 중단합니다."
+  },
+  "market": {
+    "connect": "마켓플레이스 연결",
+    "connectDesc": "Sawhorse 카탈로그 주소를 연결해 기능·워크플로·스킬 패키지를 찾아 설치하세요.",
+    "urlAria": "마켓플레이스 주소",
+    "loadCatalog": "목록 불러오기",
+    "chosen": "{{name}}을 선택했습니다. 아래에서 패키지를 검증·설치하세요.",
+    "choosePackage": "설치할 패키지 선택",
+    "noPackages": "등록된 패키지가 없습니다."
+  },
+  "browse": {
+    "desktopOnly": "파일 탐색기는 데스크톱 앱에서 사용할 수 있습니다.",
+    "pickFolder": "폴더 선택",
+    "pickFile": "파일 선택"
+  },
+  "toast": { "dismiss": "알림 닫기" },
+  "dialog": { "close": "닫기" },
+  "api": { "desktopOnly": "Sawhorse 데스크톱 앱에서 열어 주세요." },
+  "markdown": { "embed": "[임베드] {{inner}}" }
 }
