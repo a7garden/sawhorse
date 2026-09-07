@@ -1,16 +1,11 @@
 //! Durable SDD harness runs.
 //!
-//! This module deliberately keeps the Herdr process as the source of truth for a
-//! live pane, while the vault is the source of truth for ownership and history.
-//! A run is written before any external process is touched, so a desktop restart
-//! can safely reattach using the recorded session, agent name, kind, and pane.
-
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::{LazyLock, Mutex, OnceLock},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use chrono::Utc;
@@ -556,7 +551,7 @@ Permitted deliverable for this role:\n{deliverable}\n\n\
 Workflow node instructions:\n{node_instructions}\n\n\
 Instructions from the user:\n{instructions}\n\n\
 Write real, durable evidence in the permitted canonical artifact files; terminal output alone is not a deliverable.\n\
-Never change work.md stage/status/decisions, project metadata, schema, or any host-managed run identity to bypass a gate.\n\
+Never change work.md stage/status/decisions, approved-design.json, project metadata, schema, or any host-managed run identity to bypass a gate.\n\
 Do not deploy, merge, or approve any dialog. If an approval/question is shown, stop and leave it for human review.\n\
 When your turn becomes idle or done, it will be marked review; it is not verification passed.\n\
 The matching Sawhorse workflow skill is available at {skill}; follow its artifact/evidence rules.\n\
@@ -604,6 +599,16 @@ fn launch_gate(root: &Path, input: &LaunchInput) -> Result<LaunchContext, String
         .iter()
         .find(|work| work.id == input.work_id)
         .ok_or_else(|| "작업을 찾을 수 없습니다".to_string())?;
+    if matches!(
+        work.status.as_str(),
+        "done" | "rejected" | "cancelled" | "blocked" | "review"
+    ) {
+        return Err(
+            "종료·보류·결과 검토 중인 작업은 실행할 수 없습니다. 작업 상세에서 다음 결정을 하세요"
+                .into(),
+        );
+    }
+    sdlc::ensure_intent_approval(root, work)?;
     if work.project_id != input.project_id {
         return Err("작업과 프로젝트가 일치하지 않습니다".into());
     }
@@ -1826,21 +1831,32 @@ fn recent_models(root: &Path, agent: &str) -> Vec<String> {
         .collect()
 }
 
-fn agent_models_at(root: &Path, agent: &str) -> AgentModels {
-    let mut options: Vec<ModelOption> = Vec::new();
-    if let Some((_, catalog)) = crate::agents::MODEL_CATALOGS
+fn catalog_of(agent: &str) -> &'static [crate::agents::ModelSpec] {
+    crate::agents::MODEL_CATALOGS
         .iter()
         .find(|(id, _)| *id == agent)
-    {
-        for spec in *catalog {
-            options.push(ModelOption {
+        .map(|(_, catalog)| *catalog)
+        .unwrap_or(&[])
+}
+
+/// 카탈로그(라이브 우선, 없으면 정본)와 최근 사용을 한 목록으로 합친다.
+/// 최근 사용은 어디까지나 보조라서 중복은 걸러낸다.
+fn agent_models_from_parts(
+    live: Option<Vec<ModelOption>>,
+    catalog: &[crate::agents::ModelSpec],
+    recent: Vec<String>,
+) -> AgentModels {
+    let mut options: Vec<ModelOption> = live.unwrap_or_else(|| {
+        catalog
+            .iter()
+            .map(|spec| ModelOption {
                 id: spec.id.to_string(),
                 label: spec.label.to_string(),
                 source: ModelSource::Catalog,
-            });
-        }
-    }
-    for model in recent_models(root, agent) {
+            })
+            .collect()
+    });
+    for model in recent {
         if options.iter().any(|option| option.id == model) {
             continue;
         }
@@ -1853,15 +1869,109 @@ fn agent_models_at(root: &Path, agent: &str) -> AgentModels {
     AgentModels { options }
 }
 
-/// 에이전트별 모델 선택지. 정본 카탈로그 먼저, 그 뒤에 최근 사용 순으로.
-/// vault 가 아직 초기화되지 않았어도 카탈로그는 답해야 한다 — recent 는 부가 정보다.
-#[tauri::command]
-pub fn agent_models(agent: String) -> Result<AgentModels, String> {
-    let agent = agent.trim().to_lowercase();
-    let models = match sdlc::vault_root() {
-        Ok(root) => agent_models_at(&root, &agent),
-        Err(_) => agent_models_at(Path::new(""), &agent),
+fn agent_models_at(root: &Path, agent: &str) -> AgentModels {
+    agent_models_from_parts(None, catalog_of(agent), recent_models(root, agent))
+}
+
+/// `codex debug models` 의 출력. 목록에 공개된 모델만 사용자에게 보인다.
+#[derive(Deserialize)]
+struct CodexCatalog {
+    #[serde(default)]
+    models: Vec<CodexModel>,
+}
+
+#[derive(Deserialize)]
+struct CodexModel {
+    slug: String,
+    #[serde(default)]
+    display_name: String,
+    #[serde(default)]
+    visibility: String,
+}
+
+/// 설치된 codex CLI 가 내려주는 모델 카탈로그(JSON)를 선택지로 바꾼다.
+/// `visibility` 가 `list` 인 것만 골라내고, 표시 이름이 없으면 slug 를 쓴다.
+fn codex_models_from_json(raw: &str) -> Vec<ModelOption> {
+    let Ok(catalog) = serde_json::from_str::<CodexCatalog>(raw.trim()) else {
+        return Vec::new();
     };
+    catalog
+        .models
+        .into_iter()
+        .filter(|model| model.visibility == "list" && !model.slug.trim().is_empty())
+        .map(|model| {
+            let label = if model.display_name.trim().is_empty() {
+                model.slug.clone()
+            } else {
+                model.display_name
+            };
+            ModelOption {
+                id: model.slug,
+                label,
+                source: ModelSource::Catalog,
+            }
+        })
+        .collect()
+}
+
+/// 라이브 카탈로그 캐시. CLI 스폰은 수백 ms 걸리므로 대화상자가 열릴 때마다
+/// 반복하지 않는다. 실패는 캐시하지 않는다 — 다음 조회에서 다시 시도한다.
+const LIVE_MODEL_TTL: Duration = Duration::from_secs(600);
+static LIVE_MODEL_CACHE: LazyLock<Mutex<HashMap<String, (Instant, AgentModels)>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// 설치된 codex CLI 에게 모델 카탈로그를 물어본다. CLI 가 없거나 깨졌거나
+/// 목록이 비면 None — 정본 카탈로그로 떨어진다.
+async fn probe_codex_models() -> Option<Vec<ModelOption>> {
+    let mut cmd = crate::spawn::platform_command_async("codex", &["debug", "models"]);
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    let output = tokio::time::timeout(PROBE_TIMEOUT, cmd.output())
+        .await
+        .ok()?
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let models = codex_models_from_json(&String::from_utf8_lossy(&output.stdout));
+    (!models.is_empty()).then_some(models)
+}
+
+/// 에이전트별 모델 선택지. codex 는 설치된 CLI 에게 라이브 카탈로그를 물어본다.
+/// CLI 가 없거나 실패하면 정본 카탈로그로 떨어진다. claude 는 모델 나열
+/// 커맨드가 없어 정본 카탈로그가 곧 목록이다. 최근 사용은 어느 쪽이든 보조로 붙는다.
+#[tauri::command]
+pub async fn agent_models(agent: String) -> Result<AgentModels, String> {
+    let agent = agent.trim().to_lowercase();
+    let cached = LIVE_MODEL_CACHE
+        .lock()
+        .map(|cache| {
+            cache
+                .get(&agent)
+                .filter(|(at, _)| at.elapsed() < LIVE_MODEL_TTL)
+                .map(|(_, models)| models.clone())
+        })
+        .unwrap_or(None);
+    if let Some(models) = cached {
+        return Ok(models);
+    }
+    let live = if agent == "codex" {
+        probe_codex_models().await
+    } else {
+        None
+    };
+    let recent = sdlc::vault_root()
+        .map(|root| recent_models(&root, &agent))
+        .unwrap_or_default();
+    let models = agent_models_from_parts(live, catalog_of(&agent), recent);
+    if !models.options.is_empty() {
+        if let Ok(mut cache) = LIVE_MODEL_CACHE.lock() {
+            cache.insert(agent.clone(), (Instant::now(), models.clone()));
+        }
+    }
     Ok(models)
 }
 
@@ -2005,6 +2115,21 @@ fn parse_analyze_output(raw: &str) -> Result<(String, Vec<String>), String> {
     Ok((description.to_string(), verify))
 }
 
+/// 분석 결과를 프로젝트에 반영한다. description 은 언제나 새 값으로 바꾸고,
+/// verifyCommands 는 비어 있을 때만 채운다 — 사용자가 손본 검증 명령을
+/// 배경 분석이 조용히 지우는 사고를 막는다.
+fn apply_analysis(
+    mut project: sdlc::Project,
+    description: String,
+    verify: Vec<String>,
+) -> sdlc::Project {
+    project.description = description;
+    if project.verify_commands.is_empty() && !verify.is_empty() {
+        project.verify_commands = verify;
+    }
+    project
+}
+
 struct AnalyzeOutput {
     stdout: String,
     stderr: String,
@@ -2014,7 +2139,9 @@ struct AnalyzeOutput {
 /// 커맨드를 타임아웃 180초로 돌린다. 타임아웃으로 미래가 버려질 때
 /// `kill_on_drop` 이 자식 프로세스도 함께 정리한다.
 async fn run_analyze_plan(plan: &AnalyzePlan) -> Result<AnalyzeOutput, String> {
-    let mut cmd = tokio::process::Command::new(plan.program);
+    // Windows 에서 codex·claude 는 npm 셈(.cmd)인 경우가 많아 직접 실행이
+    // 실패한다. 콘솔 창 억제까지 한 번에 처리하는 공용 스폰 입구를 쓴다.
+    let mut cmd = crate::spawn::platform_command_async(plan.program, &[]);
     cmd.args(&plan.args)
         .current_dir(&plan.cwd)
         .stdin(if plan.stdin_text.is_some() {
@@ -2075,8 +2202,7 @@ async fn analyze_project(project_id: String) -> Result<(String, Vec<String>), St
             project.repo_path.trim()
         ));
     }
-    let last_message =
-        std::env::temp_dir().join(format!("sawhorse-analyze-{}.md", Uuid::new_v4()));
+    let last_message = std::env::temp_dir().join(format!("sawhorse-analyze-{}.md", Uuid::new_v4()));
     let plan = analyze_plan(&project, &last_message);
     let output = match run_analyze_plan(&plan).await {
         Ok(output) => output,
@@ -2102,9 +2228,7 @@ async fn analyze_project(project_id: String) -> Result<(String, Vec<String>), St
         None => claude_result(&output.stdout)?,
     };
     let (description, verify) = parse_analyze_output(&raw)?;
-    // 방금 읽은 프로젝트를 그대로 되저장해 description 외의 필드가 보존된다.
-    let mut updated = project;
-    updated.description = description.clone();
+    let updated = apply_analysis(project, description.clone(), verify.clone());
     sdlc::save_project_at(&root, updated)?;
     Ok((description, verify))
 }
@@ -2620,8 +2744,95 @@ esac
             .filter(|option| option.source == ModelSource::Recent)
             .map(|option| option.id.as_str())
             .collect();
-        assert_eq!(recent, vec!["my-finetune"], "카탈로그에 있는 opus 는 중복 제거");
+        assert_eq!(
+            recent,
+            vec!["my-finetune"],
+            "카탈로그에 있는 opus 는 중복 제거"
+        );
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn codex_models_from_json_keeps_only_public_list_models() {
+        let raw = r#"{"models":[
+            {"slug":"gpt-6-astra","display_name":"GPT-6-Astra","visibility":"list"},
+            {"slug":"codex-auto-review","display_name":"Codex Auto Review","visibility":"hide"},
+            {"slug":"","display_name":"?","visibility":"list"},
+            {"slug":"no-display-name","visibility":"list"}
+        ]}"#;
+        let models = codex_models_from_json(raw);
+        assert_eq!(
+            models.iter().map(|m| m.id.as_str()).collect::<Vec<_>>(),
+            vec!["gpt-6-astra", "no-display-name"]
+        );
+        assert_eq!(models[0].label, "GPT-6-Astra");
+        assert_eq!(
+            models[1].label, "no-display-name",
+            "이름이 없으면 slug 로 보인다"
+        );
+        assert_eq!(models[0].source, ModelSource::Catalog);
+    }
+
+    #[test]
+    fn codex_models_from_json_rejects_garbage() {
+        assert!(codex_models_from_json("앞뒤가 안 맞는 답").is_empty());
+    }
+
+    #[test]
+    fn live_catalog_replaces_static_and_keeps_recent_append() {
+        let live = vec![ModelOption {
+            id: "gpt-6-astra".into(),
+            label: "GPT-6-Astra".into(),
+            source: ModelSource::Catalog,
+        }];
+        let models = agent_models_from_parts(
+            Some(live),
+            catalog_of("codex"),
+            vec!["gpt-6-astra".into(), "my-finetune".into()],
+        );
+        assert_eq!(
+            models
+                .options
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["gpt-6-astra", "my-finetune"],
+            "라이브 카탈로그가 정본을 대체하고 최근 사용은 중복 없이 붙는다"
+        );
+
+        let models = agent_models_from_parts(None, catalog_of("claude"), vec!["opus".into()]);
+        assert_eq!(
+            models
+                .options
+                .iter()
+                .map(|m| m.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["opus", "sonnet", "fable", "haiku"],
+            "라이브 목록이 없으면 정본 카탈로그로 떨어진다"
+        );
+    }
+
+    #[test]
+    fn apply_analysis_fills_empty_verify_only() {
+        let mut project = sdlc::Project {
+            description: "old".into(),
+            ..Default::default()
+        };
+        project = apply_analysis(project, "새 설명".into(), vec!["npm test".into()]);
+        assert_eq!(project.description, "새 설명");
+        assert_eq!(project.verify_commands, vec!["npm test"]);
+
+        let mut project = sdlc::Project {
+            description: "old".into(),
+            verify_commands: vec!["cargo test".into()],
+            ..Default::default()
+        };
+        project = apply_analysis(project, "새 설명".into(), vec!["npm test".into()]);
+        assert_eq!(
+            project.verify_commands,
+            vec!["cargo test"],
+            "손본 검증 명령은 보존한다"
+        );
     }
 
     #[test]
@@ -2651,9 +2862,15 @@ esac
                 ANALYZE_PROMPT,
             ]
         );
-        assert!(plan.stdin_text.is_none(), "codex 는 stdin 을 닫아야 대기하지 않는다");
+        assert!(
+            plan.stdin_text.is_none(),
+            "codex 는 stdin 을 닫아야 대기하지 않는다"
+        );
         assert_eq!(plan.cwd, PathBuf::from("/repo"));
-        assert_eq!(plan.last_message_path.as_deref(), Some(Path::new("/tmp/last.md")));
+        assert_eq!(
+            plan.last_message_path.as_deref(),
+            Some(Path::new("/tmp/last.md"))
+        );
 
         let plan = analyze_plan(&base("claude", "opus"), Path::new("/tmp/last.md"));
         assert_eq!(plan.program, "claude");
@@ -2670,7 +2887,10 @@ esac
             ]
         );
         assert_eq!(plan.stdin_text.as_deref(), Some(ANALYZE_PROMPT));
-        assert!(plan.last_message_path.is_none(), "claude 답은 stdout .result 로 온다");
+        assert!(
+            plan.last_message_path.is_none(),
+            "claude 답은 stdout .result 로 온다"
+        );
 
         // 기본 에이전트·모델이 비면 claude 로 가고 모델 플래그를 생략한다.
         let plan = analyze_plan(&base("", ""), Path::new("/tmp/last.md"));
@@ -2691,18 +2911,22 @@ esac
 
     #[test]
     fn analyze_parser_strips_code_fences_and_rejects_garbage() {
-        let (description, verify) =
-            parse_analyze_output("```json\n{\"description\":\"설명\",\"verifyCommands\":[\"a\",\" \"]}\n```")
-                .unwrap();
+        let (description, verify) = parse_analyze_output(
+            "```json\n{\"description\":\"설명\",\"verifyCommands\":[\"a\",\" \"]}\n```",
+        )
+        .unwrap();
         assert_eq!(description, "설명");
         assert_eq!(verify, vec!["a".to_string()], "빈 후보는 버린다");
 
         // 답 앞뒤로 잡답이 섞여도 JSON 만 뽑는다.
-        let (description, _) = parse_analyze_output("여기 결과입니다:\n{\"description\":\"  설명  \"}")
-            .unwrap();
+        let (description, _) =
+            parse_analyze_output("여기 결과입니다:\n{\"description\":\"  설명  \"}").unwrap();
         assert_eq!(description, "설명");
 
         assert!(parse_analyze_output("완전히 엉터리 답").is_err());
-        assert!(parse_analyze_output("{\"verifyCommands\":[]}").is_err(), "빈 description은 실패");
+        assert!(
+            parse_analyze_output("{\"verifyCommands\":[]}").is_err(),
+            "빈 description은 실패"
+        );
     }
 }

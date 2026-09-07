@@ -11,6 +11,8 @@ use std::{
 
 const ACCESS_TOKEN_SECRET: &str = "github.oauth";
 const OAUTH_CLIENT_ID_ENV: &str = "SAWHORSE_GITHUB_CLIENT_ID";
+// Public identifier for the SawHorse OAuth App; no client secret is bundled.
+const DEFAULT_OAUTH_CLIENT_ID: &str = "Ov23liM5WPQSOkUOrOmd";
 const OAUTH_SCOPE: &str = "read:user repo";
 const DEVICE_CODE_URL: &str = "https://github.com/login/device/code";
 const ACCESS_TOKEN_URL: &str = "https://github.com/login/oauth/access_token";
@@ -77,7 +79,7 @@ fn oauth_client_id() -> Result<String, String> {
     let value = std::env::var(OAUTH_CLIENT_ID_ENV)
         .ok()
         .or_else(|| option_env!("SAWHORSE_GITHUB_CLIENT_ID").map(str::to_string))
-        .unwrap_or_default();
+        .unwrap_or_else(|| DEFAULT_OAUTH_CLIENT_ID.to_string());
     let value = value.trim();
     if value.is_empty() {
         return Err(format!(

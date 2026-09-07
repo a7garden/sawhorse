@@ -337,6 +337,15 @@ pub fn start(
     registry: &[WorkflowDefinition],
     input: WorkflowInstanceStartInput,
 ) -> Result<WorkflowInstance, String> {
+    start_from_node(registry, input, None)
+}
+
+/// Import the current position of an existing work record; do not fabricate past runs.
+pub(crate) fn start_from_node(
+    registry: &[WorkflowDefinition],
+    input: WorkflowInstanceStartInput,
+    current_node: Option<&str>,
+) -> Result<WorkflowInstance, String> {
     let issues = validation::validate_registry(registry);
     if !issues.is_empty() {
         return Err(format!("workflow registry가 유효하지 않습니다: {issues:?}"));
@@ -365,6 +374,12 @@ pub fn start(
         None,
         &input.input_digest,
     )?;
+    if let Some(current_node) = current_node {
+        node(root, current_node)?;
+        instance.frames[0].node_id = current_node.into();
+        instance.node_runs[0].node_id = current_node.into();
+        refresh_active_nodes(&mut instance);
+    }
     settle(&mut instance, registry, &input.input_digest)?;
     Ok(instance)
 }

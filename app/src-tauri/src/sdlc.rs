@@ -652,7 +652,9 @@ fn validate_project(project: &Project) -> Result<(), String> {
             return Err("빈 추가 디렉터리는 저장할 수 없습니다".into());
         }
         if path == repo {
-            return Err(format!("추가 디렉터리는 repoPath와 같을 수 없습니다: {path}"));
+            return Err(format!(
+                "추가 디렉터리는 repoPath와 같을 수 없습니다: {path}"
+            ));
         }
         if !seen_paths.insert(path) {
             return Err(format!("중복된 추가 디렉터리: {path}"));
@@ -673,6 +675,21 @@ fn apply_closure(work: &mut WorkItem) {
         work.state = "open".into();
         work.closed.clear();
     }
+}
+
+/// Older work records used queue review/running for agent turns. Project that
+/// vocabulary onto work progress without rewriting the pinned workflow or history.
+fn normalize_work_progress(work: &mut WorkItem, definition: &WorkflowDefinition) {
+    let final_node = !definition
+        .edges
+        .iter()
+        .any(|edge| edge.from == work.stage && edge.on != "revise" && edge.loop_ref.is_none());
+    if (work.stage != definition.entry && matches!(work.status.as_str(), "backlog" | "ready"))
+        || (work.status == "review" && !final_node)
+    {
+        work.status = "running".into();
+    }
+    apply_closure(work);
 }
 
 fn validate_work(work: &WorkItem) -> Result<(), String> {
@@ -894,6 +911,7 @@ fn list_work_from(
                                             catalog.digest(definition).to_string();
                                     }
                                     value.artifacts = existing_artifacts(root, &value, definition);
+                                    normalize_work_progress(&mut value, definition);
                                 }
                                 Err(error) => {
                                     diagnostics.push(format!("work/{id}/work.md: {error}"))
@@ -1161,6 +1179,18 @@ pub fn snapshot(root: &Path) -> Result<WorkspaceSnapshot, String> {
                         item.id
                     ));
                 }
+                if !CLOSED_STATUSES.contains(&item.status.as_str()) {
+                    match instance.status {
+                        workflow::WorkflowInstanceStatus::Completed => item.status = "done".into(),
+                        workflow::WorkflowInstanceStatus::Cancelled => {
+                            item.status = "cancelled".into()
+                        }
+                        _ => {}
+                    }
+                }
+                if let Ok(definition) = catalog.for_work(item) {
+                    normalize_work_progress(item, definition);
+                }
             }
             Err(error) => diagnostics.push(format!(
                 "work/{}/work.md: runtime 장부를 읽을 수 없습니다: {error}",
@@ -1246,6 +1276,21 @@ fn work_by_id(root: &Path, id: &str) -> Result<WorkItem, String> {
         work.workflow_digest = workflow::definition_digest(&definition)?;
     }
     work.artifacts = existing_artifacts(root, &work, &definition);
+    if let Some(id) = work.workflow_instance_id.as_deref() {
+        let instance = workflow::ledger::get_at(root, id)?;
+        if let Some(frame) = instance.frames.first() {
+            work.stage = frame.node_id.clone();
+        }
+        work.active_nodes = instance.active_nodes;
+        if !CLOSED_STATUSES.contains(&work.status.as_str()) {
+            match instance.status {
+                workflow::WorkflowInstanceStatus::Completed => work.status = "done".into(),
+                workflow::WorkflowInstanceStatus::Cancelled => work.status = "cancelled".into(),
+                _ => {}
+            }
+        }
+    }
+    normalize_work_progress(&mut work, &definition);
     Ok(work)
 }
 
@@ -1363,8 +1408,12 @@ pub fn activate_project_workflow_at(
     save_project_at(root, project)
 }
 
-fn save_work_at(root: &Path, mut input: WorkItem) -> Result<WorkItem, String> {
+fn save_work_at(root: &Path, input: WorkItem) -> Result<WorkItem, String> {
     let _guard = mutation_lock();
+    save_work_locked(root, input)
+}
+
+fn save_work_locked(root: &Path, mut input: WorkItem) -> Result<WorkItem, String> {
     ensure_initialized(root)?;
     if input.id.trim().is_empty() {
         input.id = format!("work-{}", Uuid::new_v4().simple());
@@ -1384,6 +1433,11 @@ fn save_work_at(root: &Path, mut input: WorkItem) -> Result<WorkItem, String> {
         input.workflow_digest = old.workflow_digest.clone();
         input.workflow_instance_id = old.workflow_instance_id.clone();
         input.active_nodes = old.active_nodes.clone();
+        // Metadata edits cannot become a second lifecycle control surface.
+        input.status = old.status.clone();
+        input.approve = old.approve;
+        input.approved = old.approved.clone();
+        input.approval_required = old.approval_required;
     } else {
         // 호출자가 명시한 workflow 를 프로젝트 기본값보다 우선한다. 문서·조사
         // 이슈는 6종 산출물이 필요 없어 더 가벼운 정의를 골라야 한다.
@@ -1423,9 +1477,11 @@ fn save_work_at(root: &Path, mut input: WorkItem) -> Result<WorkItem, String> {
         input.execution_type = "코드".into();
     }
     if is_new {
-        // 새 항목은 예외 없이 승인 게이트를 갖는다. 필드가 없는 기존 work.md 는
-        // false 로 읽히므로 진행 중인 작업이 소급해서 막히지는 않는다.
-        input.approval_required = true;
+        input.status = "backlog".into();
+        input.approve = false;
+        input.approved.clear();
+        // Approval is a recorded workflow decision, never a separate checkbox.
+        input.approval_required = false;
     }
     if !input.approve {
         input.approved.clear();
@@ -1801,6 +1857,9 @@ fn transition_with_constraints_at(
     ensure_initialized(root)?;
     validate_id(id)?;
     let mut work = work_by_id(root, id)?;
+    if CLOSED_STATUSES.contains(&work.status.as_str()) || work.status == "blocked" {
+        return Err("닫히거나 보류한 작업은 공정을 전환할 수 없습니다".into());
+    }
     if expected_node.is_some_and(|expected| expected != work.stage) {
         return Err(format!(
             "workflow node가 변경되었습니다. 예상 {}, 현재 {}",
@@ -1850,6 +1909,18 @@ fn transition_with_constraints_at(
         note: review_note,
     });
     work.stage = next.into();
+    work.status = if definition.nodes[target].kind == workflow::NodeKind::End {
+        "done"
+    } else {
+        "running"
+    }
+    .into();
+    work.approve = true;
+    work.approval_required = false;
+    if work.approved.is_empty() {
+        work.approved = Utc::now().date_naive().to_string();
+    }
+    apply_closure(&mut work);
     work.updated_at = timestamp;
     work.decisions.push(Decision {
         stage: next.into(),
@@ -1860,6 +1931,94 @@ fn transition_with_constraints_at(
     let body = work.description.clone();
     work.description.clear();
     write_atomic(root, &work_path(root, id), &markdown(&work, &body)?)?;
+    work.description = body;
+    Ok(work)
+}
+
+/// Queue, acceptance and closure are decisions in the same work history.
+/// The caller holds mutation_lock; ordinary metadata saves preserve these values.
+fn work_lifecycle_at(
+    root: &Path,
+    mut work: WorkItem,
+    input: &WorkflowCommandInput,
+    definition: &WorkflowDefinition,
+    active: &ActiveNode,
+) -> Result<WorkItem, String> {
+    if input
+        .facts
+        .get("expectedStatus")
+        .and_then(|value| value.as_str())
+        .is_some_and(|expected| expected != work.status)
+    {
+        return Err("작업 상태가 변경되었습니다. 새 상태를 읽고 다시 시도하세요".into());
+    }
+    let action = input.event.strip_prefix("work:").unwrap_or_default();
+    let final_node = active.workflow_id == work.workflow_id
+        && active.workflow_version == work.workflow_version
+        && definition
+            .nodes
+            .iter()
+            .any(|node| node.id == active.node_id)
+        && !definition.edges.iter().any(|edge| {
+            edge.from == active.node_id && edge.on != "revise" && edge.loop_ref.is_none()
+        });
+    let status = match (action, work.status.as_str()) {
+        ("accept", "backlog") => "ready",
+        ("start", "backlog" | "ready") => "running",
+        ("reject", "backlog") => "rejected",
+        ("cancel", "ready" | "running" | "review" | "blocked") => "cancelled",
+        ("pause", "running") => "blocked",
+        ("resume", "blocked" | "review") => "running",
+        ("revise", "review") => "running",
+        ("submit", "running") if final_node => "review",
+        ("complete", "review") if final_node => "done",
+        _ => return Err("현재 작업에서 할 수 없는 결정입니다".into()),
+    };
+    if matches!(action, "submit" | "complete") {
+        let node = definition
+            .nodes
+            .iter()
+            .find(|node| node.id == active.node_id)
+            .ok_or("현재 공정을 찾을 수 없습니다")?;
+        for role in node.inputs.iter().chain(&node.outputs) {
+            if !substantial(&read_document(root, &work.id, role)?.markdown) {
+                return Err(format!(
+                    "결과를 검토하려면 {role}.md에 실질적인 근거가 필요합니다"
+                ));
+            }
+        }
+        ensure_dependencies_complete(root, &work)?;
+    }
+    let timestamp = now();
+    work.status = status.into();
+    if matches!(action, "accept" | "start") {
+        work.approve = true; // Compatibility projection for older readers.
+        if work.approved.is_empty() {
+            work.approved = Utc::now().date_naive().to_string();
+        }
+    }
+    work.approval_required = false;
+    work.updated_at = timestamp.clone();
+    work.decisions.push(Decision {
+        stage: active.node_id.clone(),
+        at: timestamp,
+        note: format!("{}: {}", input.event, input.note.trim()),
+    });
+    if let Some(id) = work.workflow_instance_id.as_deref() {
+        match action {
+            "complete" => {
+                work.active_nodes = workflow::ledger::complete_at(root, id)?.active_nodes;
+            }
+            "cancel" | "reject" => {
+                work.active_nodes = workflow::ledger::cancel_at(root, id)?.active_nodes;
+            }
+            _ => {}
+        }
+    }
+    apply_closure(&mut work);
+    let body = work.description.clone();
+    work.description.clear();
+    write_atomic(root, &work_path(root, &work.id), &markdown(&work, &body)?)?;
     work.description = body;
     Ok(work)
 }
@@ -1903,6 +2062,15 @@ fn workflow_command_at(root: &Path, input: WorkflowCommandInput) -> Result<WorkI
         ));
     }
     let definition = workflow::resolve(Some(root), &active.workflow_id, &active.workflow_version)?;
+    if CLOSED_STATUSES.contains(&work.status.as_str()) {
+        return Err("닫힌 작업은 공정을 전환할 수 없습니다. 후속 작업을 만드세요".into());
+    }
+    if input.event.starts_with("work:") {
+        return work_lifecycle_at(root, work, &input, &definition, &active);
+    }
+    if work.status == "blocked" {
+        return Err("보류한 작업을 재개한 뒤 공정을 전환하세요".into());
+    }
     let candidates: Vec<_> = definition
         .edges
         .iter()
@@ -1927,9 +2095,21 @@ fn workflow_command_at(root: &Path, input: WorkflowCommandInput) -> Result<WorkI
         });
     }
     ensure_node_gate(root, &work, &definition, &candidates[0].to)?;
+    if work.workflow_id == "intent-flow" && input.event == "approved" {
+        if input.input_digest.is_empty() {
+            return Err("Read the design version before approving".into());
+        }
+        let revisions = intent_design_revisions(root, &work.id)?;
+        write_atomic(
+            root,
+            &work_path(root, &work.id).with_file_name("approved-design.json"),
+            &serde_json::to_string(&revisions).map_err(|error| error.to_string())?,
+        )?;
+    }
+
     let instance = match existing_instance {
         Some(instance) => instance,
-        None => workflow::ledger::start_at(
+        None => workflow::ledger::start_for_work_at(
             root,
             workflow::WorkflowInstanceStartInput {
                 work_id: work.id.clone(),
@@ -1938,6 +2118,7 @@ fn workflow_command_at(root: &Path, input: WorkflowCommandInput) -> Result<WorkI
                 workflow_version: work.workflow_version.clone(),
                 input_digest: current_digest.clone(),
             },
+            Some(&work.stage),
         )?,
     };
     let instance = workflow::ledger::command_at(
@@ -1962,6 +2143,21 @@ fn workflow_command_at(root: &Path, input: WorkflowCommandInput) -> Result<WorkI
         .map(|node| node.node_id.clone())
         .unwrap_or_else(|| candidates[0].to.clone());
     let timestamp = now();
+    work.status = match instance.status {
+        workflow::WorkflowInstanceStatus::Completed => "done",
+        workflow::WorkflowInstanceStatus::Cancelled => "cancelled",
+        workflow::WorkflowInstanceStatus::Paused | workflow::WorkflowInstanceStatus::Failed => {
+            "blocked"
+        }
+        _ => "running",
+    }
+    .into();
+    work.approve = true;
+    work.approval_required = false;
+    if work.approved.is_empty() {
+        work.approved = Utc::now().date_naive().to_string();
+    }
+    apply_closure(&mut work);
     work.workflow_instance_id = Some(instance.id);
     work.active_nodes = instance.active_nodes;
     work.stage = instance
@@ -2307,14 +2503,15 @@ fn migrate_one(
     note: &crate::vault::ImprovementNote,
     item: &IssueMigrationItem,
 ) -> Result<(), String> {
-    let markdown = fs::read_to_string(&note.path).map_err(|e| format!("노트 읽기 실패: {e}"))?;
+    let source_markdown =
+        fs::read_to_string(&note.path).map_err(|e| format!("노트 읽기 실패: {e}"))?;
     let project_id = if note.project.trim().is_empty() {
         String::new()
     } else {
         ensure_project_for(root, &note.project)?
     };
 
-    let work = save_work_at(
+    let mut work = save_work_at(
         root,
         WorkItem {
             id: item.work_id.clone(),
@@ -2347,16 +2544,16 @@ fn migrate_one(
     )?;
 
     let request = [
-        section_of(&markdown, "배경 및 요청"),
-        section_of(&markdown, "문제상황"),
-        section_of(&markdown, "근거 및 분석"),
+        section_of(&source_markdown, "배경 및 요청"),
+        section_of(&source_markdown, "문제상황"),
+        section_of(&source_markdown, "근거 및 분석"),
     ]
     .into_iter()
     .filter(|part| !part.is_empty())
     .collect::<Vec<_>>()
     .join("\n\n");
-    let design = section_of(&markdown, "설계");
-    let result = section_of(&markdown, "결과");
+    let design = section_of(&source_markdown, "설계");
+    let result = section_of(&source_markdown, "결과");
 
     let definition = workflow_definition_for_work(root, &work)?;
     for (role, heading, body) in [
@@ -2375,9 +2572,20 @@ fn migrate_one(
         write_atomic(root, &path, &contents)?;
     }
 
+    work.status = item.status.clone();
+    work.approve = note.approve;
+    work.approved = note.approved.clone();
+    apply_closure(&mut work);
+    let body = work.description.clone();
+    work.description.clear();
+    write_atomic(root, &work_path(root, &work.id), &markdown(&work, &body)?)?;
+
     // 원본은 지우지 않는다. 표시만 남겨 두 곳에 같은 이슈가 살아 있는 상태를 막는다.
-    let stamped =
-        crate::extensions::github::update_frontmatter_field(&markdown, "migrated_to", &work.id)?;
+    let stamped = crate::extensions::github::update_frontmatter_field(
+        &source_markdown,
+        "migrated_to",
+        &work.id,
+    )?;
     crate::config::write_atomic(Path::new(&note.path), stamped.as_bytes())
         .map_err(|e| format!("이관 표시 실패: {e}"))?;
     Ok(())
@@ -2462,6 +2670,218 @@ pub fn sdd_save_project(input: Project) -> Result<Project, String> {
     let root = vault_root()?;
     save_project_at(&root, input)
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntentAttachment {
+    pub name: String,
+    pub data_url: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CaptureIntentInput {
+    pub work: WorkItem,
+    pub markdown: String,
+    pub attachments: Vec<IntentAttachment>,
+}
+
+fn capture_intent_at(root: &Path, mut input: CaptureIntentInput) -> Result<WorkItem, String> {
+    use base64::Engine;
+    let _guard = mutation_lock();
+    ensure_initialized(root)?;
+    validate_id(&input.work.id)?;
+    if input.markdown.trim().is_empty() && input.attachments.is_empty() {
+        return Err("메모나 이미지를 추가하세요".into());
+    }
+    if input.markdown.len() > 1024 * 1024 || input.attachments.len() > 12 {
+        return Err("메모는 1 MiB, 이미지는 12개까지 저장할 수 있습니다".into());
+    }
+    let mut images = Vec::new();
+    for attachment in input.attachments {
+        let (header, encoded) = attachment
+            .data_url
+            .split_once(',')
+            .ok_or("잘못된 이미지 데이터입니다")?;
+        let extension = match header {
+            "data:image/png;base64" => "png",
+            "data:image/jpeg;base64" => "jpg",
+            "data:image/webp;base64" => "webp",
+            "data:image/gif;base64" => "gif",
+            _ => return Err("PNG, JPEG, WebP, GIF 이미지를 사용하세요".into()),
+        };
+        if encoded.len() > 14 * 1024 * 1024 {
+            return Err("이미지는 10 MiB까지 저장할 수 있습니다".into());
+        }
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(encoded)
+            .map_err(|_| "이미지를 읽을 수 없습니다")?;
+        if bytes.is_empty() || bytes.len() > 10 * 1024 * 1024 {
+            return Err("이미지는 10 MiB까지 저장할 수 있습니다".into());
+        }
+        let signature_ok = match extension {
+            "png" => bytes.starts_with(b"\x89PNG\r\n\x1a\n"),
+            "jpg" => bytes.starts_with(&[0xff, 0xd8, 0xff]),
+            "gif" => bytes.starts_with(b"GIF87a") || bytes.starts_with(b"GIF89a"),
+            "webp" => bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP"),
+            _ => false,
+        };
+        if !signature_ok {
+            return Err("이미지 내용과 형식이 일치하지 않습니다".into());
+        }
+        let filename = format!("{}.{}", hex::encode(Sha256::digest(&bytes)), extension);
+        let name: String = attachment
+            .name
+            .chars()
+            .filter(|c| !matches!(c, '[' | ']' | '\n' | '\r' | '\\'))
+            .take(160)
+            .collect();
+        input
+            .markdown
+            .push_str(&format!("\n\n![{}](attachments/{})", name, filename));
+        images.push((filename, bytes));
+    }
+    input.work.workflow_id = "intent-flow".into();
+    input.work.workflow_version = "1.0.0".into();
+    input.work.description = input
+        .markdown
+        .lines()
+        .find(|line| !line.trim().is_empty() && !line.starts_with("!["))
+        .unwrap_or("이미지로 남긴 의도")
+        .chars()
+        .take(180)
+        .collect();
+    let directory = work_path(root, &input.work.id)
+        .parent()
+        .ok_or("작업 경로가 없습니다")?
+        .to_path_buf();
+    safe_path(root, &directory)?;
+    if directory.exists() {
+        // A retry after a lost response must never duplicate or overwrite the note.
+        let existing = work_by_id(root, &input.work.id)?;
+        if existing.workflow_id == "intent-flow"
+            && existing.project_id == input.work.project_id
+            && read_document(root, &existing.id, "intent")?.markdown == input.markdown
+        {
+            return Ok(existing);
+        }
+        return Err("같은 ID의 의도가 이미 있습니다. 저장된 의도를 확인하세요".into());
+    }
+    let result = (|| {
+        let work = save_work_locked(root, input.work)?;
+        let attachments = directory.join("attachments");
+        if !images.is_empty() {
+            fs::create_dir_all(&attachments).map_err(|e| e.to_string())?;
+        }
+        for (name, bytes) in images {
+            fs::write(attachments.join(name), bytes).map_err(|e| e.to_string())?;
+        }
+        write_atomic(root, &directory.join("intent.md"), &input.markdown)?;
+        work_by_id(root, &work.id)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&directory);
+    }
+    result
+}
+
+#[tauri::command]
+pub fn sdd_capture_image(path: String) -> Result<String, String> {
+    use base64::Engine;
+    use std::io::Read;
+    let path = Path::new(&path);
+    let mime = match path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .as_str()
+    {
+        "png" => "image/png",
+        "jpg" | "jpeg" => "image/jpeg",
+        "webp" => "image/webp",
+        "gif" => "image/gif",
+        _ => return Err("Use PNG, JPEG, WebP or GIF images".into()),
+    };
+    let file = fs::File::open(path).map_err(|error| error.to_string())?;
+    if !file
+        .metadata()
+        .map_err(|error| error.to_string())?
+        .is_file()
+    {
+        return Err("Not an image file".into());
+    }
+    let mut bytes = Vec::new();
+    file.take(10 * 1024 * 1024 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.is_empty() || bytes.len() > 10 * 1024 * 1024 {
+        return Err("Images must be under 10 MiB".into());
+    }
+    Ok(format!(
+        "data:{mime};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    ))
+}
+
+#[tauri::command]
+pub fn sdd_capture_intent(input: CaptureIntentInput) -> Result<WorkItem, String> {
+    capture_intent_at(&vault_root()?, input)
+}
+
+fn intent_design_revisions(root: &Path, work_id: &str) -> Result<Vec<String>, String> {
+    ["intent", "spec", "plan"]
+        .iter()
+        .map(|role| read_document(root, work_id, role).map(|doc| doc.revision))
+        .collect()
+}
+
+pub fn ensure_intent_approval(root: &Path, work: &WorkItem) -> Result<(), String> {
+    if work.workflow_id != "intent-flow" || work.stage != "build" {
+        return Ok(());
+    }
+    let path = work_path(root, &work.id).with_file_name("approved-design.json");
+    safe_path(root, &path)?;
+    let approved: Vec<String> = serde_json::from_str(
+        &fs::read_to_string(&path).map_err(|_| "Design approval is required")?,
+    )
+    .map_err(|_| "Cannot read design approval")?;
+    if approved != intent_design_revisions(root, &work.id)? {
+        return Err(
+            "The intent or design changed after approval. Revisit and approve the design.".into(),
+        );
+    }
+    Ok(())
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IntentReview {
+    pub documents: Vec<Document>,
+    pub input_digest: String,
+}
+
+#[tauri::command]
+pub fn sdd_intent_review(work_id: String) -> Result<IntentReview, String> {
+    let root = vault_root()?;
+    let _guard = mutation_lock();
+    let work = work_by_id(&root, &work_id)?;
+    if work.workflow_id != "intent-flow" {
+        return Err("의도 흐름이 아닙니다".into());
+    }
+    let before = work_input_digest(&root, &work)?;
+    let documents = ["intent", "spec", "plan", "verification"]
+        .iter()
+        .map(|role| read_document(&root, &work_id, role))
+        .collect::<Result<Vec<_>, _>>()?;
+    if before != work_input_digest(&root, &work)? {
+        return Err("문서가 변경되었습니다. 다시 읽어 주세요".into());
+    }
+    Ok(IntentReview {
+        documents,
+        input_digest: before,
+    })
+}
+
 #[tauri::command]
 pub fn sdd_save_work(input: WorkItem) -> Result<WorkItem, String> {
     let root = vault_root()?;
@@ -2540,6 +2960,117 @@ mod tests {
             ..Default::default()
         }
     }
+    #[test]
+    fn intent_capture_preserves_note_images_and_retries_without_duplicates() {
+        use base64::Engine;
+        let root = tempdir("intent-capture");
+        initialize(&root).unwrap();
+        let note = "# Rough idea\n\nKeep **my words** unchanged.";
+        let image = b"\x89PNG\r\n\x1a\nfixture";
+        let input = || CaptureIntentInput {
+            work: work("capture", ""),
+            markdown: note.into(),
+            attachments: vec![IntentAttachment {
+                name: "../screen[1].png".into(),
+                data_url: format!(
+                    "data:image/png;base64,{}",
+                    base64::engine::general_purpose::STANDARD.encode(image)
+                ),
+            }],
+        };
+        let saved = capture_intent_at(&root, input()).unwrap();
+        assert_eq!(saved.workflow_id, "intent-flow");
+        assert_eq!(saved.stage, "design");
+        assert_eq!(saved.status, "backlog");
+        let document = read_document(&root, "capture", "intent").unwrap();
+        assert!(document.markdown.starts_with(note));
+        let name = format!("{}.png", hex::encode(Sha256::digest(image)));
+        assert!(document.markdown.contains(&format!("attachments/{name}")));
+        assert_eq!(
+            fs::read(root.join("work/capture/attachments").join(name)).unwrap(),
+            image
+        );
+        assert_eq!(capture_intent_at(&root, input()).unwrap().id, saved.id);
+        assert_eq!(snapshot(&root).unwrap().work.len(), 1);
+        let mut changed = input();
+        changed.markdown = "different".into();
+        assert!(capture_intent_at(&root, changed).is_err());
+        let invalid = CaptureIntentInput {
+            work: work("invalid", ""),
+            markdown: "".into(),
+            attachments: vec![IntentAttachment {
+                name: "bad.png".into(),
+                data_url: "data:image/png;base64,aGVsbG8=".into(),
+            }],
+        };
+        assert!(capture_intent_at(&root, invalid).is_err());
+        assert!(!root.join("work/invalid").exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn intent_approval_requires_reviewed_design_and_changes_invalidate_launch() {
+        let root = tempdir("intent-approval");
+        initialize(&root).unwrap();
+        capture_intent_at(
+            &root,
+            CaptureIntentInput {
+                work: work("capture", ""),
+                markdown: "Build the requested UI.".into(),
+                attachments: vec![],
+            },
+        )
+        .unwrap();
+        let command = |digest: String| WorkflowCommandInput {
+            work_id: "capture".into(),
+            event: "approved".into(),
+            target_node_id: Some("build".into()),
+            expected_node_id: "design".into(),
+            note: "Reviewed the design".into(),
+            input_digest: digest,
+            ..Default::default()
+        };
+        assert!(workflow_command_at(&root, command(String::new())).is_err());
+        for role in ["spec", "plan"] {
+            let doc = read_document(&root, "capture", role).unwrap();
+            write_document_at(
+                &root,
+                "capture",
+                role,
+                format!("# {role}\n\nConcrete scoped implementation and acceptance checks."),
+                &doc.revision,
+            )
+            .unwrap();
+        }
+        let digest = work_input_digest(&root, &work_by_id(&root, "capture").unwrap()).unwrap();
+        assert!(workflow_command_at(&root, command("stale".into())).is_err());
+        assert!(workflow_command_at(&root, command(String::new())).is_err());
+        let approved = workflow_command_at(&root, command(digest)).unwrap();
+        assert_eq!(approved.stage, "build");
+        ensure_intent_approval(&root, &approved).unwrap();
+        let verification = read_document(&root, "capture", "verification").unwrap();
+        write_document_at(
+            &root,
+            "capture",
+            "verification",
+            "Real check results".into(),
+            &verification.revision,
+        )
+        .unwrap();
+        ensure_intent_approval(&root, &approved).unwrap();
+        let spec = read_document(&root, "capture", "spec").unwrap();
+        write_document_at(
+            &root,
+            "capture",
+            "spec",
+            "Changed scope".into(),
+            &spec.revision,
+        )
+        .unwrap();
+        assert!(ensure_intent_approval(&root, &approved).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
     /// extraPaths 는 frontmatter 에 실려 저장·복원되고, 필드가 아예 없는 기존
     /// project.md 도 그대로 읽혀야 한다(serde default).
     #[test]
@@ -2551,7 +3082,10 @@ mod tests {
         saved.extra_paths = vec!["/lib".into(), "/docs".into()];
         save_project_at(&root, saved).unwrap();
         let loaded = project_by_id(&root, "p").unwrap();
-        assert_eq!(loaded.extra_paths, vec!["/lib".to_string(), "/docs".to_string()]);
+        assert_eq!(
+            loaded.extra_paths,
+            vec!["/lib".to_string(), "/docs".to_string()]
+        );
 
         // extraPaths 줄이 없던 시절의 project.md 시뮬레이션.
         let path = project_path(&root, "p");
@@ -2573,7 +3107,10 @@ mod tests {
             extra_paths,
             ..project("p")
         };
-        assert!(validate_project(&base(vec!["  ".into()])).is_err(), "빈 항목");
+        assert!(
+            validate_project(&base(vec!["  ".into()])).is_err(),
+            "빈 항목"
+        );
         assert!(
             validate_project(&base(vec!["/a".into(), " /a ".into()])).is_err(),
             "trim 으로 정규화한 중복"
@@ -2587,62 +3124,165 @@ mod tests {
         let ok: Vec<String> = (0..8).map(|i| format!("/d{i}")).collect();
         assert!(validate_project(&base(ok)).is_ok());
     }
-    /// 이슈와 개발 항목이 한 저장소가 된 뒤로 `status` 하나가 열림·닫힘의 정본이다.
-    /// 손으로 `state` 를 적어 넣어도 저장하면 상태에서 다시 파생되어야 한다.
+    fn decide(root: &Path, id: &str, event: &str) -> Result<WorkItem, String> {
+        let work = work_by_id(root, id)?;
+        workflow_command_at(
+            root,
+            WorkflowCommandInput {
+                work_id: id.into(),
+                event: event.into(),
+                expected_node_id: work
+                    .active_nodes
+                    .first()
+                    .map(|node| node.node_id.clone())
+                    .unwrap_or(work.stage),
+                note: "검토한 근거와 결정".into(),
+                event_id: Uuid::new_v4().to_string(),
+                ..Default::default()
+            },
+        )
+    }
+
     #[test]
-    fn status_is_the_single_source_of_open_and_closed() {
+    fn metadata_cannot_bypass_work_decisions_and_closure() {
         let root = tempdir("closure");
         initialize(&root).unwrap();
         save_project_at(&root, project("p")).unwrap();
-
         let open = save_work_at(
             &root,
             WorkItem {
+                status: "done".into(),
+                approve: true,
                 state: "closed".into(),
                 closed: "2020-01-01".into(),
                 ..work("a", "p")
             },
         )
         .unwrap();
+        assert_eq!(open.status, "backlog");
         assert_eq!(open.state, "open");
         assert_eq!(open.closed, "");
-        assert!(open.approval_required, "새 항목은 승인 게이트를 갖는다");
-        assert_eq!(open.issue_type, "작업");
-        assert_eq!(open.execution_type, "코드");
-
-        let done = save_work_at(
+        assert!(!open.approval_required);
+        assert!(!open.approve);
+        let accepted = decide(&root, "a", "work:accept").unwrap();
+        assert_eq!(accepted.status, "ready");
+        let saved = save_work_at(
             &root,
             WorkItem {
                 status: "done".into(),
-                ..open.clone()
+                approve: false,
+                title: "edited".into(),
+                ..accepted
             },
         )
         .unwrap();
+        assert_eq!(saved.status, "ready");
+        assert!(saved.approve);
+        assert_eq!(saved.title, "edited");
+        assert!(decide(&root, "a", "work:reject").is_err());
+        let cancelled = decide(&root, "a", "work:cancel").unwrap();
+        assert_eq!(cancelled.state, "closed");
+        assert!(!cancelled.closed.is_empty());
+        assert!(decide(&root, "a", "work:start").is_err());
+        assert!(transition_at(&root, "a", "design", Some("skip closure".into())).is_err());
+        save_work_at(&root, work("b", "p")).unwrap();
+        assert_eq!(
+            decide(&root, "b", "work:reject").unwrap().status,
+            "rejected"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn workflow_progress_and_final_acceptance_share_one_lifecycle() {
+        let root = tempdir("lifecycle");
+        initialize(&root).unwrap();
+        save_project_at(&root, project("p")).unwrap();
+        save_work_at(&root, work("a", "p")).unwrap();
+        assert!(decide(&root, "a", "work:complete").is_err());
+        assert!(
+            decide(&root, "a", "approved").is_err(),
+            "empty intent cannot advance"
+        );
+        for (role, event) in [
+            ("intent", "approved"),
+            ("spec", "approved"),
+            ("plan", "succeeded"),
+            ("verification", "verified"),
+        ] {
+            let doc = read_document(&root, "a", role).unwrap();
+            write_document_at(
+                &root,
+                "a",
+                role,
+                format!("# {role}\n\n실제 검증 근거와 수용 기준입니다."),
+                &doc.revision,
+            )
+            .unwrap();
+            let work = decide(&root, "a", event).unwrap();
+            assert_eq!(work.status, "running");
+            assert!(work.approve);
+        }
+        let paused = decide(&root, "a", "work:pause").unwrap();
+        assert_eq!(paused.stage, "deploy");
+        assert!(decide(&root, "a", "revise").is_err());
+        assert_eq!(decide(&root, "a", "work:resume").unwrap().stage, "deploy");
+        assert!(
+            decide(&root, "a", "work:submit").is_err(),
+            "release evidence is required"
+        );
+        let doc = read_document(&root, "a", "release").unwrap();
+        write_document_at(
+            &root,
+            "a",
+            "release",
+            "# 배포\n\n배포와 되돌리기 검증 결과를 확인했습니다.".into(),
+            &doc.revision,
+        )
+        .unwrap();
+        assert_eq!(decide(&root, "a", "work:submit").unwrap().status, "review");
+        assert_eq!(decide(&root, "a", "work:revise").unwrap().status, "running");
+        decide(&root, "a", "work:submit").unwrap();
+        let done = decide(&root, "a", "work:complete").unwrap();
+        assert_eq!(done.status, "done");
         assert_eq!(done.state, "closed");
         assert!(!done.closed.is_empty());
+        let instance =
+            workflow::ledger::get_at(&root, done.workflow_instance_id.as_deref().unwrap()).unwrap();
+        assert_eq!(instance.status, workflow::WorkflowInstanceStatus::Completed);
+        assert!(instance.active_nodes.is_empty());
+        assert_eq!(snapshot(&root).unwrap().work[0].status, "done");
+        assert!(decide(&root, "a", "revise").is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
 
-        let cancelled = save_work_at(
-            &root,
-            WorkItem {
-                status: "cancelled".into(),
-                closed: String::new(),
-                ..done.clone()
-            },
-        )
-        .unwrap();
-        assert_eq!(cancelled.state, "closed");
-
-        let reopened = save_work_at(
-            &root,
-            WorkItem {
-                status: "running".into(),
-                ..cancelled
-            },
-        )
-        .unwrap();
-        assert_eq!(reopened.state, "open");
-        assert_eq!(reopened.closed, "", "다시 열면 종료일이 남지 않는다");
-
+    #[test]
+    fn existing_work_keeps_its_position_when_adopting_the_runtime() {
+        let root = tempdir("legacy-runtime-position");
+        initialize(&root).unwrap();
+        save_project_at(&root, project("p")).unwrap();
+        save_work_at(&root, work("a", "p")).unwrap();
+        for role in ["intent", "spec"] {
+            let doc = read_document(&root, "a", role).unwrap();
+            write_document_at(
+                &root,
+                "a",
+                role,
+                "# 근거\n\n범위와 수용 기준을 확인했습니다.".into(),
+                &doc.revision,
+            )
+            .unwrap();
+        }
+        let old = transition_at(&root, "a", "design", Some("기존 결정".into())).unwrap();
+        assert!(old.workflow_instance_id.is_none());
+        let moved = decide(&root, "a", "approved").unwrap();
+        assert_eq!(moved.stage, "build");
+        assert_eq!(moved.status, "running");
+        let instance =
+            workflow::ledger::get_at(&root, moved.workflow_instance_id.as_deref().unwrap())
+                .unwrap();
+        assert_eq!(instance.node_runs[0].node_id, "design");
+        assert_eq!(instance.workflow_digest, old.workflow_digest);
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -3143,7 +3783,10 @@ mod tests {
         assert_eq!(work_by_id(&root, "legacy").unwrap().workflow_id, "sdd-main");
         assert_eq!(work_by_id(&root, "tdd").unwrap().workflow_id, "tdd-cycle");
         // sdd-main, tdd-cycle, sdd-with-tdd, issue-main@1.1.0, 동결된 issue-main@1.0.0
-        assert_eq!(snapshot(&root).unwrap().workflows.len(), 5);
+        assert_eq!(
+            snapshot(&root).unwrap().workflows.len(),
+            workflow::builtins::all().len()
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -450,8 +450,64 @@ fn issue_v1() -> WorkflowDefinition {
     }
 }
 
+/// A scratch note becomes a reviewable design before implementation is authorized.
+pub fn intent_flow() -> WorkflowDefinition {
+    let mut design = node(
+        "design",
+        "설계",
+        NodeKind::Agent,
+        &["intent"],
+        &["spec", "plan"],
+        &["planner", "research"],
+    );
+    design.action_ref = Some("intent-design".into());
+    design.instructions = "Read intent.md verbatim and open every attached image relative to that file. Preserve the original intent. Inspect the repository, then write spec.md with the interpreted intent, requirements, acceptance criteria, assumptions and open questions. Write plan.md as bounded work units with stable IDs, checkboxes, scope/files, dependencies and verification for each unit. Prepare the complete design for human review. Do not implement or edit repository code before approval.".into();
+    let mut build = node(
+        "build",
+        "구현·검증",
+        NodeKind::Agent,
+        &["intent", "spec", "plan"],
+        &["verification"],
+        &["implementer", "verifier"],
+    );
+    build.action_ref = Some("intent-implementation".into());
+    build.requires_completed_dependencies = true;
+    build.instructions = "The human has approved the design and work units. Implement every approved unit, run relevant checks, fix failures and continue until implementation and verification are finished. Record each work unit ID, changes, actual commands, results and remaining blockers in verification.md. Do not silently expand the approved scope. Never claim completion from an idle signal or invent test results.".into();
+    WorkflowDefinition {
+        definition_version: DEFINITION_VERSION,
+        id: "intent-flow".into(),
+        version: "1.0.0".into(),
+        label: "메모에서 구현까지".into(),
+        description: "자유로운 의도와 이미지 → 작업 분해·설계 → 사람의 승인 → 구현·검증".into(),
+        entry: "design".into(),
+        artifacts: vec![
+            artifact("intent", "원본 의도", ""),
+            artifact("spec", "설계", SPEC),
+            artifact("plan", "작업 단위", PLAN),
+            artifact("verification", "구현 결과", VERIFICATION),
+        ],
+        nodes: vec![design, build],
+        edges: vec![
+            edge("design", "build", "approved"),
+            revision_edge("build", "design", "intent-revision"),
+        ],
+        loops: vec![LoopDefinition {
+            id: "intent-revision".into(),
+            max_iterations: 20,
+            on_limit: LoopLimitAction::Pause,
+        }],
+    }
+}
+
 pub fn all() -> Vec<WorkflowDefinition> {
-    vec![sdd(), tdd(), sdd_with_tdd(), issue(), issue_v1()]
+    vec![
+        sdd(),
+        tdd(),
+        sdd_with_tdd(),
+        issue(),
+        issue_v1(),
+        intent_flow(),
+    ]
 }
 
 #[cfg(test)]

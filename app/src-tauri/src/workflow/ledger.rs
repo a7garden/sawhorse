@@ -145,6 +145,14 @@ pub fn start_at(
     root: &Path,
     input: WorkflowInstanceStartInput,
 ) -> Result<WorkflowInstance, String> {
+    start_for_work_at(root, input, None)
+}
+
+pub(crate) fn start_for_work_at(
+    root: &Path,
+    input: WorkflowInstanceStartInput,
+    current_node: Option<&str>,
+) -> Result<WorkflowInstance, String> {
     let _guard = ledger_lock()
         .lock()
         .map_err(|_| "workflow ledger lock이 손상되었습니다".to_string())?;
@@ -160,7 +168,7 @@ pub fn start_at(
         return Err("input digest가 너무 깁니다".into());
     }
     let registry = catalog(Some(root))?;
-    let instance = engine::start(&registry, input)?;
+    let instance = engine::start_from_node(&registry, input, current_node)?;
     insert(&open(root)?, &instance)?;
     Ok(instance)
 }
@@ -327,6 +335,33 @@ pub fn cancel_at(root: &Path, id: &str) -> Result<WorkflowInstance, String> {
     let connection = open(root)?;
     let mut instance = load(&connection, id)?;
     engine::cancel(&mut instance);
+    update(&connection, &instance)?;
+    Ok(instance)
+}
+
+/// Final human acceptance for pinned workflows whose last node predates End nodes.
+pub(crate) fn complete_at(root: &Path, id: &str) -> Result<WorkflowInstance, String> {
+    let _guard = ledger_lock()
+        .lock()
+        .map_err(|_| "workflow ledger lock이 손상되었습니다".to_string())?;
+    let connection = open(root)?;
+    let mut instance = load(&connection, id)?;
+    let timestamp = now();
+    for active in &instance.active_nodes {
+        if let Some(run) = instance
+            .node_runs
+            .iter_mut()
+            .find(|run| run.id == active.node_run_id)
+        {
+            run.status = NodeRunStatus::Succeeded;
+            run.waiting_reason = None;
+            run.updated_at = timestamp.clone();
+        }
+    }
+    instance.status = WorkflowInstanceStatus::Completed;
+    instance.active_nodes.clear();
+    instance.frames.clear();
+    instance.updated_at = timestamp;
     update(&connection, &instance)?;
     Ok(instance)
 }
