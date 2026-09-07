@@ -57,6 +57,9 @@ test("theme and language apply immediately and compact navigation stays usable",
   await page.getByRole("option", { name: "English", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Appearance", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await page.locator("aside nav").getByRole("button", { name: "Workbench", exact: true }).click();
+  await expect(page.locator('[data-widget="next"] time').first()).toHaveText(/^[A-Z][a-z]{2} \d{1,2}$/);
+  await page.locator("aside nav").getByRole("button", { name: "Settings", exact: true }).click();
   await page.setViewportSize({ width: 800, height: 900 });
   const nav = page.getByRole("navigation", { name: "Settings", exact: true });
   for (const name of ["Vault", "Execution", "Collaboration", "Diagnostics", "App"]) {
@@ -66,6 +69,7 @@ test("theme and language apply immediately and compact navigation stays usable",
     expect(overflow).toBe(false);
   }
   await page.reload();
+  await expect(page.locator("aside nav").getByRole("button", { name: "Journal", exact: true })).toBeVisible();
   await page.locator("aside nav").getByRole("button", { name: "Settings", exact: true }).click();
   await expect(page.getByRole("radio", { name: "Light", exact: true })).toBeChecked();
 });

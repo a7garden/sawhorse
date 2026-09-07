@@ -162,11 +162,11 @@ const PRIORITY_RANK: Record<Priority, number> = {
   normal: 2,
   low: 3,
 };
-const dateText = new Intl.DateTimeFormat("ko-KR", {
+const dateText = () => new Intl.DateTimeFormat(i18n.language, {
   month: "short",
   day: "numeric",
 });
-const dateTimeText = new Intl.DateTimeFormat("ko-KR", {
+const dateTimeText = () => new Intl.DateTimeFormat(i18n.language, {
   month: "short",
   day: "numeric",
   hour: "2-digit",
@@ -278,7 +278,7 @@ function formatDate(
   value: string | null,
   fallback = i18n.t("workbench:common.noDate"),
 ) {
-  return value ? dateText.format(new Date(`${value}T00:00:00`)) : fallback;
+  return value ? dateText().format(new Date(`${value}T00:00:00`)) : fallback;
 }
 function statusClass(status: WorkStatus) {
   return `wb-status wb-status-${status}`;
@@ -3816,7 +3816,7 @@ function WorkDetailDialog({
                     {stageLabel(workflow ? [workflow] : [], decision.stage)}
                   </span>
                   <p>{decision.note}</p>
-                  <time>{dateTimeText.format(new Date(decision.at))}</time>
+                  <time>{dateTimeText().format(new Date(decision.at))}</time>
                 </div>
               ))}
           </div>
@@ -3950,7 +3950,7 @@ function RuntimeLedger({ instanceId, revision }: { instanceId: string; revision:
                     : ""}
                   {run.waitingReason ? ` · ${run.waitingReason}` : ""}
                 </p>
-                <time>{dateTimeText.format(new Date(run.updatedAt))}</time>
+                <time>{dateTimeText().format(new Date(run.updatedAt))}</time>
               </div>
             ))}
           {events.length > 0 && (
@@ -4706,7 +4706,7 @@ function HarnessView({
                 <span>
                   {t("harness.createdAt")}{" "}
                   <strong>
-                    {dateTimeText.format(new Date(selected.createdAt))}
+                    {dateTimeText().format(new Date(selected.createdAt))}
                   </strong>
                 </span>
                 {selected.agentSession && (
@@ -4719,7 +4719,7 @@ function HarnessView({
                   <span>
                     {t("harness.tabClosed")}{" "}
                     <strong>
-                      {dateTimeText.format(new Date(selected.tabClosedAt))}
+                      {dateTimeText().format(new Date(selected.tabClosedAt))}
                     </strong>
                   </span>
                 )}

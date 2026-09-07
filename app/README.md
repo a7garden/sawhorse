@@ -17,6 +17,10 @@ npm run tauri build
 프론트엔드만 실행할 때 `npm run dev` 후 `?preview=1`로 브라우저 체험을 연다.
 체험 데이터는 브라우저의 localStorage에만 저장된다. 데스크톱 오류를 예제로 숨기지 않는다.
 
+README 촬영용 영문 데모는 `npm run dev -- --port 1430` 후
+`http://127.0.0.1:1430/showcase/?preview=1`에서 연다.
+[샘플 데이터와 이미지 재생성 안내](../docs/images/README.md)를 참고한다.
+
 | 위치 | 역할 |
 |---|---|
 | src/features/workbench | 작업대·산출물 편집·동적 workflow UI·runtime ledger·SDD 호환 IPC |

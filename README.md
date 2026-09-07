@@ -1,5 +1,7 @@
 # Sawhorse
 
+![Sawhorse — a local development workbench connecting intent, agent execution, and verification](docs/images/sawhorse-overview.png)
+
 **의도에서 실행, 검증, 기록까지 이어지는 로컬 개발 작업대.**
 
 인간이 `intent.md`에 의도를 남기면 AI가 설계와 작업 계획을 만들고, 인간의 승인 뒤 구현·검증하고 결과를 보고한다.
@@ -38,6 +40,17 @@ npm run tauri build
 Tauri 데스크톱에서만 동작한다. 처음 UI 테스트를 실행할 때 `npx playwright install chromium`이 필요하다.
 
 ## 기본 화면
+
+영문 UI에 예제 프로젝트와 작업을 넣은 실제 앱 화면이다. [캡처용 데모 실행과 이미지 재생성](docs/images/README.md)으로 같은 구성을 다시 열 수 있다.
+
+![English process board with sample work progressing through Intent, Design, Build, Verify, and Deploy](docs/images/process-board.png)
+
+<details>
+<summary>작업 상세 — Markdown 명세와 에이전트 실행 맥락</summary>
+
+![A Markdown specification beside the agent role, model, and execution context in Sawhorse](docs/images/work-detail.png)
+
+</details>
 
 | 화면 | 기능 |
 |---|---|

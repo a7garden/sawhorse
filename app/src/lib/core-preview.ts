@@ -14,6 +14,7 @@ import type {
   TodoSections,
 } from "./types";
 import { jobRequestKey } from "./jobs";
+import i18n from "@/i18n";
 
 
 function previewJournalRows() {
@@ -740,7 +741,13 @@ export async function corePreview(
     case "list_packs":
       return { packs: previewPacks, broken: [] };
     case "list_nav":
-      return previewNav;
+      return i18n.language.startsWith("en")
+        ? previewNav.map((entry) => ({
+            ...entry,
+            packName: entry.packId === "starter" ? "Starter" : entry.packName,
+            label: ({ logs: "Journal", concepts: "Concepts", vault: "Audit" } as Record<string, string>)[entry.viewId] ?? entry.label,
+          }))
+        : previewNav;
     // 작업대 위젯이 쓰는 읽기·쓰기. 브라우저 체험에서도 실행 타임라인과
     // 체크리스트가 실제로 움직여야 위젯의 값어치를 확인할 수 있다.
     case "list_jobs":
