@@ -72,6 +72,15 @@
     "pendingCancel": "Pending · Cancel",
     "stopHint": "Running. Click to stop."
   },
+  "palette": {
+    "hint": "Search work, projects, and documents",
+    "empty": "No matching results",
+    "recent": "Recent work",
+    "navigate": "Navigate",
+    "open": "Open",
+    "close": "Close",
+    "back": "Back"
+  },
   "market": {
     "connect": "Connect marketplace",
     "connectDesc": "Connect a Sawhorse catalog URL to find and install feature, workflow, and skill packages.",

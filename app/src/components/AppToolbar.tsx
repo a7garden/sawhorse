@@ -9,7 +9,7 @@ import { useApp } from "@/lib/store";
 import { useCoreExtensions } from "@/lib/core-extensions";
 import { Dialog } from "./ui/dialog";
 import { Button } from "./ui/button";
-import WorkbenchPage from "@/features/workbench/WorkbenchPage";
+import { CommandPalette } from "./CommandPalette";
 
 const isMac = /mac/i.test(navigator.platform);
 
@@ -169,21 +169,7 @@ export function AppToolbar() {
           )}
         </button>
       </div>
-      <Dialog
-        open={search}
-        onClose={() => {
-          if (
-            window.dispatchEvent(
-              new Event("sawhorse:navigate", { cancelable: true }),
-            )
-          )
-            setSearch(false);
-        }}
-        title={t("toolbar.search")}
-        className="max-w-5xl"
-      >
-        <WorkbenchPage view="knowledge" globalScope />
-      </Dialog>
+      <CommandPalette open={search} onClose={() => setSearch(false)} />
       <Dialog
         open={notifications}
         onClose={() => setNotifications(false)}

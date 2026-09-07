@@ -72,6 +72,15 @@
     "pendingCancel": "대기 중 · 취소",
     "stopHint": "실행 중입니다. 누르면 중단합니다."
   },
+  "palette": {
+    "hint": "작업, 프로젝트, 문서를 검색해 보세요",
+    "empty": "일치하는 결과가 없습니다",
+    "recent": "최근 작업",
+    "navigate": "이동",
+    "open": "열기",
+    "close": "닫기",
+    "back": "뒤로"
+  },
   "market": {
     "connect": "마켓플레이스 연결",
     "connectDesc": "Sawhorse 카탈로그 주소를 연결해 기능·워크플로·스킬 패키지를 찾아 설치하세요.",

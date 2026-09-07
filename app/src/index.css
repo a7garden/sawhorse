@@ -618,3 +618,35 @@
     animation: none;
   }
 }
+
+/* 커맨드 팔레트 — 위에서 살짝 내려오며 나타난다. */
+.palette-panel {
+  animation: palette-in 150ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.palette-backdrop {
+  animation: palette-fade 150ms ease-out;
+}
+@keyframes palette-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes palette-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .palette-panel,
+  .palette-backdrop {
+    animation: none;
+  }
+}
