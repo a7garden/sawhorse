@@ -18,8 +18,10 @@ jobs:
         run: npm install -g @anthropic-ai/claude-code
       - name: Validate plugin manifest
         run: claude plugin validate ./plugin
-      - name: Hook tests (node:test)
-        run: node --test plugin/hooks/hooks.test.mjs
+      - name: Validate pack catalogs and workspace seeds
+        run: node plugin/validate.mjs
+      - name: Plugin regression tests (node:test)
+        run: node --test plugin/hooks/hooks.test.mjs plugin/scripts/*.test.mjs plugin/extension-packages/*/skills/*/scripts/*.test.mjs
       - name: Validate bundled extension packages
         run: node plugin/extension-packages/validate.mjs
   version:

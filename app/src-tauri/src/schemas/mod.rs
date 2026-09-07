@@ -204,8 +204,23 @@ fn validate_storage_path(path: &str) -> Result<(), &'static str> {
     {
         return Err("storage.path에 빈 경로, . 또는 ..를 사용할 수 없습니다");
     }
-    if rendered.starts_with(".sawhorse/") {
-        return Err("내부 .sawhorse 영역에는 사용자 문서를 둘 수 없습니다");
+    let parts: Vec<_> = rendered.split(['/', '\\']).collect();
+    if parts
+        .iter()
+        .any(|part| part.starts_with('.') || part.contains(':'))
+    {
+        return Err("숨김 상태 디렉터리나 절대경로에는 사용자 문서를 둘 수 없습니다");
+    }
+    let host_record = matches!(parts.first().copied(), Some("calendar" | "runs"))
+        || (parts.len() == 3
+            && matches!(
+                (parts[0], parts[2]),
+                ("work", "work.md") | ("projects", "project.md")
+            ));
+    if host_record {
+        return Err(
+            "작업·프로젝트·일정·실행 레코드는 앱이 관리합니다. 사용자 문서 경로를 지정하세요",
+        );
     }
     Ok(())
 }
@@ -451,7 +466,7 @@ fn markdown_paths(root: &Path) -> Result<Vec<PathBuf>, String> {
                 continue;
             }
             if file_type.is_dir() {
-                if path == root.join(".sawhorse") {
+                if entry.file_name().to_string_lossy().starts_with('.') {
                     continue;
                 }
                 visit(root, &path, output)?;
@@ -1368,6 +1383,46 @@ mod tests {
             .diagnostics
             .iter()
             .any(|entry| entry.code == "unknown-required-field"));
+    }
+
+    #[test]
+    fn user_schema_cannot_replace_host_records_or_hidden_state() {
+        for path in [
+            "work/{id}/work.md",
+            "projects/{id}/project.md",
+            "calendar/{id}.md",
+            "runs/{id}.md",
+            ".sawhorse/record.md",
+            ".git/record.md",
+            r".sawhorse\record.md",
+            r"C:\record.md",
+        ] {
+            let mut candidate = schema();
+            candidate.types[0].storage.path = path.into();
+            assert!(!validate(&candidate).valid, "{path}");
+        }
+        let mut candidate = schema();
+        candidate.types[0].storage.path = "문서/{id}.md".into();
+        assert!(validate(&candidate).valid);
+    }
+
+    #[test]
+    fn schema_scan_does_not_read_hidden_state_as_documents() {
+        let root = tempdir();
+        for dir in [".git", ".obsidian", ".trash", ".sawhorse"] {
+            fs::create_dir_all(root.join(dir)).unwrap();
+            fs::write(
+                root.join(dir).join("state.md"),
+                "---\nid: hidden\ntypeId: unknown\n---\n",
+            )
+            .unwrap();
+        }
+        fs::write(root.join("visible.md"), "# Document\n").unwrap();
+        let result = scan(&root, &schema()).unwrap();
+        assert_eq!(result.scanned_files, 1);
+        assert_eq!(result.unmanaged_markdown, ["visible.md"]);
+        assert!(result.diagnostics.is_empty());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

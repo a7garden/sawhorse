@@ -1,8 +1,12 @@
 {
   "name": "sawhorse",
-  "description": "업무 지식베이스 플러그인: Obsidian vault 기반 업무일지, 업무 보고, 위키(개념 노트), 제안서/코드베이스 분석 문서화, push 확인 안전장치",
+  "description": "Sawhorse 작업대의 워크플로우 산출물, 자동화, 일지·지식 문서를 위한 에이전트 스킬과 훅.",
   "version": "1.0.0",
-  "skills": ["./skills", "./packs/si/skills", "./packs/starter/skills"],
+  "skills": [
+    "./skills",
+    "./packs/si/skills",
+    "./packs/starter/skills"
+  ],
   "author": {
     "name": "won"
   },
@@ -10,16 +14,17 @@
   "repository": "https://github.com/a7garden/sawhorse",
   "license": "MIT",
   "keywords": [
-    "obsidian",
-    "wiki",
-    "daily-log",
-    "korean"
+    "sawhorse",
+    "workflow",
+    "sdd",
+    "tdd",
+    "knowledge"
   ],
   "userConfig": {
     "vault_path": {
       "type": "string",
-      "title": "Obsidian vault 절대 경로",
-      "description": "업무 지식베이스로 쓸 Obsidian vault의 절대 경로 (예: C:\\Users\\me\\Documents\\WorkVault)"
+      "title": "작업공간 절대 경로",
+      "description": "Sawhorse에서 기록을 저장할 로컬 Markdown 작업공간 경로"
     }
   }
 }

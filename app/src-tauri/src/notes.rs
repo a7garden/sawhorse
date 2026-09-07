@@ -346,6 +346,33 @@ mod tests {
     use super::*;
     use std::fs;
 
+    #[test]
+    fn xlsx_view_reads_work_items_without_legacy_or_artifact_duplicates() {
+        let root = tempdir("xlsx-view");
+        for (path, body) in [
+            ("work/a/work.md", "---\nid: a\ntitle: Current work\nprojectId: p\nworkflowId: issue-main\nstatus: backlog\n---\n"),
+            ("work/a/intent.md", "# Intent\n"),
+            ("work/a/mockup.md", "---\nid: a\ntype: mockup\n---\n"),
+            ("프로젝트/P/개선/old.md", "---\nid: old\ntype: 개선\n---\n"),
+        ] {
+            let target = root.join(path);
+            fs::create_dir_all(target.parent().unwrap()).unwrap();
+            fs::write(target, body).unwrap();
+        }
+        let manifest_root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugin");
+        let view: crate::packs::PackView = serde_json::from_str(
+            &fs::read_to_string(
+                manifest_root.join("extension-packages/xlsx-export/views/reports.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        let result = query(&root, &view.query);
+        assert_eq!(result.rows.len(), 1);
+        assert_eq!(result.rows[0].rel, "work/a/work.md");
+        fs::remove_dir_all(root).unwrap();
+    }
+
     fn tempdir(tag: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("sw-notes-{tag}-{}", uuid::Uuid::new_v4()));
         fs::create_dir_all(&d).unwrap();

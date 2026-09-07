@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // sawhorse 볼트 위생 점검. morning/lunch/evening 이 모드별로 호출한다.
 //
-// quick : 즉시형. 표준 폴더 밖 첨부 회수, attachmentFolderPath 교정, .base 템플릿 제외 보정,
+// quick : 즉시형. 볼트 루트 첨부 회수, attachmentFolderPath 교정, .base 템플릿 제외 보정,
 //         인덱스 자산 존재 확인. 되돌릴 수 있는 기계적 조치만 수행한다. (morning)
 // scan  : 진단 전용. 죽은 링크, 고아 첨부, frontmatter 스키마 이탈을 찾아 보고만 한다.
 //         어떤 파일도 쓰지 않는다. (lunch)
@@ -10,7 +10,7 @@
 // 스킬이 노트를 하나씩 열어 읽는 대신 이 스크립트 한 번으로 목록만 받는 것이 목적이다.
 //
 // Usage: node vault-hygiene.mjs --vault <vault-path> --mode <quick|scan|fix>
-import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, lstatSync, statSync, writeFileSync } from "node:fs";
 import { basename, join, relative, sep } from "node:path";
 
 // ---------- args ----------
@@ -37,22 +37,25 @@ const V = vaultPath.replace(/[\\/]+$/, "");
 
 // 프로젝트 문서 루트. 이름을 바꾸기 전 볼트는 사업/ 만 갖고 있고, 이관은 사용자가 고른다.
 const ProjectRoot = existsSync(join(V, "프로젝트")) ? "프로젝트" : "사업";
-const StdFolders = ["일지", ProjectRoot, "개념", "첨부", "템플릿"];
+const DocumentFolders = ["일지", "기록", "문서", "노트", "개념", "프로젝트", "사업"];
 const ImageExt = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"];
 const AttachExt = [...ImageExt, ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".zip", ".csv"];
 const IndexAssets = [
   "대시보드.md",
   "개념/개념.base",
   `${ProjectRoot}/${ProjectRoot}.base`,
-  `${ProjectRoot}/이슈.base`,
-  `${ProjectRoot}/마일스톤.base`,
   "일지/일지.base",
 ];
 
 const writeUtf8 = (full, text) => writeFileSync(full, text, "utf8"); // BOM-less
 
 const relOf = (full) => relative(V, full).split(sep).join("/");
-const excluded = (full) => /(^|[\\/])\.(obsidian|git|trash)[\\/]/.test(full);
+// Hidden state and linked directories are never traversed. The previous trailing
+// slash check entered .git/.sawhorse before recognizing their descendants.
+const excluded = (full) => relOf(full).split("/").some((part) => part.startsWith("."));
+const legacyPath = (full) => /^(프로젝트|사업)\/[^/]+\/(이슈|개선|마일스톤)(\/|$)/.test(relOf(full));
+const documentPath = (full) => DocumentFolders.includes(relOf(full).split("/")[0]) && !legacyPath(full);
+const schemaManaged = (text) => /^---\r?\n[\s\S]*?^typeId:/m.test(text.split(/\r?\n---(?:\r?\n|$)/)[0]);
 
 // ---------- walk ----------
 
@@ -61,7 +64,9 @@ const walk = (dir, filter) => {
   const visit = (d) => {
     for (const name of readdirSync(d)) {
       const full = join(d, name);
-      const st = statSync(full);
+      if (excluded(full)) continue;
+      const st = lstatSync(full);
+      if (st.isSymbolicLink()) continue;
       if (st.isDirectory()) {
         if (!excluded(full)) visit(full);
       } else if (st.isFile() && filter(name, full)) {
@@ -96,14 +101,14 @@ const titleDedup = (doFix) => {
   const reTail = /^\r?\n(\r?\n)?/;
   for (const full of mdFiles) {
     const rel = relOf(full);
-    if (rel.startsWith("템플릿/")) continue;
+    if (!documentPath(full)) continue;
     let txt;
     try {
       txt = readFileSync(full, "utf8");
     } catch {
       continue;
     }
-    if (!txt) continue;
+    if (!txt || schemaManaged(txt)) continue;
     let prefix = 0;
     let rest = txt;
     const fm = txt.match(reFm);
@@ -129,13 +134,12 @@ const titleDedup = (doFix) => {
 if (mode === "quick" || mode === "fix") {
   say("== 볼트 위생: 즉시 점검 ==");
 
-  // 1) 표준 폴더 밖 첨부 회수
+  // 1) 볼트 루트 첨부 회수
   const strays = allFiles.filter((full) => {
     const ext = basename(full).replace(/^.*(\.[^.]+)$/, "$1").toLowerCase();
     if (!AttachExt.includes(ext)) return false;
     const rel = relOf(full);
-    const top = rel.split("/")[0];
-    return rel === basename(full) || !StdFolders.includes(top);
+    return rel === basename(full);
   });
   for (const full of strays) {
     const ext = basename(full).replace(/^.*(\.[^.]+)$/, "$1").toLowerCase();
@@ -155,7 +159,7 @@ if (mode === "quick" || mode === "fix") {
       }
     }
   }
-  if (strays.length === 0) say("[이동] 표준 폴더 밖 첨부 없음");
+  if (strays.length === 0) say("[이동] 볼트 루트 첨부 없음");
 
   // 2) attachmentFolderPath (붙여넣기 이미지가 루트에 쌓이는 근본 원인)
   const appJson = join(V, ".obsidian", "app.json");
@@ -180,7 +184,7 @@ if (mode === "quick" || mode === "fix") {
         say(`[설정] attachmentFolderPath = ${cur} (사용자 설정 유지)`);
       }
     }
-  } else {
+  } else if (existsSync(join(V, ".obsidian"))) {
     mkdirSync(join(V, ".obsidian"), { recursive: true });
     writeUtf8(appJson, '{"attachmentFolderPath":"첨부/스크린샷"}\n');
     say("[설정] app.json 생성, attachmentFolderPath = 첨부/스크린샷");
@@ -201,12 +205,13 @@ if (mode === "quick" || mode === "fix") {
   if (missingAssets.length > 0) {
     say(`[자산] 없음: ${missingAssets.join(", ")} — /sawhorse:init-vault 필요`);
   } else {
-    say("[자산] 대시보드·base 5종 모두 있음");
+    say("[자산] SI 문서 인덱스 모두 있음");
   }
 
   // 5) .base 가 템플릿 폴더를 제외하는지 (템플릿 노트도 진짜 type 값을 갖고 있다)
   const bases = walk(V, (name) => name.toLowerCase().endsWith(".base"));
   for (const full of bases) {
+    if (!IndexAssets.includes(relOf(full))) continue;
     const txt = readFileSync(full, "utf8");
     // 이미 폴더로 범위를 좁힌 base(개선의 프로젝트 범위)는 템플릿이 섞일 수 없으므로 건드리지 않는다.
     const scoped = /file\.inFolder\("[^"]+"\)/.test(txt);
@@ -219,49 +224,6 @@ if (mode === "quick" || mode === "fix") {
         fixed++;
       } else {
         warn.push(`[base] ${relOf(full)} — 템플릿 제외 누락, 구조가 달라 자동 보정 실패`);
-      }
-    }
-  }
-
-  // 5-b) 이슈(및 레거시 개선) 폴더의 범위별 base 존재 확인 + 파생 표 잔존 탐지
-  const impRoot = join(V, ProjectRoot);
-  if (existsSync(impRoot)) {
-    const impDirs = walkDirs(impRoot).filter(
-      (d) => ["이슈", "개선"].includes(basename(d)) && !excluded(d),
-    );
-    for (const d of impDirs) {
-      const mdIn = walk(d, (name) => name.toLowerCase().endsWith(".md"));
-      const hasNote = mdIn.some((full) => {
-        try {
-          return readFileSync(full, "utf8")
-            .split(/\r?\n/)
-            .slice(0, 16)
-            .some((l) => /^type:\s*(이슈|개선)\s*$/.test(l));
-        } catch {
-          return false;
-        }
-      });
-      if (!hasNote) continue;
-      const ownBases = readdirSync(d).filter((n) => n.toLowerCase().endsWith(".base"));
-      if (ownBases.length === 0) {
-        const kind = basename(d) === "이슈" ? "이슈" : "개선(레거시)";
-        say(`[이슈base] ${relOf(d)} — ${kind} 프로젝트 범위 base 없음 (/sawhorse:issues 가 만든다)`);
-      }
-      // 이슈 폴더는 평면이다 — 화면·마일스톤은 프로퍼티가 나눈다. 하위 폴더는 보고만 한다.
-      for (const sd of walkDirs(d, false)) {
-        const n = readdirSync(sd).filter((x) => statSync(join(sd, x)).isFile() && x.toLowerCase().endsWith(".md")).length;
-        if (n > 0) {
-          say(
-            `[이슈폴더] ${relOf(sd)} — 하위 폴더. 이슈 노트를 이슈/ 바로 아래로 둘 것 — 화면·마일스톤은 프로퍼티가 나눈다`,
-          );
-        }
-      }
-      // 노트 프로퍼티를 베껴 둔 표(행이 [[링크]] 로 시작)는 반드시 어긋난다.
-      for (const full of mdIn) {
-        const rows = (readFileSync(full, "utf8").match(/^[ \t]*\|[ \t]*\[\[/gm) || []).length;
-        if (rows >= 3) {
-          say(`[파생표] ${relOf(full)} — 이슈 노트를 베낀 표 ${rows} 행. .base 뷰 임베드로 바꿀 것`);
-        }
       }
     }
   }
@@ -350,7 +312,7 @@ if (mode === "scan" || mode === "fix") {
   const reList = /^\s*([-*+]|\d+\.)\s+/;
   for (const [full, txt] of bodies) {
     const rel = relOf(full);
-    if (rel.startsWith("템플릿/")) continue;
+    if (!documentPath(full) || schemaManaged(txt)) continue;
     const lines = txt.split(/\r?\n/);
     const sections = [];
     let cur = null;
@@ -442,9 +404,9 @@ if (mode === "scan" || mode === "fix") {
   const issues = [];
   for (const [full, raw] of bodies) {
     const rel = relOf(full);
-    if (rel.startsWith("템플릿/")) continue;
+    if (!documentPath(full) || schemaManaged(raw)) continue;
     const name = basename(full);
-    // improve 스킬이 의도적으로 frontmatter 없이 두는 산출물
+    // 과거 문서의 인박스와 MOC는 템플릿 대조에서 제외한다
     if (/^문제목록 - .*\.md$/.test(name) || / 문제목록\.md$/.test(name) || / 이슈목록\.md$/.test(name)) continue;
     if (name === "개선.md" && /(^|\/)개선\/개선\.md$/.test(rel)) continue;
     if (name === "이슈.md" && /(^|\/)이슈\/이슈\.md$/.test(rel)) continue;
@@ -498,19 +460,4 @@ say(`[요약] mode=${mode} · 이동 ${moved} · 교정 ${fixed} · 경고 ${war
 function renameOrCopy(from, to) {
   // 같은 볼륨이면 rename — Move-Item 의미 유지. 실패는 호출자가 경고로 기록한다.
   renameSync(from, to);
-}
-
-function walkDirs(root, recursive = true) {
-  const out = [];
-  const visit = (d) => {
-    for (const name of readdirSync(d)) {
-      const full = join(d, name);
-      if (statSync(full).isDirectory()) {
-        out.push(full);
-        if (recursive) visit(full);
-      }
-    }
-  };
-  visit(root);
-  return out;
 }

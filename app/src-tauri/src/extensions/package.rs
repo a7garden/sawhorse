@@ -365,7 +365,7 @@ fn payload_files(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, String> {
     Ok(output)
 }
 
-fn verify_directory(root: &Path) -> Result<(ExtensionPackageManifest, String), String> {
+pub(crate) fn verify_directory(root: &Path) -> Result<(ExtensionPackageManifest, String), String> {
     let manifest: ExtensionPackageManifest = serde_json::from_slice(
         &fs::read(root.join("extension.json"))
             .map_err(|error| format!("extension.json 읽기 실패: {error}"))?,
@@ -1134,6 +1134,69 @@ pub fn extension_package_list() -> Result<Vec<InstalledPackage>, String> {
     list_installed()
 }
 
+/// 확장 패키지가 기여하는 워크플로 한 편의 요약. 확장 관리의 워크플로 탭이 읽는다.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageWorkflowEntry {
+    pub id: String,
+    pub label: String,
+    pub version: String,
+    pub description: String,
+    pub nodes: usize,
+}
+
+/// 설치된 확장 패키지별 워크플로 기여 목록.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct PackageWorkflowSummary {
+    pub package_id: String,
+    pub package_name: String,
+    pub package_version: String,
+    pub source: String,
+    pub workflows: Vec<PackageWorkflowEntry>,
+}
+
+fn workflow_summaries(
+    installed: Vec<InstalledPackage>,
+) -> Result<Vec<PackageWorkflowSummary>, String> {
+    installed
+        .into_iter()
+        .filter(|package| !package.manifest.contributions.workflows.is_empty())
+        .map(|package| {
+            let directory = Path::new(&package.path);
+            let workflows = package
+                .manifest
+                .contributions
+                .workflows
+                .iter()
+                .map(|path| {
+                    read_json::<crate::workflow::WorkflowDefinition>(directory, path).map(
+                        |definition| PackageWorkflowEntry {
+                            id: definition.id,
+                            label: definition.label,
+                            version: definition.version,
+                            description: definition.description,
+                            nodes: definition.nodes.len(),
+                        },
+                    )
+                })
+                .collect::<Result<Vec<_>, String>>()?;
+            Ok(PackageWorkflowSummary {
+                package_id: package.manifest.id,
+                package_name: package.manifest.name,
+                package_version: package.manifest.version,
+                source: package.source,
+                workflows,
+            })
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn extension_package_workflows() -> Result<Vec<PackageWorkflowSummary>, String> {
+    workflow_summaries(list_installed()?)
+}
+
 #[tauri::command]
 pub fn extension_package_resolve(
     package_id: String,
@@ -1265,6 +1328,28 @@ mod tests {
         adapter.validate().unwrap();
         assert_eq!(adapter.views[0].selection, "multiple");
         assert_eq!(adapter.views[1].selection, "multiple");
+    }
+
+    #[test]
+    fn bundled_mockup_workflow_summary_lists_contributed_workflow() {
+        let package_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../plugin/extension-packages/ui-mockup");
+        let (manifest, digest) = verify_directory(&package_root).unwrap();
+        let summaries = workflow_summaries(vec![InstalledPackage {
+            manifest,
+            digest,
+            path: package_root.display().to_string(),
+            source: "builtin".into(),
+            commit: None,
+            installed_at: String::new(),
+        }])
+        .unwrap();
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].package_id, "ui-mockup");
+        let workflow = &summaries[0].workflows[0];
+        assert_eq!(workflow.id, "mockup-review");
+        assert_eq!(workflow.version, "1.1.0");
+        assert!(workflow.nodes > 0, "노드 수가 요약돼야 한다");
     }
 
     #[test]

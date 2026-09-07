@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { actionJobKey } from "@/lib/jobs";
+import { workflowApi } from "@/features/workbench/api";
 import { RunButton } from "@/components/RunButton";
 import { useApp } from "@/lib/store";
 import { icon as packIcon } from "@/lib/icons";
@@ -28,6 +29,7 @@ import type {
   SettingField,
   SkillState,
   SkillStatus,
+  PackageWorkflowSummary,
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,12 +40,14 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Empty, MarkdownView, PageHeader } from "./common";
 
-type CatalogCategory = "installed" | "marketplace" | "skill";
+type CatalogCategory = "installed" | "marketplace" | "skill" | "workflow";
 
+// 설계 문서(product-organization.md)의 확장 관리 탭 구성: 설치됨 · 마켓플레이스 · 스킬 · 워크플로.
 const CATALOG_TABS: CatalogCategory[] = [
   "installed",
   "marketplace",
   "skill",
+  "workflow",
 ];
 
 function skillVariant(s: SkillState) {
@@ -102,6 +106,12 @@ export default function PacksPage() {
   const [extensionLock, setExtensionLock] = useState<ExtensionLock | null>(
     null,
   );
+  const [packageWorkflows, setPackageWorkflows] = useState<
+    PackageWorkflowSummary[]
+  >([]);
+  const [catalogWorkflows, setCatalogWorkflows] = useState<Set<string>>(
+    new Set(),
+  );
   const [sourceKind, setSourceKind] = useState<
     "local-directory" | "local-file" | "git" | "https"
   >("local-directory");
@@ -115,22 +125,47 @@ export default function PacksPage() {
 
   useEffect(() => {
     void refreshAgents();
-    void Promise.all([api.listExtensionPackages(), api.extensionLock()])
-      .then(([packages, lock]) => {
+    void Promise.all([
+      api.listExtensionPackages(),
+      api.extensionLock(),
+      api.extensionPackageWorkflows(),
+    ])
+      .then(([packages, lock, workflows]) => {
         setInstalled(packages);
         setExtensionLock(lock);
+        setPackageWorkflows(workflows);
       })
       .catch(() => undefined);
   }, [refreshAgents]);
 
   async function refreshExtensionPackages() {
-    const [packages, lock] = await Promise.all([
+    const [packages, lock, workflows] = await Promise.all([
       api.listExtensionPackages(),
       api.extensionLock(),
+      api.extensionPackageWorkflows(),
     ]);
     setInstalled(packages);
     setExtensionLock(lock);
+    setPackageWorkflows(workflows);
   }
+
+  // 워크플로 탭이 열릴 때만 라이브러리 카탈로그를 읽어 등록 여부를 매긴다.
+  useEffect(() => {
+    if (category !== "workflow") return;
+    let alive = true;
+    void workflowApi
+      .catalog()
+      .then((rows) => {
+        if (!alive) return;
+        setCatalogWorkflows(
+          new Set(rows.map((item) => `${item.id}@${item.version}`)),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [category]);
 
   async function installExtensionPackage() {
     if (!sourceLocation.trim()) return;
@@ -499,6 +534,104 @@ export default function PacksPage() {
           </div>
         </div>
       )}
+      {category === "installed" && (
+        <div className="border-b p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">{t("packages.title")}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("packages.subtitle")}
+              </p>
+            </div>
+            <span className="ml-auto flex items-center gap-2">
+              {installed.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {t("install.countSuffix", { n: installed.length })}
+                </span>
+              )}
+              <span className="text-xs text-muted-foreground">
+                {t("install.project")}
+              </span>
+              <Input
+                className="h-8 w-44"
+                value={extensionProject}
+                onChange={(event) => setExtensionProject(event.target.value)}
+              />
+            </span>
+          </div>
+          {installed.length === 0 ? (
+            <p className="text-xs text-muted-foreground">
+              {t("packages.empty")}
+            </p>
+          ) : (
+            <div className="grid gap-2 lg:grid-cols-2">
+              {installed.map((item) => {
+                const locked = extensionLock?.projects[
+                  extensionProject
+                ]?.some(
+                  (entry) =>
+                    entry.id === item.manifest.id &&
+                    entry.digest === item.digest,
+                );
+                return (
+                  <div
+                    key={`${item.manifest.id}-${item.digest}`}
+                    className="rounded-md border p-3 text-xs"
+                  >
+                    <div className="flex items-center gap-2">
+                      <strong>{item.manifest.name}</strong>
+                      <Badge variant="outline">{item.manifest.version}</Badge>
+                      {locked && (
+                        <Badge variant="success">{t("install.pinned")}</Badge>
+                      )}
+                      <Button
+                        className="ml-auto"
+                        size="xs"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => void exportExtensionPackage(item)}
+                      >
+                        <Download className="size-3" /> {t("install.export")}
+                      </Button>
+                      <Button
+                        size="xs"
+                        disabled={busy || locked}
+                        title={t("install.permissionsTitle", {
+                          permissions:
+                            item.manifest.permissions.join(", ") ||
+                            t("install.noPermissions"),
+                        })}
+                        onClick={() => void activateExtensionPackage(item)}
+                      >
+                        {t("install.approveApply")}
+                      </Button>
+                    </div>
+                    <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                      sha256:{item.digest.slice(0, 16)}… · {item.source}
+                    </p>
+                    <p className="mt-1 text-muted-foreground">
+                      {t("packages.contributions", {
+                        views: item.manifest.contributions.views?.length ?? 0,
+                        actions: item.manifest.contributions.actions?.length ?? 0,
+                        skills: item.manifest.contributions.skills?.length ?? 0,
+                        workflows:
+                          item.manifest.contributions.workflows?.length ?? 0,
+                      })}
+                    </p>
+                    {item.manifest.permissions.length > 0 && (
+                      <p className="mt-1">
+                        {t("install.permissions", {
+                          permissions: item.manifest.permissions.join(", "),
+                        })}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
       {category === "marketplace" && (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <ExtensionMarketplace
@@ -516,9 +649,6 @@ export default function PacksPage() {
           >
         <summary className="cursor-pointer text-sm font-medium">
           {t("install.title")}
-          {installed.length > 0
-            ? t("install.countSuffix", { n: installed.length })
-            : ""}
         </summary>
         <Card className="mt-3">
           <CardHeader className="pb-2">
@@ -569,78 +699,6 @@ export default function PacksPage() {
                 <HardDriveDownload /> {t("install.verifyInstall")}
               </Button>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                {t("install.project")}
-              </span>
-              <Input
-                className="h-8 w-44"
-                value={extensionProject}
-                onChange={(event) => setExtensionProject(event.target.value)}
-              />
-            </div>
-            {installed.length === 0 ? (
-              <p className="text-xs text-muted-foreground">
-                {t("install.emptyHint")}
-              </p>
-            ) : (
-              <div className="grid gap-2 lg:grid-cols-2">
-                {installed.map((item) => {
-                  const locked = extensionLock?.projects[
-                    extensionProject
-                  ]?.some(
-                    (entry) =>
-                      entry.id === item.manifest.id &&
-                      entry.digest === item.digest,
-                  );
-                  return (
-                    <div
-                      key={`${item.manifest.id}-${item.digest}`}
-                      className="rounded-md border p-3 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <strong>{item.manifest.name}</strong>
-                        <Badge variant="outline">{item.manifest.version}</Badge>
-                        {locked && (
-                          <Badge variant="success">{t("install.pinned")}</Badge>
-                        )}
-                        <Button
-                          className="ml-auto"
-                          size="xs"
-                          variant="ghost"
-                          disabled={busy}
-                          onClick={() => void exportExtensionPackage(item)}
-                        >
-                          <Download className="size-3" /> {t("install.export")}
-                        </Button>
-                        <Button
-                          size="xs"
-                          disabled={busy || locked}
-                          title={t("install.permissionsTitle", {
-                            permissions:
-                              item.manifest.permissions.join(", ") ||
-                              t("install.noPermissions"),
-                          })}
-                          onClick={() => void activateExtensionPackage(item)}
-                        >
-                          {t("install.approveApply")}
-                        </Button>
-                      </div>
-                      <p className="mt-1 font-mono text-[10px] text-muted-foreground">
-                        sha256:{item.digest.slice(0, 16)}… · {item.source}
-                      </p>
-                      {item.manifest.permissions.length > 0 && (
-                        <p className="mt-1">
-                          {t("install.permissions", {
-                            permissions: item.manifest.permissions.join(", "),
-                          })}
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </CardContent>
         </Card>
           </details>
@@ -701,6 +759,82 @@ export default function PacksPage() {
                 <MarkdownView src={skillDoc.body} />
               </CardContent>
             </Card>
+          )}
+        </div>
+      )}
+      {category === "workflow" && (
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">{t("workflows.title")}</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t("workflows.subtitle")}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto shrink-0"
+              onClick={() => setPage("workflows")}
+            >
+              {t("workflows.openStudio")}
+            </Button>
+          </div>
+          {packageWorkflows.length === 0 ? (
+            <Empty>{t("workflows.empty")}</Empty>
+          ) : (
+            <div className="grid gap-3 lg:grid-cols-2">
+              {packageWorkflows.map((summary) => (
+                <Card key={summary.packageId}>
+                  <CardHeader className="pb-1">
+                    <CardTitle className="flex flex-wrap items-center gap-2 text-[13px]">
+                      {summary.packageName}
+                      <Badge variant="secondary">
+                        v{summary.packageVersion}
+                      </Badge>
+                      <Badge variant="outline">
+                        {summary.source === "builtin"
+                          ? t("source.builtin")
+                          : t("source.user")}
+                      </Badge>
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {summary.workflows.map((workflow) => {
+                      const published = catalogWorkflows.has(
+                        `${workflow.id}@${workflow.version}`,
+                      );
+                      return (
+                        <div
+                          key={`${workflow.id}@${workflow.version}`}
+                          className="rounded-md border p-2.5"
+                        >
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="min-w-0 flex-1 truncate font-medium">
+                              {workflow.label}
+                            </span>
+                            <Badge variant={published ? "success" : "outline"}>
+                              {published
+                                ? t("workflows.published")
+                                : t("workflows.pending")}
+                            </Badge>
+                          </div>
+                          {workflow.description && (
+                            <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                              {workflow.description}
+                            </p>
+                          )}
+                          <p className="mt-1 font-mono text-[10px] text-muted-foreground">
+                            {workflow.id} · v{workflow.version} ·{" "}
+                            {t("workflows.nodes", { n: workflow.nodes })}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </div>
       )}

@@ -1,8 +1,8 @@
 {
   "id": "export",
   "label": "XLSX 내보내기",
-  "description": "현재 이슈 질의를 검증 가능한 XLSX 보고서로 내보냅니다.",
-  "prompt": "/{{ns}}:xlsx-export",
+  "description": "현재 프로젝트의 작업을 검증 가능한 XLSX 보고서로 내보냅니다.",
+  "prompt": "/{{ns}}:xlsx-export --project {{projectId}}",
   "cwd": "workspace",
   "params": [],
   "featured": false

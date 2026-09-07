@@ -3,24 +3,36 @@
   "id": "xlsx-export",
   "publisher": "sawhorse",
   "name": "XLSX Export",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "engineApi": "^1.0",
   "dependencies": [],
-  "provides": ["exporter:xlsx"],
+  "provides": [
+    "exporter:xlsx"
+  ],
   "contributions": {
     "workflows": [],
     "schemas": [],
     "templates": [],
-    "views": ["views/reports.json"],
-    "actions": ["actions/export.json"],
-    "skills": ["skills/xlsx-export"],
+    "views": [
+      "views/reports.json"
+    ],
+    "actions": [
+      "actions/export.json"
+    ],
+    "skills": [
+      "skills/xlsx-export"
+    ],
     "analyzers": [],
     "exporters": []
   },
-  "permissions": ["vault:read", "vault:write", "adapter:xlsx-export"],
+  "permissions": [
+    "vault:read",
+    "vault:write",
+    "adapter:xlsx-export"
+  ],
   "fileDigests": {
-    "actions/export.json": "af57f1e3b673fc9ef800097d52ece26659ffac7ec7efbf4bbd88cb23a380f2ff",
-    "skills/xlsx-export/SKILL.md": "baaa7714089a288e6c81302d370a431da5d135b43bd3ebf8ed4c465ec1dc70ad",
-    "views/reports.json": "59caa546b2c5728592c7cb1a649f93ac2782ef9241d57f5b274c5216c7288b45"
+    "actions/export.json": "7b07ac8837aeaa519ac5c4ca4debbc4f6de9f8a5419ce6b28b0a0eab615bcf31",
+    "skills/xlsx-export/SKILL.md": "01761a42ca6e6aa92f79985933d485d150d8f75ac2bf62c667bae1da3c7af64b",
+    "views/reports.json": "518ff8df12cdfb17ac6f73fad5a61f2afa11287db58c6e48060e807476e43f75"
   }
 }

@@ -119,7 +119,19 @@ pub fn list_skills(root: &Path) -> Vec<SkillInfo> {
         let Ok(rd) = std::fs::read_dir(&dir) else {
             continue;
         };
+        // A pack manifest owns its public skill catalog. Old directories left by
+        // an earlier installation must not reappear just because they still exist.
+        let declared = dir.parent().filter(|parent| parent.join("pack.json").is_file())
+            .map(|parent| -> Vec<String> {
+                std::fs::read_to_string(parent.join("pack.json")).ok()
+                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+                    .and_then(|value| value.get("skills")?.as_array().cloned())
+                    .unwrap_or_default().iter().filter_map(|value| value.as_str().map(str::to_owned)).collect()
+            });
         for entry in rd.flatten() {
+            if declared.as_ref().is_some_and(|names| !names.iter().any(|name| entry.file_name() == name.as_str())) {
+                continue;
+            }
             let p = entry.path();
             if !p.is_dir() {
                 continue;
@@ -301,6 +313,22 @@ mod tests {
         assert_eq!(got[0].name, "aaa");
         assert_eq!(got[1].description, "last");
         fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn pack_catalog_does_not_rediscover_retired_skill_directories() {
+        let root = tempdir("retired-skills");
+        fs::create_dir_all(root.join(".claude-plugin")).unwrap();
+        fs::write(root.join(MARKER), r#"{"skills":["./packs/si/skills"]}"#).unwrap();
+        for name in ["issues", "improve", "improve-excel"] {
+            let path = root.join("packs/si/skills").join(name);
+            fs::create_dir_all(&path).unwrap();
+            fs::write(path.join("SKILL.md"), format!("---\nname: {name}\ndescription: example\n---\n")).unwrap();
+        }
+        fs::write(root.join("packs/si/pack.json"), r#"{"skills":["issues"]}"#).unwrap();
+        let skills = list_skills(&root);
+        assert_eq!(skills.iter().map(|skill| skill.name.as_str()).collect::<Vec<_>>(), vec!["issues"]);
+        fs::remove_dir_all(root).unwrap();
     }
 
     /// 동봉된 plugin.json 의 skills 배열(팩 디렉터리 포함)을 모두 훑는지.

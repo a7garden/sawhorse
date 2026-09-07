@@ -227,6 +227,12 @@ impl PackManifest {
         if self.name.trim().is_empty() {
             self.name = self.id.clone();
         }
+        let mut seen_skills = std::collections::HashSet::new();
+        for skill in &self.skills {
+            if !valid_id(skill) || !seen_skills.insert(skill) {
+                return Err(format!("스킬 이름이 유효하고 중복되지 않아야 합니다: {skill}"));
+            }
+        }
         for f in &mut self.settings {
             if f.key.trim().is_empty() {
                 return Err("설정 항목에 key 가 없습니다".into());
@@ -1047,6 +1053,14 @@ mod tests {
 
     /// 동봉한 팩이 실제로 파싱되는지 — 깨진 매니페스트를 배포하지 않기 위한 자물쇠.
     #[test]
+    fn skill_names_are_unique_safe_directory_names() {
+        for skills in [vec!["../escape"], vec!["/absolute"], vec!["wiki", "wiki"]] {
+            let mut manifest = PackManifest { id: "demo".into(), skills: skills.into_iter().map(str::to_owned).collect(), ..Default::default() };
+            assert!(manifest.validate().is_err());
+        }
+    }
+
+    #[test]
     fn shipped_packs_parse() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugin");
         let reg = load_registry_from(Some(&root), Path::new("/nonexistent"), &[]);
@@ -1054,6 +1068,13 @@ mod tests {
 
         let si = reg.get("si").expect("si 팩이 있어야 한다");
         assert!(si.manifest.skills.contains(&"issues".to_string()));
+        for retired in ["improve", "improve-excel"] {
+            assert!(!si.manifest.skills.iter().any(|name| name == retired));
+            assert!(!si.skills_dir.join(retired).exists());
+        }
+        assert!(si.manifest.workspace.files.iter().all(|seed|
+            !["이슈.md", "개선.md", "마일스톤.md"].iter().any(|name| seed.dest.ends_with(name))
+        ));
         assert_eq!(
             si.skills_dir,
             root.join("packs/si/skills"),
