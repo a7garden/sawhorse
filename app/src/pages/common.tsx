@@ -360,7 +360,7 @@ export function MarkdownView({
       )}
     >
       <ReactMarkdown
-        urlTransform={(url, key) => key === "src" && /^data:image\/(png|jpeg|webp|gif);base64,/i.test(url) ? url : defaultUrlTransform(url)}
+        urlTransform={(url, key) => key === "src" && /^(blob:|data:image\/(png|jpeg|webp|gif);base64,)/i.test(url) ? url : defaultUrlTransform(url)}
         remarkPlugins={[remarkGfm]}
         components={{
           img: ({ src: imgSrc, alt, title }) => (

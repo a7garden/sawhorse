@@ -287,43 +287,47 @@ export default function SettingsPage() {
           <div className="h-40 animate-pulse rounded-xl border bg-muted/40" />
         </div>
       ) : (
-        <div className="flex items-start">
+        <div className="flex">
           {/* 섹션 레일. 앵커 내비 — 누르면 해당 섹션으로 스크롤하고, 스크롤 위치를
               따라 현재 섹션을 밝힌다. 목차만 말하고 설명은 본문 머리에 한 번만 둔다.
-              진단에 문항이 있으면 점을 찍어 눈길을 끈다. */}
-          <nav
-            aria-label={t("page.title")}
-            className="sticky top-[58px] hidden max-h-[calc(100dvh-58px)] w-36 shrink-0 flex-col gap-0.5 self-start overflow-y-auto border-r p-3 md:flex"
-          >
-            {SECTION_IDS.map((id) => {
-              const Icon = SECTION_ICONS[id];
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-current={active === id ? "location" : undefined}
-                  onClick={() => scrollToSection(id)}
-                  className={cn(
-                    "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors",
-                    active === id
-                      ? "bg-secondary font-medium text-secondary-foreground"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-                  )}
-                >
-                  <Icon className="size-3.5 shrink-0" />
-                  <span className="min-w-0 flex-1 leading-tight">
-                    {t(`sections.${id}`)}
-                  </span>
-                  {id === "diagnostics" && diagProblem && (
-                    <span
-                      className="size-1.5 shrink-0 rounded-full bg-warning"
-                      aria-hidden
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+              진단에 문항이 있으면 점을 찍어 눈길을 끈다. 세로선은 nav 이 아니라
+              감싸는 열이 가져야 본문 끝까지 내려온다 — nav 자체는 버튼 몇 개 분
+              높이뿐이라 선이 중간에서 끊긴다. */}
+          <div className="hidden w-36 shrink-0 border-r md:block">
+            <nav
+              aria-label={t("page.title")}
+              className="sticky top-[58px] flex max-h-[calc(100dvh-58px)] flex-col gap-0.5 overflow-y-auto p-3"
+            >
+              {SECTION_IDS.map((id) => {
+                const Icon = SECTION_ICONS[id];
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-current={active === id ? "location" : undefined}
+                    onClick={() => scrollToSection(id)}
+                    className={cn(
+                      "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors",
+                      active === id
+                        ? "bg-secondary font-medium text-secondary-foreground"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+                    )}
+                  >
+                    <Icon className="size-3.5 shrink-0" />
+                    <span className="min-w-0 flex-1 leading-tight">
+                      {t(`sections.${id}`)}
+                    </span>
+                    {id === "diagnostics" && diagProblem && (
+                      <span
+                        className="size-1.5 shrink-0 rounded-full bg-warning"
+                        aria-hidden
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
 
           <div className="min-w-0 flex-1">
             {/* 좁은 화면에서는 레일 대신 칩 한 줄. 누르면 마찬가지로 스크롤한다. */}
