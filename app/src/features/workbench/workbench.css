@@ -106,7 +106,7 @@
   background: color-mix(in srgb, var(--wb-paper) 70%, transparent);
   padding: 25px;
 }
-.wb-empty svg {
+.wb-empty > svg {
   color: var(--wb-teal);
 }
 .wb-empty strong {
@@ -736,7 +736,7 @@
 }
 .wb-search-hit small {
   font-family: ui-monospace, monospace;
-  color: #94a09c;
+  color: var(--wb-muted);
   font-size: 10px;
 }
 .wb-project-grid {
@@ -792,10 +792,12 @@
   margin-top: 10px;
   padding-top: 9px;
   font-size: 10px;
-  color: #94a09c;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.wb-project-card footer > span {
+  color: #94a09c;
 }
 .wb-form {
   display: grid;
