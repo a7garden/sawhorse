@@ -1,0 +1,2 @@
+# Extension payload digests cover exact bytes; keep text identical on Windows.
+plugin/extension-packages/** text=auto eol=lf
