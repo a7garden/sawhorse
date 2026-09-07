@@ -36,14 +36,22 @@ import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { Empty, PageHeader } from "./common";
 
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+
 const REMOTE_STATUSES = ["prepared", "approved", "uncertain", "failed"];
 
-const REMOTE_STATUS_KO: Record<string, string> = {
-  prepared: "승인대기",
-  approved: "승인됨",
-  uncertain: "결과 불확실",
-  failed: "실패",
+const REMOTE_STATUS_KEY: Record<string, string> = {
+  prepared: "sources.remoteStatus.prepared",
+  approved: "sources.remoteStatus.approved",
+  uncertain: "sources.remoteStatus.uncertain",
+  failed: "sources.remoteStatus.failed",
 };
+
+function remoteStatusLabel(t: TFunction, s: string): string {
+  const key = REMOTE_STATUS_KEY[s];
+  return key ? t(key) : s;
+}
 
 function remoteStatusVariant(
   s: string,
@@ -54,10 +62,15 @@ function remoteStatusVariant(
   return "outline";
 }
 
-const REMOTE_KIND_KO: Record<string, string> = {
-  push: "푸시",
-  pr_create: "PR 생성",
+const REMOTE_KIND_KEY: Record<string, string> = {
+  push: "sources.remoteKind.push",
+  pr_create: "sources.remoteKind.pr_create",
 };
+
+function remoteKindLabel(t: TFunction, s: string): string {
+  const key = REMOTE_KIND_KEY[s];
+  return key ? t(key) : s;
+}
 
 function parseIssue(payload: string): GitHubIssuePayload | null {
   try {
@@ -125,10 +138,15 @@ function adapterOf(config: SourceInstanceCfg): string {
   return isFeedCfg(config) ? "builtin:rss" : "builtin:github";
 }
 
-const ADAPTER_KO: Record<string, string> = {
-  "builtin:rss": "피드",
-  "builtin:github": "GitHub",
+const ADAPTER_KEY: Record<string, string> = {
+  "builtin:rss": "sources.adapter.rss",
+  "builtin:github": "sources.adapter.github",
 };
+
+function adapterLabel(t: TFunction, s: string): string {
+  const key = ADAPTER_KEY[s];
+  return key ? t(key) : s;
+}
 
 interface SyncInfo {
   ok: boolean;
@@ -141,6 +159,7 @@ export default function SourcesPage({
 }: {
   scope?: "rss" | "github";
 }) {
+  const { t } = useTranslation("sessions");
   const [bundles, setBundles] = useState<ExtensionBundle[]>([]);
   const [instances, setInstances] = useState<SourceInstanceRow[]>([]);
   const [deadLetters, setDeadLetters] = useState<DeadLetter[]>([]);
@@ -253,8 +272,12 @@ export default function SourcesPage({
       `refresh:${instance.instanceId}`,
       () => api.sourcesRefresh(instance.instanceId),
       (r) => {
-        noteSync(instance.instanceId, true, `기사 ${r.discovered}건 발견`);
-        return `기사 ${r.discovered}건을 발견했습니다.`;
+        noteSync(
+          instance.instanceId,
+          true,
+          t("sources.sync.discoveredNote", { n: r.discovered }),
+        );
+        return t("sources.toast.feedRefreshed", { n: r.discovered });
       },
     );
   }
@@ -267,10 +290,18 @@ export default function SourcesPage({
         noteSync(
           instance.instanceId,
           true,
-          `읽음 ${r.fetched} · 신규 ${r.stagedNew} · 갱신 ${r.stagedUpdates} · PR 제외 ${r.skippedPullRequests}` +
-            (r.cursor ? ` · cursor ${r.cursor}` : ""),
+          t("sources.sync.tickNote", {
+            fetched: r.fetched,
+            stagedNew: r.stagedNew,
+            stagedUpdates: r.stagedUpdates,
+            skipped: r.skippedPullRequests,
+          }) + (r.cursor ? ` · cursor ${r.cursor}` : ""),
         );
-        return `이슈 ${r.fetched}건을 읽었습니다 — 가져오기 후보 ${r.stagedNew}건, 갱신 ${r.stagedUpdates}건.`;
+        return t("sources.toast.issuesFetched", {
+          fetched: r.fetched,
+          stagedNew: r.stagedNew,
+          stagedUpdates: r.stagedUpdates,
+        });
       },
     );
   }
@@ -286,7 +317,10 @@ export default function SourcesPage({
     const ib = importFor;
     if (!ib) return;
     if (!importProjectId.trim() || !importNotesDir.trim()) {
-      setMsg({ ok: false, text: "projectId와 notesDir는 필수입니다." });
+      setMsg({
+        ok: false,
+        text: t("sources.validation.projectAndNotesDirRequired"),
+      });
       return;
     }
     setImportFor(null);
@@ -299,7 +333,7 @@ export default function SourcesPage({
           notesDir: importNotesDir.trim(),
           idPrefix: importIdPrefix.trim(),
         }),
-      (r) => `문서를 만들었습니다: ${r.notePath}`,
+      (r) => t("sources.toast.noteCreated", { path: r.notePath }),
     );
   }
 
@@ -307,31 +341,31 @@ export default function SourcesPage({
     const op = execFor;
     if (!op) return;
     if (!execRepoDir.trim()) {
-      setMsg({ ok: false, text: "로컬 저장소 경로(repoDir)를 입력하세요." });
+      setMsg({ ok: false, text: t("sources.validation.repoDirRequired") });
       return;
     }
     setExecFor(null);
     void act(
       `exec:${op.id}`,
       () => api.remoteOperationExecute(op.id, execRepoDir.trim()),
-      (r) => `실행 완료: ${truncate(r, 160)}`,
+      (r) => t("sources.toast.executed", { output: truncate(r, 160) }),
     );
   }
 
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title={scope === "rss" ? "읽을거리 소스" : "GitHub 이슈 연동"}
+        title={scope === "rss" ? t("sources.title.rss") : t("sources.title.github")}
       >
         <Button
           size="sm"
           disabled={!bundles.length}
           onClick={() => setAddOpen(true)}
         >
-          <Plus /> 연결 추가
+          <Plus /> {t("actions.addConnection")}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void reload()}>
-          <RefreshCw className="size-3" /> 새로고침
+          <RefreshCw className="size-3" /> {t("actions.refresh")}
         </Button>
       </PageHeader>
 
@@ -348,7 +382,9 @@ export default function SourcesPage({
 
       <div className="flex min-h-0 flex-1">
         <div className="w-56 shrink-0 overflow-y-auto border-r p-2">
-          {instances.length === 0 && <Empty>연결된 소스가 없습니다.</Empty>}
+          {instances.length === 0 && (
+            <Empty>{t("sources.empty.noInstances")}</Empty>
+          )}
           {instances.map((i) => {
             const feedCfg = isFeedCfg(i.config) ? i.config : null;
             const ghCfg = isGitHubCfg(i.config) ? i.config : null;
@@ -370,14 +406,18 @@ export default function SourcesPage({
                   </span>
                   <span className="block truncate text-[10px] text-muted-foreground">
                     {feedCfg
-                      ? `피드 ${feedCfg.feeds.length}곳`
+                      ? t("sources.instance.feedCount", {
+                          n: feedCfg.feeds.length,
+                        })
                       : ghCfg?.repository || "GitHub"}
                   </span>
                 </span>
                 {info && !info.ok ? (
                   <CircleAlert className="size-3.5 shrink-0 text-destructive" />
                 ) : (
-                  <Badge variant="outline">{feedCfg ? "피드" : "GitHub"}</Badge>
+                  <Badge variant="outline">
+                    {feedCfg ? t("sources.adapter.rss") : t("sources.adapter.github")}
+                  </Badge>
                 )}
               </button>
             );
@@ -386,9 +426,7 @@ export default function SourcesPage({
 
         <div className="min-w-0 flex-1 overflow-y-auto p-4">
           {!sel && (
-            <Empty>
-              왼쪽에서 연결을 선택하거나 「연결 추가」로 새 소스를 붙이세요.
-            </Empty>
+            <Empty>{t("sources.empty.selectInstance")}</Empty>
           )}
           {sel && (
             <div className="space-y-3">
@@ -407,16 +445,19 @@ export default function SourcesPage({
                   <Card>
                     <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="flex items-center gap-2 text-[13px]">
-                        <Inbox className="size-3.5" /> 가져오기 후보 (새 이슈)
+                        <Inbox className="size-3.5" />{" "}
+                        {t("sources.importCandidates.title")}
                       </CardTitle>
                       <span className="text-[11px] text-muted-foreground">
-                        {importCandidates.length}건
+                        {t("sources.candidatesCount", {
+                          n: importCandidates.length,
+                        })}
                       </span>
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {importCandidates.length === 0 && (
                         <p className="text-[11px] text-muted-foreground">
-                          가져올 새 이슈가 없습니다.
+                          {t("sources.importCandidates.empty")}
                         </p>
                       )}
                       {importCandidates.map((ib) => {
@@ -447,7 +488,8 @@ export default function SourcesPage({
                               disabled={busy != null}
                               onClick={() => openImportForm(ib)}
                             >
-                              <Download className="size-3" /> 수락
+                              <Download className="size-3" />{" "}
+                              {t("actions.accept")}
                             </Button>
                           </div>
                         );
@@ -458,16 +500,18 @@ export default function SourcesPage({
                   <Card>
                     <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
                       <CardTitle className="text-[13px]">
-                        이슈 변경 사항
+                        {t("sources.updates.title")}
                       </CardTitle>
                       <span className="text-[11px] text-muted-foreground">
-                        {updateCandidates.length}건
+                        {t("sources.candidatesCount", {
+                          n: updateCandidates.length,
+                        })}
                       </span>
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {updateCandidates.length === 0 && (
                         <p className="text-[11px] text-muted-foreground">
-                          연결된 문서에 반영할 갱신이 없습니다.
+                          {t("sources.updates.empty")}
                         </p>
                       )}
                       {updateCandidates.map((ib) => {
@@ -504,11 +548,14 @@ export default function SourcesPage({
                                 void act(
                                   `update:${ib.id}`,
                                   () => api.inboundAcceptUpdate(ib.id),
-                                  (r) => `갱신을 반영했습니다: ${r.notePath}`,
+                                  (r) =>
+                                    t("sources.toast.updateApplied", {
+                                      path: r.notePath,
+                                    }),
                                 )
                               }
                             >
-                              수락
+                              {t("actions.accept")}
                             </Button>
                           </div>
                         );
@@ -523,8 +570,7 @@ export default function SourcesPage({
                       void act(
                         `approve:${op.id}`,
                         () => api.remoteOperationApprove(op.id, "human"),
-                        () =>
-                          "원격 쓰기를 승인했습니다 — 이제 실행할 수 있습니다.",
+                        () => t("sources.toast.remoteApproved"),
                       )
                     }
                     onExecute={(op) => {
@@ -539,13 +585,13 @@ export default function SourcesPage({
                             op.id,
                             created,
                             created
-                              ? "사후 확인: 생성됨"
-                              : "사후 확인: 생성 안 됨",
+                              ? t("sources.remote.reconciledCreatedNote")
+                              : t("sources.remote.reconciledMissingNote"),
                           ),
                         () =>
                           created
-                            ? "생성됨으로 재조정했습니다."
-                            : "실패로 재조정했습니다 — 다시 준비할 수 있습니다.",
+                            ? t("sources.toast.reconciledCreated")
+                            : t("sources.toast.reconciledMissing"),
                       )
                     }
                   />
@@ -576,7 +622,7 @@ export default function SourcesPage({
       <Dialog
         open={importFor != null}
         onClose={() => setImportFor(null)}
-        title="가져오기 수락"
+        title={t("sources.dialog.importTitle")}
       >
         {importFor && (
           <div className="space-y-3">
@@ -584,32 +630,32 @@ export default function SourcesPage({
               const p = parseIssue(importFor.payload);
               return p ? (
                 <p className="text-xs text-muted-foreground">
-                  #{p.number} {p.title} — 문서로 가져옵니다.
+                  {t("sources.import.intro", { n: p.number, title: p.title })}
                 </p>
               ) : null;
             })()}
             <div className="space-y-1">
-              <Label>projectId (등록된 코어 프로젝트 UUID)</Label>
+              <Label>{t("sources.import.projectIdLabel")}</Label>
               <Input
                 value={importProjectId}
                 onChange={(e) => setImportProjectId(e.target.value)}
-                placeholder="예: 5fce…"
+                placeholder={t("sources.import.projectIdPlaceholder")}
               />
             </div>
             <div className="space-y-1">
-              <Label>notesDir (문서를 만들 디렉터리)</Label>
+              <Label>{t("sources.import.notesDirLabel")}</Label>
               <PathInput
                 value={importNotesDir}
                 onValueChange={(value) => setImportNotesDir(value)}
-                placeholder="예: 보관함/이슈"
+                placeholder={t("sources.import.notesDirPlaceholder")}
               />
             </div>
             <div className="space-y-1">
-              <Label>idPrefix (문서 파일 이름 접두)</Label>
+              <Label>{t("sources.import.idPrefixLabel")}</Label>
               <Input
                 value={importIdPrefix}
                 onChange={(e) => setImportIdPrefix(e.target.value)}
-                placeholder="예: gh-"
+                placeholder={t("sources.import.idPrefixPlaceholder")}
               />
             </div>
             <div className="flex justify-end gap-2">
@@ -618,14 +664,14 @@ export default function SourcesPage({
                 size="sm"
                 onClick={() => setImportFor(null)}
               >
-                취소
+                {t("actions.cancel")}
               </Button>
               <Button
                 size="sm"
                 disabled={busy != null}
                 onClick={() => void submitImport()}
               >
-                가져오기
+                {t("actions.import")}
               </Button>
             </div>
           </div>
@@ -635,16 +681,18 @@ export default function SourcesPage({
       <Dialog
         open={execFor != null}
         onClose={() => setExecFor(null)}
-        title="원격 쓰기 실행"
+        title={t("sources.dialog.execTitle")}
       >
         {execFor && (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              {REMOTE_KIND_KO[execFor.kind] ?? execFor.kind} (
-              {execFor.capability})을 로컬 저장소에서 실행합니다.
+              {t("sources.exec.summary", {
+                kind: remoteKindLabel(t, execFor.kind),
+                capability: execFor.capability,
+              })}
             </p>
             <div className="space-y-1">
-              <Label>로컬 저장소 경로 (repoDir)</Label>
+              <Label>{t("sources.exec.repoDirLabel")}</Label>
               <PathInput
                 value={execRepoDir}
                 onValueChange={(value) => setExecRepoDir(value)}
@@ -657,14 +705,14 @@ export default function SourcesPage({
                 size="sm"
                 onClick={() => setExecFor(null)}
               >
-                취소
+                {t("actions.cancel")}
               </Button>
               <Button
                 size="sm"
                 disabled={busy != null}
                 onClick={() => void submitExecute()}
               >
-                실행
+                {t("actions.execute")}
               </Button>
             </div>
           </div>
@@ -691,6 +739,7 @@ function InstanceCard({
   onRefresh: () => void;
   onTick: () => void;
 }) {
+  const { t } = useTranslation("sessions");
   const feedCfg = isFeedCfg(instance.config) ? instance.config : null;
   const ghCfg = isGitHubCfg(instance.config) ? instance.config : null;
   const adapter = adapterOf(instance.config);
@@ -700,21 +749,23 @@ function InstanceCard({
         <div className="min-w-0">
           <CardTitle className="flex items-center gap-2 text-sm">
             {instance.instanceId}
-            <Badge variant="outline">{ADAPTER_KO[adapter] ?? adapter}</Badge>
+            <Badge variant="outline">{adapterLabel(t, adapter)}</Badge>
             {info === undefined ? (
-              <Badge variant="outline">확인 안 됨</Badge>
+              <Badge variant="outline">{t("sources.instance.statusUnknown")}</Badge>
             ) : info.ok ? (
-              <Badge variant="success">연결됨</Badge>
+              <Badge variant="success">{t("sources.instance.connected")}</Badge>
             ) : (
-              <Badge variant="destructive">오류</Badge>
+              <Badge variant="destructive">{t("sources.instance.error")}</Badge>
             )}
           </CardTitle>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            최근 동기화: {info ? `${info.at} — ${info.text}` : "기록 없음"}
+            {t("sources.instance.lastSync", {
+              detail: info ? `${info.at} — ${info.text}` : t("sources.instance.noSync"),
+            })}
           </p>
           {requests && (
             <p className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-              권한:
+              {t("sources.instance.permissions")}
               {requests.repository.length > 0 && (
                 <Badge variant="outline">
                   repository {requests.repository.join(",")}
@@ -741,11 +792,11 @@ function InstanceCard({
         <div className="flex shrink-0 items-center gap-1.5 pl-3">
           {feedCfg ? (
             <Button size="xs" disabled={busy} onClick={onRefresh}>
-              <RefreshCw className="size-3" /> 새로고침
+              <RefreshCw className="size-3" /> {t("actions.refresh")}
             </Button>
           ) : (
             <Button size="xs" disabled={busy} onClick={onTick}>
-              <RefreshCw className="size-3" /> 이슈 가져오기
+              <RefreshCw className="size-3" /> {t("actions.importIssues")}
             </Button>
           )}
         </div>
@@ -766,15 +817,16 @@ function InstanceCard({
         )}
         {ghCfg && (
           <p>
-            {ghCfg.account || "계정 미지정"} ·{" "}
-            {ghCfg.repository || "repo 미지정"} · state {ghCfg.state || "open"}
+            {ghCfg.account || t("sources.gh.accountUnset")} ·{" "}
+            {ghCfg.repository || t("sources.gh.repoUnset")} · state{" "}
+            {ghCfg.state || "open"}
             <span className="ml-1 font-mono" title={ghCfg.repositoryId}>
               {truncate(ghCfg.repositoryId, 24)}
             </span>
           </p>
         )}
         <div>
-          실패 outbox {deadLetters.length}건
+          {t("sources.instance.deadLetterCount", { n: deadLetters.length })}
           {deadLetters.length > 0 && (
             <ul className="mt-1 space-y-0.5 pl-3">
               {deadLetters.slice(0, 5).map((d) => (
@@ -809,31 +861,34 @@ function RemoteOpsCard({
   onExecute: (op: RemoteOperation) => void;
   onReconcile: (op: RemoteOperation, created: boolean) => void;
 }) {
+  const { t } = useTranslation("sessions");
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-[13px]">원격 쓰기 승인 대기</CardTitle>
+        <CardTitle className="text-[13px]">
+          {t("sources.remoteOps.title")}
+        </CardTitle>
         <span className="text-[11px] text-muted-foreground">
-          처리할 작업 {ops.length}건
+          {t("sources.remoteOps.pendingCount", { n: ops.length })}
         </span>
       </CardHeader>
       <CardContent className="space-y-2">
         {ops.length === 0 && (
           <p className="text-[11px] text-muted-foreground">
-            승인·실행·재조정을 기다리는 원격 쓰기가 없습니다.
+            {t("sources.remoteOps.empty")}
           </p>
         )}
         {ops.map((op) => (
           <div key={op.id} className="space-y-1.5 rounded-lg border p-2.5">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant="outline">
-                {REMOTE_KIND_KO[op.kind] ?? op.kind}
+                {remoteKindLabel(t, op.kind)}
               </Badge>
               <span className="min-w-0 truncate font-mono text-[10px] text-muted-foreground">
                 {op.capability}
               </span>
               <Badge variant={remoteStatusVariant(op.status)}>
-                {REMOTE_STATUS_KO[op.status] ?? op.status}
+                {remoteStatusLabel(t, op.status)}
               </Badge>
               <span className="text-[10px] text-muted-foreground">
                 {fmtWhen(op.updatedAt)}
@@ -845,7 +900,7 @@ function RemoteOpsCard({
                     disabled={busy}
                     onClick={() => onApprove(op)}
                   >
-                    승인
+                    {t("actions.approve")}
                   </Button>
                 )}
                 {op.status === "approved" && (
@@ -854,7 +909,7 @@ function RemoteOpsCard({
                     disabled={busy}
                     onClick={() => onExecute(op)}
                   >
-                    <Play className="size-3" /> 실행
+                    <Play className="size-3" /> {t("actions.execute")}
                   </Button>
                 )}
                 {op.status === "uncertain" && (
@@ -865,7 +920,7 @@ function RemoteOpsCard({
                       disabled={busy}
                       onClick={() => onReconcile(op, true)}
                     >
-                      생성됨
+                      {t("sources.remoteOps.created")}
                     </Button>
                     <Button
                       size="xs"
@@ -873,7 +928,7 @@ function RemoteOpsCard({
                       disabled={busy}
                       onClick={() => onReconcile(op, false)}
                     >
-                      생성안됨
+                      {t("sources.remoteOps.notCreated")}
                     </Button>
                   </>
                 )}
@@ -907,6 +962,7 @@ function AddConnectionDialog({
   onSaved: (instanceId: string, okText: string) => Promise<void>;
   onError: (text: string) => void;
 }) {
+  const { t } = useTranslation("sessions");
   const [error, setError] = useState("");
   const onError = (message: string) => {
     setError(message);
@@ -954,15 +1010,17 @@ function AddConnectionDialog({
   }
 
   async function save() {
-    if (!choice) return onError("connector를 선택하세요.");
+    if (!choice) return onError(t("sources.add.errors.selectConnector"));
     const id = name.trim();
-    if (!id) return onError("연결 이름을 입력하세요.");
-    if (takenIds.includes(id)) return onError("이미 있는 연결 이름입니다.");
+    if (!id) return onError(t("sources.add.errors.nameRequired"));
+    if (takenIds.includes(id))
+      return onError(t("sources.add.errors.nameTaken"));
     let config: SourceInstanceCfg;
     let network: string[];
     if (isRss) {
       const rows = feeds.filter((f) => f.url.trim().length > 0);
-      if (rows.length === 0) return onError("feed URL을 하나 이상 입력하세요.");
+      if (rows.length === 0)
+        return onError(t("sources.add.errors.feedUrlRequired"));
       config = {
         feeds: rows.map((f, i) => ({
           name: f.name.trim(),
@@ -975,11 +1033,10 @@ function AddConnectionDialog({
       };
       network = suggestedHosts.filter((h) => granted[h]);
       if (network.length === 0)
-        return onError(
-          "네트워크 도메인 grant가 하나는 필요합니다 — feed 호스트를 승인하세요.",
-        );
+        return onError(t("sources.add.errors.networkGrantRequired"));
     } else {
-      if (!ghRepositoryId.trim()) return onError("repositoryId는 필수입니다.");
+      if (!ghRepositoryId.trim())
+        return onError(t("sources.add.errors.repoIdRequired"));
       config = {
         account: ghAccount.trim(),
         repository: ghRepository.trim(),
@@ -997,7 +1054,7 @@ function AddConnectionDialog({
         config,
         network,
       });
-      await onSaved(id, `${id} 연결을 저장했습니다.`);
+      await onSaved(id, t("sources.toast.connectionSaved", { id }));
     } catch (e) {
       onError(String(e));
     } finally {
@@ -1006,7 +1063,7 @@ function AddConnectionDialog({
   }
 
   return (
-    <Dialog open onClose={onClose} title="연결 추가" wide>
+    <Dialog open onClose={onClose} title={t("sources.dialog.addTitle")} wide>
       {error && (
         <p role="alert" className="mb-3 text-xs text-destructive">
           {error}
@@ -1015,7 +1072,7 @@ function AddConnectionDialog({
       <div className="space-y-3">
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label>연결 서비스</Label>
+            <Label>{t("sources.add.serviceLabel")}</Label>
             <Select
               className="w-full"
               value={choiceKey}
@@ -1029,18 +1086,18 @@ function AddConnectionDialog({
             </Select>
           </div>
           <div className="space-y-1">
-            <Label>연결 이름</Label>
+            <Label>{t("sources.add.nameLabel")}</Label>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="예: 내-블로그-피드"
+              placeholder={t("sources.add.namePlaceholder")}
             />
           </div>
         </div>
 
         {choice && (
           <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-            요청 권한:
+            {t("sources.add.requestedPermissions")}
             {choice.requests.repository.length > 0 && (
               <Badge variant="outline">
                 repository {choice.requests.repository.join(",")}
@@ -1066,12 +1123,12 @@ function AddConnectionDialog({
 
         {isRss && (
           <div className="space-y-2">
-            <Label>RSS 피드</Label>
+            <Label>{t("sources.add.rssLabel")}</Label>
             {feeds.map((f, i) => (
               <div key={i} className="flex items-center gap-1.5">
                 <Input
                   className="w-32 shrink-0"
-                  placeholder="이름"
+                  placeholder={t("sources.add.feedNamePlaceholder")}
                   value={f.name}
                   onChange={(e) => setFeed(i, { name: e.target.value })}
                 />
@@ -1083,7 +1140,7 @@ function AddConnectionDialog({
                 />
                 <Input
                   className="w-32 shrink-0"
-                  placeholder="태그 (쉼표)"
+                  placeholder={t("sources.add.tagsPlaceholder")}
                   value={tagsText[i] ?? ""}
                   onChange={(e) =>
                     setTagsText((t) =>
@@ -1094,7 +1151,7 @@ function AddConnectionDialog({
                 <Button
                   size="icon"
                   variant="ghost"
-                  aria-label="feed 삭제"
+                  aria-label={t("sources.add.feedRemoveAria")}
                   disabled={feeds.length === 1}
                   onClick={() => {
                     setFeeds((rows) => rows.filter((_, j) => j !== i));
@@ -1117,10 +1174,10 @@ function AddConnectionDialog({
                   setTagsText((t) => [...t, ""]);
                 }}
               >
-                <Plus className="size-3" /> 피드 추가
+                <Plus className="size-3" /> {t("sources.add.addFeed")}
               </Button>
               <div className="flex items-center gap-1.5">
-                <Label>새로고침(분)</Label>
+                <Label>{t("sources.add.refreshMinutesLabel")}</Label>
                 <Input
                   type="number"
                   className="h-7 w-20"
@@ -1130,24 +1187,24 @@ function AddConnectionDialog({
               </div>
             </div>
             <div className="space-y-1">
-              <Label>접속할 웹사이트 허용</Label>
+              <Label>{t("sources.add.allowHostsLabel")}</Label>
               <div className="flex flex-wrap gap-1.5">
                 {suggestedHosts.length === 0 && (
                   <span className="text-[11px] text-muted-foreground">
-                    RSS 주소를 입력하면 접속할 웹사이트가 표시됩니다.
+                    {t("sources.add.hostsHint")}
                   </span>
                 )}
                 {suggestedHosts.map((h) => (
                   <button key={h} type="button" onClick={() => toggleGrant(h)}>
                     <Badge variant={granted[h] ? "success" : "outline"}>
-                      {granted[h] ? h : `${h} (거부)`}
+                      {granted[h] ? h : t("sources.add.hostDenied", { host: h })}
                     </Badge>
                   </button>
                 ))}
               </div>
               {missingHosts.length > 0 && (
                 <p className="text-[10px] text-warning-foreground">
-                  승인하지 않은 호스트의 feed는 동기화되지 않습니다.
+                  {t("sources.add.deniedHostsWarning")}
                 </p>
               )}
             </div>
@@ -1157,7 +1214,7 @@ function AddConnectionDialog({
         {isGithub && (
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label>계정 (account)</Label>
+              <Label>{t("sources.add.accountLabel")}</Label>
               <Input
                 value={ghAccount}
                 onChange={(e) => setGhAccount(e.target.value)}
@@ -1165,7 +1222,7 @@ function AddConnectionDialog({
               />
             </div>
             <div className="space-y-1">
-              <Label>저장소 (owner/repo)</Label>
+              <Label>{t("sources.add.repoLabel")}</Label>
               <Input
                 value={ghRepository}
                 onChange={(e) => setGhRepository(e.target.value)}
@@ -1173,7 +1230,7 @@ function AddConnectionDialog({
               />
             </div>
             <div className="space-y-1">
-              <Label>repositoryId (불변 id)</Label>
+              <Label>{t("sources.add.repoIdLabel")}</Label>
               <Input
                 value={ghRepositoryId}
                 onChange={(e) => setGhRepositoryId(e.target.value)}
@@ -1181,7 +1238,7 @@ function AddConnectionDialog({
               />
             </div>
             <div className="space-y-1">
-              <Label>읽어올 이슈 상태</Label>
+              <Label>{t("sources.add.stateLabel")}</Label>
               <Select
                 className="w-full"
                 value={ghState}
@@ -1197,16 +1254,16 @@ function AddConnectionDialog({
 
         {!isRss && !isGithub && choice && (
           <p className="text-[11px] text-warning-foreground">
-            이 어댑터({choice.adapter})는 설정 폼이 아직 없습니다.
+            {t("sources.add.noConfigForm", { adapter: choice.adapter })}
           </p>
         )}
 
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onClose}>
-            취소
+            {t("actions.cancel")}
           </Button>
           <Button size="sm" disabled={saving} onClick={() => void save()}>
-            저장
+            {t("actions.save")}
           </Button>
         </div>
       </div>

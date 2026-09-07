@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Archive, ExternalLink, Inbox, RefreshCw } from "lucide-react";
 import { api } from "@/lib/api";
+import { useTranslation } from "react-i18next";
 import SourcesPage from "./SourcesPage";
 import { isFeedCfg } from "@/lib/types";
 import type { ArticleRow, SourceInstanceRow } from "@/lib/types";
@@ -14,11 +15,7 @@ import { Empty, PageHeader } from "./common";
 
 type ArticleFilter = "all" | "unread" | "archived";
 
-const FILTER_KO: Record<ArticleFilter, string> = {
-  all: "전체",
-  unread: "안읽음",
-  archived: "보관",
-};
+const FILTERS: ArticleFilter[] = ["all", "unread", "archived"];
 
 function parseTags(a: ArticleRow): string[] {
   try {
@@ -43,6 +40,7 @@ export default function ReadingPage() {
   const [articles, setArticles] = useState<ArticleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState<string | null>(null);
+  const { t } = useTranslation("sessions");
 
   const reloadInstances = useCallback(async () => {
     const v = await api.sourcesListInstances().catch(() => null);
@@ -120,7 +118,7 @@ export default function ReadingPage() {
             void reloadInstances();
           }}
         >
-          ← 읽을거리로 돌아가기
+          {t("reading.back")}
         </Button>
         <SourcesPage scope="rss" />
       </div>
@@ -128,13 +126,13 @@ export default function ReadingPage() {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title="읽을거리">
+      <PageHeader title={t("reading.title")}>
         <Button
           size="sm"
           variant="outline"
           onClick={() => setSourcesOpen(true)}
         >
-          RSS 소스 관리
+          {t("reading.manageSources")}
         </Button>
         {instances.length > 0 && (
           <>
@@ -149,9 +147,9 @@ export default function ReadingPage() {
               value={filter}
               onChange={(e) => setFilter(e.target.value as ArticleFilter)}
             >
-              {(Object.keys(FILTER_KO) as ArticleFilter[]).map((f) => (
+              {FILTERS.map((f) => (
                 <option key={f} value={f}>
-                  {FILTER_KO[f]}
+                  {t(`filter.${f}`)}
                 </option>
               ))}
             </Select>
@@ -163,7 +161,7 @@ export default function ReadingPage() {
                 void reloadArticles(selId);
               }}
             >
-              <RefreshCw className="size-3" /> 새로고침
+              <RefreshCw className="size-3" /> {t("actions.refresh")}
             </Button>
           </>
         )}
@@ -179,30 +177,32 @@ export default function ReadingPage() {
         {instances.length === 0 && (
           <Empty className="pt-16">
             <div className="space-y-3 text-center">
-              <p>아직 연결된 읽을거리 소스가 없습니다.</p>
+              <p>{t("reading.emptyNoSources")}</p>
               <p className="text-[11px]">
-                RSS 소스 관리에서 RSS 피드를 연결하면 기사가 여기에 모입니다.
+                {t("reading.emptyNoSourcesHint")}
               </p>
               <Button size="sm" onClick={() => setSourcesOpen(true)}>
-                <Inbox /> RSS 소스 관리 열기
+                <Inbox /> {t("reading.openSources")}
               </Button>
             </div>
           </Empty>
         )}
 
         {instances.length > 0 && !selId && (
-          <Empty>왼쪽 위에서 피드 instance를 선택하세요.</Empty>
+          <Empty>{t("reading.selectInstance")}</Empty>
         )}
 
         {instances.length > 0 && selId && loading && (
-          <Empty>기사를 불러오는 중…</Empty>
+          <Empty>{t("reading.loading")}</Empty>
         )}
 
         {instances.length > 0 && selId && !loading && filtered.length === 0 && (
           <Empty>
             {filter === "all"
-              ? "발견한 기사가 없습니다 — RSS 소스 관리에서 새로고침을 눌러 보세요."
-              : `${FILTER_KO[filter]} 기사가 없습니다.`}
+              ? t("reading.emptyNoArticles")
+              : t("reading.emptyNoArticlesFiltered", {
+                  filter: t(`filter.${filter}`),
+                })}
           </Empty>
         )}
 
@@ -224,8 +224,8 @@ export default function ReadingPage() {
                       <span className="min-w-0">{a.title || a.url}</span>
                     </button>
                     <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                      {!read && <Badge variant="default">안읽음</Badge>}
-                      {archived && <Badge variant="warning">보관</Badge>}
+                      {!read && <Badge variant="default">{t("filter.unread")}</Badge>}
+                      {archived && <Badge variant="warning">{t("filter.archived")}</Badge>}
                       <span>{fmtWhen(a.publishedAt)}</span>
                       {tags.map((t) => (
                         <Badge key={t} variant="secondary">
@@ -245,7 +245,7 @@ export default function ReadingPage() {
                       variant={read ? "ghost" : "outline"}
                       onClick={() => setArticleState(a, { read: !read })}
                     >
-                      {read ? "안읽음으로" : "읽음"}
+                      {read ? t("reading.markUnread") : t("reading.markRead")}
                     </Button>
                     <Button
                       size="xs"
@@ -255,7 +255,7 @@ export default function ReadingPage() {
                       }
                     >
                       <Archive className="size-3" />{" "}
-                      {archived ? "보관 해제" : "보관"}
+                      {archived ? t("reading.unarchive") : t("reading.archive")}
                     </Button>
                   </div>
                 </div>

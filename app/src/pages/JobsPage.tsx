@@ -13,6 +13,7 @@ import {
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import type { Job, ProgressEntry } from "@/lib/types";
+import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +67,7 @@ export default function JobsPage() {
   const jobs = useApp((s) => s.jobs);
   const progress = useApp((s) => s.progress);
   const refreshJobs = useApp((s) => s.refreshJobs);
+  const { t } = useTranslation("sessions");
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [logView, setLogView] = useState<{
@@ -126,7 +128,7 @@ export default function JobsPage() {
     } catch (e) {
       setLogView({
         label: j.label,
-        lines: [`로그를 읽지 못했습니다: ${String(e)}`],
+        lines: [t("jobs.logReadFailed", { error: String(e) })],
       });
     }
   }
@@ -141,9 +143,9 @@ export default function JobsPage() {
 
   return (
     <div>
-      <PageHeader title="실행 기록">
+      <PageHeader title={t("jobs.title")}>
         <Button size="sm" variant="outline" onClick={() => void refreshJobs()}>
-          <RefreshCw /> 새로고침
+          <RefreshCw /> {t("actions.refresh")}
         </Button>
       </PageHeader>
 
@@ -151,17 +153,17 @@ export default function JobsPage() {
         <section className="grid gap-3 lg:grid-cols-2">
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-[13px]">큐 / 실행중</CardTitle>
+              <CardTitle className="text-[13px]">{t("jobs.activeTitle")}</CardTitle>
               <Badge variant="secondary">{active.length}</Badge>
             </CardHeader>
             <CardContent className="space-y-2">
               {focusError && (
                 <div className="rounded-md border border-destructive/40 px-2 py-1 text-[11px] text-destructive">
-                  herdr 세션을 열지 못했습니다: {focusError}
+                  {t("jobs.focusFailed", { error: focusError })}
                 </div>
               )}
               {active.length === 0 ? (
-                <Empty>대기 중인 실행이 없습니다.</Empty>
+                <Empty>{t("jobs.emptyActive")}</Empty>
               ) : (
                 active.map((j) => (
                   <div
@@ -177,7 +179,7 @@ export default function JobsPage() {
                       <button
                         className="min-w-0 flex-1 truncate text-left text-xs font-medium hover:underline"
                         onClick={() => setSelectedId(j.id)}
-                        title="타임라인에서 보기"
+                        title={t("jobs.seeTimeline")}
                       >
                         {j.label}
                       </button>
@@ -200,14 +202,13 @@ export default function JobsPage() {
                           disabled={cancelling}
                           onClick={() => void cancel(j.id)}
                         >
-                          <Square /> 취소
+                          <Square /> {t("actions.cancel")}
                         </Button>
                       )}
                     </div>
                     {j.agentStatus === "blocked" && (
                       <div className={`mt-1 text-[11px] ${WARN_TEXT}`}>
-                        herdr 세션이 승인·입력을 기다립니다. 「herdr」로 열어
-                        응답하면 이어서 진행합니다.
+                        {t("jobs.blockedNote")}
                       </div>
                     )}
                     {j.project && (
@@ -223,7 +224,7 @@ export default function JobsPage() {
 
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-              <CardTitle className="text-[13px]">라이브 타임라인</CardTitle>
+              <CardTitle className="text-[13px]">{t("jobs.timelineTitle")}</CardTitle>
               {current && (
                 <div className="flex gap-1">
                   <Badge variant="outline">{JOB_KIND_KO[current.kind]}</Badge>
@@ -235,9 +236,9 @@ export default function JobsPage() {
             </CardHeader>
             <CardContent>
               {!current ? (
-                <Empty>진행 중인 실행이 없습니다.</Empty>
+                <Empty>{t("jobs.emptyCurrent")}</Empty>
               ) : timeline.length === 0 ? (
-                <Empty>진행 이벤트를 기다리는 중…</Empty>
+                <Empty>{t("jobs.waitingEvents")}</Empty>
               ) : (
                 <div className="max-h-[360px] space-y-0.5 overflow-y-auto">
                   {timeline.map((e, i) => (
@@ -264,23 +265,23 @@ export default function JobsPage() {
 
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-            <CardTitle className="text-[13px]">히스토리</CardTitle>
+            <CardTitle className="text-[13px]">{t("jobs.historyTitle")}</CardTitle>
             <Badge variant="secondary">{history.length}</Badge>
           </CardHeader>
           <CardContent>
             {history.length === 0 ? (
-              <Empty>완료된 실행이 없습니다.</Empty>
+              <Empty>{t("jobs.emptyHistory")}</Empty>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-20">종류</TableHead>
-                    <TableHead>라벨</TableHead>
-                    <TableHead className="w-28">프로젝트</TableHead>
-                    <TableHead className="w-24">실행</TableHead>
-                    <TableHead className="w-24">상태</TableHead>
-                    <TableHead className="w-24">종료 시각</TableHead>
-                    <TableHead className="w-24">소요</TableHead>
+                    <TableHead className="w-20">{t("jobs.kind")}</TableHead>
+                    <TableHead>{t("jobs.label")}</TableHead>
+                    <TableHead className="w-28">{t("jobs.project")}</TableHead>
+                    <TableHead className="w-24">{t("jobs.runner")}</TableHead>
+                    <TableHead className="w-24">{t("jobs.status")}</TableHead>
+                    <TableHead className="w-24">{t("jobs.finishedAt")}</TableHead>
+                    <TableHead className="w-24">{t("jobs.duration")}</TableHead>
                     <TableHead className="w-32" />
                   </TableRow>
                 </TableHeader>
@@ -334,14 +335,14 @@ export default function JobsPage() {
                             variant="ghost"
                             onClick={() => void openLog(j)}
                           >
-                            로그
+                            {t("jobs.log")}
                           </Button>
                           <Button
                             size="xs"
                             variant="ghost"
                             onClick={() => void openReport(j)}
                           >
-                            리포트
+                            {t("jobs.report")}
                           </Button>
                           {j.runner === "herdr" && j.herdrTabId && (
                             <Button
@@ -367,7 +368,7 @@ export default function JobsPage() {
         open={logView != null}
         onClose={() => setLogView(null)}
         wide
-        title={`로그 — ${logView?.label ?? ""}`}
+        title={t("jobs.logTitle", { label: logView?.label ?? "" })}
       >
         <pre className="max-h-[60vh] overflow-auto rounded-md bg-muted p-2.5 text-[11px] leading-relaxed selectable">
           {logView?.lines.join("\n")}
@@ -378,15 +379,12 @@ export default function JobsPage() {
         open={reportView != null}
         onClose={() => setReportView(null)}
         wide
-        title={`리포트 — ${reportView?.label ?? ""}`}
+        title={t("jobs.reportTitle", { label: reportView?.label ?? "" })}
       >
         {reportView?.md ? (
           <MarkdownView src={reportView.md} className="selectable" />
         ) : (
-          <Empty>
-            저장된 리포트가 없습니다. 마지막 assistant 응답이 있을 때만
-            저장됩니다.
-          </Empty>
+          <Empty>{t("jobs.emptyReport")}</Empty>
         )}
       </Dialog>
     </div>

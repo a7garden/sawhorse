@@ -13,6 +13,7 @@ import type { VaultNode } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Empty, MarkdownView } from "./common";
+import { useTranslation } from "react-i18next";
 
 interface TreeNode {
   name: string;
@@ -56,6 +57,7 @@ function buildTree(nodes: VaultNode[]): TreeNode[] {
 export default function DocsPage() {
   const vaultTree = useApp((s) => s.vaultTree);
   const refreshTree = useApp((s) => s.refreshTree);
+  const { t } = useTranslation("sessions");
 
   const tree = useMemo(() => buildTree(vaultTree), [vaultTree]);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -153,19 +155,19 @@ export default function DocsPage() {
     <div className="flex h-full">
       <aside className="flex w-60 shrink-0 flex-col border-r">
         <div className="flex items-center justify-between border-b px-3 py-2">
-          <span className="text-xs font-semibold">볼트 문서</span>
+          <span className="text-xs font-semibold">{t("docs.title")}</span>
           <Button
             size="xs"
             variant="ghost"
             onClick={() => void refreshTree()}
-            aria-label="트리 새로고침"
+            aria-label={t("docs.refreshTree")}
           >
             <RefreshCw />
           </Button>
         </div>
         <div className="flex-1 overflow-y-auto p-1.5">
           {tree.length === 0 ? (
-            <Empty>볼트가 비어 있거나 찾을 수 없습니다.</Empty>
+            <Empty>{t("docs.emptyVault")}</Empty>
           ) : (
             renderNodes(tree, 0)
           )}
@@ -174,7 +176,7 @@ export default function DocsPage() {
 
       <section className="min-w-0 flex-1 overflow-y-auto">
         {loading ? (
-          <Empty>문서를 불러오는 중…</Empty>
+          <Empty>{t("docs.loading")}</Empty>
         ) : err ? (
           <div className="p-4 text-xs text-destructive">{err}</div>
         ) : view ? (
@@ -200,7 +202,7 @@ export default function DocsPage() {
             </div>
           </>
         ) : (
-          <Empty className="mt-16">왼쪽에서 문서를 선택하세요.</Empty>
+          <Empty className="mt-16">{t("docs.selectNote")}</Empty>
         )}
       </section>
     </div>

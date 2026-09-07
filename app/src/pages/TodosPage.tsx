@@ -10,10 +10,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Empty, PageHeader, WARN_TEXT } from "./common";
+import { useTranslation } from "react-i18next";
 
-const SECTIONS: { key: TodoSection; title: string }[] = [
-  { key: "today", title: "오늘 할 일" },
-  { key: "tomorrow", title: "내일 할 일" },
+const SECTIONS: { key: TodoSection }[] = [
+  { key: "today" },
+  { key: "tomorrow" },
 ];
 
 export default function TodosPage() {
@@ -24,6 +25,7 @@ export default function TodosPage() {
     tomorrow: "",
   });
   const [pending, setPending] = useState(false);
+  const { t } = useTranslation("sessions");
 
   async function toggle(
     section: TodoSection,
@@ -54,11 +56,11 @@ export default function TodosPage() {
 
   return (
     <div>
-      <PageHeader title="할 일" />
+      <PageHeader title={t("todos.title")} />
 
       {todos && !todos.fileExists && (
         <div className={`px-4 pt-3 text-xs ${WARN_TEXT}`}>
-          오늘 일지 파일이 없습니다. 항목을 추가하면 최소 골격으로 생성됩니다.
+          {t("todos.noJournal")}
         </div>
       )}
 
@@ -69,14 +71,16 @@ export default function TodosPage() {
           return (
             <Card key={sec.key}>
               <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
-                <CardTitle className="text-[13px]">{sec.title}</CardTitle>
+                <CardTitle className="text-[13px]">
+                  {t(`section.${sec.key}`)}
+                </CardTitle>
                 <Badge variant="secondary">
                   {done}/{items.length}
                 </Badge>
               </CardHeader>
               <CardContent className="space-y-1.5">
                 {items.length === 0 && (
-                  <Empty className="py-4">항목이 없습니다.</Empty>
+                  <Empty className="py-4">{t("todos.empty")}</Empty>
                 )}
                 {items.map((it) => (
                   <label
@@ -113,14 +117,14 @@ export default function TodosPage() {
                     onChange={(e) =>
                       setDrafts((d) => ({ ...d, [sec.key]: e.target.value }))
                     }
-                    placeholder="새 항목을 입력하세요"
+                    placeholder={t("todos.newItemPlaceholder")}
                   />
                   <Button
                     type="submit"
                     size="sm"
                     disabled={pending || drafts[sec.key].trim().length === 0}
                   >
-                    <Plus /> 추가
+                    <Plus /> {t("actions.add")}
                   </Button>
                 </form>
               </CardContent>

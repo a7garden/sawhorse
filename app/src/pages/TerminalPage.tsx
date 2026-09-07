@@ -14,6 +14,7 @@ import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import { actionJobKey } from "@/lib/jobs";
 import { RunButton } from "@/components/RunButton";
+import { Trans, useTranslation } from "react-i18next";
 import type { HerdrSnapshot, PackInfo } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,13 +24,16 @@ import { cn } from "@/lib/utils";
 import type { BadgeVariant } from "./common";
 import { AGENT_STATUS_KO, Empty, PageHeader } from "./common";
 
-function statusBadge(s: string): { label: string; variant: BadgeVariant } {
+function statusBadge(
+  s: string,
+  noneLabel: string,
+): { label: string; variant: BadgeVariant } {
   const known = (AGENT_STATUS_KO as Record<string, string>)[s];
   if (s === "blocked") return { label: known ?? s, variant: "warning" };
   if (s === "working") return { label: known ?? s, variant: "default" };
   if (s === "idle" || s === "done")
     return { label: known ?? s, variant: "outline" };
-  return { label: known ?? (s || "없음"), variant: "secondary" };
+  return { label: known ?? (s || noneLabel), variant: "secondary" };
 }
 
 type Tone = "working" | "blocked" | "idle" | "done" | "focused";
@@ -64,6 +68,7 @@ export default function TerminalPage() {
   const packs = useApp((s) => s.packs);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const setPage = useApp((s) => s.setPage);
+  const { t } = useTranslation("sessions");
 
   const [snap, setSnap] = useState<HerdrSnapshot | null>(null);
   const [busy, setBusy] = useState(false);
@@ -100,7 +105,12 @@ export default function TerminalPage() {
   );
 
   const cwdChoices = [
-    { value: "", label: `작업공간 (${config?.vaultPath || "미설정"})` },
+    {
+      value: "",
+      label: t("terminal.workspaceOption", {
+        path: config?.vaultPath || t("unset"),
+      }),
+    },
     ...(config?.projects ?? [])
       .filter((p) => p.path.length > 0)
       .map((p) => ({ value: p.path, label: `${p.name} (${p.path})` })),
@@ -145,21 +155,21 @@ export default function TerminalPage() {
 
   /** 앱을 떠나지 않고 그 페인이 지금 무엇을 묻고 있는지 본다. */
   async function peek(paneId: string, title: string) {
-    setPreview({ paneId, title, body: "출력을 읽는 중…" });
+    setPreview({ paneId, title, body: t("terminal.peeking") });
     try {
       setPreview({ paneId, title, body: await api.herdrReadPane(paneId, 60) });
     } catch (e) {
       setPreview({
         paneId,
         title,
-        body: `출력을 읽지 못했습니다: ${String(e)}`,
+        body: t("terminal.peekFailed", { error: String(e) }),
       });
     }
   }
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title="터미널">
+      <PageHeader title={t("terminal.title")}>
         <Button
           size="sm"
           variant="outline"
@@ -167,14 +177,14 @@ export default function TerminalPage() {
           onClick={() =>
             void act(
               () => api.herdrOpenTab(target || undefined),
-              "새 탭을 열었습니다.",
+              t("terminal.toastTabOpened"),
             )
           }
         >
-          <Plus /> 새 탭
+          <Plus /> {t("terminal.newTab")}
         </Button>
         <Button size="sm" variant="ghost" onClick={() => void load()}>
-          <RefreshCw className="size-3" /> 새로고침
+          <RefreshCw className="size-3" /> {t("actions.refresh")}
         </Button>
       </PageHeader>
 
@@ -183,20 +193,23 @@ export default function TerminalPage() {
       )}
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        {snap == null && <Empty>herdr 상태를 확인하는 중…</Empty>}
+        {snap == null && <Empty>{t("terminal.checkingHerdr")}</Empty>}
 
         {snap && !snap.available && (
           <Card className="mx-auto max-w-xl">
             <CardHeader className="pb-1">
               <CardTitle className="text-[13px]">
-                herdr 서버에 닿지 못했습니다
+                {t("terminal.unreachableTitle")}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-xs leading-relaxed text-muted-foreground">
               <p>
-                herdr 는 잡을 <b>사람이 볼 수 있고 이어받을 수 있는</b> 터미널
-                세션에서 돌리는 실행 기반입니다. 없으면 잡은 백그라운드로 조용히
-                돌아갑니다 — 동작은 하지만 승인 프롬프트에 답할 수 없습니다.
+                <Trans i18nKey="terminal.unreachableBody">
+                  herdr 는 잡을 <b>사람이 볼 수 있고 이어받을 수 있는</b> 터미널
+                  세션에서 돌리는 실행 기반입니다. 없으면 잡은 백그라운드로
+                  조용히 돌아갑니다 — 동작은 하지만 승인 프롬프트에 답할 수
+                  없습니다.
+                </Trans>
               </p>
               {snap.error && (
                 <p className="break-all font-mono text-[11px]">{snap.error}</p>
@@ -214,7 +227,7 @@ export default function TerminalPage() {
                   variant="ghost"
                   onClick={() => setPage("settings")}
                 >
-                  실행 설정 열기
+                  {t("terminal.openSettings")}
                 </Button>
               </div>
             </CardContent>
@@ -226,8 +239,8 @@ export default function TerminalPage() {
             {blocked.length > 0 && (
               <div className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2">
                 <div className="flex items-center gap-2 text-[13px] font-semibold text-warning-foreground">
-                  <TriangleAlert className="size-4" /> 사람 응답을 기다리는 세션{" "}
-                  {blocked.length}건
+                  <TriangleAlert className="size-4" />{" "}
+                  {t("terminal.blockedTitle", { n: blocked.length })}
                 </div>
                 <div className="mt-1.5 space-y-1">
                   {blocked.map((a) => (
@@ -246,7 +259,7 @@ export default function TerminalPage() {
                           void peek(a.paneId, a.terminalTitle || a.paneId)
                         }
                       >
-                        <Eye className="size-3" /> 내용
+                        <Eye className="size-3" /> {t("terminal.peek")}
                       </Button>
                       <Button
                         size="xs"
@@ -255,7 +268,7 @@ export default function TerminalPage() {
                           void act(() => api.herdrFocusPane(a.paneId))
                         }
                       >
-                        열기
+                        {t("actions.open")}
                       </Button>
                     </div>
                   ))}
@@ -265,7 +278,9 @@ export default function TerminalPage() {
 
             <Card>
               <CardHeader className="pb-1">
-                <CardTitle className="text-[13px]">터미널에서 실행</CardTitle>
+                <CardTitle className="text-[13px]">
+                  {t("terminal.runTitle")}
+                </CardTitle>
               </CardHeader>
               <CardContent className="flex flex-wrap items-center gap-2">
                 <Select
@@ -284,7 +299,7 @@ export default function TerminalPage() {
                   value={action}
                   onChange={(e) => setAction(e.target.value)}
                 >
-                  <option value="">(액션 선택)</option>
+                  <option value="">{t("terminal.selectAction")}</option>
                   {runnable.map(({ pack, action: a }) => (
                     <option
                       key={`${pack.id}:${a.id}`}
@@ -297,16 +312,14 @@ export default function TerminalPage() {
                 <RunButton
                   size="sm"
                   variant="default"
-                  label="실행"
+                  label={t("actions.run")}
                   jobKey={selectedActionKey}
                   disabled={busy || action === ""}
                   onRun={runInTerminal}
                   onError={setMsg}
                 />
                 <p className="w-full text-[11px] text-muted-foreground">
-                  액션은 실행 설정의 herdr 모드를 따릅니다 — herdr 가 떠 있으면
-                  탭에서 돌고, 아니면 백그라운드로 떨어집니다. 경로 선택은 「새
-                  탭」에도 함께 적용됩니다.
+                  {t("terminal.herdrNote")}
                 </p>
               </CardContent>
             </Card>
@@ -327,7 +340,7 @@ export default function TerminalPage() {
                       disabled={busy}
                       onClick={() => void peek(preview.paneId, preview.title)}
                     >
-                      <RefreshCw className="size-3" /> 다시 읽기
+                      <RefreshCw className="size-3" /> {t("terminal.reread")}
                     </Button>
                     <Button
                       size="xs"
@@ -336,14 +349,14 @@ export default function TerminalPage() {
                         void act(() => api.herdrFocusPane(preview.paneId))
                       }
                     >
-                      열기
+                      {t("actions.open")}
                     </Button>
                     <Button
                       size="xs"
                       variant="ghost"
                       onClick={() => setPreview(null)}
                     >
-                      닫기
+                      {t("actions.close")}
                     </Button>
                   </div>
                 </CardHeader>
@@ -356,27 +369,31 @@ export default function TerminalPage() {
             )}
 
             {snap.workspaces.length === 0 && (
-              <Empty>
-                워크스페이스가 없습니다. 「새 탭」으로 하나 만드세요.
-              </Empty>
+              <Empty>{t("terminal.emptyWorkspaces")}</Empty>
             )}
 
             {snap.workspaces.map((ws) => {
               const tabs = snap.tabs.filter(
                 (t) => t.workspaceId === ws.workspaceId,
               );
-              const st = statusBadge(ws.agentStatus);
+              const st = statusBadge(ws.agentStatus, t("status.none"));
               return (
                 <Card key={ws.workspaceId}>
                   <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
                     <CardTitle className="flex items-center gap-2 text-[13px]">
-                      {ws.label || `워크스페이스 ${ws.number}`}
+                      {ws.label ||
+                        t("terminal.workspaceNumbered", { n: ws.number })}
                       <Badge variant={st.variant}>{st.label}</Badge>
-                      {ws.focused && <Badge variant="secondary">포커스</Badge>}
+                      {ws.focused && (
+                        <Badge variant="secondary">{t("terminal.focused")}</Badge>
+                      )}
                     </CardTitle>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] text-muted-foreground">
-                        탭 {ws.tabCount} · 페인 {ws.paneCount}
+                        {t("terminal.tabPaneCount", {
+                          tabs: ws.tabCount,
+                          panes: ws.paneCount,
+                        })}
                       </span>
                       <Button
                         size="xs"
@@ -388,42 +405,45 @@ export default function TerminalPage() {
                           )
                         }
                       >
-                        열기
+                        {t("actions.open")}
                       </Button>
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-1">
-                    {tabs.length === 0 && <Empty>탭이 없습니다.</Empty>}
-                    {tabs.map((t) => {
+                    {tabs.length === 0 && (
+                      <Empty>{t("terminal.emptyTabs")}</Empty>
+                    )}
+                    {tabs.map((tab) => {
                       const agents = snap.agents.filter(
-                        (a) => a.tabId === t.tabId,
+                        (a) => a.tabId === tab.tabId,
                       );
-                      const ts = statusBadge(t.agentStatus);
+                      const ts = statusBadge(tab.agentStatus, t("status.none"));
                       return (
                         <div
-                          key={t.tabId}
+                          key={tab.tabId}
                           className="rounded-md border px-2.5 py-1.5"
                         >
                           <div className="flex items-center gap-2">
                             <span
                               className="term-rail"
-                              data-tone={toneOf(t.agentStatus)}
+                              data-tone={toneOf(tab.agentStatus)}
                               aria-hidden
                             />
                             <span className="min-w-0 flex-1 truncate text-xs font-medium">
-                              {t.label || `탭 ${t.number}`}
+                              {tab.label ||
+                                t("terminal.tabNumbered", { n: tab.number })}
                             </span>
                             <Badge variant={ts.variant}>{ts.label}</Badge>
                             <Button
                               size="icon"
                               variant="ghost"
-                              aria-label="탭 닫기"
+                              aria-label={t("terminal.closeTab")}
                               disabled={busy}
-                              title="탭 닫기"
+                              title={t("terminal.closeTab")}
                               onClick={() =>
                                 void act(
-                                  () => api.herdrCloseTab(t.tabId),
-                                  "탭을 닫았습니다.",
+                                  () => api.herdrCloseTab(tab.tabId),
+                                  t("terminal.toastTabClosed"),
                                 )
                               }
                             >
@@ -431,7 +451,7 @@ export default function TerminalPage() {
                             </Button>
                           </div>
                           {agents.map((a) => {
-                            const as = statusBadge(a.agentStatus);
+                            const as = statusBadge(a.agentStatus, t("status.none"));
                             const tone = toneOf(a.agentStatus);
                             return (
                               <div
@@ -461,7 +481,9 @@ export default function TerminalPage() {
                                     )
                                   }
                                   className="min-w-0 flex-1 truncate text-left hover:underline"
-                                  title={`${a.cwd}\n클릭하면 최근 출력을 봅니다`}
+                                  title={t("terminal.panePeekHint", {
+                                    cwd: a.cwd,
+                                  })}
                                 >
                                   {a.terminalTitle || a.cwd || a.paneId}
                                 </button>
@@ -471,14 +493,14 @@ export default function TerminalPage() {
                                     size="xs"
                                     variant="ghost"
                                     disabled={busy}
-                                    title="이 페인을 herdr 에서 앞으로"
+                                    title={t("terminal.focusPaneTitle")}
                                     onClick={() =>
                                       void act(() =>
                                         api.herdrFocusPane(a.paneId),
                                       )
                                     }
                                   >
-                                    열기
+                                    {t("actions.open")}
                                   </Button>
                                 </span>
                               </div>

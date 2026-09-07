@@ -1,1 +1,431 @@
-{}
+{
+  "codexNote": "수동 제출 전용 — 앱이 시작·취소·재연결을 보장하지 않는다",
+  "status": {
+    "none": "없음"
+  },
+  "unset": "미설정",
+  "changeStatus": {
+    "working": "작업 중",
+    "review_pending": "승인대기",
+    "changes_requested": "수정 요청",
+    "approved": "승인",
+    "authorized_by_policy": "정책 허가",
+    "queued": "대기열",
+    "integrating": "통합 중",
+    "conflicted": "충돌",
+    "integrated": "통합됨",
+    "automated_verifying": "자동 검사",
+    "manual_verification_pending": "수동 확인 대기",
+    "verification_failed": "검증 실패",
+    "fix_forward": "수정 진행",
+    "reverting": "되돌리는 중",
+    "reverted": "되돌려짐",
+    "verified": "검증 완료",
+    "superseded": "대체됨",
+    "stale_context": "오래된 기준",
+    "baseline_failed": "기준 검사 실패",
+    "redundant": "중복",
+    "resolved_with_repair": "수정으로 해소",
+    "recovery_required": "복구 필요",
+    "revert_conflicted": "되돌리기 충돌",
+    "rejected": "거부됨"
+  },
+  "actions": {
+    "cancel": "취소",
+    "refresh": "새로고침",
+    "open": "열기",
+    "close": "닫기",
+    "run": "실행",
+    "approve": "승인",
+    "execute": "실행",
+    "save": "저장",
+    "accept": "수락",
+    "import": "가져오기",
+    "add": "추가",
+    "create": "세션 만들기",
+    "pause": "일시정지",
+    "resume": "재개",
+    "finalize": "세션 종결",
+    "addConnection": "연결 추가",
+    "importIssues": "이슈 가져오기"
+  },
+  "title": "세션",
+  "sessionStatus": {
+    "active": "진행",
+    "paused": "일시정지",
+    "readyToFinalize": "종결 준비",
+    "finalized": "종결"
+  },
+  "runStatus": {
+    "pending": "대기",
+    "running": "실행",
+    "done": "완료",
+    "failed": "실패",
+    "cancelled": "취소",
+    "manual": "수동",
+    "unknown": "상태 불명"
+  },
+  "toast": {
+    "created": "세션을 만들었습니다.",
+    "resumed": "세션을 재개했습니다.",
+    "finalized": "세션을 종결했습니다.",
+    "paused": "세션을 일시정지했습니다.",
+    "detailLoadFailed": "상세 조회 실패: {{error}}"
+  },
+  "validation": {
+    "selectProject": "프로젝트를 선택하세요.",
+    "enterGoal": "세션 목표를 입력하세요.",
+    "enterLanePrompt": "레인의 작업 지시를 하나 이상 입력하세요."
+  },
+  "empty": {
+    "noProjects": "협업 프로젝트가 없습니다. 설정 > 협업에서 저장소를 먼저 등록하세요.",
+    "noSessions": "아직 세션이 없습니다.",
+    "noLanes": "레인이 없습니다.",
+    "noChanges": "아직 후보가 없습니다. 레인이 제출하면 여기에 표시됩니다.",
+    "noAudit": "기록이 없습니다."
+  },
+  "list": {
+    "title": "세션 목록",
+    "noGoal": "(목표 없음)",
+    "pausedReason": "정지 사유: {{reason}}"
+  },
+  "mode": {
+    "direct": "직접",
+    "isolated": "격리"
+  },
+  "integration": {
+    "title": "대표 체크아웃",
+    "clean": "개발 서버 깨끗함",
+    "dirty": "개발 서버에 변경 있음",
+    "path": "경로: {{path}}",
+    "branchHead": "브랜치: {{branch}} · HEAD: {{head}}",
+    "meta": "시작 HEAD: {{head}} · 정책 v{{policy}} · 검증 프로필: {{profile}}",
+    "defaultProfile": "기본"
+  },
+  "lanes": {
+    "title": "에이전트 레인",
+    "freeRun": "자유 실행"
+  },
+  "changes": {
+    "title": "변경 후보 (의존 순)",
+    "noSummary": "(요약 없음)",
+    "fileCount": "파일 {{n}}개",
+    "deps": "의존: {{deps}}",
+    "overlap": "겹침 경로: {{paths}}"
+  },
+  "audit": {
+    "title": "감사 기록"
+  },
+  "pause": {
+    "title": "세션 일시정지",
+    "reasonLabel": "정지 사유",
+    "reasonPlaceholder": "예: 통합 체크아웃 점검",
+    "defaultReason": "사용자 일시정지"
+  },
+  "create": {
+    "title": "새 협업 세션",
+    "project": "프로젝트",
+    "selectProject": "선택…",
+    "defaultBranch": "기본 브랜치",
+    "goal": "세션 목표",
+    "goalPlaceholder": "예: 홈 화면에 읽을거리 위젯 추가",
+    "integrationBranch": "통합 브랜치 (비우면 등록값)",
+    "mode": "모드",
+    "modeDirect": "직접 (기존 브랜치)",
+    "modeIsolated": "격리 (세션 전용)",
+    "lanes": "레인",
+    "addLane": "레인 추가",
+    "laneTaskIdPlaceholder": "자동화 작업 ID (비우면 자유 실행)",
+    "laneTaskIdAria": "레인 {{n}} 자동화 작업 ID",
+    "laneDriverAria": "레인 {{n}} 드라이버",
+    "driverClaude": "Claude (관리형)",
+    "driverCodex": "Codex (수동 제출)",
+    "laneRemoveAria": "레인 {{n}} 삭제",
+    "lanePromptPlaceholder": "이 레인이 할 작업 지시",
+    "lanePromptAria": "레인 {{n}} 작업 지시",
+    "submit": "세션 생성"
+  },
+  "sources": {
+    "title": {
+      "rss": "읽을거리 소스",
+      "github": "GitHub 이슈 연동"
+    },
+    "empty": {
+      "noInstances": "연결된 소스가 없습니다.",
+      "selectInstance": "왼쪽에서 연결을 선택하거나 「연결 추가」로 새 소스를 붙이세요."
+    },
+    "candidatesCount": "{{n}}건",
+    "instance": {
+      "feedCount": "피드 {{n}}곳",
+      "statusUnknown": "확인 안 됨",
+      "connected": "연결됨",
+      "error": "오류",
+      "lastSync": "최근 동기화: {{detail}}",
+      "noSync": "기록 없음",
+      "permissions": "권한:",
+      "deadLetterCount": "실패 outbox {{n}}건"
+    },
+    "gh": {
+      "accountUnset": "계정 미지정",
+      "repoUnset": "repo 미지정"
+    },
+    "sync": {
+      "discoveredNote": "기사 {{n}}건 발견",
+      "tickNote": "읽음 {{fetched}} · 신규 {{stagedNew}} · 갱신 {{stagedUpdates}} · PR 제외 {{skipped}}"
+    },
+    "importCandidates": {
+      "title": "가져오기 후보 (새 이슈)",
+      "empty": "가져올 새 이슈가 없습니다."
+    },
+    "updates": {
+      "title": "이슈 변경 사항",
+      "empty": "연결된 문서에 반영할 갱신이 없습니다."
+    },
+    "import": {
+      "intro": "#{{n}} {{title}} — 문서로 가져옵니다.",
+      "projectIdLabel": "projectId (등록된 코어 프로젝트 UUID)",
+      "projectIdPlaceholder": "예: 5fce…",
+      "notesDirLabel": "notesDir (문서를 만들 디렉터리)",
+      "notesDirPlaceholder": "예: 보관함/이슈",
+      "idPrefixLabel": "idPrefix (문서 파일 이름 접두)",
+      "idPrefixPlaceholder": "예: gh-"
+    },
+    "dialog": {
+      "importTitle": "가져오기 수락",
+      "execTitle": "원격 쓰기 실행",
+      "addTitle": "연결 추가"
+    },
+    "exec": {
+      "summary": "{{kind}} ({{capability}})을 로컬 저장소에서 실행합니다.",
+      "repoDirLabel": "로컬 저장소 경로 (repoDir)"
+    },
+    "remote": {
+      "reconciledCreatedNote": "사후 확인: 생성됨",
+      "reconciledMissingNote": "사후 확인: 생성 안 됨"
+    },
+    "remoteOps": {
+      "title": "원격 쓰기 승인 대기",
+      "pendingCount": "처리할 작업 {{n}}건",
+      "empty": "승인·실행·재조정을 기다리는 원격 쓰기가 없습니다.",
+      "created": "생성됨",
+      "notCreated": "생성안됨"
+    },
+    "remoteStatus": {
+      "prepared": "승인대기",
+      "approved": "승인됨",
+      "uncertain": "결과 불확실",
+      "failed": "실패"
+    },
+    "remoteKind": {
+      "push": "푸시",
+      "pr_create": "PR 생성"
+    },
+    "adapter": {
+      "rss": "피드",
+      "github": "GitHub"
+    },
+    "validation": {
+      "projectAndNotesDirRequired": "projectId와 notesDir는 필수입니다.",
+      "repoDirRequired": "로컬 저장소 경로(repoDir)를 입력하세요."
+    },
+    "add": {
+      "serviceLabel": "연결 서비스",
+      "nameLabel": "연결 이름",
+      "namePlaceholder": "예: 내-블로그-피드",
+      "requestedPermissions": "요청 권한:",
+      "rssLabel": "RSS 피드",
+      "feedNamePlaceholder": "이름",
+      "tagsPlaceholder": "태그 (쉼표)",
+      "feedRemoveAria": "feed 삭제",
+      "addFeed": "피드 추가",
+      "refreshMinutesLabel": "새로고침(분)",
+      "allowHostsLabel": "접속할 웹사이트 허용",
+      "hostsHint": "RSS 주소를 입력하면 접속할 웹사이트가 표시됩니다.",
+      "hostDenied": "{{host}} (거부)",
+      "deniedHostsWarning": "승인하지 않은 호스트의 feed는 동기화되지 않습니다.",
+      "accountLabel": "계정 (account)",
+      "repoLabel": "저장소 (owner/repo)",
+      "repoIdLabel": "repositoryId (불변 id)",
+      "stateLabel": "읽어올 이슈 상태",
+      "noConfigForm": "이 어댑터({{adapter}})는 설정 폼이 아직 없습니다.",
+      "errors": {
+        "selectConnector": "connector를 선택하세요.",
+        "nameRequired": "연결 이름을 입력하세요.",
+        "nameTaken": "이미 있는 연결 이름입니다.",
+        "feedUrlRequired": "feed URL을 하나 이상 입력하세요.",
+        "networkGrantRequired": "네트워크 도메인 grant가 하나는 필요합니다 — feed 호스트를 승인하세요.",
+        "repoIdRequired": "repositoryId는 필수입니다."
+      }
+    },
+    "toast": {
+      "feedRefreshed": "기사 {{n}}건을 발견했습니다.",
+      "issuesFetched": "이슈 {{fetched}}건을 읽었습니다 — 가져오기 후보 {{stagedNew}}건, 갱신 {{stagedUpdates}}건.",
+      "noteCreated": "문서를 만들었습니다: {{path}}",
+      "updateApplied": "갱신을 반영했습니다: {{path}}",
+      "remoteApproved": "원격 쓰기를 승인했습니다 — 이제 실행할 수 있습니다.",
+      "reconciledCreated": "생성됨으로 재조정했습니다.",
+      "reconciledMissing": "실패로 재조정했습니다 — 다시 준비할 수 있습니다.",
+      "executed": "실행 완료: {{output}}",
+      "connectionSaved": "{{id}} 연결을 저장했습니다."
+    }
+  },
+  "review": {
+    "title": "변경 검토",
+    "runQueue": "큐 진행",
+    "checkInbox": "인박스 확인",
+    "pendingTitle": "승인대기",
+    "integratingTitle": "통합",
+    "agentLabel": "에이전트: {{driver}}",
+    "expectedHead": "예상 HEAD: {{head}}",
+    "remediatedBy": "수정: {{sha}}",
+    "manualNeeded": "수동 확인이 필요합니다. 검증 프로필: {{profile}}",
+    "manualOk": "확인 완료",
+    "binaryLabel": "(바이너리)",
+    "manualFail": "실패",
+    "viewDiff": "Diff 보기",
+    "requestChanges": "수정 요청",
+    "approveAndQueue": "승인 후 큐에 넣기",
+    "reject": "거부",
+    "createRepair": "수정 작업 만들기",
+    "revert": "변경 제거",
+    "remove": "제거",
+    "confirm": "확인",
+    "checking": "확인 중",
+    "revertDescription": "이 후보의 통합 변경을 되돌립니다. 되돌리기는 병합 커밋을 되돌리는 revert 커밋으로 기록됩니다.",
+    "diffTitle": "Diff — {{taskId}}",
+    "diffAction": {
+      "A": "추가",
+      "M": "수정",
+      "D": "삭제",
+      "R": "이름 변경"
+    },
+    "empty": {
+      "noSessions": "세션이 없습니다. 세션 화면에서 먼저 만드세요.",
+      "pending": "승인대기 후보가 없습니다.",
+      "integrating": "통합 진행·완료 후보가 없습니다.",
+      "noEntries": "항목이 없습니다."
+    },
+    "banner": {
+      "stalled": "큐가 멈췄습니다 — 검증 실패·충돌·복구 필요 후보 {{n}}건을 아래에서 처리하세요."
+    },
+    "prompt": {
+      "title": {
+        "request_changes": "수정 요청",
+        "reject": "후보 거부",
+        "manual_fail": "수동 확인 실패",
+        "repair": "수정 작업 만들기"
+      },
+      "repairLabel": "수정 지시",
+      "reasonLabel": "사유",
+      "repairPlaceholder": "예: 빌드 실패 원인을 찾아 고쳐 제출하세요",
+      "reasonPlaceholder": "사유를 입력하세요"
+    },
+    "toast": {
+      "queueAdvanced": "큐 진행: {{status}}",
+      "queueEmpty": "진행할 대기 후보가 없습니다.",
+      "inboxEmpty": "인박스에 새 제출이 없습니다.",
+      "inboxAccepted": "인박스 {{total}}건 중 {{accepted}}건 수용",
+      "changesRequested": "수정을 요청했습니다.",
+      "rejected": "후보를 거부했습니다.",
+      "approvedQueued": "승인하고 큐에 넣었습니다.",
+      "manualFailRecorded": "수동 확인을 실패로 기록했습니다.",
+      "manualOk": "수동 확인을 완료했습니다.",
+      "repairPromptRequired": "수정 지시를 입력하세요.",
+      "reasonRequired": "사유를 입력하세요.",
+      "repairLaneCreated": "수정 레인을 만들었습니다: {{branch}}",
+      "revertStarted": "되돌리기 시작: {{result}}"
+    }
+  },
+  "terminal": {
+    "title": "터미널",
+    "newTab": "새 탭",
+    "toastTabOpened": "새 탭을 열었습니다.",
+    "checkingHerdr": "herdr 상태를 확인하는 중…",
+    "unreachableTitle": "herdr 서버에 닿지 못했습니다",
+    "unreachableBody": "herdr 는 잡을 <1>사람이 볼 수 있고 이어받을 수 있는</1> 터미널 세션에서 돌리는 실행 기반입니다. 없으면 잡은 백그라운드로 조용히 돌아갑니다 — 동작은 하지만 승인 프롬프트에 답할 수 없습니다.",
+    "openSettings": "실행 설정 열기",
+    "blockedTitle": "사람 응답을 기다리는 세션 {{n}}건",
+    "peek": "내용",
+    "peeking": "출력을 읽는 중…",
+    "peekFailed": "출력을 읽지 못했습니다: {{error}}",
+    "runTitle": "터미널에서 실행",
+    "workspaceOption": "작업공간 ({{path}})",
+    "selectAction": "(액션 선택)",
+    "herdrNote": "액션은 실행 설정의 herdr 모드를 따릅니다 — herdr 가 떠 있으면 탭에서 돌고, 아니면 백그라운드로 떨어집니다. 경로 선택은 「새 탭」에도 함께 적용됩니다.",
+    "reread": "다시 읽기",
+    "emptyWorkspaces": "워크스페이스가 없습니다. 「새 탭」으로 하나 만드세요.",
+    "workspaceNumbered": "워크스페이스 {{n}}",
+    "focused": "포커스",
+    "tabPaneCount": "탭 {{tabs}} · 페인 {{panes}}",
+    "emptyTabs": "탭이 없습니다.",
+    "tabNumbered": "탭 {{n}}",
+    "closeTab": "탭 닫기",
+    "toastTabClosed": "탭을 닫았습니다.",
+    "panePeekHint": "{{cwd}}\n클릭하면 최근 출력을 봅니다",
+    "focusPaneTitle": "이 페인을 herdr 에서 앞으로"
+  },
+  "jobs": {
+    "title": "실행 기록",
+    "activeTitle": "큐 / 실행중",
+    "focusFailed": "herdr 세션을 열지 못했습니다: {{error}}",
+    "emptyActive": "대기 중인 실행이 없습니다.",
+    "seeTimeline": "타임라인에서 보기",
+    "blockedNote": "herdr 세션이 승인·입력을 기다립니다. 「herdr」로 열어 응답하면 이어서 진행합니다.",
+    "timelineTitle": "라이브 타임라인",
+    "emptyCurrent": "진행 중인 실행이 없습니다.",
+    "waitingEvents": "진행 이벤트를 기다리는 중…",
+    "historyTitle": "히스토리",
+    "emptyHistory": "완료된 실행이 없습니다.",
+    "kind": "종류",
+    "label": "라벨",
+    "project": "프로젝트",
+    "runner": "실행",
+    "status": "상태",
+    "finishedAt": "종료 시각",
+    "duration": "소요",
+    "log": "로그",
+    "report": "리포트",
+    "logTitle": "로그 — {{label}}",
+    "reportTitle": "리포트 — {{label}}",
+    "logReadFailed": "로그를 읽지 못했습니다: {{error}}",
+    "emptyReport": "저장된 리포트가 없습니다. 마지막 assistant 응답이 있을 때만 저장됩니다."
+  },
+  "reading": {
+    "title": "읽을거리",
+    "back": "← 읽을거리로 돌아가기",
+    "manageSources": "RSS 소스 관리",
+    "openSources": "RSS 소스 관리 열기",
+    "emptyNoSources": "아직 연결된 읽을거리 소스가 없습니다.",
+    "emptyNoSourcesHint": "RSS 소스 관리에서 RSS 피드를 연결하면 기사가 여기에 모입니다.",
+    "selectInstance": "왼쪽 위에서 피드 instance를 선택하세요.",
+    "loading": "기사를 불러오는 중…",
+    "emptyNoArticles": "발견한 기사가 없습니다 — RSS 소스 관리에서 새로고침을 눌러 보세요.",
+    "emptyNoArticlesFiltered": "{{filter}} 기사가 없습니다.",
+    "markRead": "읽음",
+    "markUnread": "안읽음으로",
+    "archive": "보관",
+    "unarchive": "보관 해제"
+  },
+  "filter": {
+    "all": "전체",
+    "unread": "안읽음",
+    "archived": "보관"
+  },
+  "todos": {
+    "title": "할 일",
+    "noJournal": "오늘 일지 파일이 없습니다. 항목을 추가하면 최소 골격으로 생성됩니다.",
+    "empty": "항목이 없습니다.",
+    "newItemPlaceholder": "새 항목을 입력하세요"
+  },
+  "section": {
+    "today": "오늘 할 일",
+    "tomorrow": "내일 할 일"
+  },
+  "docs": {
+    "title": "볼트 문서",
+    "refreshTree": "트리 새로고침",
+    "emptyVault": "볼트가 비어 있거나 찾을 수 없습니다.",
+    "loading": "문서를 불러오는 중…",
+    "selectNote": "왼쪽에서 문서를 선택하세요."
+  }
+}

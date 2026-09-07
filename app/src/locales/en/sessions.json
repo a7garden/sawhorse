@@ -1,1 +1,431 @@
-{}
+{
+  "codexNote": "Manual submission only — the app does not guarantee start, cancel, or reconnection",
+  "status": {
+    "none": "none"
+  },
+  "unset": "Not set",
+  "changeStatus": {
+    "working": "Working",
+    "review_pending": "Awaiting review",
+    "changes_requested": "Changes requested",
+    "approved": "Approved",
+    "authorized_by_policy": "Allowed by policy",
+    "queued": "Queued",
+    "integrating": "Integrating",
+    "conflicted": "Conflicted",
+    "integrated": "Integrated",
+    "automated_verifying": "Auto-checking",
+    "manual_verification_pending": "Manual verification pending",
+    "verification_failed": "Verification failed",
+    "fix_forward": "Fix forward",
+    "reverting": "Reverting",
+    "reverted": "Reverted",
+    "verified": "Verified",
+    "superseded": "Superseded",
+    "stale_context": "Stale base",
+    "baseline_failed": "Baseline check failed",
+    "redundant": "Redundant",
+    "resolved_with_repair": "Resolved with repair",
+    "recovery_required": "Recovery required",
+    "revert_conflicted": "Revert conflicted",
+    "rejected": "Rejected"
+  },
+  "actions": {
+    "cancel": "Cancel",
+    "refresh": "Refresh",
+    "open": "Open",
+    "close": "Close",
+    "run": "Run",
+    "approve": "Approve",
+    "execute": "Execute",
+    "save": "Save",
+    "accept": "Accept",
+    "import": "Import",
+    "add": "Add",
+    "create": "New session",
+    "pause": "Pause",
+    "resume": "Resume",
+    "finalize": "Finalize session",
+    "addConnection": "Add connection",
+    "importIssues": "Fetch issues"
+  },
+  "title": "Sessions",
+  "sessionStatus": {
+    "active": "Active",
+    "paused": "Paused",
+    "readyToFinalize": "Ready to finalize",
+    "finalized": "Finalized"
+  },
+  "runStatus": {
+    "pending": "Pending",
+    "running": "Running",
+    "done": "Done",
+    "failed": "Failed",
+    "cancelled": "Cancelled",
+    "manual": "Manual",
+    "unknown": "Unknown status"
+  },
+  "toast": {
+    "created": "Session created.",
+    "resumed": "Session resumed.",
+    "finalized": "Session finalized.",
+    "paused": "Session paused.",
+    "detailLoadFailed": "Failed to load details: {{error}}"
+  },
+  "validation": {
+    "selectProject": "Select a project.",
+    "enterGoal": "Enter a session goal.",
+    "enterLanePrompt": "Enter at least one lane task prompt."
+  },
+  "empty": {
+    "noProjects": "No collaboration projects. Register a repository first under Settings > Collaboration.",
+    "noSessions": "No sessions yet.",
+    "noLanes": "No lanes.",
+    "noChanges": "No candidates yet. They will appear here once a lane submits.",
+    "noAudit": "No records."
+  },
+  "list": {
+    "title": "Session list",
+    "noGoal": "(no goal)",
+    "pausedReason": "Paused: {{reason}}"
+  },
+  "mode": {
+    "direct": "Direct",
+    "isolated": "Isolated"
+  },
+  "integration": {
+    "title": "Integration checkout",
+    "clean": "Integration checkout clean",
+    "dirty": "Integration checkout has changes",
+    "path": "Path: {{path}}",
+    "branchHead": "Branch: {{branch}} · HEAD: {{head}}",
+    "meta": "Start HEAD: {{head}} · policy v{{policy}} · verification profile: {{profile}}",
+    "defaultProfile": "default"
+  },
+  "lanes": {
+    "title": "Agent lanes",
+    "freeRun": "Free run"
+  },
+  "changes": {
+    "title": "Change candidates (dependency order)",
+    "noSummary": "(no summary)",
+    "fileCount": "{{n}} files",
+    "deps": "Depends on: {{deps}}",
+    "overlap": "Overlapping paths: {{paths}}"
+  },
+  "audit": {
+    "title": "Audit log"
+  },
+  "pause": {
+    "title": "Pause session",
+    "reasonLabel": "Pause reason",
+    "reasonPlaceholder": "e.g. check the integration checkout",
+    "defaultReason": "Paused by user"
+  },
+  "create": {
+    "title": "New collaboration session",
+    "project": "Project",
+    "selectProject": "Select…",
+    "defaultBranch": "default branch",
+    "goal": "Session goal",
+    "goalPlaceholder": "e.g. add a reading widget to the home screen",
+    "integrationBranch": "Integration branch (blank = registered value)",
+    "mode": "Mode",
+    "modeDirect": "Direct (existing branch)",
+    "modeIsolated": "Isolated (session-only)",
+    "lanes": "Lanes",
+    "addLane": "Add lane",
+    "laneTaskIdPlaceholder": "Automation task ID (blank = free run)",
+    "laneTaskIdAria": "Lane {{n}} automation task ID",
+    "laneDriverAria": "Lane {{n}} driver",
+    "driverClaude": "Claude (managed)",
+    "driverCodex": "Codex (manual submission)",
+    "laneRemoveAria": "Remove lane {{n}}",
+    "lanePromptPlaceholder": "Task prompt for this lane",
+    "lanePromptAria": "Lane {{n}} task prompt",
+    "submit": "Create session"
+  },
+  "sources": {
+    "title": {
+      "rss": "Reading sources",
+      "github": "GitHub issues"
+    },
+    "empty": {
+      "noInstances": "No connected sources.",
+      "selectInstance": "Pick a connection on the left, or add a new source with \"Add connection\"."
+    },
+    "candidatesCount": "{{n}}",
+    "instance": {
+      "feedCount": "{{n}} feeds",
+      "statusUnknown": "Unchecked",
+      "connected": "Connected",
+      "error": "Error",
+      "lastSync": "Last sync: {{detail}}",
+      "noSync": "No record",
+      "permissions": "Permissions:",
+      "deadLetterCount": "Failed outbox: {{n}}"
+    },
+    "gh": {
+      "accountUnset": "No account",
+      "repoUnset": "No repo"
+    },
+    "sync": {
+      "discoveredNote": "Found {{n}} articles",
+      "tickNote": "Fetched {{fetched}} · new {{stagedNew}} · updated {{stagedUpdates}} · PRs skipped {{skipped}}"
+    },
+    "importCandidates": {
+      "title": "Import candidates (new issues)",
+      "empty": "No new issues to import."
+    },
+    "updates": {
+      "title": "Issue updates",
+      "empty": "No updates to apply to linked documents."
+    },
+    "import": {
+      "intro": "#{{n}} {{title}} — importing as a document.",
+      "projectIdLabel": "projectId (registered core project UUID)",
+      "projectIdPlaceholder": "e.g. 5fce…",
+      "notesDirLabel": "notesDir (directory for the document)",
+      "notesDirPlaceholder": "e.g. Archive/Issues",
+      "idPrefixLabel": "idPrefix (document file name prefix)",
+      "idPrefixPlaceholder": "e.g. gh-"
+    },
+    "dialog": {
+      "importTitle": "Accept import",
+      "execTitle": "Run remote write",
+      "addTitle": "Add connection"
+    },
+    "exec": {
+      "summary": "Runs {{kind}} ({{capability}}) on the local repository.",
+      "repoDirLabel": "Local repository path (repoDir)"
+    },
+    "remote": {
+      "reconciledCreatedNote": "Post-check: created",
+      "reconciledMissingNote": "Post-check: not created"
+    },
+    "remoteOps": {
+      "title": "Remote writes awaiting approval",
+      "pendingCount": "{{n}} pending",
+      "empty": "No remote writes waiting for approval, execution, or reconciliation.",
+      "created": "Created",
+      "notCreated": "Not created"
+    },
+    "remoteStatus": {
+      "prepared": "Awaiting approval",
+      "approved": "Approved",
+      "uncertain": "Uncertain result",
+      "failed": "Failed"
+    },
+    "remoteKind": {
+      "push": "Push",
+      "pr_create": "Create PR"
+    },
+    "adapter": {
+      "rss": "Feed",
+      "github": "GitHub"
+    },
+    "validation": {
+      "projectAndNotesDirRequired": "projectId and notesDir are required.",
+      "repoDirRequired": "Enter the local repository path (repoDir)."
+    },
+    "add": {
+      "serviceLabel": "Connection service",
+      "nameLabel": "Connection name",
+      "namePlaceholder": "e.g. my-blog-feed",
+      "requestedPermissions": "Requested permissions:",
+      "rssLabel": "RSS feeds",
+      "feedNamePlaceholder": "Name",
+      "tagsPlaceholder": "Tags (comma)",
+      "feedRemoveAria": "Remove feed",
+      "addFeed": "Add feed",
+      "refreshMinutesLabel": "Refresh (minutes)",
+      "allowHostsLabel": "Allowed websites",
+      "hostsHint": "Enter RSS URLs to see the websites to allow.",
+      "hostDenied": "{{host}} (denied)",
+      "deniedHostsWarning": "Feeds from unapproved hosts are not synchronized.",
+      "accountLabel": "Account",
+      "repoLabel": "Repository (owner/repo)",
+      "repoIdLabel": "repositoryId (immutable id)",
+      "stateLabel": "Issue state to fetch",
+      "noConfigForm": "This adapter ({{adapter}}) has no settings form yet.",
+      "errors": {
+        "selectConnector": "Select a connector.",
+        "nameRequired": "Enter a connection name.",
+        "nameTaken": "That connection name already exists.",
+        "feedUrlRequired": "Enter at least one feed URL.",
+        "networkGrantRequired": "At least one network domain grant is required — approve the feed hosts.",
+        "repoIdRequired": "repositoryId is required."
+      }
+    },
+    "toast": {
+      "feedRefreshed": "Found {{n}} articles.",
+      "issuesFetched": "Read {{fetched}} issues — {{stagedNew}} new import candidates, {{stagedUpdates}} updates.",
+      "noteCreated": "Document created: {{path}}",
+      "updateApplied": "Update applied: {{path}}",
+      "remoteApproved": "Remote write approved — it can now be executed.",
+      "reconciledCreated": "Reconciled as created.",
+      "reconciledMissing": "Reconciled as failed — it can be prepared again.",
+      "executed": "Execution finished: {{output}}",
+      "connectionSaved": "Saved connection {{id}}."
+    }
+  },
+  "review": {
+    "title": "Change review",
+    "runQueue": "Advance queue",
+    "checkInbox": "Check inbox",
+    "pendingTitle": "Awaiting review",
+    "integratingTitle": "Integration",
+    "agentLabel": "Agent: {{driver}}",
+    "expectedHead": "Expected HEAD: {{head}}",
+    "remediatedBy": "Repair: {{sha}}",
+    "manualNeeded": "Manual verification required. Verification profile: {{profile}}",
+    "manualOk": "Confirm",
+    "binaryLabel": "(binary)",
+    "manualFail": "Fail",
+    "viewDiff": "View diff",
+    "requestChanges": "Request changes",
+    "approveAndQueue": "Approve and queue",
+    "reject": "Reject",
+    "createRepair": "Create repair task",
+    "revert": "Revert changes",
+    "remove": "Remove",
+    "confirm": "OK",
+    "checking": "Checking",
+    "revertDescription": "This reverts the candidate's integrated changes. The revert is recorded as a revert commit undoing the merge commit.",
+    "diffTitle": "Diff — {{taskId}}",
+    "diffAction": {
+      "A": "Add",
+      "M": "Modify",
+      "D": "Delete",
+      "R": "Rename"
+    },
+    "empty": {
+      "noSessions": "No sessions. Create one on the Sessions page first.",
+      "pending": "No candidates awaiting review.",
+      "integrating": "No candidates integrating or done.",
+      "noEntries": "No entries."
+    },
+    "banner": {
+      "stalled": "The queue is stuck — handle the {{n}} candidates that failed verification, conflicted, or need recovery below."
+    },
+    "prompt": {
+      "title": {
+        "request_changes": "Request changes",
+        "reject": "Reject candidate",
+        "manual_fail": "Fail manual verification",
+        "repair": "Create repair task"
+      },
+      "repairLabel": "Repair instructions",
+      "reasonLabel": "Reason",
+      "repairPlaceholder": "e.g. find the build failure, fix it, and resubmit",
+      "reasonPlaceholder": "Enter a reason"
+    },
+    "toast": {
+      "queueAdvanced": "Queue advanced: {{status}}",
+      "queueEmpty": "No queued candidates to advance.",
+      "inboxEmpty": "No new submissions in the inbox.",
+      "inboxAccepted": "Accepted {{accepted}} of {{total}} inbox items",
+      "changesRequested": "Changes requested.",
+      "rejected": "Candidate rejected.",
+      "approvedQueued": "Approved and queued.",
+      "manualFailRecorded": "Manual verification recorded as failed.",
+      "manualOk": "Manual verification completed.",
+      "repairPromptRequired": "Enter repair instructions.",
+      "reasonRequired": "Enter a reason.",
+      "repairLaneCreated": "Repair lane created: {{branch}}",
+      "revertStarted": "Revert started: {{result}}"
+    }
+  },
+  "terminal": {
+    "title": "Terminal",
+    "newTab": "New tab",
+    "toastTabOpened": "Opened a new tab.",
+    "checkingHerdr": "Checking herdr status…",
+    "unreachableTitle": "Could not reach the herdr server",
+    "unreachableBody": "herdr runs jobs on a terminal session <1>you can see and take over</1>. Without it, jobs run quietly in the background — they still work, but nobody can answer approval prompts.",
+    "openSettings": "Open run settings",
+    "blockedTitle": "{{n}} sessions waiting for a human response",
+    "peek": "Peek",
+    "peeking": "Reading output…",
+    "peekFailed": "Could not read output: {{error}}",
+    "runTitle": "Run in terminal",
+    "workspaceOption": "Workspace ({{path}})",
+    "selectAction": "(select an action)",
+    "herdrNote": "Actions follow the herdr mode in run settings — if herdr is up they run in a tab, otherwise they fall back to the background. The path choice also applies to \"New tab\".",
+    "reread": "Read again",
+    "emptyWorkspaces": "No workspaces. Create one with \"New tab\".",
+    "workspaceNumbered": "Workspace {{n}}",
+    "focused": "Focused",
+    "tabPaneCount": "{{tabs}} tabs · {{panes}} panes",
+    "emptyTabs": "No tabs.",
+    "tabNumbered": "Tab {{n}}",
+    "closeTab": "Close tab",
+    "toastTabClosed": "Tab closed.",
+    "panePeekHint": "{{cwd}}\nClick to see recent output",
+    "focusPaneTitle": "Bring this pane forward in herdr"
+  },
+  "jobs": {
+    "title": "Run history",
+    "activeTitle": "Queue / running",
+    "focusFailed": "Could not open the herdr session: {{error}}",
+    "emptyActive": "Nothing queued or running.",
+    "seeTimeline": "See in timeline",
+    "blockedNote": "The herdr session is waiting for approval or input. Open it via \"herdr\" and respond to continue.",
+    "timelineTitle": "Live timeline",
+    "emptyCurrent": "Nothing is running.",
+    "waitingEvents": "Waiting for progress events…",
+    "historyTitle": "History",
+    "emptyHistory": "No finished runs.",
+    "kind": "Kind",
+    "label": "Label",
+    "project": "Project",
+    "runner": "Runner",
+    "status": "Status",
+    "finishedAt": "Finished",
+    "duration": "Duration",
+    "log": "Log",
+    "report": "Report",
+    "logTitle": "Log — {{label}}",
+    "reportTitle": "Report — {{label}}",
+    "logReadFailed": "Could not read the log: {{error}}",
+    "emptyReport": "No stored report. It is saved only when there is a final assistant response."
+  },
+  "reading": {
+    "title": "Reading",
+    "back": "← Back to Reading",
+    "manageSources": "Manage RSS sources",
+    "openSources": "Open RSS sources",
+    "emptyNoSources": "No reading sources connected yet.",
+    "emptyNoSourcesHint": "Connect RSS feeds under Manage RSS sources and articles will gather here.",
+    "selectInstance": "Pick a feed instance above.",
+    "loading": "Loading articles…",
+    "emptyNoArticles": "No articles found — try Refresh under Manage RSS sources.",
+    "emptyNoArticlesFiltered": "No {{filter}} articles.",
+    "markRead": "Mark read",
+    "markUnread": "Mark unread",
+    "archive": "Archive",
+    "unarchive": "Unarchive"
+  },
+  "filter": {
+    "all": "All",
+    "unread": "Unread",
+    "archived": "Archived"
+  },
+  "todos": {
+    "title": "To-dos",
+    "noJournal": "No journal file for today. Adding an item creates a minimal skeleton.",
+    "empty": "No items.",
+    "newItemPlaceholder": "Enter a new item"
+  },
+  "section": {
+    "today": "Today's tasks",
+    "tomorrow": "Tomorrow's tasks"
+  },
+  "docs": {
+    "title": "Vault documents",
+    "refreshTree": "Refresh tree",
+    "emptyVault": "Vault is empty or not found.",
+    "loading": "Loading document…",
+    "selectNote": "Select a document on the left."
+  }
+}
