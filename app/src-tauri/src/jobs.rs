@@ -299,17 +299,7 @@ pub struct JobManager {
 }
 
 fn build_spawn_command(bin: &str, args: &[&str], cwd: &str) -> tokio::process::Command {
-    let mut c;
-    #[cfg(windows)]
-    {
-        c = crate::spawn::no_window_async(tokio::process::Command::new("cmd"));
-        c.arg("/c").arg(bin);
-    }
-    #[cfg(not(windows))]
-    {
-        c = crate::spawn::no_window_async(tokio::process::Command::new(bin));
-    }
-    c.args(args);
+    let mut c = crate::spawn::platform_command_async(bin, args);
     c.current_dir(cwd);
     c
 }
@@ -997,13 +987,8 @@ impl JobManager {
         {
             Ok(c) => c,
             Err(e) => {
-                self.finish(
-                    job,
-                    JobStatus::Failed,
-                    None,
-                    Some(format!("claude 실행 실패: {e}")),
-                    None,
-                );
+                let err = crate::error::CoreError::from_io(&job.claude_bin, &e);
+                self.finish(job, JobStatus::Failed, None, Some(err.to_ipc()), None);
                 return;
             }
         };
@@ -1905,7 +1890,8 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             .await
             .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Failed);
-        assert!(done.error.unwrap_or_default().contains("claude 실행 실패"));
+        #[cfg(not(windows))]
+        assert!(done.error.unwrap_or_default().contains("spawn_not_found"));
     }
 
     #[test]

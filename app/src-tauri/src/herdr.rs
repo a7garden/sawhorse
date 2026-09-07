@@ -103,17 +103,7 @@ pub struct Herdr {
 }
 
 fn spawn_command(bin: &str, args: &[&str]) -> tokio::process::Command {
-    let mut c;
-    #[cfg(windows)]
-    {
-        c = crate::spawn::no_window_async(tokio::process::Command::new("cmd"));
-        c.arg("/c").arg(bin);
-    }
-    #[cfg(not(windows))]
-    {
-        c = crate::spawn::no_window_async(tokio::process::Command::new(bin));
-    }
-    c.args(args);
+    let mut c = crate::spawn::platform_command_async(bin, args);
     c.kill_on_drop(true);
     c
 }
@@ -146,13 +136,13 @@ impl Herdr {
         let out = match tokio::time::timeout(timeout, cmd.output()).await {
             Err(_) => {
                 return Err(HerdrError::local(
-                    "timeout",
+                    crate::error::CoreCode::Timeout.as_str(),
                     format!("herdr {} 응답이 없습니다", args.first().unwrap_or(&"")),
                 ))
             }
             Ok(Err(e)) => {
                 return Err(HerdrError::local(
-                    "spawn_failed",
+                    crate::error::CoreCode::SpawnFailed.as_str(),
                     format!("herdr 실행 실패: {e}"),
                 ))
             }

@@ -5,7 +5,9 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock};
 
+use arc_swap::ArcSwap;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -318,9 +320,23 @@ pub fn view(raw: &Value, exists: bool) -> ConfigView {
 }
 
 pub fn load_view() -> ConfigView {
+    SNAPSHOT.load_full().as_ref().clone()
+}
+
+/// 프로세스 공유 설정 스냅샷. 틱마다 파일을 다시 읽지 않게 한다 — 읽기는
+/// `load_view()`(스냅샷 조회), 갱신은 `refresh_view()`(저장 직후·파일 감시)만 한다.
+static SNAPSHOT: LazyLock<ArcSwap<ConfigView>> =
+    LazyLock::new(|| ArcSwap::from_pointee(load_view_from_disk()));
+
+fn load_view_from_disk() -> ConfigView {
     let path = config_path();
     let exists = path.is_file();
     view(&load_raw_at(&path), exists)
+}
+
+/// 디스크에서 다시 읽어 스냅샷을 교체한다.
+pub fn refresh_view() {
+    SNAPSHOT.store(Arc::new(load_view_from_disk()));
 }
 
 // ---------- save ----------
@@ -624,7 +640,9 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
 }
 
 pub fn save_patch(patch: &Value) -> Result<ConfigView, String> {
-    save_patch_at(&config_path(), patch)
+    let view = save_patch_at(&config_path(), patch)?;
+    refresh_view();
+    Ok(view)
 }
 
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -672,21 +690,12 @@ pub struct HerdrDiag {
     pub server_ok: bool,
     /// what the next job would actually use: "herdr" | "headless"
     pub effective_runner: String,
+    /// herdr를 못 쓸 때 그 이유. herdr가 실제로 쓰이면 없다.
+    pub reason: Option<String>,
 }
 
 fn build_command(bin: &str, args: &[&str]) -> std::process::Command {
-    #[cfg(windows)]
-    {
-        let mut c = crate::spawn::no_window(std::process::Command::new("cmd"));
-        c.arg("/c").arg(bin).args(args);
-        c
-    }
-    #[cfg(not(windows))]
-    {
-        let mut c = crate::spawn::no_window(std::process::Command::new(bin));
-        c.args(args);
-        c
-    }
+    crate::spawn::platform_command(bin, args)
 }
 
 async fn probe(bin: &str, args: &[&str], cwd: Option<&Path>) -> Option<String> {
@@ -726,12 +735,24 @@ pub async fn herdr_diagnostics(cfg: &HerdrCfg) -> HerdrDiag {
         _ if server_ok => "herdr",
         _ => "headless",
     };
+    // 폴백은 조용히 일어나지 않는다 — 다음 잡이 headless로 돌 거면 이유를 함께 알린다.
+    let reason = if effective == "herdr" {
+        None
+    } else {
+        Some(match cfg.mode.as_str() {
+            "headless" => "설정에서 headless 모드를 쓴다".to_string(),
+            "herdr" if version.is_none() => "herdr 실행 파일을 찾지 못했다".to_string(),
+            "herdr" => "herdr 서버에 연결하지 못했다".to_string(),
+            _ => "herdr에 연결할 수 없어 headless로 실행한다".to_string(),
+        })
+    };
     HerdrDiag {
         mode: cfg.mode.clone(),
         bin_ok: version.is_some(),
         version,
         server_ok,
         effective_runner: effective.into(),
+        reason,
     }
 }
 

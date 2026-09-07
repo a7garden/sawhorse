@@ -164,23 +164,7 @@ fn truncate_chars(s: &str, max: usize) -> String {
 }
 
 fn build_command(path: &Path, args: &[&str]) -> tokio::process::Command {
-    // 윈도우의 .cmd/.bat 은 CreateProcess 가 직접 실행하지 못한다 — cmd 를 통해 부른다.
-    #[cfg(windows)]
-    {
-        let ext = path
-            .extension()
-            .and_then(|e| e.to_str())
-            .map(str::to_ascii_lowercase)
-            .unwrap_or_default();
-        if ext == "cmd" || ext == "bat" {
-            let mut c = crate::spawn::no_window_async(tokio::process::Command::new("cmd"));
-            c.arg("/c").arg(path).args(args);
-            return c;
-        }
-    }
-    let mut c = crate::spawn::no_window_async(tokio::process::Command::new(path));
-    c.args(args);
-    c
+    crate::spawn::platform_command_async(path, args)
 }
 
 /// 있으면 좋고 없어도 그만인 한 줄. 타임아웃을 짧게 잡아 마법사가 멈추지 않게 한다.

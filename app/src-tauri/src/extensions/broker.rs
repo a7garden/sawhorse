@@ -280,53 +280,37 @@ fn resolve_redirect(base: &str, location: &str) -> Result<String, String> {
     }
 }
 
-/// OS Keychain 저장소(macOS `security` CLI). DB에는 secret_ref 이름만 남긴다(설계 512줄).
+/// OS 보안 저장소(keyring 크레이트): macOS Keychain · Windows Credential Manager ·
+/// Linux Secret Service. DB에는 secret_ref 이름만 남긴다(설계 512줄).
 pub mod secrets {
+    const SERVICE: &str = "sawhorse";
+
+    fn entry(name: &str) -> Result<keyring::Entry, String> {
+        if name.is_empty() {
+            return Err("secret 이름은 비어 있을 수 없다".into());
+        }
+        keyring::Entry::new(SERVICE, name).map_err(|e| format!("보안 저장소 진입 실패: {e}"))
+    }
+
     /// 저장. 이미 있으면 교체한다.
     pub fn write(name: &str, value: &str) -> Result<(), String> {
-        if name.is_empty() || value.is_empty() {
-            return Err("secret 이름과 값은 비어 있을 수 없다".into());
+        if value.is_empty() {
+            return Err("secret 값은 비어 있을 수 없다".into());
         }
-        let out = crate::spawn::no_window(std::process::Command::new("security"))
-            .args([
-                "add-generic-password",
-                "-s",
-                "sawhorse",
-                "-a",
-                name,
-                "-w",
-                value,
-                "-U",
-            ])
-            .output()
-            .map_err(|e| format!("keychain 실행 실패: {e}"))?;
-        if out.status.success() {
-            Ok(())
-        } else {
-            Err(format!(
-                "keychain 저장 실패: {}",
-                String::from_utf8_lossy(&out.stderr)
-            ))
-        }
+        entry(name)?
+            .set_password(value)
+            .map_err(|e| format!("secret '{name}' 저장 실패: {e}"))
     }
 
     /// 조회. 토큰은 connector로 반환되지 않고 broker 내부에서만 쓴다.
     pub fn read(name: &str) -> Result<String, String> {
-        let out = crate::spawn::no_window(std::process::Command::new("security"))
-            .args(["find-generic-password", "-s", "sawhorse", "-a", name, "-w"])
-            .output()
-            .map_err(|e| format!("keychain 실행 실패: {e}"))?;
-        if out.status.success() {
-            Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
-        } else {
-            Err(format!("secret '{name}'이 keychain에 없다"))
-        }
+        entry(name)?
+            .get_password()
+            .map_err(|_| format!("secret '{name}'이 보안 저장소에 없다"))
     }
 
     pub fn delete(name: &str) -> Result<(), String> {
-        let _ = crate::spawn::no_window(std::process::Command::new("security"))
-            .args(["delete-generic-password", "-s", "sawhorse", "-a", name])
-            .output();
+        let _ = entry(name)?.delete_credential();
         Ok(())
     }
 }
