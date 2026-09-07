@@ -35,7 +35,7 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
 | `workspace` | `folders[]` 와 `files[{src,dest}]`. **기존 파일은 덮지 않는다** |
 | `settings` | 확장 화면이 폼을 자동 생성. 값은 `config.json` 의 `packs.settings.<id>` |
 | `actions` | 실행 단위. 잡 큐에 들어가고 예약 대상이 된다 |
-| `views` | 별도 업무 흐름이 필요한 확장 화면. 볼트 폴더 분류에는 쓰지 않는다 |
+| `views` | 사이드바 카테고리 아래에 추가할 화면 |
 
 ### actions
 
@@ -58,7 +58,7 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
 ### views
 
 ```jsonc
-{ "id": "logs", "label": "기록", "icon": "calendar-days", "type": "notes",
+{ "id": "logs", "label": "일지", "icon": "calendar-days", "group": "vault", "type": "notes",
   "query": {
     "folders": ["기록", "사업/*/이슈"],        // 글로브는 `*` 한 단계만
     "exclude": ["*목록.md", "*.base"],
@@ -76,14 +76,14 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
   "empty": "아직 없습니다. …" }
 ```
 
-- `일지`, `개념`처럼 볼트 안의 폴더·문서 유형은 `views`로 만들지 않는다. 앱의 단일
-  `문서` 화면이 전체 볼트 파일 트리를 그대로 보여 준다.
+- `group: "vault"`인 화면은 사이드바의 `볼트` 카테고리 아래에서 `모든 문서`와 함께
+  표시한다. 폴더 전체 탐색은 `모든 문서`, 유형별 목록은 선언형 `notes` 뷰를 쓴다.
 - 술어 연산자: `eq` `ne` `in` `contains` `exists` `truthy` `notEmpty`.
   모르는 연산자는 거르지 않는다(오타로 화면이 비지 않게).
 - 컬럼 타입: `text` `badge` `list` `check` `date`.
 - `source` 는 프론트매터가 아니라 노트 자체에서 오는 값: `title`(첫 `# 헤딩`, 없으면 파일명)
   `mtime` `path`.
-- `type: "native"` 는 앱이 이미 가진 업무 화면(`issues` `todos`)을 가리킨다.
+- `type: "native"` 는 앱이 이미 가진 업무 화면(`issues` `todos` `vault`)을 가리킨다.
   내장 SI 확장만 쓴다.
 
 ### settings

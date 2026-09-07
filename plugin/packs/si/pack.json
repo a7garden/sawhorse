@@ -181,6 +181,36 @@
       "group": "work",
       "type": "native",
       "component": "todos"
+    },
+    {
+      "id": "concepts",
+      "label": "개념",
+      "icon": "book-marked",
+      "group": "vault",
+      "type": "notes",
+      "query": {
+        "folders": ["개념"],
+        "exclude": ["*.base"],
+        "sort": { "field": "", "source": "title", "desc": false }
+      },
+      "columns": [
+        { "field": "", "source": "title", "label": "개념" },
+        { "field": "domain", "label": "분류", "type": "badge", "width": 110 },
+        { "field": "aliases", "label": "다른 이름", "type": "list" },
+        { "field": "sources", "label": "출처", "type": "list" },
+        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
+      ],
+      "groupBy": "domain",
+      "actions": ["wiki"],
+      "empty": "개념 문서가 아직 없습니다. '개념 정리'를 실행하면 문서에 나온 용어부터 만듭니다."
+    },
+    {
+      "id": "vault",
+      "label": "점검",
+      "icon": "folder-search",
+      "group": "vault",
+      "type": "native",
+      "component": "vault"
     }
   ]
 }

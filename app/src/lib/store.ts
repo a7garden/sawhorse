@@ -135,7 +135,6 @@ export const useApp = create<AppState>((set, get) => ({
    * 팩이 꺼져 화면이 사라졌으면 홈으로 — 존재하지 않는 페이지에 갇히지 않게.
    */
   setPage: (p) => {
-    if (p === "vault") return set({ page: "docs" });
     if (isCore(p)) return set({ page: p });
     if (parseViewPage(p)) {
       const { packId, viewId } = parseViewPage(p)!;

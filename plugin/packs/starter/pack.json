@@ -79,5 +79,26 @@
     }
   ],
 
-  "views": []
+  "views": [
+    {
+      "id": "logs",
+      "label": "일지",
+      "icon": "calendar-days",
+      "group": "vault",
+      "type": "notes",
+      "query": {
+        "folders": ["일지", "기록"],
+        "exclude": ["*.base"],
+        "sort": { "field": "", "source": "title", "desc": true },
+        "limit": 120
+      },
+      "columns": [
+        { "field": "", "source": "title", "label": "날짜", "width": 120 },
+        { "field": "mood", "label": "컨디션", "type": "badge", "width": 90 },
+        { "field": "tags", "label": "태그", "type": "list" },
+        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
+      ],
+      "empty": "아직 일지가 없습니다. '오늘 일지 준비'를 실행하면 첫 장이 생깁니다."
+    }
+  ]
 }

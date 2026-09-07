@@ -1046,8 +1046,18 @@ mod tests {
             "마일스톤 계획은 화면이 아니라 실행할 작업으로 남는다"
         );
         assert!(
-            si.manifest.views.iter().all(|v| v.group != "vault"),
-            "개념과 볼트는 문서 탐색기와 별도 화면으로 노출하지 않는다"
+            si.manifest
+                .views
+                .iter()
+                .any(|v| v.id == "concepts" && v.group == "vault"),
+            "개념은 볼트 카테고리의 문서 보기다"
+        );
+        assert!(
+            si.manifest
+                .views
+                .iter()
+                .any(|v| v.component == "vault" && v.label == "점검"),
+            "볼트 진단은 볼트 카테고리의 점검 화면이다"
         );
 
         let starter = reg.get("starter").expect("starter 팩이 있어야 한다");
@@ -1070,8 +1080,12 @@ mod tests {
             );
         }
         assert!(
-            starter.manifest.views.is_empty(),
-            "일지는 문서 탐색기 안의 폴더이지 별도 화면이 아니다"
+            starter
+                .manifest
+                .views
+                .iter()
+                .any(|v| v.label == "일지" && v.group == "vault"),
+            "일지는 볼트 카테고리의 문서 보기다"
         );
         assert!(
             !starter.manifest.settings.is_empty(),

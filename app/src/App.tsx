@@ -35,6 +35,7 @@ import SessionsPage from "@/pages/SessionsPage";
 import ReviewPage from "@/pages/ReviewPage";
 import SourcesPage from "@/pages/SourcesPage";
 import ReadingPage from "@/pages/ReadingPage";
+import VaultPage from "@/pages/VaultPage";
 import PacksPage from "@/pages/PacksPage";
 import PackViewPage from "@/pages/PackViewPage";
 import TerminalPage from "@/pages/TerminalPage";
@@ -49,7 +50,7 @@ import SetupWizard from "@/pages/SetupWizard";
 /** 사이드바 섹션 — 호스트가 섹션 목록·순서를 소유하고, 팩 뷰는 group 태그로 섹션을 고른다. */
 const SECTIONS = [
   { id: "work", label: "작업공간" },
-  { id: "vault", label: "문서" },
+  { id: "vault", label: "볼트" },
   { id: "reading", label: "확장 기능" },
 ];
 const TOP_NAV: {
@@ -64,7 +65,7 @@ const TOP_NAV: {
   { id: "projects", label: "프로젝트", icon: FolderGit2, group: "work" },
   { id: "issues", label: "이슈", icon: CircleDot, group: "work" },
   { id: "terminal", label: "실행", icon: Terminal, group: "work" },
-  { id: "docs", label: "문서", icon: FileText, group: "vault" },
+  { id: "docs", label: "모든 문서", icon: FileText, group: "vault" },
   { id: "reading", label: "읽을거리", icon: Newspaper, group: "reading" },
   { id: "github", label: "GitHub", icon: Github, group: "reading" },
   { id: "packs", label: "확장 관리", icon: Puzzle, group: "reading" },
@@ -100,6 +101,7 @@ const NATIVE: Record<string, () => JSX.Element> = {
   issues: ImprovePage,
   todos: TodosPage,
   docs: DocsPage,
+  vault: VaultPage,
 };
 
 const THEME_LABEL: Record<Theme, string> = {
@@ -181,9 +183,6 @@ export default function App() {
       (n) => n.packId === parsed.packId && n.viewId === parsed.viewId,
     );
     if (!entry) return <WorkbenchPage view="overview" />;
-    // 볼트 문서 뷰는 모두 하나의 문서 탐색기 안에서 전환한다. 팩이 기여한
-    // 일지·개념·점검을 각각 독립 페이지처럼 보이게 하지 않는다.
-    if (entry.group === "vault") return <DocsPage />;
     if (entry.type === "native") {
       const Native = NATIVE[entry.component];
       return Native ? <Native /> : <WorkbenchPage view="overview" />;
@@ -202,18 +201,9 @@ export default function App() {
     Icon: IconComponent;
     badge?: number;
   }) {
-    const parsedPage = parseViewPage(page);
-    const activePackView = parsedPage
-      ? nav.find(
-          (entry) =>
-            entry.packId === parsedPage.packId &&
-            entry.viewId === parsedPage.viewId,
-        )
-      : null;
     const active =
       page === id ||
       group?.root === id ||
-      (id === "docs" && activePackView?.group === "vault") ||
       (
         {
           workflows: "packs",
@@ -269,9 +259,15 @@ export default function App() {
             const packViews = nav.filter(
               (n) =>
                 n.group === id &&
-                n.group !== "vault" &&
                 !["issues", "todos", "docs"].includes(n.component),
             );
+            if (id === "vault") {
+              const order = (label: string) =>
+                ({ 일지: 10, 개념: 20, 점검: 30 } as Record<string, number>)[
+                  label
+                ] ?? 50;
+              packViews.sort((a, b) => order(a.label) - order(b.label));
+            }
             if (core.length === 0 && packViews.length === 0) return null;
             return (
               <Fragment key={id}>

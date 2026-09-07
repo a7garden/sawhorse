@@ -113,27 +113,26 @@ test("tasks are defined once and scheduled by reference without duplicating cont
   );
 });
 
-test("vault folders are browsed through one document page without separate concept, journal, or vault views", async ({
+test("all document views stay grouped under one vault sidebar category", async ({
   page,
 }) => {
-  await expect(
-    page.locator("aside nav").getByRole("button", { name: "문서", exact: true }),
-  ).toHaveCount(1);
-  for (const duplicate of ["모든 문서", "일지", "개념", "볼트"]) {
+  await expect(page.locator("aside nav").getByText("볼트", { exact: true })).toHaveCount(1);
+  for (const child of ["모든 문서", "일지", "개념", "점검"]) {
     await expect(
       page
         .locator("aside nav")
-        .getByRole("button", { name: duplicate, exact: true }),
-    ).toHaveCount(0);
+        .getByRole("button", { name: child, exact: true }),
+    ).toHaveCount(1);
   }
 
-  await nav(page, "문서");
-  await expect(page.getByRole("tablist", { name: "문서 보기" })).toHaveCount(0);
-  await expect(
-    page.locator("main").getByText("문서", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(page.locator("main").getByRole("button", { name: "일지", exact: true })).toBeVisible();
-  await expect(page.locator("main").getByRole("button", { name: "개념", exact: true })).toBeVisible();
+  await nav(page, "모든 문서");
+  await expect(page.getByText("볼트 문서", { exact: true })).toBeVisible();
+  await nav(page, "일지");
+  await expect(page.getByRole("heading", { name: "일지", exact: true })).toBeVisible();
+  await nav(page, "개념");
+  await expect(page.getByRole("heading", { name: "개념", exact: true })).toBeVisible();
+  await nav(page, "점검");
+  await expect(page.getByRole("heading", { name: "볼트", exact: true })).toBeVisible();
 });
 
 test("installed GitHub gets an extension page and RSS stays inside reading", async ({

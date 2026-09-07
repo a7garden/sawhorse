@@ -305,12 +305,12 @@ export default function HomePage() {
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0 pb-1">
               <CardTitle className="text-[13px]">볼트 현황</CardTitle>
-              <Button size="xs" variant="ghost" onClick={() => setPage("docs")}>
-                문서 보기 <ArrowRight />
+              <Button size="xs" variant="ghost" onClick={() => setPage("vault")}>
+                볼트 점검 <ArrowRight />
               </Button>
             </CardHeader>
             <CardContent className="space-y-2 text-xs">
-              <button onClick={() => setPage("docs")} className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-accent">
+              <button onClick={() => setPage("vault")} className="flex w-full items-center justify-between rounded-md border p-2 text-left transition-colors hover:bg-accent">
                 <span className="text-muted-foreground">미승격 항목</span>
                 <span className="text-lg font-bold tabular-nums">{inboxCount}</span>
               </button>

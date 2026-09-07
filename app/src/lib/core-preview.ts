@@ -1,4 +1,111 @@
-import type { TaskDef, TaskRow } from "./types";
+import type { NavEntry, PackInfo, PackView, TaskDef, TaskRow } from "./types";
+
+const PREVIEW_VAULT_VIEWS: Array<{
+  packId: string;
+  packName: string;
+  view: PackView;
+}> = [
+  {
+    packId: "starter",
+    packName: "기본 작업",
+    view: {
+      id: "logs",
+      label: "일지",
+      icon: "calendar-days",
+      type: "notes",
+      component: "",
+      columns: [
+        { field: "", source: "title", label: "날짜", type: "text", width: 120 },
+        { field: "", source: "mtime", label: "수정", type: "date", width: 110 },
+      ],
+      groupBy: "",
+      actions: [],
+      empty: "아직 일지가 없습니다.",
+    },
+  },
+  {
+    packId: "si",
+    packName: "SI",
+    view: {
+      id: "concepts",
+      label: "개념",
+      icon: "book-marked",
+      type: "notes",
+      component: "",
+      columns: [
+        { field: "", source: "title", label: "개념", type: "text", width: 0 },
+        { field: "domain", source: "", label: "분류", type: "badge", width: 110 },
+      ],
+      groupBy: "domain",
+      actions: [],
+      empty: "개념 문서가 아직 없습니다.",
+    },
+  },
+  {
+    packId: "si",
+    packName: "SI",
+    view: {
+      id: "vault",
+      label: "점검",
+      icon: "folder-search",
+      type: "native",
+      component: "vault",
+      columns: [],
+      groupBy: "",
+      actions: [],
+      empty: "",
+    },
+  },
+];
+
+const previewPack = (id: string, name: string, views: PackView[]): PackInfo => ({
+  id,
+  name,
+  version: "1.0.0",
+  description: `${name} 미리보기 팩`,
+  author: "sawhorse",
+  icon: "package",
+  skills: [],
+  workspace: { folders: [], files: [] },
+  settings: [],
+  actions: [],
+  views,
+  dir: "",
+  source: "builtin",
+  enabled: true,
+  availableSkills: [],
+  settingsValues: {},
+});
+
+const previewPacks: PackInfo[] = [
+  previewPack(
+    "starter",
+    "기본 작업",
+    PREVIEW_VAULT_VIEWS.filter((item) => item.packId === "starter").map(
+      (item) => item.view,
+    ),
+  ),
+  previewPack(
+    "si",
+    "SI",
+    PREVIEW_VAULT_VIEWS.filter((item) => item.packId === "si").map(
+      (item) => item.view,
+    ),
+  ),
+];
+
+const previewNav: NavEntry[] = PREVIEW_VAULT_VIEWS.map(
+  ({ packId, packName, view }) => ({
+    packId,
+    packName,
+    viewId: view.id,
+    label: view.label,
+    icon: view.icon,
+    type: view.type,
+    component: view.component,
+    group: "vault",
+  }),
+);
 // Explicit browser preview only. No commands here launch agents or touch desktop files.
 export async function corePreview(
   command: string,
@@ -206,6 +313,36 @@ export async function corePreview(
         title: String(args.rel ?? "").split("/").pop()?.replace(/\.md$/, "") ?? "문서",
         markdown: "# 미리보기 문서\n\n볼트에 저장된 문서입니다.",
       };
+    case "query_pack_view": {
+      const viewId = String(args.viewId ?? "");
+      return viewId === "logs"
+        ? {
+            folders: ["일지", "기록"],
+            truncated: false,
+            rows: [
+              {
+                path: "/preview/일지/2026-09-07.md",
+                rel: "일지/2026-09-07.md",
+                title: "2026-09-07",
+                mtimeMs: Date.now(),
+                fields: {},
+              },
+            ],
+          }
+        : {
+            folders: ["개념"],
+            truncated: false,
+            rows: [
+              {
+                path: "/preview/개념/정본.md",
+                rel: "개념/정본.md",
+                title: "정본",
+                mtimeMs: Date.now(),
+                fields: { domain: "지식관리" },
+              },
+            ],
+          };
+    }
     case "set_issue_milestone": {
       const rows = JSON.parse(
         localStorage.getItem("sawhorse.preview-issues") ?? "[]",
@@ -226,8 +363,9 @@ export async function corePreview(
     case "remote_operations_list":
       return { operations: [] };
     case "list_packs":
-      return { packs: [], broken: [] };
+      return { packs: previewPacks, broken: [] };
     case "list_nav":
+      return previewNav;
     case "list_schedules":
     case "list_extension_packages":
     case "ingestion_list":
