@@ -195,7 +195,12 @@ fn is_issue_note(file_name: &str) -> bool {
         && !file_name.ends_with("문제목록.md")
 }
 
-fn note_from_file(project: &str, path: &Path, map: &Mapping, legacy: bool) -> ImprovementNote {
+pub(crate) fn note_from_file(
+    project: &str,
+    path: &Path,
+    map: &Mapping,
+    legacy: bool,
+) -> ImprovementNote {
     let stem = path
         .file_stem()
         .and_then(|s| s.to_str())
@@ -698,35 +703,8 @@ pub fn audit_vault(vault: &Path, projects: &[(String, String)]) -> VaultAudit {
         });
     }
 
-    // 구조 (5): 이슈/개선 폴더 + 프로젝트별 인박스 목록 존재 여부
-    let lists = problem_list_paths(vault, projects);
-    for (project, id_prefix) in projects {
-        let base = project_dir(vault, project);
-        let dir = base.join("이슈");
-        let legacy_dir = base.join("개선");
-        if !dir.is_dir() && !legacy_dir.is_dir() {
-            issues.push(AuditIssue {
-                severity: "info".into(),
-                path: dir.to_string_lossy().to_string(),
-                message: format!("'{project}' 이슈 폴더 없음 (init-vault 기준 구조)"),
-            });
-            continue;
-        }
-        if id_prefix.is_empty() {
-            continue; // 접두사 없는 프로젝트는 목록 파일명을 특정할 수 없어 생략
-        }
-        let has_list = lists.iter().any(|(p, _, _)| p == project);
-        if !has_list {
-            issues.push(AuditIssue {
-                severity: "info".into(),
-                path: dir
-                    .join(format!("{id_prefix} 이슈목록.md"))
-                    .to_string_lossy()
-                    .to_string(),
-                message: format!("'{project}' {id_prefix} 이슈목록/문제목록 없음"),
-            });
-        }
-    }
+    // Legacy notes remain readable, but their folders/inboxes are not required
+    // in a workspace whose work and milestones are owned by the host.
 
     VaultAudit {
         issues,
@@ -1560,35 +1538,19 @@ mod tests {
     }
 
     #[test]
-    fn audit_flags_missing_inbox_list_but_skips_empty_prefix() {
+    fn audit_does_not_require_retired_issue_folders_or_inboxes() {
         let vault = fixture_vault("audit-list");
-        // FDR: 폴더 + FDR 문제목록 모두 있음 → 구조 이슈 없음
-        let no_list = vault.join("프로젝트").join("ABC").join("개선");
-        std::fs::create_dir_all(&no_list).unwrap();
-        let no_prefix = vault.join("프로젝트").join("XYZ").join("이슈");
-        std::fs::create_dir_all(&no_prefix).unwrap();
+        std::fs::create_dir_all(vault.join("프로젝트/ABC/개선")).unwrap();
         let audit = audit_vault(
             &vault,
-            &[
-                ("FDR".to_string(), "FDR".to_string()),
-                ("ABC".to_string(), "ABC".to_string()),
-                ("XYZ".to_string(), String::new()),
-            ],
+            &[("ABC".into(), "ABC".into()), ("NEW".into(), "NEW".into())],
         );
-        let msgs: Vec<&str> = audit.issues.iter().map(|i| i.message.as_str()).collect();
-        assert!(
-            msgs.iter()
-                .any(|m| m.contains("ABC") && m.contains("문제목록")),
-            "{msgs:?}"
-        );
-        assert!(
-            !msgs.iter().any(|m| m.contains("XYZ") && m.contains("목록")),
-            "{msgs:?}"
-        );
-        assert!(
-            !msgs.iter().any(|m| m.contains("FDR") && m.contains("목록")),
-            "{msgs:?}"
-        );
+        assert!(audit
+            .issues
+            .iter()
+            .all(|issue| !issue.message.contains("폴더 없음")
+                && !issue.message.contains("문제목록 없음")));
+        std::fs::remove_dir_all(vault).unwrap();
     }
 
     fn todo_fixture(tag: &str) -> PathBuf {

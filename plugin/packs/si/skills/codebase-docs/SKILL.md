@@ -17,7 +17,7 @@ description: Use when the user wants to analyze a codebase and document it featu
 - vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
 - 위키 규범은 sawhorse:wiki를 준수한다: 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 `템플릿/개념.md`로 먼저 생성한다(죽은 링크 금지).
 - 시각화 우선: 텍스트 나열보다 다이어그램이 명확한 곳은 반드시 다이어그램으로 쓴다. 기능분석 문서에서 실제 파일 경로는 frontmatter `sources`에만 적는다(경로 변경에 본문이 썩지 않는 구조).
-- frontmatter는 design.md 스키마의 키와 순서 그대로만. 임의 필드 생성 금지. 키는 영어, 값은 한국어.
+- frontmatter는 볼트의 해당 문서 템플릿을 기준으로. 임의 필드 생성 금지. 키는 영어, 값은 한국어.
 
 ## 입력
 
@@ -88,6 +88,6 @@ description: Use when the user wants to analyze a codebase and document it featu
 | 본문에 파일 경로 나열 | 경로는 frontmatter `sources` + 역할 주석만 |
 | 폴더 구조 미러한 기능 분해 | 사용자 관점 기능(capability) 단위로 분해 |
 | 텍스트만 있는 기능분석 문서 | 다이어그램 필수 — mermaid 우선, 복잡한 그림은 SVG |
-| 스키마 밖 frontmatter 필드 추가 | design.md 스키마의 키·순서만 사용 |
+| 스키마 밖 frontmatter 필드 추가 | 볼트의 해당 문서 템플릿 참고, 기존 사용자 필드 보존 |
 | 죽은 위키링크(`[[...]]` 대상 없음) | 링크 전에 `템플릿/개념.md`로 노트 생성 |
 | Playwright MCP 부재 시 작업 중단 | 텍스트만 진행하고 건너뛴 사실 보고 |

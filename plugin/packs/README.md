@@ -1,6 +1,6 @@
-# 확장(pack) 만들기
+# 문서·자동화 팩 만들기
 
-확장 하나가 "한 가지 일하는 방식" 전체다. 폴더 하나 + `pack.json` 한 장이면 된다.
+팩은 지식 문서와 자동화 루틴을 묶는다. 작업의 단계·승인·산출물은 앱의 공통 워크플로우가 관리한다. 설치 권한·의존성을 가진 새 기능은 [확장 패키지 v2](../extension-packages/README.md)를 사용한다.
 **코드는 필요 없다** — 선언하면 앱이 렌더·검증·실행을 맡는다.
 
 ## 5분 만에 만들기
@@ -60,9 +60,9 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
 ```jsonc
 { "id": "logs", "label": "일지", "icon": "calendar-days", "group": "vault", "type": "notes",
   "query": {
-    "folders": ["기록", "프로젝트/*/이슈"],        // 글로브는 `*` 한 단계만
+    "folders": ["일지", "문서"],        // 글로브는 `*` 한 단계만
     "exclude": ["*목록.md", "*.base"],
-    "where": [{ "field": "type", "op": "eq", "value": "이슈" }],
+    "where": [{ "field": "type", "op": "eq", "value": "문서" }],
     "sort": { "source": "title", "desc": true },   // source: "" | "title" | "mtime"
     "limit": 120
   },
@@ -116,3 +116,11 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
 | 설치 버튼이 아무것도 안 한다 | `skills[]` 에 적은 이름의 `SKILL.md` 가 실제로 없다 (`본문 없음` 배지) |
 | 작업공간에 아무것도 안 생긴다 | 이미 다 있거나, `files[].src` 가 팩 폴더 기준이 아니다 |
 | 예약이 안 돈다 | 팩이 꺼져 있거나 작업공간 경로가 비어 있다. 놓친 예약은 홈 카드로만 뜬다(자동 실행 없음) |
+
+## 번들 정합성
+
+`pack.json`의 `skills`가 공개 스킬의 정본이다. 실제 스킬 폴더와 선언이 일치해야 하고, 액션은 선언된 스킬을 호출해야 한다. 폐지한 스킬은 선언과 폴더를 함께 제거한다.
+
+다른 팩과 충돌할 수 있는 템플릿은 `템플릿/<pack-id>/`에 둔다. 기존 사용자 파일은 덮어쓰지 않는다. 코어 레코드나 과거 이슈·개선 템플릿을 팩 초기화로 다시 만들지 않는다.
+
+저장소 루트에서 `node plugin/validate.mjs`로 선언·시드·스킬 참조를 검사한다.

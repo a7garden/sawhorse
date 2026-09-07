@@ -1,9 +1,11 @@
 ---
 name: project-doc
-description: Use when the user wants to register a new business project in the vault from proposal documents - "새 프로젝트 등록해줘", "제안서 정리해줘", "프로젝트 문서 만들어줘", "제안서 보고 프로젝트 등록해줘" 같은 요청일 때 사용.
+description: Use when the user wants to create project knowledge documents in the vault from proposal documents - "새 프로젝트 등록해줘", "제안서 정리해줘", "프로젝트 문서 만들어줘", "제안서 보고 프로젝트 등록해줘" 같은 요청일 때 사용.
 ---
 
-# 프로젝트 등록 (project-doc)
+# 프로젝트 지식 문서 (project-doc)
+
+앱의 프로젝트 등록은 `projects/<id>/project.md`에서 관리한다. 이 스킬은 별도의 프로젝트나 이슈 저장소를 만들지 않는다.
 
 제안서·프로젝트 문서를 vault로 가져와 `프로젝트/<프로젝트명>/` 폴더, 프로젝트 허브(MOC), 제안 요약, 개념 노트를 만든다.
 실제 코드베이스 기능 분석은 `/sawhorse:codebase-docs`가 담당한다. 이 스킬은 등록까지만 한다.
@@ -15,7 +17,7 @@ description: Use when the user wants to register a new business project in the v
 - 쓰기 대상은 vault(`${user_config.vault_path}`)뿐이다.
 - vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
 - 위키 규범은 sawhorse:wiki를 준수한다: 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 `템플릿/개념.md`로 먼저 생성한다(죽은 링크 금지).
-- frontmatter는 design.md 스키마의 키와 순서 그대로만 사용한다. 임의 필드 생성 금지. 키는 영어, 값은 한국어.
+- frontmatter는 볼트의 해당 문서 템플릿을 기준으로 사용한다. 임의 필드 생성 금지. 키는 영어, 값은 한국어.
 - vault 밖 원문 문서를 통째로 복사하지 않는다. 요약 + 출처 표기만 남긴다.
 
 ## 입력
@@ -35,9 +37,7 @@ description: Use when the user wants to register a new business project in the v
    - 문서가 하나도 없으면 docx 파싱 단계를 건너뛰고, 발주처/기간 등을 사용자 문답으로 채운다.
 
 2. **프로젝트 폴더 생성**
-   - `${user_config.vault_path}/프로젝트/<프로젝트명>/` 아래 `분석/`, `산출물/`, `회의/`, `이슈/`, `마일스톤/`을 만든다(이미 있으면 유지).
-   - 이슈 폴더에는 `이슈.md` MOC, `<idPrefix> 이슈목록.md`, `<idPrefix> 이슈.base`를 준비한다. 마일스톤 폴더에는 `마일스톤.md` MOC를 준비한다. 기존 파일은 절대 덮어쓰지 않는다.
-   - MOC에는 상태 표를 수기로 쓰지 않고 각각 `![[프로젝트/이슈.base]]`, `![[프로젝트/마일스톤.base]]` 또는 프로젝트 범위 Base 뷰를 임베드한다. 이슈목록은 `## 신규 (미승격)`과 `## 승격 이력`만 둔다.
+   - `${user_config.vault_path}/프로젝트/<프로젝트명>/` 아래 `분석/`, `산출물/`, `회의/`을 만든다(이미 있으면 유지).
    - 필요 시 `${user_config.vault_path}/개념/`도 만든다.
 
 3. **문서 파싱 (docx)**
@@ -107,7 +107,7 @@ description: Use when the user wants to register a new business project in the v
 |---|---|
 | 원격 변경(`git push`, `svn commit` 등) | 승인받은 목적이 없으면 실행하지 않는다. 훅이 확인을 요구한다 |
 | 코드베이스 파일 수정/삭제 | 읽기 전용 탐색만 |
-| 스키마 밖 frontmatter 필드 추가 | design.md 스키마의 키·순서만 사용 |
+| 스키마 밖 frontmatter 필드 추가 | 볼트의 해당 문서 템플릿 참고, 기존 사용자 필드 보존 |
 | 죽은 위키링크(`[[...]]` 대상 없음) | 링크 전에 `템플릿/개념.md`로 노트 생성 |
 | 원문 통째 복사 | 요약 + 출처 표기 |
 | 확실하지 않은 값 기입 | 빈 값 + 사용자 확인 질문 |

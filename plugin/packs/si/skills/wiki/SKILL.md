@@ -83,7 +83,7 @@ frontmatter 필드는 템플릿 스키마만 사용한다. 개념 노트 스키�
   ```
   `!` 로 시작하는 부정 표현은 YAML이 태그로 읽으므로 `not:` 절을 쓴다.
 - 표에서 구분하고 싶은 축은 새 폴더가 아니라 **프로퍼티**로 만든다. `개념/`은 평면 폴더로 유지하고 `domain`으로 나눈다.
-- 표준 `.base` 위치: `개념/개념.base`, `프로젝트/프로젝트.base`, `프로젝트/이슈.base`, `프로젝트/마일스톤.base`, `일지/일지.base`. 볼트 루트 `대시보드.md`가 이들의 뷰를 임베드한다.
+- 표준 `.base` 위치: `개념/개념.base`, `프로젝트/프로젝트.base`, `일지/일지.base`. 볼트 루트 `대시보드.md`가 이들의 뷰를 임베드한다.
 - 표에서 바로 개념을 붙잡을 수 있게 `개념.base`는 `newItemFolder: 개념`과 `newItemTemplate: 템플릿/개념.md`를 갖는다. 새 항목 버튼이 템플릿 frontmatter를 씨앗으로 `개념/`에 노트를 만든다 — 표에 한 줄 추가하는 동작이 곧 노트 생성이므로 이원 저장이 생기지 않는다.
 - `.base` 스키마(Obsidian 1.13 기준): 최상위 키는 `filters` `views` `properties` `formulas` `summaries` `newItemFolder` `newItemTemplate`.
   각 view는 `type`(필수)·`name`(필수)과 `filters` `order` `sort`(`{property, direction: ASC|DESC}`) `groupBy`(`{property, direction}`) `limit`를 갖는다.

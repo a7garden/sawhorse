@@ -4,18 +4,28 @@
   "version": "1.0.0",
   "author": "sawhorse",
   "icon": "notebook-pen",
-  "description": "업종·조직 어휘가 하나도 없는 최소 팩. 매일 일지 한 장, 빠른 메모, 주간 회고 — 이 세 가지만 한다. 팩을 직접 만들려면 이 폴더를 복사해 시작하는 것이 가장 빠르다. 설정은 config.json 의 packs.settings.starter 에 저장된다.",
-
-  "skills": ["capture", "weekly-review"],
-
+  "description": "오늘 일지, 빠른 메모, 주간 회고를 위한 기본 팩.",
+  "skills": [
+    "capture",
+    "weekly-review"
+  ],
   "workspace": {
-    "folders": ["일지", "문서", "보관"],
+    "folders": [
+      "일지",
+      "문서",
+      "보관"
+    ],
     "files": [
-      { "src": "templates/기록.md", "dest": "템플릿/일지.md" },
-      { "src": "templates/노트.md", "dest": "템플릿/문서.md" }
+      {
+        "src": "templates/기록.md",
+        "dest": "템플릿/starter/일지.md"
+      },
+      {
+        "src": "templates/노트.md",
+        "dest": "템플릿/starter/문서.md"
+      }
     ]
   },
-
   "settings": [
     {
       "key": "ownerName",
@@ -30,9 +40,18 @@
       "label": "회고 기준 요일",
       "description": "주간 회고가 한 주의 끝으로 볼 요일",
       "options": [
-        { "value": "금", "label": "금요일" },
-        { "value": "토", "label": "토요일" },
-        { "value": "일", "label": "일요일" }
+        {
+          "value": "금",
+          "label": "금요일"
+        },
+        {
+          "value": "토",
+          "label": "토요일"
+        },
+        {
+          "value": "일",
+          "label": "일요일"
+        }
       ]
     },
     {
@@ -48,7 +67,6 @@
       "description": "켜면 일지에서 언급한 주제를 [[문서 이름]] 으로 잇고, 없는 문서는 만듭니다"
     }
   ],
-
   "actions": [
     {
       "id": "today",
@@ -57,7 +75,10 @@
       "prompt": "/{{ns}}:capture --today",
       "cwd": "workspace",
       "featured": true,
-      "schedule": { "kind": "weekdays", "time": "09:00" }
+      "schedule": {
+        "kind": "weekdays",
+        "time": "09:00"
+      }
     },
     {
       "id": "capture",
@@ -66,7 +87,14 @@
       "prompt": "/{{ns}}:capture {{text}}",
       "cwd": "workspace",
       "featured": true,
-      "params": [{ "key": "text", "type": "text", "label": "적을 내용", "required": true }]
+      "params": [
+        {
+          "key": "text",
+          "type": "text",
+          "label": "적을 내용",
+          "required": true
+        }
+      ]
     },
     {
       "id": "review",
@@ -75,10 +103,15 @@
       "prompt": "/{{ns}}:weekly-review {{week}}",
       "cwd": "workspace",
       "featured": true,
-      "params": [{ "key": "week", "type": "text", "label": "기준 날짜 (선택, 비우면 이번 주)" }]
+      "params": [
+        {
+          "key": "week",
+          "type": "text",
+          "label": "기준 날짜 (선택, 비우면 이번 주)"
+        }
+      ]
     }
   ],
-
   "views": [
     {
       "id": "logs",
@@ -87,16 +120,45 @@
       "group": "vault",
       "type": "notes",
       "query": {
-        "folders": ["일지", "기록"],
-        "exclude": ["*.base"],
-        "sort": { "field": "", "source": "title", "desc": true },
+        "folders": [
+          "일지",
+          "기록"
+        ],
+        "exclude": [
+          "*.base"
+        ],
+        "sort": {
+          "field": "",
+          "source": "title",
+          "desc": true
+        },
         "limit": 120
       },
       "columns": [
-        { "field": "", "source": "title", "label": "날짜", "width": 120 },
-        { "field": "mood", "label": "컨디션", "type": "badge", "width": 90 },
-        { "field": "tags", "label": "태그", "type": "list" },
-        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
+        {
+          "field": "",
+          "source": "title",
+          "label": "날짜",
+          "width": 120
+        },
+        {
+          "field": "mood",
+          "label": "컨디션",
+          "type": "badge",
+          "width": 90
+        },
+        {
+          "field": "tags",
+          "label": "태그",
+          "type": "list"
+        },
+        {
+          "field": "",
+          "source": "mtime",
+          "label": "수정",
+          "type": "date",
+          "width": 110
+        }
       ],
       "empty": "아직 일지가 없습니다. '오늘 일지 준비'를 실행하면 첫 장이 생깁니다."
     }

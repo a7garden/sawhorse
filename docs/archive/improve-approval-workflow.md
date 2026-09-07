@@ -1,3 +1,5 @@
+> 보관 문서: 폐지된 개선 승인 흐름의 이력입니다. 현재 계약은 [구조 정리](../architecture/extension-boundaries.md)를 참고하세요.
+
 # 개선 사이클 v2 — 볼트 승인 게이트 + 일괄 처리
 
 `skills/improve` 개편 설계. 확정 후 SKILL.md·design.md·base·템플릿·볼트에 반영한다.
