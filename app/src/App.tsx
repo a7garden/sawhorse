@@ -18,6 +18,7 @@ import {
   Github,
   Repeat,
   SquareCheckBig,
+  Workflow,
 } from "lucide-react";
 import { useApp, parseViewPage, viewPageId, type PageId } from "@/lib/store";
 import { icon as packIcon, type IconComponent } from "@/lib/icons";
@@ -69,6 +70,8 @@ const TOP_NAV: {
   { id: "task-library", labelKey: "nav.taskLibrary", icon: Repeat, group: "work" },
   { id: "calendar", labelKey: "nav.calendar", icon: CalendarDays, group: "work" },
   { id: "projects", labelKey: "nav.projects", icon: FolderGit2, group: "work" },
+  // 워크플로우는 확장의 부속이 아니라 제품의 주인 객체다. 작업 섹션의 1급 진입점.
+  { id: "workflows", labelKey: "nav.workflows", icon: Workflow, group: "work" },
   { id: "issues", labelKey: "nav.issues", icon: CircleDot, group: "work" },
   // `실행` 은 잡·하네스 런 한 가지만 가리킨다. 진입점 이름까지 실행이면 여섯 개가
   // 같은 낱말을 쓴다.
@@ -210,16 +213,7 @@ export default function App() {
     Icon: IconComponent;
     badge?: number;
   }) {
-    const active =
-      page === id ||
-      group?.root === id ||
-      (
-        {
-          workflows: "packs",
-          schemas: "settings",
-          onboarding: "projects",
-        } as Record<string, string>
-      )[page] === id;
+    const active = page === id || group?.root === id;
     return (
       <button
         onClick={() => {

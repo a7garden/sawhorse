@@ -348,6 +348,7 @@
     "notInstalled": "Not installed",
     "nextJob": "Next job: {{runner}}",
     "runnerHerdr": "herdr session",
+    "runnerFallback": "Running headless — {{reason}}",
     "badgePath": "Path",
     "badgeBranch": "Branch",
     "requirementsTitle": "Required programs",

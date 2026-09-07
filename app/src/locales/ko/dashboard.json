@@ -223,11 +223,10 @@
     }
   },
   "workflowStudio": {
-    "title": "워크플로 스튜디오",
+    "title": "워크플로",
     "loadDraftsFailed": "초안을 불러오지 못했습니다: {{error}}",
     "copied": "워크플로 JSON을 클립보드에 복사했습니다.",
     "export": "내보내기",
-    "librarySummary": "워크플로 라이브러리 · 기존 흐름 선택",
     "library": "라이브러리",
     "newWorkflow": "새 워크플로",
     "published": "발행됨",
@@ -273,7 +272,10 @@
     "none": "없음",
     "toVisual": "시각 편집으로",
     "advancedJson": "고급 JSON",
-    "jsonSyntaxError": "JSON 구문을 확인하세요."
+    "jsonSyntaxError": "JSON 구문을 확인하세요.",
+    "unused": "사용처 없음",
+    "defaultOf": "기본: {{names}}",
+    "workCount": "작업 {{count}}개"
   },
   "schemaStudio": {
     "title": "볼트 문서 구조",

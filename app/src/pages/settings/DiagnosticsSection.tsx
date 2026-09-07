@@ -101,6 +101,11 @@ export default function DiagnosticsSection({
                   )}
                   {diag.herdr.version ? ` · ${diag.herdr.version}` : ""}
                 </span>
+                  {diag.herdr.reason && (
+                    <span className="text-[11px] text-muted-foreground">
+                      {t("diag.runnerFallback", { reason: diag.herdr.reason })}
+                    </span>
+                  )}
               </div>
               {diag.projects.map((p) => (
                 <div

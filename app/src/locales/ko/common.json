@@ -7,6 +7,7 @@
     "taskLibrary": "자동화",
     "calendar": "캘린더",
     "projects": "프로젝트",
+    "workflows": "워크플로",
     "issues": "이슈",
     "terminal": "에이전트",
     "docs": "모든 문서",
@@ -26,7 +27,6 @@
     },
     "other": "기타",
     "back": {
-      "workflows": "확장 관리으로 돌아가기",
       "schemas": "설정으로 돌아가기",
       "onboarding": "프로젝트으로 돌아가기",
       "sources": "읽을거리으로 돌아가기"

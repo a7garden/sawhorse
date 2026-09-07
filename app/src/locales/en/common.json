@@ -7,6 +7,7 @@
     "taskLibrary": "Automation",
     "calendar": "Calendar",
     "projects": "Projects",
+    "workflows": "Workflows",
     "issues": "Issues",
     "terminal": "Agents",
     "docs": "All docs",
@@ -26,7 +27,6 @@
     },
     "other": "Other",
     "back": {
-      "workflows": "Back to Extensions",
       "schemas": "Back to Settings",
       "onboarding": "Back to Projects",
       "sources": "Back to Reading"

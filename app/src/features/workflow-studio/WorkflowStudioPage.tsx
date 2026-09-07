@@ -17,7 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input, Textarea } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/pages/common";
-import { workflowApi, isWorkbenchPreview } from "@/features/workbench/api";
+import { workflowApi, sddApi, isWorkbenchPreview } from "@/features/workbench/api";
 import type {
   SimulationResult,
   AgentRole,
@@ -26,6 +26,7 @@ import type {
   WorkflowArtifact,
   WorkflowDraftRecord,
   WorkflowNode,
+  WorkspaceSnapshot,
 } from "@/features/workbench/types";
 
 function clone<T>(value: T): T {
@@ -108,9 +109,10 @@ export default function WorkflowStudioPage() {
   const [simulation, setSimulation] = useState<SimulationResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
 
   async function load() {
-    const [nextCatalog, nextDrafts] = await Promise.all([
+    const [nextCatalog, nextDrafts, nextSnapshot] = await Promise.all([
       workflowApi.catalog(),
       workflowApi.drafts().catch((error) => {
         if (!isWorkbenchPreview)
@@ -119,9 +121,12 @@ export default function WorkflowStudioPage() {
           );
         return [];
       }),
+      // 라이브러리의 "어디에 쓰이는지" 표시용. 실패해도 편집은 계속된다.
+      sddApi.snapshot().catch(() => null),
     ]);
     setCatalog(nextCatalog);
     setDrafts(nextDrafts);
+    setSnapshot(nextSnapshot);
   }
 
   useEffect(() => {
@@ -137,6 +142,49 @@ export default function WorkflowStudioPage() {
       definition.nodes[0],
     [definition, selected],
   );
+
+  // 발행 정의를 id별로 묶어 버전 이력을 한 자리에 보여준다.
+  const publishedGroups = useMemo(() => {
+    const groups = new Map<string, WorkflowDefinition[]>();
+    for (const item of catalog) {
+      const versions = groups.get(item.id) ?? [];
+      versions.push(item);
+      groups.set(item.id, versions);
+    }
+    return [...groups.entries()];
+  }, [catalog]);
+
+  // 프로젝트 기본 워크플로와 개별 작업의 고정 버전을 한 번에 센다.
+  const usage = useMemo(() => {
+    const map = new Map<string, { projects: string[]; work: number }>();
+    const entry = (id: string, version: string) => {
+      const key = `${id}@${version}`;
+      const current = map.get(key) ?? { projects: [], work: 0 };
+      map.set(key, current);
+      return current;
+    };
+    for (const project of snapshot?.projects ?? [])
+      entry(project.workflowId, project.workflowVersion).projects.push(
+        project.name,
+      );
+    for (const work of snapshot?.work ?? [])
+      entry(work.workflowId, work.workflowVersion).work += 1;
+    return map;
+  }, [snapshot]);
+
+  function usageText(id: string, version: string): string {
+    const use = usage.get(`${id}@${version}`);
+    if (!use || (use.projects.length === 0 && use.work === 0))
+      return t("workflowStudio.unused");
+    const parts: string[] = [];
+    if (use.projects.length > 0)
+      parts.push(
+        t("workflowStudio.defaultOf", { names: use.projects.join(", ") }),
+      );
+    if (use.work > 0)
+      parts.push(t("workflowStudio.workCount", { count: use.work }));
+    return parts.join(" · ");
+  }
 
   function updateDefinition(patch: Partial<WorkflowDefinition>) {
     setDefinition((current) => ({ ...current, ...patch }));
@@ -198,12 +246,9 @@ export default function WorkflowStudioPage() {
         </Button>
       </PageHeader>
       <div className="min-h-0 flex-1 overflow-auto p-5">
-        <div className="mx-auto grid max-w-7xl gap-4 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <details className="xl:col-span-2 rounded-xl border bg-card p-4">
-            <summary className="cursor-pointer text-sm font-semibold">
-              {t("workflowStudio.librarySummary")}
-            </summary>
-            <Card className="mt-3">
+        <div className="mx-auto grid max-w-7xl gap-4 xl:grid-cols-[260px_minmax(0,1fr)_300px]">
+          <aside>
+            <Card>
               <CardHeader>
                 <CardTitle>{t("workflowStudio.library")}</CardTitle>
               </CardHeader>
@@ -215,21 +260,33 @@ export default function WorkflowStudioPage() {
                 >
                   <Plus /> {t("workflowStudio.newWorkflow")}
                 </Button>
-                <div className="space-y-1">
+                <div className="space-y-3">
                   <p className="text-xs font-semibold text-muted-foreground">
                     {t("workflowStudio.published")}
                   </p>
-                  {catalog.map((item) => (
-                    <button
-                      key={`${item.id}@${item.version}`}
-                      className="w-full rounded-md border p-2 text-left text-xs hover:bg-accent"
-                      onClick={() => selectDefinition(item)}
-                    >
-                      <strong className="block">{item.label}</strong>
-                      <span className="text-muted-foreground">
-                        {item.id}@{item.version}
-                      </span>
-                    </button>
+                  {publishedGroups.map(([id, versions]) => (
+                    <div key={id} className="space-y-1">
+                      <p className="truncate font-mono text-[10px] text-muted-foreground">
+                        {id}
+                      </p>
+                      {versions.map((item) => (
+                        <button
+                          key={`${item.id}@${item.version}`}
+                          className="w-full rounded-md border p-2 text-left text-xs hover:bg-accent"
+                          onClick={() => selectDefinition(item)}
+                        >
+                          <span className="flex items-baseline justify-between gap-2">
+                            <strong className="truncate">{item.label}</strong>
+                            <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                              v{item.version}
+                            </span>
+                          </span>
+                          <span className="mt-0.5 block text-[10px] text-muted-foreground">
+                            {usageText(item.id, item.version)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   ))}
                 </div>
                 <div className="space-y-1">
@@ -260,7 +317,7 @@ export default function WorkflowStudioPage() {
                 </div>
               </CardContent>
             </Card>
-          </details>
+          </aside>
 
           <div className="space-y-4">
             <Card>

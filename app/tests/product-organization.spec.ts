@@ -246,8 +246,7 @@ test("installed GitHub gets an extension page and RSS stays inside reading", asy
 test("workflow edges are editable without JSON and schema is nested under settings", async ({
   page,
 }) => {
-  await nav(page, "확장 관리");
-  await page.getByRole("button", { name: "워크플로", exact: false }).click();
+  await nav(page, "워크플로");
   await page.getByRole("button", { name: "새 워크플로", exact: true }).click();
   await expect(page.getByLabel("워크플로 캔버스")).toBeVisible();
   await page.getByLabel("연결 1 다음 단계").selectOption("start");
@@ -417,14 +416,13 @@ test("project imports preserve project context and functional pages have no slog
   await expect(page.getByLabel("화면 선택")).toHaveCount(0);
 });
 
-test("opening a workflow from its extension card edits the selected definition", async ({
+test("opening a published workflow from the library edits the selected definition", async ({
   page,
 }) => {
-  await nav(page, "확장 관리");
-  await page.getByRole("button", { name: "워크플로", exact: false }).click();
+  await nav(page, "워크플로");
   await page
-    .getByRole("button", { name: "스튜디오에서 열기", exact: true })
-    .nth(1)
+    .getByRole("button", { name: "TDD 사이클", exact: false })
+    .first()
     .click();
   await expect(page.getByLabel("워크플로 이름", { exact: true })).toHaveValue(
     "TDD 사이클",

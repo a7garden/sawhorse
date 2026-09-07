@@ -351,11 +351,10 @@ test("schema studio exposes the guarded desktop migration workflow", async ({
 test("workflow studio and resumable project ingestion are reachable", async ({
   page,
 }) => {
-  await nav(page, "확장 관리");
-  await page.getByRole("button", { name: "워크플로", exact: false }).click();
+  await nav(page, "워크플로");
   await page.getByRole("button", { name: "새 워크플로", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "워크플로 스튜디오" }),
+    page.getByRole("heading", { name: "워크플로", exact: true }),
   ).toBeVisible();
   await expect(page.getByText("작성할 문서")).toBeVisible();
   await expect(page.getByRole("button", { name: "가상 실행" })).toBeVisible();

@@ -348,6 +348,7 @@
     "notInstalled": "미설치",
     "nextJob": "다음 잡: {{runner}}",
     "runnerHerdr": "herdr 세션",
+    "runnerFallback": "headless 실행 — {{reason}}",
     "badgePath": "경로",
     "badgeBranch": "브랜치",
     "requirementsTitle": "필요한 프로그램",

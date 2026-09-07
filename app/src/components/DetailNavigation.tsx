@@ -3,7 +3,6 @@ import { ArrowLeft } from "lucide-react";
 import { useApp } from "@/lib/store";
 
 const parents: Record<string, { page: string; labelKey: string }> = {
-  workflows: { page: "packs", labelKey: "nav.back.workflows" },
   schemas: { page: "settings", labelKey: "nav.back.schemas" },
   onboarding: { page: "projects", labelKey: "nav.back.onboarding" },
   sources: { page: "reading", labelKey: "nav.back.sources" },

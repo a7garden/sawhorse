@@ -9,10 +9,8 @@ import {
   Download,
   FolderOpen,
   HardDriveDownload,
-  PencilRuler,
   RefreshCw,
   Trash2,
-  Workflow,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { actionJobKey } from "@/lib/jobs";
@@ -39,57 +37,14 @@ import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Empty, MarkdownView, PageHeader } from "./common";
-import { workflowApi } from "@/features/workbench/api";
-import type { WorkflowDefinition } from "@/features/workbench/types";
 
-type CatalogCategory = "installed" | "marketplace" | "workflow" | "skill";
+type CatalogCategory = "installed" | "marketplace" | "skill";
 
 const CATALOG_TABS: CatalogCategory[] = [
   "installed",
   "marketplace",
   "skill",
-  "workflow",
 ];
-
-function WorkflowCard({
-  wf,
-  onOpenStudio,
-}: {
-  wf: WorkflowDefinition;
-  onOpenStudio: () => void;
-}) {
-  const { t } = useTranslation("packs");
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-sm">
-          <Workflow className="size-4 shrink-0 text-muted-foreground" />{" "}
-          {wf.label}
-          <Badge variant="outline" className="ml-auto">
-            v{wf.version}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {wf.description && (
-          <p className="line-clamp-2 text-xs text-muted-foreground">
-            {wf.description}
-          </p>
-        )}
-        <p className="text-[11px] text-muted-foreground">
-          {t("workflow.card.meta", {
-            nodes: wf.nodes.length,
-            edges: wf.edges.length,
-          })}
-        </p>
-        <Button size="xs" variant="outline" onClick={onOpenStudio}>
-          <PencilRuler className="size-3" /> {t("workflow.card.openStudio")}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
 
 function skillVariant(s: SkillState) {
   return s === "installed"
@@ -154,11 +109,8 @@ export default function PacksPage() {
   const [sourceCommit, setSourceCommit] = useState("");
   const [extensionProject, setExtensionProject] = useState("default");
   const [category, setCategory] = useState<CatalogCategory>("installed");
-  const [selWfId, setSelWfId] = useState<string | null>(null);
-  const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
 
   const list = packs?.packs ?? [];
-  const selWf = workflows.find((w) => w.id === selWfId) ?? null;
   const sel = list.find((p) => p.id === selId) ?? list[0] ?? null;
 
   useEffect(() => {
@@ -170,21 +122,6 @@ export default function PacksPage() {
       })
       .catch(() => undefined);
   }, [refreshAgents]);
-
-  useEffect(() => {
-    let alive = true;
-    workflowApi
-      .catalog()
-      .then((rows) => {
-        if (alive) setWorkflows(rows);
-      })
-      .catch(() => {
-        if (alive) setWorkflows([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   async function refreshExtensionPackages() {
     const [packages, lock] = await Promise.all([
@@ -409,18 +346,6 @@ export default function PacksPage() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader title={t("header.title")}>
-        {category === "workflow" && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              useApp.setState({ workflowToEdit: null });
-              useApp.getState().setPage("workflows");
-            }}
-          >
-            {t("actions.newWorkflow")}
-          </Button>
-        )}
         {category === "installed" && (
           <Button
             size="sm"
@@ -447,9 +372,6 @@ export default function PacksPage() {
             )}
           >
             {t(`catalog.tabs.${tab}`)}
-            {tab === "workflow" && workflows.length > 0
-              ? ` ${workflows.length}`
-              : ""}
           </button>
         ))}
       </div>
@@ -725,27 +647,6 @@ export default function PacksPage() {
         </div>
       )}
 
-      {category === "workflow" && (
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">
-          {workflows.length === 0 && (
-            <Empty className="pt-16">
-              {t("workflow.empty")}
-            </Empty>
-          )}
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {workflows.map((wf) => (
-              <WorkflowCard
-                key={`${wf.id}@${wf.version}`}
-                wf={wf}
-                onOpenStudio={() => {
-                  useApp.setState({ workflowToEdit: wf });
-                  setPage("workflows");
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      )}
       {category === "skill" && (
         <div className="grid gap-3 p-4 md:grid-cols-2">
           {list
@@ -814,7 +715,6 @@ export default function PacksPage() {
                   key={p.id}
                   onClick={() => {
                     setSelId(p.id);
-                    setSelWfId(null);
                   }}
                   className={cn(
                     "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-accent",
@@ -886,19 +786,8 @@ export default function PacksPage() {
           </div>
 
           <div className="min-w-0 flex-1 overflow-y-auto p-4">
-            {selWf && (
-              <div className="mx-auto max-w-xl">
-                <WorkflowCard
-                  wf={selWf}
-                  onOpenStudio={() => {
-                    useApp.setState({ workflowToEdit: selWf });
-                    setPage("workflows");
-                  }}
-                />
-              </div>
-            )}
-            {!selWf && !sel && <Empty>{t("list.selectHint")}</Empty>}
-            {!selWf && sel && (
+            {!sel && <Empty>{t("list.selectHint")}</Empty>}
+            {sel && (
               <div className="space-y-3">
                 <Card>
                   <CardHeader className="flex-row items-start justify-between space-y-0 pb-2">

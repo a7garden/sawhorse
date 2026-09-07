@@ -236,6 +236,7 @@ export interface HerdrDiag {
   version?: string;
   serverOk: boolean;
   effectiveRunner: JobRunner;
+  reason?: string | null;
 }
 
 export interface Diagnostics {

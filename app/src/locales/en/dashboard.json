@@ -250,11 +250,10 @@
     }
   },
   "workflowStudio": {
-    "title": "Workflow studio",
+    "title": "Workflows",
     "loadDraftsFailed": "Failed to load drafts: {{error}}",
     "copied": "Workflow JSON copied to the clipboard.",
     "export": "Export",
-    "librarySummary": "Workflow library · pick an existing flow",
     "library": "Library",
     "newWorkflow": "New workflow",
     "published": "Published",
@@ -300,7 +299,10 @@
     "none": "None",
     "toVisual": "To visual editor",
     "advancedJson": "Advanced JSON",
-    "jsonSyntaxError": "Check the JSON syntax."
+    "jsonSyntaxError": "Check the JSON syntax.",
+    "unused": "Not in use",
+    "defaultOf": "Default for: {{names}}",
+    "workCount": "{{count}} work items"
   },
   "schemaStudio": {
     "title": "Vault document structure",

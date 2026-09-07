@@ -3,13 +3,11 @@
     "tabs": {
       "installed": "Installed",
       "marketplace": "Marketplace",
-      "skill": "Skills",
-      "workflow": "Workflows"
+      "skill": "Skills"
     }
   },
   "header": { "title": "Extension manager" },
   "actions": {
-    "newWorkflow": "New workflow",
     "applyWorkspace": "Apply to workspace",
     "refresh": "Refresh",
     "openFolder": "Open folder",
@@ -73,13 +71,6 @@
     "noPermissions": "none",
     "approveApply": "Approve & apply",
     "permissions": "Permissions: {{permissions}}"
-  },
-  "workflow": {
-    "empty": "No published workflows. Create one in the workflow studio or import an extension package.",
-    "card": {
-      "meta": "{{nodes}} nodes · {{edges}} transitions · published in app",
-      "openStudio": "Open in Studio"
-    }
   },
   "skill": {
     "summary": "{{installed}} installed · {{modified}} modified · {{missing}} missing",

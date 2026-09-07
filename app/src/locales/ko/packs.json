@@ -3,13 +3,11 @@
     "tabs": {
       "installed": "설치됨",
       "marketplace": "마켓플레이스",
-      "skill": "스킬",
-      "workflow": "워크플로"
+      "skill": "스킬"
     }
   },
   "header": { "title": "확장 관리" },
   "actions": {
-    "newWorkflow": "새 워크플로",
     "applyWorkspace": "작업공간에 반영",
     "refresh": "새로고침",
     "openFolder": "폴더 열기",
@@ -73,13 +71,6 @@
     "noPermissions": "없음",
     "approveApply": "권한 승인 및 적용",
     "permissions": "권한: {{permissions}}"
-  },
-  "workflow": {
-    "empty": "발행된 워크플로우가 없습니다. 워크플로 스튜디오에서 만들거나 확장 패키지로 가져올 수 있습니다.",
-    "card": {
-      "meta": "단계 {{nodes}} · 전이 {{edges}} · 앱에서 발행",
-      "openStudio": "스튜디오에서 열기"
-    }
   },
   "skill": {
     "summary": "설치 {{installed}} · 수정 {{modified}} · 미설치 {{missing}}",
