@@ -208,7 +208,7 @@ const previewConfigBase: ConfigView = {
     permissionMode: "acceptEdits",
     launchAtLogin: false,
     herdr: {
-      mode: "auto",
+      mode: "headless",
       bin: "herdr",
       session: "",
       workspaceLabel: "sawhorse",
@@ -243,11 +243,12 @@ const previewDiagnostics: Diagnostics = {
   claudeOk: true,
   claudeVersion: "2.1.7 (Claude Code)",
   herdr: {
-    mode: "auto",
+    mode: "headless",
     binOk: false,
     serverOk: false,
     effectiveRunner: "headless",
-    reason: "herdr 실행 파일을 찾지 못했습니다",
+    reason: "기본값이 headless다 — 실행은 창 없이 돌고, 필요할 때 herdr로 들여다본다",
+    viewerOk: false,
   },
   projects: [
     { name: "Sawhorse", pathOk: true, gitOk: true, branchOk: true },

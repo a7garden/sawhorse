@@ -69,11 +69,12 @@ impl Default for Schedules {
     }
 }
 
-/// Auto runs in the background. Herdr execution requires an explicit setting.
+/// 기본은 headless — 실행은 창 없이 돌고, herdr는 그 진행을 들여다보는 뷰어다.
+/// herdr가 실행 자체를 소유하려면 명시적으로 골라야 한다.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HerdrCfg {
-    /// "auto" | "herdr" | "headless"
+    /// "headless" | "herdr". 옛 "auto"는 코드상 headless와 같아서 정리했다.
     pub mode: String,
     pub bin: String,
     /// named herdr session; empty = default session
@@ -95,7 +96,7 @@ pub struct HerdrCfg {
 impl Default for HerdrCfg {
     fn default() -> Self {
         Self {
-            mode: "auto".into(),
+            mode: "headless".into(),
             bin: "herdr".into(),
             session: String::new(),
             workspace_label: "sawhorse".into(),
@@ -109,16 +110,27 @@ impl Default for HerdrCfg {
     }
 }
 
-pub const HERDR_MODES: [&str; 3] = ["auto", "herdr", "headless"];
+/// 설정 화면에 내놓는 모드. 동작이 둘뿐이라 선택지도 둘이다.
+pub const HERDR_MODES: [&str; 2] = ["headless", "herdr"];
+/// 저장된 설정 파일에서 아직 들어올 수 있는 옛 값. 거부하지 않고 받아서 정규화한다.
+pub const HERDR_MODE_ALIASES: [&str; 1] = ["auto"];
+
+/// 설정 값 하나를 실제 동작 하나로 옮긴다. 옛 "auto"는 herdr가 떠 있든 말든
+/// `sdlc_harness`가 늘 headless로 돌렸으므로 headless로 읽는 것이 사실에 맞다.
+pub fn herdr_mode(value: &str) -> &'static str {
+    if value == "herdr" {
+        "herdr"
+    } else {
+        "headless"
+    }
+}
 pub const HERDR_CLEANUPS: [&str; 3] = ["closeOnSuccess", "keep", "closeAlways"];
 
 impl HerdrCfg {
     /// Config values arrive from a hand-editable file; clamp instead of failing.
     pub fn sanitized(&self) -> Self {
         let mut c = self.clone();
-        if !HERDR_MODES.contains(&c.mode.as_str()) {
-            c.mode = "auto".into();
-        }
+        c.mode = herdr_mode(&c.mode).into();
         if !HERDR_CLEANUPS.contains(&c.cleanup.as_str()) {
             c.cleanup = "closeAlways".into();
         }
@@ -295,10 +307,13 @@ pub fn view(raw: &Value, exists: bool) -> ConfigView {
                 .collect()
         })
         .unwrap_or_default();
-    let dashboard = obj
+    let mut dashboard = obj
         .and_then(|o| o.get("dashboard"))
         .and_then(|v| serde_json::from_value::<DashboardCfg>(v.clone()).ok())
         .unwrap_or_default();
+    // 화면과 진단이 같은 값을 보게 여기서 한 번 정규화한다. 옛 "auto"가 남아 있으면
+    // 설정 화면의 선택지에 없어서 빈 칸으로 보이는데, 실제 동작은 headless였다.
+    dashboard.herdr = dashboard.herdr.sanitized();
     let packs = obj
         .and_then(|o| o.get("packs"))
         .and_then(|v| serde_json::from_value::<PacksCfg>(v.clone()).ok())
@@ -377,7 +392,8 @@ fn validate_herdr_key(key: &str, v: &Value) -> Result<(), String> {
             let m = v
                 .as_str()
                 .ok_or_else(|| "herdr.mode는 문자열이어야 합니다".to_string())?;
-            if !HERDR_MODES.contains(&m) {
+            // 별칭까지 받아 준다 — 옛 설정을 그대로 되쓰는 클라이언트가 저장에서 막히면 안 된다.
+            if !HERDR_MODES.contains(&m) && !HERDR_MODE_ALIASES.contains(&m) {
                 return Err(format!("알 수 없는 herdr 실행 모드: {m}"));
             }
         }
@@ -705,8 +721,10 @@ pub struct HerdrDiag {
     pub server_ok: bool,
     /// what the next job would actually use: "herdr" | "headless"
     pub effective_runner: String,
-    /// herdr를 못 쓸 때 그 이유. herdr가 실제로 쓰이면 없다.
+    /// herdr가 실행을 소유하지 않는 이유. herdr 모드로 돌 때는 없다.
     pub reason: Option<String>,
+    /// headless 실행을 herdr 창으로 들여다볼 수 있는가 — 「herdr로 보기」의 가부.
+    pub viewer_ok: bool,
 }
 
 fn build_command(bin: &str, args: &[&str]) -> std::process::Command {
@@ -737,28 +755,19 @@ async fn probe(bin: &str, args: &[&str], cwd: Option<&Path>) -> Option<String> {
 pub async fn herdr_diagnostics(cfg: &HerdrCfg) -> HerdrDiag {
     let cfg = cfg.sanitized();
     let h = crate::herdr::Herdr::new(&cfg);
-    let (version, server_ok) = if cfg.mode == "headless" {
-        (None, false)
-    } else {
-        let v = h.version().await;
-        let up = v.is_some() && h.reachable().await;
-        (v, up)
-    };
-    let effective = match cfg.mode.as_str() {
-        "headless" => "headless",
-        "herdr" => "herdr",
-        _ => "headless",
-    };
-    // 폴백은 조용히 일어나지 않는다 — 다음 잡이 headless로 돌 거면 이유를 함께 알린다.
-    let reason = if effective == "herdr" {
-        None
-    } else {
-        Some(match cfg.mode.as_str() {
-            "headless" => "설정에서 headless 모드를 쓴다".to_string(),
-            "herdr" if version.is_none() => "herdr 실행 파일을 찾지 못했다".to_string(),
-            "herdr" => "herdr 서버에 연결하지 못했다".to_string(),
-            _ => "자동 모드는 백그라운드에서 실행한다".to_string(),
-        })
+    // headless 모드에서도 herdr를 조회한다 — 실행은 창 없이 돌지만 「herdr로 보기」가
+    // 그 진행 로그를 herdr 창에 띄우므로, 서버가 떠 있는지가 여전히 답해야 할 질문이다.
+    let version = h.version().await;
+    let server_ok = version.is_some() && h.reachable().await;
+    let effective = herdr_mode(&cfg.mode);
+    // 다음 잡이 무엇으로 돌지, 왜 그런지를 늘 한 줄로 말한다. herdr 모드를 골랐는데
+    // herdr를 못 쓰는 경우는 실행 파일이 없는 것과 서버가 안 뜬 것이 처방이 달라서 나눈다.
+    // (이때 러너는 headless로 조용히 내려가지 않는다 — 잡이 herdr로 시작하려다 실패한다.)
+    let reason = match effective {
+        "herdr" if version.is_none() => Some("herdr 실행 파일을 찾지 못했다".to_string()),
+        "herdr" if !server_ok => Some("herdr 서버에 연결하지 못했다".to_string()),
+        "herdr" => None,
+        _ => Some("기본값이 headless다 — 실행은 창 없이 돌고, 필요할 때 herdr로 들여다본다".to_string()),
     };
     HerdrDiag {
         mode: cfg.mode.clone(),
@@ -767,6 +776,7 @@ pub async fn herdr_diagnostics(cfg: &HerdrCfg) -> HerdrDiag {
         server_ok,
         effective_runner: effective.into(),
         reason,
+        viewer_ok: server_ok,
     }
 }
 
@@ -821,6 +831,38 @@ mod tests {
         assert_eq!(v.dashboard.schedules.morning.time, "09:00");
         assert_eq!(v.dashboard.herdr.child_model_policy, "auto");
         assert_eq!(v.dashboard.herdr.max_parallel, 2);
+    }
+
+    /// 기본은 headless 하나로 읽혀야 하고, 이미 저장된 "auto" 는 거부가 아니라
+    /// 같은 뜻(headless)으로 받아들여야 한다 — 그게 그 값이 원래 하던 동작이다.
+    #[test]
+    fn legacy_auto_mode_reads_as_headless_and_is_still_accepted() {
+        assert_eq!(HerdrCfg::default().mode, "headless");
+        assert_eq!(herdr_mode("auto"), "headless");
+        assert_eq!(herdr_mode("herdr"), "herdr");
+        assert_eq!(herdr_mode("nonsense"), "headless");
+
+        let legacy = view(
+            &serde_json::json!({"dashboard":{"herdr":{"mode":"auto"}}}),
+            true,
+        );
+        assert_eq!(legacy.dashboard.herdr.mode, "headless");
+
+        // 저장 경로에서도 막히지 않는다
+        assert!(validate_herdr_key("mode", &serde_json::json!("auto")).is_ok());
+        assert!(validate_herdr_key("mode", &serde_json::json!("headless")).is_ok());
+        assert!(validate_herdr_key("mode", &serde_json::json!("herdr")).is_ok());
+        assert!(validate_herdr_key("mode", &serde_json::json!("nonsense")).is_err());
+
+        let path = temp_path("legacy-auto");
+        write_atomic(&path, br#"{"dashboard":{"herdr":{"mode":"auto"}}}"#).unwrap();
+        let saved = save_patch_at(
+            &path,
+            &serde_json::json!({"dashboard":{"herdr":{"notify":false}}}),
+        )
+        .unwrap();
+        assert_eq!(saved.dashboard.herdr.mode, "headless");
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]

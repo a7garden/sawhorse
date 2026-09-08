@@ -13,7 +13,8 @@ export interface Schedules {
 
 export type PermissionMode = "default" | "acceptEdits" | "bypassPermissions";
 
-export type HerdrMode = "auto" | "herdr" | "headless";
+/** 동작은 둘뿐이다. 옛 설정 파일의 "auto"는 백엔드가 headless로 정규화한다. */
+export type HerdrMode = "herdr" | "headless";
 export type HerdrCleanup = "closeOnSuccess" | "keep" | "closeAlways";
 
 export interface HerdrCfg {
@@ -247,6 +248,8 @@ export interface HerdrDiag {
   serverOk: boolean;
   effectiveRunner: JobRunner;
   reason?: string | null;
+  /** headless 실행을 herdr 창으로 들여다볼 수 있는가 — 「herdr로 보기」의 가부 */
+  viewerOk: boolean;
 }
 
 export interface Diagnostics {

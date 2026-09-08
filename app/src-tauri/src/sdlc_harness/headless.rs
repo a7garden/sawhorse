@@ -42,6 +42,218 @@ fn args(root: &Path, record: &mut RunRecord) -> Result<Vec<String>, String> {
     Ok(args)
 }
 
+/// 사람이 따라 읽는 진행 로그.
+///
+/// transcript 는 에이전트의 stream-json 원문이라 그대로 tail 하면 JSON 한 줄씩만
+/// 흘러간다. 같은 내용을 한 줄씩 사람 말로 옮겨 두고 「herdr로 보기」는 이 파일을 tail 한다.
+/// 원문은 `report()` 가 파싱해야 하므로 손대지 않는다.
+fn view_log_path(root: &Path, id: &str) -> Result<PathBuf, String> {
+    checked_run_id(id)?;
+    Ok(runs_dir(root)?.join(format!("{id}.view.log")))
+}
+
+/// 터미널 한 줄을 넘기면 따라 읽기 어렵다. 도구 인자·결과는 앞부분만 남긴다.
+const VIEW_LINE_MAX: usize = 400;
+
+/// 여러 줄짜리 값을 한 줄로 접고 길면 자른다.
+fn one_line(text: &str, max: usize) -> String {
+    let folded = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if folded.chars().count() <= max {
+        folded
+    } else {
+        format!("{} …", folded.chars().take(max).collect::<String>())
+    }
+}
+
+/// 도구 호출에서 사람이 알아볼 만한 인자 하나. 못 고르면 입력 전체를 줄여 쓴다.
+fn tool_brief(input: &Value) -> String {
+    for key in [
+        "command",
+        "file_path",
+        "path",
+        "pattern",
+        "url",
+        "description",
+        "prompt",
+        "query",
+    ] {
+        if let Some(value) = input[key].as_str().filter(|s| !s.trim().is_empty()) {
+            return one_line(value, VIEW_LINE_MAX);
+        }
+    }
+    match input {
+        Value::Null => String::new(),
+        other => one_line(&other.to_string(), VIEW_LINE_MAX),
+    }
+}
+
+/// 도구 결과는 문자열이거나 블록 배열이다.
+fn result_text(content: &Value) -> String {
+    match content {
+        Value::String(text) => one_line(text, VIEW_LINE_MAX),
+        Value::Array(blocks) => one_line(
+            &blocks
+                .iter()
+                .filter_map(|b| b["text"].as_str())
+                .collect::<Vec<_>>()
+                .join(" "),
+            VIEW_LINE_MAX,
+        ),
+        _ => String::new(),
+    }
+}
+
+/// stream-json 한 줄을 사람이 읽는 줄로 옮긴다. JSON 이 아닌 줄(stderr, 머리말)은
+/// 그대로 흘려보내고, 화면에 남길 게 없는 이벤트는 버린다.
+fn render_line(line: &str) -> Option<String> {
+    let line = line.trim_end_matches(['\n', '\r']);
+    if line.trim().is_empty() {
+        return None;
+    }
+    let Ok(value) = serde_json::from_str::<Value>(line) else {
+        return Some(line.to_string());
+    };
+    let mut out: Vec<String> = Vec::new();
+    match value["type"].as_str().unwrap_or_default() {
+        "system" if value["subtype"] == "init" => out.push(format!(
+            "── 세션 시작 · {}",
+            value["model"].as_str().unwrap_or("모델 미상")
+        )),
+        "assistant" | "user" => {
+            for block in value["message"]["content"].as_array().into_iter().flatten() {
+                match block["type"].as_str().unwrap_or_default() {
+                    "text" => {
+                        let text = one_line(block["text"].as_str().unwrap_or_default(), VIEW_LINE_MAX);
+                        if !text.is_empty() {
+                            out.push(format!("● {text}"));
+                        }
+                    }
+                    "thinking" => out.push("● (생각 중)".into()),
+                    "tool_use" => out.push(format!(
+                        "⏺ {}({})",
+                        block["name"].as_str().unwrap_or("tool"),
+                        tool_brief(&block["input"])
+                    )),
+                    "tool_result" => {
+                        let text = result_text(&block["content"]);
+                        if !text.is_empty() {
+                            out.push(format!("  ↳ {text}"));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        "result" => out.push(if value["is_error"] == true {
+            format!(
+                "✖ 실패: {}",
+                one_line(value["result"].as_str().unwrap_or("오류"), VIEW_LINE_MAX)
+            )
+        } else {
+            format!(
+                "✔ 완료: {}",
+                one_line(value["result"].as_str().unwrap_or_default(), VIEW_LINE_MAX)
+            )
+        }),
+        // codex 의 이벤트 이름
+        "item.completed" => {
+            let item = &value["item"];
+            match item["type"].as_str().unwrap_or_default() {
+                "agent_message" => out.push(format!(
+                    "● {}",
+                    one_line(item["text"].as_str().unwrap_or_default(), VIEW_LINE_MAX)
+                )),
+                "command_execution" => out.push(format!(
+                    "⏺ {}",
+                    one_line(item["command"].as_str().unwrap_or_default(), VIEW_LINE_MAX)
+                )),
+                _ => {}
+            }
+        }
+        "turn.completed" => out.push("✔ 턴 완료".into()),
+        "turn.failed" | "error" => out.push(format!(
+            "✖ {}",
+            one_line(
+                value["error"]["message"]
+                    .as_str()
+                    .or(value["message"].as_str())
+                    .unwrap_or("에이전트 실행 오류"),
+                VIEW_LINE_MAX,
+            )
+        )),
+        _ => {}
+    }
+    (!out.is_empty()).then(|| out.join("\n"))
+}
+
+/// 파일에서 읽어 온 덩어리는 줄 가운데서 잘린다. 완성된 줄만 옮기고 나머지는
+/// 다음 덩어리까지 들고 있는다. 바이트로 모으는 이유는 256KB 경계가 한글 한 글자를
+/// 반으로 자를 수 있기 때문이다.
+#[derive(Default)]
+struct ViewLog {
+    pending: Vec<u8>,
+}
+
+impl ViewLog {
+    fn write(path: &Path, text: &str) -> Result<(), String> {
+        use std::io::Write;
+        reject_symlink(path)?;
+        fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .and_then(|mut file| file.write_all(text.as_bytes()))
+            .map_err(|e| format!("진행 로그를 쓸 수 없습니다: {e}"))
+    }
+
+    fn push(&mut self, path: &Path, chunk: &[u8]) -> Result<(), String> {
+        self.pending.extend_from_slice(chunk);
+        let mut rendered = String::new();
+        while let Some(index) = self.pending.iter().position(|b| *b == b'\n') {
+            let line: Vec<u8> = self.pending.drain(..=index).collect();
+            if let Some(text) = render_line(&String::from_utf8_lossy(&line)) {
+                rendered.push_str(&text);
+                rendered.push('\n');
+            }
+        }
+        if rendered.is_empty() {
+            return Ok(());
+        }
+        Self::write(path, &rendered)
+    }
+
+    /// 마지막 줄에 개행이 없을 수 있다.
+    fn flush(&mut self, path: &Path) -> Result<(), String> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        let line = std::mem::take(&mut self.pending);
+        match render_line(&String::from_utf8_lossy(&line)) {
+            Some(text) => Self::write(path, &format!("{text}\n")),
+            None => Ok(()),
+        }
+    }
+}
+
+/// 이 변경 전에 시작했거나 이미 끝난 실행에는 진행 로그가 없다. 그때는 transcript 를
+/// 한 번 옮겨 담아 만들어 준다 — tail 대상 파일이 없으면 pane 에 오류만 뜬다.
+fn ensure_view_log(root: &Path, id: &str) -> Result<PathBuf, String> {
+    let path = view_log_path(root, id)?;
+    reject_symlink(&path)?;
+    if path.is_file() {
+        return Ok(path);
+    }
+    let transcript = transcript_path(root, id)?;
+    reject_symlink(&transcript)?;
+    // 원문이 비어 있어도 파일 자체는 있어야 tail 이 붙는다. 먼저 만들고 채운다.
+    ViewLog::write(&path, "")?;
+    let raw = fs::read(&transcript).unwrap_or_default();
+    let mut view = ViewLog::default();
+    view.push(&path, &raw)?;
+    view.flush(&path)?;
+    Ok(path)
+}
+
 fn read_tail(path: &Path) -> Result<String, String> {
     reject_symlink(path)?;
     let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
@@ -207,6 +419,16 @@ pub(super) async fn run(root: &Path, mut record: RunRecord) {
         ),
         Err(error) => update(&mut latest, "failed", Some(error)),
     }
+    // 뷰어를 열어 둔 사람이 끝을 보고 알 수 있어야 한다 — 진행 로그는 tail 중이다.
+    if let Ok(path) = view_log_path(root, &latest.id) {
+        let _ = ViewLog::write(
+            &path,
+            &match &latest.error {
+                Some(error) => format!("── 실행 종료 ({}) · {error}\n", latest.status),
+                None => format!("── 실행 종료 ({})\n", latest.status),
+            },
+        );
+    }
     if let Some(error) = &latest.error {
         let _ = append_output(root, &latest, &format!("[{}] {error}", latest.status));
         latest.final_report = read_tail(&transcript_path(root, &latest.id).unwrap_or_default())
@@ -242,6 +464,38 @@ async fn execute(root: &Path, record: &mut RunRecord) -> Result<Option<String>, 
     .await
 }
 
+/// 에이전트가 쓰고 있는 로그에서 아직 안 옮긴 부분을 transcript(원문)와
+/// 진행 로그(사람이 읽는 쪽) 양쪽으로 옮기고, 이번에 옮긴 바이트 수를 돌려준다.
+fn drain(
+    source: &Path,
+    offset: &mut u64,
+    transcript: &Path,
+    view_path: &Path,
+    view: &mut ViewLog,
+) -> Result<usize, String> {
+    let mut input = fs::File::open(source).map_err(|e| e.to_string())?;
+    input
+        .seek(SeekFrom::Start(*offset))
+        .map_err(|e| e.to_string())?;
+    let mut chunk = Vec::new();
+    input
+        .take(256_000)
+        .read_to_end(&mut chunk)
+        .map_err(|e| e.to_string())?;
+    if chunk.is_empty() {
+        return Ok(0);
+    }
+    use std::io::Write;
+    fs::OpenOptions::new()
+        .append(true)
+        .open(transcript)
+        .and_then(|mut file| file.write_all(&chunk))
+        .map_err(|e| e.to_string())?;
+    *offset += chunk.len() as u64;
+    view.push(view_path, &chunk)?;
+    Ok(chunk.len())
+}
+
 async fn execute_command(
     root: &Path,
     record: &mut RunRecord,
@@ -262,6 +516,8 @@ async fn execute_command(
     let stdout = fs::File::create(&turn_path).map_err(|e| e.to_string())?;
     let stderr = fs::File::create(&stderr_path).map_err(|e| e.to_string())?;
     drop(output);
+    // 이 턴이 시작되기 전에 진행 로그가 있어야 「herdr로 보기」가 곧바로 붙는다.
+    let view_path = ensure_view_log(root, &record.id)?;
     {
         let _guard = run_lock(&record.id).lock().await;
         let mut latest = load_record(root, &record.id)?;
@@ -287,29 +543,19 @@ async fn execute_command(
     }
     let start = Instant::now();
     let mut offsets = [0_u64; 2];
+    let mut views = [ViewLog::default(), ViewLog::default()];
     loop {
         let step = async {
             let _guard = run_lock(&record.id).lock().await;
             let mut latest = load_record(root, &record.id)?;
             for (index, path) in [&turn_path, &stderr_path].iter().enumerate() {
-                let mut input = fs::File::open(path).map_err(|e| e.to_string())?;
-                input
-                    .seek(SeekFrom::Start(offsets[index]))
-                    .map_err(|e| e.to_string())?;
-                let mut chunk = Vec::new();
-                input
-                    .take(256_000)
-                    .read_to_end(&mut chunk)
-                    .map_err(|e| e.to_string())?;
-                if !chunk.is_empty() {
-                    use std::io::Write;
-                    fs::OpenOptions::new()
-                        .append(true)
-                        .open(&output_path)
-                        .and_then(|mut f| f.write_all(&chunk))
-                        .map_err(|e| e.to_string())?;
-                    offsets[index] += chunk.len() as u64;
-                }
+                drain(
+                    path,
+                    &mut offsets[index],
+                    &output_path,
+                    &view_path,
+                    &mut views[index],
+                )?;
             }
             if latest.parent_run_id.is_none()
                 && latest.workflow_id == "intent-flow"
@@ -346,15 +592,15 @@ async fn execute_command(
         match child.try_wait() {
             Ok(Some(status)) => {
                 for (index, path) in [&turn_path, &stderr_path].iter().enumerate() {
-                    let mut input = fs::File::open(path).map_err(|e| e.to_string())?;
-                    input
-                        .seek(SeekFrom::Start(offsets[index]))
-                        .map_err(|e| e.to_string())?;
-                    let mut target = fs::OpenOptions::new()
-                        .append(true)
-                        .open(&output_path)
-                        .map_err(|e| e.to_string())?;
-                    std::io::copy(&mut input, &mut target).map_err(|e| e.to_string())?;
+                    while drain(
+                        path,
+                        &mut offsets[index],
+                        &output_path,
+                        &view_path,
+                        &mut views[index],
+                    )? > 0
+                    {}
+                    views[index].flush(&view_path)?;
                 }
                 let stderr = read_tail(&stderr_path)?;
                 let stdout = read_tail(&turn_path)?;
@@ -406,19 +652,31 @@ async fn open_viewer_with(root: &Path, record: &mut RunRecord, h: &Herdr) -> Res
             return Ok(());
         }
     }
-    let path = transcript_path(root, &record.id)?;
-    reject_symlink(&path)?;
-    let workspace = h
-        .create_workspace(&format!("sdd-{}", &record.id[..8]))
-        .await
-        .map_err(|e| e.to_string())?;
+    // 원문(stream-json)이 아니라 사람이 읽는 진행 로그를 따라간다.
+    let path = ensure_view_log(root, &record.id)?;
+    // 같은 실행을 다시 열 때 워크스페이스를 새로 만들면 herdr 전환기에 계속 쌓인다.
+    // 기록해 둔 것 → 라벨이 같은 것 → 없으면 그때 새로 만든다.
+    let label = format!("sdd-{}", &record.id[..8]);
+    let (workspace, created) = match record.workspace_id.as_deref() {
+        Some(id) if h.workspace_exists(id).await => (id.to_string(), false),
+        _ => match h.find_workspace_by_label(&label).await {
+            Some(id) => (id, false),
+            None => (
+                h.create_workspace(&label).await.map_err(|e| e.to_string())?,
+                true,
+            ),
+        },
+    };
     let tab = match h
         .create_tab(&workspace, "execution log", &record.repo_path)
         .await
     {
         Ok(tab) => tab,
         Err(e) => {
-            let _ = h.close_workspace(&workspace).await;
+            // 남의 워크스페이스는 닫지 않는다. 방금 내가 만든 것만 치운다.
+            if created {
+                let _ = h.close_workspace(&workspace).await;
+            }
             return Err(e.to_string());
         }
     };
@@ -434,7 +692,10 @@ async fn open_viewer_with(root: &Path, record: &mut RunRecord, h: &Herdr) -> Res
         path.display().to_string().replace('\'', "''")
     );
     if let Err(e) = h.call(&["pane", "run", &tab.pane_id, &command]).await {
-        let _ = h.close_workspace(&workspace).await;
+        let _ = h.close_tab(&tab.tab_id).await;
+        if created {
+            let _ = h.close_workspace(&workspace).await;
+        }
         return Err(e.to_string());
     }
     record.workspace_id = Some(workspace.clone());
@@ -484,6 +745,100 @@ mod tests {
         assert!(args(root.path(), &mut record).is_err());
     }
 
+    /// 뷰어가 tail 하는 파일은 사람이 읽을 수 있어야 한다. JSON 이 아닌 줄
+    /// (stderr, 머리말)은 그대로 두고, 화면에 남길 게 없는 이벤트는 버린다.
+    #[test]
+    fn stream_json_renders_as_readable_progress() {
+        assert_eq!(
+            render_line(r#"{"type":"system","subtype":"init","model":"opus"}"#).unwrap(),
+            "── 세션 시작 · opus"
+        );
+        assert_eq!(
+            render_line(
+                r#"{"type":"assistant","message":{"content":[{"type":"text","text":"저장소를\n살펴봅니다"}]}}"#
+            )
+            .unwrap(),
+            "● 저장소를 살펴봅니다"
+        );
+        assert_eq!(
+            render_line(
+                r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"cargo test"}}]}}"#
+            )
+            .unwrap(),
+            "⏺ Bash(cargo test)"
+        );
+        assert_eq!(
+            render_line(
+                r#"{"type":"user","message":{"content":[{"type":"tool_result","content":"ok"}]}}"#
+            )
+            .unwrap(),
+            "  ↳ ok"
+        );
+        assert_eq!(
+            render_line(r#"{"type":"result","is_error":false,"result":"끝"}"#).unwrap(),
+            "✔ 완료: 끝"
+        );
+        assert_eq!(
+            render_line(r#"{"type":"turn.failed","error":{"message":"quota"}}"#).unwrap(),
+            "✖ quota"
+        );
+        assert_eq!(
+            render_line(
+                r#"{"type":"item.completed","item":{"type":"agent_message","text":"done"}}"#
+            )
+            .unwrap(),
+            "● done"
+        );
+        // 원문이 아닌 줄은 손대지 않는다
+        assert_eq!(
+            render_line("# Harness transcript: x").unwrap(),
+            "# Harness transcript: x"
+        );
+        // 사람이 볼 게 없는 이벤트와 빈 줄은 흘리지 않는다
+        assert!(render_line(r#"{"type":"stream_event","event":{}}"#).is_none());
+        assert!(render_line("   ").is_none());
+    }
+
+    /// 덩어리 경계가 줄 가운데(한글 한 글자 가운데까지)에 떨어져도 글자가 깨지면 안 된다.
+    #[test]
+    fn view_log_buffers_partial_lines_across_chunks() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("view.log");
+        let full =
+            r#"{"type":"assistant","message":{"content":[{"type":"text","text":"진행 상황"}]}}"#
+                .as_bytes()
+                .to_vec();
+        let cut = full.len() - 12;
+        let mut view = ViewLog::default();
+        view.push(&path, &full[..cut]).unwrap();
+        assert!(!path.exists() || fs::read_to_string(&path).unwrap().is_empty());
+        view.push(&path, &full[cut..]).unwrap();
+        view.flush(&path).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "● 진행 상황\n");
+    }
+
+    /// 이 변경 전에 돌았거나 이미 끝난 실행을 처음 뷰어로 열면, 그때까지의 원문이
+    /// 사람이 읽는 형태로 그대로 채워져 있어야 한다.
+    #[test]
+    fn first_viewer_open_backfills_existing_transcript() {
+        let (root, record) = fixture();
+        fs::write(
+            transcript_path(root.path(), &record.id).unwrap(),
+            "# Harness transcript: x\n{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"이미 지나간 진행\"}]}}\n{\"type\":\"result\",\"is_error\":false,\"result\":\"끝\"}\n",
+        )
+        .unwrap();
+        let path = ensure_view_log(root.path(), &record.id).unwrap();
+        let rendered = fs::read_to_string(&path).unwrap();
+        assert!(rendered.contains("● 이미 지나간 진행"), "{rendered}");
+        assert!(rendered.contains("✔ 완료: 끝"), "{rendered}");
+        // 두 번째 호출은 이미 있는 파일을 그대로 쓴다 — 내용이 겹쳐 쌓이지 않는다
+        assert_eq!(
+            ensure_view_log(root.path(), &record.id).unwrap(),
+            path
+        );
+        assert_eq!(fs::read_to_string(&path).unwrap(), rendered);
+    }
+
     #[test]
     fn restart_marks_abandoned_background_runs_for_attention() {
         let (root, mut record) = fixture();
@@ -512,7 +867,9 @@ echo "$1 $2" >> calls
 case "$1 $2" in
   "workspace create") echo '{"result":{"workspace":{"workspace_id":"w1"}}}' ;;
   "tab create") echo '{"result":{"tab":{"tab_id":"w1:t1"},"root_pane":{"pane_id":"w1:p1"}}}' ;;
-  "pane run"|"workspace focus"|"tab focus") echo '{"result":{}}' ;;
+  "workspace get") echo '{"result":{"workspace":{"workspace_id":"w1"}}}' ;;
+  "tab focus") [ "$3" = "gone" ] && exit 1; echo '{"result":{}}' ;;
+  "pane run"|"workspace focus") echo '{"result":{}}' ;;
   *) exit 1 ;;
 esac
 "#,
@@ -529,9 +886,17 @@ esac
         open_viewer_with(root.path(), &mut record, &h)
             .await
             .unwrap();
+        // 탭이 사라진 뒤 다시 열어도 워크스페이스는 기록해 둔 것을 그대로 쓴다 —
+        // 볼 때마다 새로 만들면 herdr 전환기에 sdd-* 워크스페이스가 쌓인다.
+        record.tab_id = Some("gone".into());
+        save_record(root.path(), &record).unwrap();
+        open_viewer_with(root.path(), &mut record, &h)
+            .await
+            .unwrap();
         let calls = fs::read_to_string(root.path().join("calls")).unwrap();
         assert_eq!(calls.matches("workspace create").count(), 1);
-        assert_eq!(calls.matches("pane run").count(), 1);
+        assert_eq!(calls.matches("tab create").count(), 2);
+        assert_eq!(calls.matches("pane run").count(), 2);
         assert!(!calls.contains("agent start"));
         assert_eq!(record.runner, "headless");
         assert_eq!(record.status, "running");

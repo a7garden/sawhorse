@@ -1,5 +1,6 @@
 {
   "codexNote": "Manual submission only — the app does not guarantee start, cancel, or reconnection",
+  "herdrViewerOff": "Cannot reach the herdr server, so the progress log has nowhere to open. Start herdr and try again (check Settings > Diagnostics).",
   "status": {
     "none": "none"
   },

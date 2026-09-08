@@ -4619,6 +4619,21 @@ function HarnessView({
   const [pollError, setPollError] = useState<string | null>(null);
   const [followUp, setFollowUp] = useState("");
   const [busy, setBusy] = useState(false);
+  // 「herdr로 보기」는 herdr 서버가 있어야 진행 로그를 띄울 수 있다. 프로브가 없거나
+  // 실패하면 열 수 있다고 보고 그대로 둔다 — 조용히 막는 것보다 실패 이유가 낫다.
+  const [viewerOk, setViewerOk] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    void vaultApi
+      .herdrProbe()
+      .then((diag) => {
+        if (alive && diag) setViewerOk(diag.viewerOk);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   const load = async () => {
     setLoading(true);
     try {
@@ -4925,7 +4940,8 @@ function HarnessView({
                       variant="outline"
                       size="sm"
                       onClick={() => void resume()}
-                      disabled={busy}
+                      disabled={busy || !viewerOk}
+                      title={viewerOk ? undefined : t("sessions:herdrViewerOff")}
                     >
                       <SquareTerminal /> {t("harness.viewHerdr")}
                     </Button>
