@@ -28,7 +28,6 @@
     "refresh": "Refresh",
     "openFolder": "Open folder",
     "install": "Install",
-    "forceInstall": "Force install",
     "uninstall": "Uninstall",
     "save": "Save",
     "close": "Close",
@@ -92,13 +91,40 @@
   "skill": {
     "summary": "{{installed}} installed · {{modified}} modified · {{missing}} missing",
     "tabCardTitle": "{{name}} · {{n}} skills",
-    "installTo": "Install to {{agent}}",
-    "empty": "Install skills from the marketplace or an extension package.",
+    "empty": "No extension provides skills. Install one from the marketplace or an extension package.",
     "state": {
       "installed": "installed",
       "modified": "modified",
       "missing": "missing",
       "noSource": "no source"
+    }
+  },
+  "skillsTab": {
+    "market": {
+      "title": "Skill marketplace · skills.sh",
+      "subtitle": "Search public skills and install them with the npx skills CLI. Installs and updates apply globally (-g).",
+      "placeholder": "Search skills (2+ characters)",
+      "search": "Search",
+      "updateAll": "Update all installed skills",
+      "installs": "{{n}} installs",
+      "noResults": "No results.",
+      "targets": "Install to:",
+      "noTargets": "Select at least one target agent.",
+      "installed": "Ran install for {{name}}. Check the log below.",
+      "updated": "Ran update for installed skills. Check the log below.",
+      "logTitle": "Command log"
+    },
+    "packs": {
+      "title": "Skills provided by extensions",
+      "subtitle": "Install, update, or remove each extension pack's skills per agent. When files show as modified, \"Update\" overwrites them with the pack source.",
+      "update": "Update",
+      "updateHint": "Overwrites modified or outdated files with the pack's current source."
+    },
+    "browse": {
+      "title": "Skills installed on agents",
+      "subtitle": "Skills actually found in each agent's folders, regardless of where they came from. Click one to read it.",
+      "empty": "No skills found for this agent.",
+      "managed": "managed by sawhorse"
     }
   },
   "list": {
@@ -125,7 +151,7 @@
     "title": "Install to agents",
     "explain1": "For Claude Code, bundled plugins are unpacked wholesale into ~/.claude/skills/sawhorse (skills-dir plugin — loaded automatically, no install step). Hand-edited files are not overwritten; they appear as",
     "modifiedTag": "Modified",
-    "explain2": " — to overwrite them, use \"Force install\".",
+    "explain2": " — to overwrite them, use \"Update\".",
     "marketplaceExists": "A marketplace plugin is already installed ({{plugins}}). Since the content is identical, the app does not create a copy — that plugin provides the skills."
   },
   "settings": { "title": "Extension settings", "deleteRow": "Delete", "addRow": "Add row" },

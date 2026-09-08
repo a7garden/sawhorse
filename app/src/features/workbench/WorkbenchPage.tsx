@@ -8,6 +8,7 @@ import { JournalWidget } from "@/features/journal/JournalPage";
 import { MockupReview } from "@/features/mockups/MockupReview";
 import { GoalPanel } from "./GoalPanel";
 import { GOAL_WORKFLOW, type GoalBatchItem } from "./goals";
+import { DiagnosticsBanner } from "./DiagnosticsBanner";
 import { IntentComposer } from "./IntentComposer";
 import { IntentFlowPanel } from "./IntentFlowPanel";
 import { WorkCopilot } from "./WorkCopilot";
@@ -676,14 +677,11 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
         </div>
       )}
       {snapshot.diagnostics.length > 0 && (
-        <div className="wb-diagnostics">
-          <AlertCircle size={15} />{" "}
-          <span>
-            {t("common.diagnostics", {
-              docs: snapshot.diagnostics.join(" · "),
-            })}
-          </span>
-        </div>
+        <DiagnosticsBanner
+          diagnostics={snapshot.diagnostics}
+          reload={reload}
+          setNotice={setNotice}
+        />
       )}
       {selectedProject && ["calendar", "harness", "knowledge"].includes(view) && (
         <div className="wb-project-scope">

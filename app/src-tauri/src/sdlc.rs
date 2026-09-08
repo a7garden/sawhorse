@@ -163,6 +163,24 @@ pub struct WorkspaceSnapshot {
     pub diagnostics: Vec<String>,
 }
 
+/// One field-level fix applied by [`repair_documents`].
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct DocumentRepair {
+    pub path: String,
+    pub field: String,
+    pub from: String,
+    pub to: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
+#[serde(default, rename_all = "camelCase")]
+pub struct RepairReport {
+    pub repairs: Vec<DocumentRepair>,
+    /// Snapshot diagnostics still present after the repairs were written.
+    pub remaining: Vec<String>,
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Document {
@@ -2957,11 +2975,43 @@ fn parse_legacy_frontmatter(
     }
 }
 
-fn normalize_legacy_core_records(root: &Path) -> Result<Vec<String>, String> {
-    let mut normalized = Vec::new();
+/// Known-safe canonical value for something another tool wrote into `issueType`.
+fn canonical_issue_type(value: &str) -> Option<&'static str> {
+    match value {
+        // `결함` was used by an intermediate issue schema; `개선` and `제안`
+        // come from the SI-domain taxonomy (the original survives in the
+        // 유형/… tag). All map onto the canonical GitHub-compatible types
+        // instead of being rejected.
+        "결함" => Some("버그"),
+        "개선" | "제안" => Some("기능"),
+        _ => None,
+    }
+}
+
+/// Known-safe canonical value for something another tool wrote into
+/// `executionType`.
+fn canonical_execution_type(value: &str) -> Option<&'static str> {
+    match value {
+        // `운영` labels ops actions on a live system; among the canonical
+        // execution types the system-changing one is `코드` (the 실행/운영 tag
+        // keeps the original nuance).
+        "운영" => Some("코드"),
+        _ => None,
+    }
+}
+
+/// Apply every known-safe format fix to work documents in place, then report
+/// what changed and which diagnostics remain. Files are rewritten from their
+/// raw frontmatter mapping so unknown keys survive; unreadable files are left
+/// for the snapshot diagnostics rather than aborting the other repairs.
+pub fn repair_documents(root: &Path) -> Result<RepairReport, String> {
+    let mut repairs = Vec::new();
     for id in ids_from_dir(root, "work", "work.md")? {
         let path = work_path(root, &id);
-        let (mut header, body) = read_markdown::<serde_yaml::Mapping>(root, &path)?;
+        let relative = format!("work/{id}/work.md");
+        let Ok((mut header, body)) = read_markdown::<serde_yaml::Mapping>(root, &path) else {
+            continue;
+        };
         let mut changed = false;
         let title_key = serde_yaml::Value::String("title".into());
         if header
@@ -2969,28 +3019,97 @@ fn normalize_legacy_core_records(root: &Path) -> Result<Vec<String>, String> {
             .and_then(serde_yaml::Value::as_str)
             .is_none_or(|title| title.trim().is_empty())
         {
-            header.insert(
-                title_key,
-                serde_yaml::Value::String(first_title(&body, &id)),
-            );
+            let title = first_title(&body, &id);
+            repairs.push(DocumentRepair {
+                path: relative.clone(),
+                field: "title".into(),
+                from: String::new(),
+                to: title.clone(),
+            });
+            header.insert(title_key, serde_yaml::Value::String(title));
             changed = true;
         }
-        let key = serde_yaml::Value::String("issueType".into());
-        let replacement = match header.get(&key).and_then(serde_yaml::Value::as_str) {
-            // `결함` was used by an intermediate issue schema. It is the direct
-            // Korean synonym of the canonical GitHub-compatible `버그` type.
-            Some("결함") => Some("버그"),
-            _ => None,
-        };
-        if let Some(replacement) = replacement {
-            header.insert(key, serde_yaml::Value::String(replacement.into()));
+        let issue_key = serde_yaml::Value::String("issueType".into());
+        if let Some(replacement) = header
+            .get(&issue_key)
+            .and_then(serde_yaml::Value::as_str)
+            .and_then(canonical_issue_type)
+        {
+            repairs.push(DocumentRepair {
+                path: relative.clone(),
+                field: "issueType".into(),
+                from: header
+                    .get(&issue_key)
+                    .and_then(serde_yaml::Value::as_str)
+                    .unwrap_or_default()
+                    .into(),
+                to: replacement.into(),
+            });
+            header.insert(issue_key, serde_yaml::Value::String(replacement.into()));
             changed = true;
+        }
+        let execution_key = serde_yaml::Value::String("executionType".into());
+        if let Some(replacement) = header
+            .get(&execution_key)
+            .and_then(serde_yaml::Value::as_str)
+            .and_then(canonical_execution_type)
+        {
+            repairs.push(DocumentRepair {
+                path: relative.clone(),
+                field: "executionType".into(),
+                from: header
+                    .get(&execution_key)
+                    .and_then(serde_yaml::Value::as_str)
+                    .unwrap_or_default()
+                    .into(),
+                to: replacement.into(),
+            });
+            header.insert(execution_key, serde_yaml::Value::String(replacement.into()));
+            changed = true;
+        }
+        // due < start comes from migrated legacy notes whose registration date
+        // landed in `dueDate`. Swapping keeps both dates instead of inventing
+        // or deleting one; either way the report and git history hold the old
+        // values.
+        let start_key = serde_yaml::Value::String("startDate".into());
+        let due_key = serde_yaml::Value::String("dueDate".into());
+        let start = header
+            .get(&start_key)
+            .and_then(serde_yaml::Value::as_str)
+            .map(str::to_string);
+        let due = header
+            .get(&due_key)
+            .and_then(serde_yaml::Value::as_str)
+            .map(str::to_string);
+        if let (Some(start), Some(due)) = (start, due) {
+            if date(&start, "시작").is_ok() && date(&due, "마감").is_ok() && due < start {
+                repairs.push(DocumentRepair {
+                    path: relative.clone(),
+                    field: "startDate/dueDate".into(),
+                    from: format!("{start}/{due}"),
+                    to: format!("{due}/{start}"),
+                });
+                header.insert(start_key, serde_yaml::Value::String(due));
+                header.insert(due_key, serde_yaml::Value::String(start));
+                changed = true;
+            }
         }
         if !changed {
             continue;
         }
         write_atomic(root, &path, &markdown(&header, &body)?)?;
-        normalized.push(format!("work/{id}/work.md"));
+    }
+    let remaining = snapshot(root)?.diagnostics;
+    Ok(RepairReport { repairs, remaining })
+}
+
+fn normalize_legacy_core_records(root: &Path) -> Result<Vec<String>, String> {
+    let mut normalized: Vec<String> = Vec::new();
+    // Repairs arrive in file order, so adjacent dedup yields one entry per doc.
+    for repair in repair_documents(root)?.repairs {
+        if normalized.last() != Some(&repair.path) {
+            normalized.push(repair.path);
+        }
     }
     Ok(normalized)
 }
@@ -3279,6 +3398,12 @@ pub fn migrate_issues(root: &Path, paths: &[String]) -> Result<IssueMigrationRep
 pub fn sdd_snapshot() -> Result<WorkspaceSnapshot, String> {
     let root = vault_root()?;
     snapshot(&root)
+}
+/// 알려진 안전한 규칙으로 문서 형식 문제를 고치고 남은 진단을 돌려준다.
+#[tauri::command]
+pub fn sdd_repair_documents() -> Result<RepairReport, String> {
+    let root = vault_root()?;
+    repair_documents(&root)
 }
 #[tauri::command]
 pub fn issue_migration_plan() -> Result<Vec<IssueMigrationItem>, String> {
@@ -4248,6 +4373,51 @@ mod tests {
         assert_eq!(ok.milestone, "m1");
         assert!(milestone_has_issues(&root, "m1"));
 
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// 다른 도구가 남긴 동의어 issueType 과 뒤바뀐 날짜는 앱이 직접 고칠 수
+    /// 있어야 한다. 수리는 알 수 없는 키를 보존하고 두 번째 실행에서는 아무
+    /// 것도 바꾸지 않는다.
+    #[test]
+    fn repair_documents_fixes_issue_type_synonyms_and_swapped_dates() {
+        let root = tempdir("repair-documents");
+        initialize(&root).unwrap();
+        let path = root.join("work/FDR-001/work.md");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            &path,
+            "---\nid: FDR-001\ntitle: 검토 화면 개선\nstage: request\nstatus: backlog\npriority: normal\nissueType: 개선\nexecutionType: 운영\nstartDate: 2026-09-04\ndueDate: 2026-08-12\nworkflowId: issue-main\nworkflowVersion: 1.1.0\nscreen: fdrList.do\n---\n\n본문\n",
+        )
+        .unwrap();
+
+        let report = repair_documents(&root).unwrap();
+        let fields: Vec<_> = report
+            .repairs
+            .iter()
+            .map(|repair| repair.field.as_str())
+            .collect();
+        assert_eq!(
+            fields,
+            ["issueType", "executionType", "startDate/dueDate"],
+            "{report:?}"
+        );
+        assert!(
+            report
+                .remaining
+                .iter()
+                .all(|d| !d.contains("유효하지 않은 issueType") && !d.contains("마감일")),
+            "{report:?}"
+        );
+        let item = work_by_id(&root, "FDR-001").unwrap();
+        assert_eq!(item.issue_type, "기능");
+        assert_eq!(item.execution_type, "코드");
+        assert_eq!(item.start_date.as_deref(), Some("2026-08-12"));
+        assert_eq!(item.due_date.as_deref(), Some("2026-09-04"));
+        let raw = fs::read_to_string(&path).unwrap();
+        assert!(raw.contains("screen: fdrList.do"), "알 수 없는 키 보존");
+
+        assert!(repair_documents(&root).unwrap().repairs.is_empty());
         fs::remove_dir_all(root).unwrap();
     }
 

@@ -9,8 +9,18 @@
     "save": "Save",
     "delete": "Delete",
     "refresh": "Refresh",
-    "diagnostics": "Some documents could not be read: {{docs}}",
     "nCount": "{{count}}"
+  },
+  "diagnostics": {
+    "title": "{{count}} diagnostics found across {{docs}} documents",
+    "repair": "Auto-fix",
+    "details": "Details",
+    "hide": "Hide",
+    "docsMore": "and {{count}} more",
+    "repaired": "Automatically fixed {{count}} documents",
+    "repairedRemaining": "Automatically fixed {{count}} documents. {{remaining}} diagnostics still need a manual look",
+    "nothingToRepair": "Nothing can be fixed automatically. The remaining diagnostics need a manual look",
+    "repairFailed": "Auto-fix failed: {{error}}"
   },
   "role": {
     "research": "Research",

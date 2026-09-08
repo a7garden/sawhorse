@@ -22,9 +22,15 @@ use crate::packs::Pack;
 pub const CLAUDE: &str = "claude";
 pub const CODEX: &str = "codex";
 
+/// 스킬 설치 대상 에이전트의 정본 목록. 상태 조회·화면이 같은 순서로 읽는다 —
+/// 대상이 늘면 이 줄만 늘리면 되고, 스키마와 UI 는 그대로다.
+pub fn install_targets() -> &'static [&'static str] {
+    &[CLAUDE, CODEX]
+}
+
 /// 스킬을 설치할 수 있는 에이전트인가. 카탈로그의 나머지는 감지 대상일 뿐이다.
 pub fn is_install_target(agent: &str) -> bool {
-    agent == CLAUDE || agent == CODEX
+    install_targets().contains(&agent)
 }
 
 fn home() -> PathBuf {
@@ -469,6 +475,180 @@ pub fn uninstall_pack_skills_in(
         }
     }
     Ok(report)
+}
+
+// ---------- 에이전트에 설치된 스킬 열람 ----------
+
+/// 에이전트 폴더에서 실제로 발견한 스킬 하나. 팩 상태(`SkillStatus`)와 달리
+/// 출처를 가리지 않는다 — 사용자가 npx skills 나 손으로 넣은 것도 다 보인다.
+#[derive(Serialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSkillEntry {
+    pub name: String,
+    pub description: String,
+    pub path: String,
+    /// 스킬이 속한 최상위 폴더(플러그인·모음) 이름. 홈 바로 아래 스킬이면 빈 값,
+    /// Codex 슬래시 프롬프트는 "prompts".
+    pub group: String,
+    /// sawhorse 가 materialize 한 사본인가
+    pub managed: bool,
+}
+
+/// 프론트매터에서 `description:` 한 줄을 뽑는다. 열람 목록용이라 없는 것은 빈 값으로 둔다.
+fn frontmatter_description(text: &str) -> String {
+    let normalized = text.replace("\r\n", "\n");
+    let mut lines = normalized.lines();
+    if lines.next().map(str::trim) != Some("---") {
+        return String::new();
+    }
+    for line in lines {
+        if line.trim() == "---" {
+            break;
+        }
+        if let Some(rest) = line.strip_prefix("description:") {
+            return rest
+                .trim()
+                .trim_matches(|c| c == '"' || c == '\'')
+                .to_string();
+        }
+    }
+    String::new()
+}
+
+fn push_skill_md(entries: &mut Vec<AgentSkillEntry>, skill_md: &Path, group: &str, managed: bool) {
+    let Some(name) = skill_md
+        .parent()
+        .and_then(Path::file_name)
+        .map(|n| n.to_string_lossy().to_string())
+    else {
+        return;
+    };
+    let description = std::fs::read_to_string(skill_md)
+        .map(|s| frontmatter_description(&s))
+        .unwrap_or_default();
+    entries.push(AgentSkillEntry {
+        name,
+        description,
+        path: skill_md.display().to_string(),
+        group: group.into(),
+        managed,
+    });
+}
+
+/// `SKILL.md` 를 찾아 내려간다. 플러그인 트리는 깊을 수 있어 깊이만 제한한다.
+fn walk_skill_md(
+    dir: &Path,
+    group: &str,
+    managed: bool,
+    depth: u8,
+    entries: &mut Vec<AgentSkillEntry>,
+) {
+    if depth > 4 {
+        return;
+    }
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut paths: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+    paths.sort();
+    for p in paths {
+        if !p.is_dir() {
+            continue;
+        }
+        let md = p.join("SKILL.md");
+        if md.is_file() {
+            push_skill_md(entries, &md, group, managed);
+        } else {
+            walk_skill_md(&p, group, managed, depth + 1, entries);
+        }
+    }
+}
+
+/// `<dir>/*` 를 훑는다: 폴더에 SKILL.md 가 바로 있으면 스킬 하나, 아니면
+/// 플러그인·모음 폴더로 보고 안쪽의 SKILL.md 들을 걷는다.
+fn scan_skills_dir(dir: &Path, entries: &mut Vec<AgentSkillEntry>) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut tops: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+    tops.sort();
+    for top in tops {
+        if !top.is_dir() {
+            continue;
+        }
+        let group = top
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        let managed = group == "sawhorse" || group.starts_with("sawhorse-");
+        let direct = top.join("SKILL.md");
+        if direct.is_file() {
+            push_skill_md(entries, &direct, "", managed);
+        } else {
+            walk_skill_md(&top, &group, managed, 0, entries);
+        }
+    }
+}
+
+pub fn list_agent_skills(agent: &str) -> Result<Vec<AgentSkillEntry>, String> {
+    list_agent_skills_in(&home(), agent)
+}
+
+pub fn list_agent_skills_in(base: &Path, agent: &str) -> Result<Vec<AgentSkillEntry>, String> {
+    if !is_install_target(agent) {
+        return Err(format!("{agent} 의 스킬 목록 조회는 지원하지 않습니다"));
+    }
+    let mut entries = Vec::new();
+    let home = agent_home_in(base, agent);
+    scan_skills_dir(&home.join("skills"), &mut entries);
+    if agent == CODEX {
+        // 앱이 변환해 넣는 슬래시 프롬프트도 열람 대상이다.
+        if let Ok(rd) = std::fs::read_dir(home.join("prompts")) {
+            let mut files: Vec<PathBuf> = rd
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|e| e == "md"))
+                .collect();
+            files.sort();
+            for f in files {
+                let text = std::fs::read_to_string(&f).unwrap_or_default();
+                entries.push(AgentSkillEntry {
+                    name: f
+                        .file_stem()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_default(),
+                    description: frontmatter_description(&text),
+                    path: f.display().to_string(),
+                    group: "prompts".into(),
+                    managed: text.contains("sawhorse 워크벤치가 설치한 프롬프트"),
+                });
+            }
+        }
+    }
+    Ok(entries)
+}
+
+/// 열람 UI 가 임의 파일을 읽지 못하게, 설치 대상 에이전트의 홈과 `npx skills` 의
+/// 공용 저장소(~/.agents) 아래만 허용한다. 에이전트 폴더의 스킬이 공용 저장소로 가는
+/// 심링크일 수 있어 canonicalize 결과 기준으로 본다.
+pub fn read_agent_skill(path: &str) -> Result<String, String> {
+    let canon = PathBuf::from(path)
+        .canonicalize()
+        .map_err(|e| format!("경로를 열 수 없습니다: {e}"))?;
+    let allowed = install_targets()
+        .iter()
+        .map(|a| agent_home(a))
+        .chain(std::iter::once(home().join(".agents")))
+        .filter_map(|root| root.canonicalize().ok())
+        .any(|root| canon.starts_with(&root));
+    if !allowed {
+        return Err("에이전트 폴더 밖의 파일은 열람할 수 없습니다".into());
+    }
+    let meta = std::fs::metadata(&canon).map_err(|e| e.to_string())?;
+    if meta.len() > 1024 * 1024 {
+        return Err("1MB 를 넘는 파일은 열람하지 않습니다".into());
+    }
+    std::fs::read_to_string(&canon).map_err(|e| format!("읽기 실패: {e}"))
 }
 
 // ---------- 감지 ----------

@@ -576,11 +576,36 @@ export interface PluginInstall {
   installPath: string;
 }
 
+export interface AgentSkillGroup {
+  agent: string;
+  skills: SkillStatus[];
+}
+
 export interface PackAgentStatus {
   packId: string;
-  claude: SkillStatus[];
-  codex: SkillStatus[];
+  /** 설치 대상 에이전트별 스킬 상태 — 대상이 늘어도 스키마가 그대로다 */
+  agents: AgentSkillGroup[];
   pluginInstalls: PluginInstall[];
+}
+
+/** 에이전트 폴더에서 실제로 발견한 스킬 하나 (출처 무관 열람용) */
+export interface AgentSkillEntry {
+  name: string;
+  description: string;
+  path: string;
+  /** 최상위 폴더(플러그인·모음) 이름. Codex 슬래시 프롬프트는 "prompts" */
+  group: string;
+  /** sawhorse 가 관리하는 사본인가 */
+  managed: boolean;
+}
+
+/** skills.sh 마켓플레이스 검색 결과 한 줄 */
+export interface MarketSkill {
+  id: string;
+  skillId: string;
+  name: string;
+  source: string;
+  installs: number;
 }
 
 export interface AgentPresence {

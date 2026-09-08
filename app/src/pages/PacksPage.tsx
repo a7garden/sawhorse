@@ -19,18 +19,18 @@ import { RunButton } from "@/components/RunButton";
 import { useApp } from "@/lib/store";
 import { icon as packIcon } from "@/lib/icons";
 import { useTranslation } from "react-i18next";
-import i18n from "@/i18n";
 import type {
-  InstallReport,
   PackAgentStatus,
   PackInfo,
   InstalledExtensionPackage,
   ExtensionLock,
   SettingField,
-  SkillState,
-  SkillStatus,
   PackageWorkflowSummary,
 } from "@/lib/types";
+import SkillsTab, {
+  AgentInstallRows,
+  reportText,
+} from "@/components/SkillsTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,36 +49,6 @@ const CATALOG_TABS: CatalogCategory[] = [
   "skill",
   "workflow",
 ];
-
-function skillVariant(s: SkillState) {
-  return s === "installed"
-    ? "success"
-    : s === "modified"
-      ? "warning"
-      : "outline";
-}
-
-function summarize(list: SkillStatus[]): string {
-  const n = (s: SkillState) => list.filter((x) => x.state === s).length;
-  return i18n.t("packs:skill.summary", {
-    installed: n("installed"),
-    modified: n("modified"),
-    missing: n("missing"),
-  });
-}
-
-function reportText(r: InstallReport): string {
-  const parts: string[] = [];
-  if (r.installed.length > 0)
-    parts.push(i18n.t("packs:report.processed", { n: r.installed.length }));
-  if (r.skipped.length > 0)
-    parts.push(i18n.t("packs:report.skipped", { n: r.skipped.length }));
-  if (r.failed.length > 0)
-    parts.push(
-      i18n.t("packs:report.failed", { list: r.failed.join(", ") }),
-    );
-  return parts.join(" · ") || i18n.t("packs:report.none");
-}
 
 export default function PacksPage() {
   const { t } = useTranslation("packs");
@@ -706,61 +676,13 @@ export default function PacksPage() {
       )}
 
       {category === "skill" && (
-        <div className="grid gap-3 p-4 md:grid-cols-2">
-          {list
-            .filter((pack) => pack.skills.length > 0)
-            .map((pack) => (
-              <Card key={pack.id}>
-                <CardHeader>
-                  <CardTitle>
-                    {t("skill.tabCardTitle", {
-                      name: pack.name,
-                      n: pack.skills.length,
-                    })}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2">
-                  <div className="flex flex-wrap gap-1">
-                    {pack.skills.map((skill) => (
-                      <Button
-                        key={skill}
-                        size="xs"
-                        variant="ghost"
-                        onClick={() => void openSkill(pack, skill)}
-                      >
-                        {skill}
-                      </Button>
-                    ))}
-                  </div>
-                  {agents.map((agent) => (
-                    <Button
-                      key={agent.id}
-                      className="mr-2"
-                      size="sm"
-                      variant="outline"
-                      disabled={busy}
-                      onClick={() => void install(pack, agent.id, false)}
-                    >
-                      {t("skill.installTo", { agent: agent.id })}
-                    </Button>
-                  ))}
-                </CardContent>
-              </Card>
-            ))}
-          {!list.some((p) => p.skills.length) && (
-            <Empty>{t("skill.empty")}</Empty>
-          )}
-          {skillDoc && (
-            <Card className="md:col-span-2">
-              <CardHeader>
-                <CardTitle>{skillDoc.name}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <MarkdownView src={skillDoc.body} />
-              </CardContent>
-            </Card>
-          )}
-        </div>
+        <SkillsTab
+          packs={list}
+          agents={agents}
+          busy={busy}
+          setBusy={setBusy}
+          setMsg={setMsg}
+        />
       )}
       {category === "workflow" && (
         <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -987,72 +909,16 @@ export default function PacksPage() {
                           })}
                         </div>
                       )}
-                    {(["claude", "codex"] as const).map((agent) => {
-                      const rows = status ? status[agent] : [];
-                      const present =
-                        agents.find((a) => a.id === agent)?.detected ?? false;
-                      return (
-                        <div key={agent} className="rounded-lg border p-2.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="text-[13px] font-medium">
-                              {agent === "claude" ? "Claude Code" : "Codex"}
-                            </span>
-                            {!present && (
-                              <Badge variant="outline">
-                                {t("packAgents.undetected")}
-                              </Badge>
-                            )}
-                            <span className="text-[11px] text-muted-foreground">
-                              {summarize(rows)}
-                            </span>
-                            <span className="ml-auto flex gap-1.5">
-                              <Button
-                                size="xs"
-                                disabled={busy}
-                                onClick={() => void install(sel, agent, false)}
-                              >
-                                <Download className="size-3" />{" "}
-                                {t("actions.install")}
-                              </Button>
-                              <Button
-                                size="xs"
-                                variant="outline"
-                                disabled={busy}
-                                onClick={() => void install(sel, agent, true)}
-                              >
-                                {t("actions.forceInstall")}
-                              </Button>
-                              <Button
-                                size="xs"
-                                variant="ghost"
-                                disabled={busy}
-                                onClick={() => void uninstall(sel, agent)}
-                              >
-                                <Trash2 className="size-3" />{" "}
-                                {t("actions.uninstall")}
-                              </Button>
-                            </span>
-                          </div>
-                          {rows.length > 0 && (
-                            <div className="mt-2 flex flex-wrap gap-1">
-                              {rows.map((r) => (
-                                <button
-                                  key={r.skill}
-                                  onClick={() => void openSkill(sel, r.skill)}
-                                  title={r.target}
-                                  className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] transition-colors hover:bg-accent"
-                                >
-                                  {r.skill}
-                                  <Badge variant={skillVariant(r.state)}>
-                                    {t(`skill.state.${r.state}`)}
-                                  </Badge>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    <AgentInstallRows
+                      agents={agents}
+                      groups={status?.agents ?? null}
+                      busy={busy}
+                      onInstall={(agent, force) =>
+                        void install(sel, agent, force)
+                      }
+                      onUninstall={(agent) => void uninstall(sel, agent)}
+                      onOpenSkill={(skill) => void openSkill(sel, skill)}
+                    />
                   </CardContent>
                 </Card>
 

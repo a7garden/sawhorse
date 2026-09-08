@@ -48,7 +48,7 @@
 }
 .wb-diagnostics {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 8px;
   border: 1px solid var(--wb-line);
   padding: 10px 13px;
@@ -56,6 +56,31 @@
   margin: 0 0 18px;
   background: var(--wb-paper);
   font-size: 12px;
+}
+.wb-diagnostics-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wb-diagnostics-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+}
+.wb-diagnostics-groups {
+  margin: 0;
+  padding: 0 0 0 23px;
+  display: grid;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.wb-diagnostics-message {
+  font-weight: 600;
+}
+.wb-diagnostics-docs {
+  opacity: 0.85;
+  word-break: break-all;
 }
 .wb-inline-error {
   border-color: #e9aeaa;

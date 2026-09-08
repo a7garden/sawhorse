@@ -63,22 +63,47 @@ fn extra_bin_dirs() -> Vec<PathBuf> {
         if let Some(d) = dirs::data_dir() {
             v.push(d.join("npm"));
         }
+        // herdr 는 버전이 박힌 릴리스 디렉토리에 깔리고 자가 업데이트로 그 경로가
+        // 바뀐다. 오래 떠 있는 앱의 PATH 는 지워진 옛 버전을 가리키게 되므로 설치
+        // 폴더를 직접 훑는다. 최근에 깔린 것부터 본다.
+        let releases = h
+            .join(".herdr")
+            .join("packages")
+            .join("standalone")
+            .join("releases");
+        if let Ok(entries) = std::fs::read_dir(&releases) {
+            let mut dirs: Vec<PathBuf> = entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.is_dir())
+                .collect();
+            dirs.sort_by_cached_key(|p| {
+                std::cmp::Reverse(
+                    std::fs::metadata(p)
+                        .and_then(|m| m.modified())
+                        .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+                )
+            });
+            v.extend(dirs);
+        }
     }
     v
 }
 
 /// 윈도우에서 `foo` 는 `foo.exe`·`foo.cmd` 일 수 있다. PATHEXT 가 비어 있는 환경도 있어
-/// 기본값을 둔다.
+/// 기본값을 둔다. 확장자 붙은 후보를 맨 이름보다 먼저 본다 — npm 이 .cmd 와 나란히
+/// 두는 확장자 없는 sh 스크립트는 CreateProcess 가 실행하지 못하는데, 그것이 먼저
+/// 잡히면 실행 가능한 셈을 두고도 못 찾은 셈이 된다.
 #[cfg(windows)]
 fn candidate_names(name: &str) -> Vec<String> {
     let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
-    let mut v = vec![name.to_string()];
-    v.extend(
-        exts.split(';')
-            .map(str::trim)
-            .filter(|e| !e.is_empty())
-            .map(|e| format!("{name}{}", e.to_lowercase())),
-    );
+    let mut v: Vec<String> = exts
+        .split(';')
+        .map(str::trim)
+        .filter(|e| !e.is_empty())
+        .map(|e| format!("{name}{}", e.to_lowercase()))
+        .collect();
+    v.push(name.to_string());
     v
 }
 
@@ -451,6 +476,15 @@ mod tests {
         assert_eq!(expand_path("   "), None);
     }
 
+    /// 확장자 없는 npm sh 스크립트가 실행 가능한 .exe·.cmd 를 가리면 안 된다.
+    #[cfg(windows)]
+    #[test]
+    fn candidates_prefer_executable_extensions_over_bare_name() {
+        let names = candidate_names("claude");
+        assert_eq!(names.last().map(String::as_str), Some("claude"));
+        assert!(names.iter().any(|n| n.eq_ignore_ascii_case("claude.exe")));
+    }
+
     #[test]
     fn resolve_bin_accepts_an_explicit_path_and_rejects_a_directory() {
         let dir = tempdir("explicit");
@@ -511,10 +545,10 @@ mod tests {
         };
         assert_eq!(locate(&spec), Some((app, false)));
 
-        // 경로가 없으면 실행 파일로 떨어진다
+        // 경로가 없으면 실행 파일로 떨어진다 (Windows 에서는 sh.exe 로 해석된다)
         let only_bin = RequirementSpec { paths: &[], ..spec };
         let (p, is_bin) = locate(&only_bin).expect("sh 를 찾지 못했습니다");
-        assert!(is_bin && p.ends_with("sh"));
+        assert!(is_bin && p.file_stem().is_some_and(|s| s == "sh"), "{p:?}");
         fs::remove_dir_all(&dir).unwrap();
     }
 

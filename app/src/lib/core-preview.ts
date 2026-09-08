@@ -887,6 +887,10 @@ export async function corePreview(
       return structuredClone(previewRequirements);
     case "list_agents":
       return structuredClone(previewAgents);
+    case "pack_agent_status":
+      return { packId: String(args.packId ?? ""), agents: [], pluginInstalls: [] };
+    case "list_agent_skills":
+      return [];
     case "list_missed":
     case "list_schedules":
     case "ingestion_list":

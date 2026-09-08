@@ -2517,8 +2517,8 @@ async fn run_analyze_plan(plan: &AnalyzePlan) -> Result<AnalyzeOutput, String> {
         }
     };
     Ok(AnalyzeOutput {
-        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+        stdout: crate::spawn::decode_console_lines(&output.stdout),
+        stderr: crate::spawn::decode_console_lines(&output.stderr),
         success: output.status.success(),
     })
 }

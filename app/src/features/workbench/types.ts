@@ -199,6 +199,18 @@ export interface WorkspaceSnapshot {
   workflows: WorkflowDefinition[];
   diagnostics: string[];
 }
+/** sdd_repair_documents 가 적용한 필드 단위 수정 하나. */
+export interface DocumentRepair {
+  path: string;
+  field: string;
+  from: string;
+  to: string;
+}
+export interface RepairReport {
+  repairs: DocumentRepair[];
+  /** 수리 후에도 남아 있는 스냅샷 진단. */
+  remaining: string[];
+}
 export interface Document {
   workId: string;
   artifact: ArtifactKind;

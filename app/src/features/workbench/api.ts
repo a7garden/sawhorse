@@ -15,6 +15,7 @@ import type {
   IssueMigrationReport,
   LaunchInput,
   Project,
+  RepairReport,
   SearchHit,
   Stage,
   WorkItem,
@@ -70,6 +71,8 @@ export const sddApi = {
   intentCheckpoint: (workId: string, checkpointId: string): Promise<Document[]> =>
     call("sdd_intent_checkpoint", { workId, checkpointId }),
   snapshot: (): Promise<WorkspaceSnapshot> => call("sdd_snapshot"),
+  /** 알려진 안전한 규칙(동의어 issueType, 뒤바뀐 날짜 등)으로 문서 형식 문제를 고친다. */
+  repairDocuments: (): Promise<RepairReport> => call("sdd_repair_documents"),
   initialize: (): Promise<WorkspaceSnapshot> => call("sdd_initialize"),
   saveProject: (input: Project): Promise<Project> =>
     call("sdd_save_project", { input }),

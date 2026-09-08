@@ -28,7 +28,6 @@
     "refresh": "새로고침",
     "openFolder": "폴더 열기",
     "install": "설치",
-    "forceInstall": "강제 설치",
     "uninstall": "제거",
     "save": "저장",
     "close": "닫기",
@@ -92,13 +91,40 @@
   "skill": {
     "summary": "설치 {{installed}} · 수정 {{modified}} · 미설치 {{missing}}",
     "tabCardTitle": "{{name}} · 스킬 {{n}}개",
-    "installTo": "{{agent}}에 설치",
-    "empty": "마켓플레이스나 확장 패키지에서 스킬을 설치하세요.",
+    "empty": "스킬을 제공하는 확장이 없습니다. 마켓플레이스나 확장 패키지에서 설치하세요.",
     "state": {
       "installed": "설치됨",
       "modified": "수정됨",
       "missing": "미설치",
       "noSource": "본문 없음"
+    }
+  },
+  "skillsTab": {
+    "market": {
+      "title": "스킬 마켓플레이스 · skills.sh",
+      "subtitle": "공개 스킬을 검색해 npx skills CLI 로 설치합니다. 설치와 업데이트는 전역(-g)으로 적용됩니다.",
+      "placeholder": "스킬 검색 (2자 이상)",
+      "search": "검색",
+      "updateAll": "설치된 스킬 모두 업데이트",
+      "installs": "설치 {{n}}회",
+      "noResults": "검색 결과가 없습니다.",
+      "targets": "설치 대상:",
+      "noTargets": "설치할 에이전트를 하나 이상 선택하세요.",
+      "installed": "{{name}} 설치를 실행했습니다. 아래 실행 로그를 확인하세요.",
+      "updated": "설치된 스킬 업데이트를 실행했습니다. 아래 실행 로그를 확인하세요.",
+      "logTitle": "실행 로그"
+    },
+    "packs": {
+      "title": "확장이 제공하는 스킬",
+      "subtitle": "설치된 확장 팩의 스킬을 에이전트별로 설치·업데이트·제거합니다. 수정됨이 있으면 「업데이트」가 원본으로 덮어씁니다.",
+      "update": "업데이트",
+      "updateHint": "수정되었거나 팩이 바뀐 파일을 원본 내용으로 덮어씁니다."
+    },
+    "browse": {
+      "title": "에이전트에 설치된 스킬",
+      "subtitle": "에이전트 폴더에서 실제로 발견한 스킬입니다. 출처와 상관없이 눌러서 내용을 열람할 수 있습니다.",
+      "empty": "이 에이전트에서 발견한 스킬이 없습니다.",
+      "managed": "sawhorse 관리"
     }
   },
   "list": {
@@ -125,7 +151,7 @@
     "title": "에이전트에 설치",
     "explain1": "Claude Code 에는 번들 플러그인을 ~/.claude/skills/sawhorse로 통째로 펼칩니다 (skills-dir 플러그인 — 설치 단계 없이 자동 적재). 손으로 고친 파일은 덮지 않고",
     "modifiedTag": "수정됨",
-    "explain2": "으로 표시합니다 — 덮어쓰려면 「강제 설치」를 쓰세요.",
+    "explain2": "으로 표시합니다 — 덮어쓰려면 「업데이트」를 쓰세요.",
     "marketplaceExists": "마켓플레이스 플러그인이 이미 설치되어 있습니다 ({{plugins}}). 같은 내용이므로 앱은 사본을 만들지 않습니다 — 스킬은 그 플러그인이 제공합니다."
   },
   "settings": { "title": "확장 설정", "deleteRow": "삭제", "addRow": "줄 추가" },

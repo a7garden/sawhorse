@@ -3,7 +3,10 @@ use super::*;
 use std::io::{Read, Seek, SeekFrom};
 use std::process::Stdio;
 
-fn args(root: &Path, record: &mut RunRecord) -> Result<Vec<String>, String> {
+/// 실행 인자와 stdin 으로 보낼 프롬프트. 프롬프트를 argv 로 넘기면 Windows 명령줄
+/// 한도(cmd 8,191자 · CreateProcess 32,767자)에 걸려 에이전트가 시작도 못 한다.
+/// stdin 을 받는 에이전트(claude · codex)는 프롬프트를 stdin 으로 보낸다.
+fn args(root: &Path, record: &mut RunRecord) -> Result<(Vec<String>, Option<String>), String> {
     let mut args: Vec<String> = match record.agent.as_str() {
         "claude" => {
             let mut args = vec!["-p".into(), "--output-format".into(), "stream-json".into(), "--verbose".into()];
@@ -38,8 +41,20 @@ fn args(root: &Path, record: &mut RunRecord) -> Result<Vec<String>, String> {
     if !record.model.is_empty() {
         args.extend(["--model".into(), record.model.clone()]);
     }
-    args.push(record.prompt.clone());
-    Ok(args)
+    let stdin_prompt = match record.agent.as_str() {
+        // claude -p 는 위치 프롬프트가 없으면 stdin 에서 읽는다.
+        "claude" => Some(record.prompt.clone()),
+        // codex exec 는 `-` 위치 인자로 stdin 프롬프트를 받는다.
+        "codex" => {
+            args.push("-".into());
+            Some(record.prompt.clone())
+        }
+        _ => {
+            args.push(record.prompt.clone());
+            None
+        }
+    };
+    Ok((args, stdin_prompt))
 }
 
 /// 사람이 따라 읽는 진행 로그.
@@ -211,7 +226,7 @@ impl ViewLog {
         let mut rendered = String::new();
         while let Some(index) = self.pending.iter().position(|b| *b == b'\n') {
             let line: Vec<u8> = self.pending.drain(..=index).collect();
-            if let Some(text) = render_line(&String::from_utf8_lossy(&line)) {
+            if let Some(text) = render_line(&crate::spawn::decode_console(&line)) {
                 rendered.push_str(&text);
                 rendered.push('\n');
             }
@@ -228,7 +243,7 @@ impl ViewLog {
             return Ok(());
         }
         let line = std::mem::take(&mut self.pending);
-        match render_line(&String::from_utf8_lossy(&line)) {
+        match render_line(&crate::spawn::decode_console(&line)) {
             Some(text) => Self::write(path, &format!("{text}\n")),
             None => Ok(()),
         }
@@ -262,7 +277,8 @@ fn read_tail(path: &Path) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-    Ok(String::from_utf8_lossy(&bytes).into_owned())
+    // 에이전트 stdout(UTF-8)과 cmd·도구의 CP949 stderr 가 섞일 수 있어 줄 단위로 판별한다.
+    Ok(crate::spawn::decode_console_lines(&bytes))
 }
 
 /// Exit zero alone does not prove an agent completed a turn.
@@ -445,7 +461,7 @@ async fn execute(root: &Path, record: &mut RunRecord) -> Result<Option<String>, 
     if cancellation_requested(root, record)? {
         return Ok(None);
     }
-    let args = args(root, record)?;
+    let (args, stdin_prompt) = args(root, record)?;
     let cmd = crate::spawn::platform_command_async(
         &record.agent,
         &args.iter().map(String::as_str).collect::<Vec<_>>(),
@@ -459,6 +475,7 @@ async fn execute(root: &Path, record: &mut RunRecord) -> Result<Option<String>, 
         root,
         record,
         cmd,
+        stdin_prompt,
         (timeout > 0).then(|| Duration::from_secs(timeout as u64 * 60)),
     )
     .await
@@ -500,6 +517,7 @@ async fn execute_command(
     root: &Path,
     record: &mut RunRecord,
     mut cmd: tokio::process::Command,
+    stdin_text: Option<String>,
     timeout: Option<Duration>,
 ) -> Result<Option<String>, String> {
     let output_path = transcript_path(root, &record.id)?;
@@ -527,7 +545,11 @@ async fn execute_command(
     cmd.current_dir(&record.repo_path)
         .env_remove("CLAUDECODE")
         .env_remove("CLAUDE_CODE_CHILD_SESSION")
-        .stdin(Stdio::null())
+        .stdin(if stdin_text.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stdout(stdout)
         .stderr(stderr)
         .kill_on_drop(true);
@@ -536,6 +558,19 @@ async fn execute_command(
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("{} 백그라운드 시작 실패: {e}", record.agent))?;
+    if let Some(text) = stdin_text {
+        use tokio::io::AsyncWriteExt;
+        let Some(mut stdin) = child.stdin.take() else {
+            kill_tree(&mut child).await;
+            return Err(format!("{} stdin을 열 수 없습니다", record.agent));
+        };
+        // 프롬프트가 파이프 버퍼보다 길면 자식이 읽기 시작할 때까지 write 가 막힌다.
+        // 진행 로그 옮기기가 멈추지 않게 별도 태스크로 흘려보내고 닫는다.
+        tokio::spawn(async move {
+            let _ = stdin.write_all(text.as_bytes()).await;
+            let _ = stdin.shutdown().await;
+        });
+    }
     record.worker_pid = child.id();
     if let Err(error) = save_record(root, record) {
         kill_tree(&mut child).await;
@@ -734,13 +769,25 @@ mod tests {
         let (root, mut record) = fixture();
         record.extra_paths = vec!["/trusted library".into()];
         record.model = "sonnet".into();
-        let first = args(root.path(), &mut record).unwrap();
+        record.prompt = "긴 설계 프롬프트".into();
+        let (first, stdin) = args(root.path(), &mut record).unwrap();
         assert!(first.contains(&"--session-id".into()));
         assert!(first.contains(&"/trusted library".into()));
+        // 프롬프트는 argv 가 아니라 stdin 으로 간다 — Windows 명령줄 한도 때문이다.
+        assert!(!first.contains(&record.prompt));
+        assert_eq!(stdin.as_deref(), Some("긴 설계 프롬프트"));
         let session = record.agent_session.clone().unwrap();
-        let next = args(root.path(), &mut record).unwrap();
+        let (next, _) = args(root.path(), &mut record).unwrap();
         assert!(next.contains(&"--resume".into()));
         assert!(next.contains(&session));
+        record.agent = "codex".into();
+        let (codex, stdin) = args(root.path(), &mut record).unwrap();
+        assert_eq!(codex.last().map(String::as_str), Some("-"));
+        assert!(stdin.is_some(), "codex 는 `-` 로 stdin 프롬프트를 받는다");
+        record.agent = "omp".into();
+        let (omp, stdin) = args(root.path(), &mut record).unwrap();
+        assert_eq!(omp.last(), Some(&record.prompt));
+        assert!(stdin.is_none(), "omp 는 위치 프롬프트를 유지한다");
         record.agent = "unsupported".into();
         assert!(args(root.path(), &mut record).is_err());
     }
@@ -914,7 +961,7 @@ esac
     async fn background_process_captures_both_streams_and_rejects_empty_followup() {
         let (root, mut record) = fixture();
         let cmd = crate::spawn::platform_command_async("/bin/sh", &["-c", "echo diagnostic >&2; echo '{\"type\":\"result\",\"is_error\":false,\"result\":\"completed report\"}'"]);
-        let result = execute_command(root.path(), &mut record, cmd, Some(Duration::from_secs(3)))
+        let result = execute_command(root.path(), &mut record, cmd, None, Some(Duration::from_secs(3)))
             .await
             .unwrap();
         assert_eq!(result.as_deref(), Some("completed report"));
@@ -930,6 +977,7 @@ esac
             root.path(),
             &mut record,
             empty,
+            None,
             Some(Duration::from_secs(3))
         )
         .await
@@ -941,11 +989,27 @@ esac
             root.path(),
             &mut record,
             failure,
+            None,
             Some(Duration::from_secs(3))
         )
         .await
         .unwrap_err()
         .contains("auth-error"));
+        // stdin 프롬프트는 그대로 자식에게 도착해야 한다 — argv 한도를 피하는 경로다.
+        let echo = crate::spawn::platform_command_async(
+            "/bin/sh",
+            &["-c", "printf '{\"type\":\"result\",\"is_error\":false,\"result\":\"%s\"}\\n' \"$(cat)\""],
+        );
+        let result = execute_command(
+            root.path(),
+            &mut record,
+            echo,
+            Some("stdin 프롬프트".into()),
+            Some(Duration::from_secs(3)),
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.as_deref(), Some("stdin 프롬프트"));
     }
 
     #[cfg(unix)]
@@ -955,7 +1019,7 @@ esac
         request_cancel(root.path(), &record.id).unwrap();
         let cmd = crate::spawn::platform_command_async("/bin/sh", &["-c", "sleep 30"]);
         assert!(
-            execute_command(root.path(), &mut record, cmd, Some(Duration::from_secs(3)))
+            execute_command(root.path(), &mut record, cmd, None, Some(Duration::from_secs(3)))
                 .await
                 .unwrap()
                 .is_none()
@@ -966,6 +1030,7 @@ esac
             root.path(),
             &mut record,
             cmd,
+            None,
             Some(Duration::from_millis(20))
         )
         .await

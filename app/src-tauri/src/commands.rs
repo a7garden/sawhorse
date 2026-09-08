@@ -465,10 +465,18 @@ pub fn read_pack_skill(pack_id: String, name: String) -> Result<String, String> 
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct AgentSkillGroup {
+    pub agent: String,
+    pub skills: Vec<agents::SkillStatus>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PackAgentStatus {
     pub pack_id: String,
-    pub claude: Vec<agents::SkillStatus>,
-    pub codex: Vec<agents::SkillStatus>,
+    /// 설치 대상 에이전트별 스킬 상태. 에이전트별 필드를 두지 않아 대상이 늘어도
+    /// 스키마와 화면이 그대로다.
+    pub agents: Vec<AgentSkillGroup>,
     /// 같은 내용이 Claude Code 플러그인으로도 깔려 있으면 개인 스킬 설치를 권하지 않는다
     pub plugin_installs: Vec<agents::PluginInstall>,
 }
@@ -527,11 +535,28 @@ pub fn pack_agent_status(pack_id: String) -> Result<PackAgentStatus, String> {
         .get(&pack_id)
         .ok_or_else(|| format!("없는 팩입니다: {pack_id}"))?;
     Ok(PackAgentStatus {
-        claude: agents::pack_skill_status(pack, agents::CLAUDE),
-        codex: agents::pack_skill_status(pack, agents::CODEX),
+        agents: agents::install_targets()
+            .iter()
+            .map(|agent| AgentSkillGroup {
+                agent: (*agent).into(),
+                skills: agents::pack_skill_status(pack, agent),
+            })
+            .collect(),
         plugin_installs: agents::plugin_installs(&plugin::plugin_name().unwrap_or_default()),
         pack_id,
     })
+}
+
+/// 에이전트 폴더에서 실제로 발견한 스킬 전부 — 출처(sawhorse·마켓플레이스·수동)를 가리지 않는다.
+#[tauri::command]
+pub fn list_agent_skills(agent: String) -> Result<Vec<agents::AgentSkillEntry>, String> {
+    agents::list_agent_skills(&agent)
+}
+
+/// 열람 화면이 고른 스킬 파일 본문. 경로 검증은 agents 쪽이 한다.
+#[tauri::command]
+pub fn read_agent_skill(path: String) -> Result<String, String> {
+    agents::read_agent_skill(&path)
 }
 
 #[tauri::command]

@@ -149,11 +149,12 @@ impl Herdr {
             Ok(Ok(o)) => o,
         };
         if out.status.success() {
-            let text = String::from_utf8_lossy(&out.stdout);
+            let text = crate::spawn::decode_console(&out.stdout);
             let parsed: Value = serde_json::from_str(text.trim()).unwrap_or(Value::Null);
             return Ok(parsed.get("result").cloned().unwrap_or(parsed));
         }
-        let err_text = String::from_utf8_lossy(&out.stderr);
+        // 실패 stderr 에는 herdr 의 JSON 이 아니라 cmd 의 CP949 메시지가 올 수 있다.
+        let err_text = crate::spawn::decode_console(&out.stderr);
         let parsed: Value = serde_json::from_str(err_text.trim()).unwrap_or(Value::Null);
         let code = parsed
             .pointer("/error/code")

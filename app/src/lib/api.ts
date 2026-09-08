@@ -15,7 +15,9 @@ async function invoke<T>(
   return tauriInvoke<T>(command, args);
 }
 import type {
+  AgentSkillEntry,
   AgentsView,
+  MarketSkill,
   CollabAgentRun,
   CollabAuditEvent,
   CollabCreateSessionInput,
@@ -232,6 +234,21 @@ export const api = {
     agent: string,
   ): Promise<InstallReport> =>
     invoke("uninstall_pack_skills", { packId, agent }),
+  listAgentSkills: (agent: string): Promise<AgentSkillEntry[]> =>
+    invoke("list_agent_skills", { agent }),
+  readAgentSkill: (path: string): Promise<string> =>
+    invoke("read_agent_skill", { path }),
+
+  // 스킬 마켓플레이스 (skills.sh · npx skills)
+  skillsMarketSearch: (query: string): Promise<MarketSkill[]> =>
+    invoke("skills_market_search", { query }),
+  skillsMarketInstall: (
+    source: string,
+    skill: string | null,
+    agents: string[],
+  ): Promise<string> =>
+    invoke("skills_market_install", { source, skill, agents }),
+  skillsMarketUpdate: (): Promise<string> => invoke("skills_market_update"),
 
   // 작업공간 프로비저닝
   suggestVaultPath: (): Promise<string> => invoke("suggest_vault_path"),

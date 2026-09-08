@@ -9,8 +9,18 @@
     "save": "저장",
     "delete": "삭제",
     "refresh": "새로 고침",
-    "diagnostics": "일부 문서를 읽지 못했습니다: {{docs}}",
     "nCount": "{{count}}개"
+  },
+  "diagnostics": {
+    "title": "문서 {{docs}}개에서 진단 {{count}}건이 발견되었습니다",
+    "repair": "자동 수정",
+    "details": "자세히",
+    "hide": "접기",
+    "docsMore": "외 {{count}}건",
+    "repaired": "문서 {{count}}건을 자동으로 수정했습니다",
+    "repairedRemaining": "문서 {{count}}건을 자동으로 수정했습니다. 남은 진단 {{remaining}}건은 직접 확인이 필요합니다",
+    "nothingToRepair": "자동으로 수정할 수 있는 항목이 없습니다. 남은 진단은 문서를 직접 확인해야 합니다",
+    "repairFailed": "자동 수정 실패: {{error}}"
   },
   "role": {
     "research": "조사",

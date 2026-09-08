@@ -19,6 +19,7 @@ mod scheduler;
 mod schemas;
 mod sdlc;
 mod sdlc_harness;
+mod skills_market;
 mod spawn;
 mod state;
 mod tasks;
@@ -304,6 +305,7 @@ pub fn run() {
             schemas::schema_plan,
             schemas::schema_changeset_preview,
             sdlc::sdd_snapshot,
+            sdlc::sdd_repair_documents,
             sdlc::workflow_snapshot,
             sdlc::workflow_command,
             sdlc::artifact_read,
@@ -462,6 +464,11 @@ pub fn run() {
             commands::pack_agent_status,
             commands::install_pack_skills,
             commands::uninstall_pack_skills,
+            commands::list_agent_skills,
+            commands::read_agent_skill,
+            skills_market::skills_market_search,
+            skills_market::skills_market_install,
+            skills_market::skills_market_update,
             // 작업공간 프로비저닝
             commands::workspace_plan,
             commands::provision_workspace,

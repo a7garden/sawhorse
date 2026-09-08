@@ -587,6 +587,9 @@ export async function previewInvoke(
     case "sdd_snapshot":
     case "workflow_snapshot":
       return structuredClone(s);
+    // 체험 데이터는 형식이 항상 올바르다. 고칠 것이 없다는 보고가 곧 정답이다.
+    case "sdd_repair_documents":
+      return { repairs: [], remaining: structuredClone(s.diagnostics ?? []) };
     // 브라우저 체험에는 레거시 볼트가 없다. 이관할 것이 없다는 사실 자체가 답이다.
     case "issue_migration_plan":
       return [];
