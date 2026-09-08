@@ -4,6 +4,8 @@ import type { Mockup } from "@/features/mockups/types";
 import type {
   ArtifactKind,
   CalendarEvent,
+  CopilotAnswer,
+  CopilotTurn,
   Document,
   IntentCheckpoint,
   HarnessRun,
@@ -107,6 +109,15 @@ export const sddApi = {
   ): Promise<{
     options: Array<{ id: string; label: string; source: "catalog" | "recent" }>;
   }> => call("agent_models", { agent }),
+  /**
+   * 작업 하나에 대한 질문에 답한다. 엔진은 프로젝트(없으면 설정)의 기본 에이전트다.
+   * 읽기 전용 한 번짜리 호출이라 작업 상태를 바꾸지 않는다.
+   */
+  copilotAsk: (input: {
+    workId: string;
+    question: string;
+    history: CopilotTurn[];
+  }): Promise<CopilotAnswer> => call("sdd_work_copilot", { input }),
   /**
    * 프로젝트 분석을 백그라운드로 돌린다. 커맨드는 즉시 돌아오고 완료는
    * `project-analyzed` 이벤트로 온다.

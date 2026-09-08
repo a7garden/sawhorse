@@ -349,8 +349,19 @@
     "allMilestones": "모든 마일스톤",
     "results": "{{count}}개 작업",
     "resetFilters": "필터 초기화",
-    "priorityOrder": "중요도순",
+    "sortAria": "정렬 기준",
+    "sortDirection": "정렬 방향: {{direction}}",
+    "sortAscending": "오름차순",
+    "sortDescending": "내림차순",
+    "sort": {
+      "priority": "중요도순",
+      "id": "이슈 번호순",
+      "due": "기한순",
+      "updated": "최근 수정순",
+      "title": "제목순"
+    },
     "emptyFiltered": "검색어나 필터를 변경해 작업을 찾아보세요.",
+    "intentOnly": "의도",
     "title": "작업",
     "view": "작업 보기",
     "board": "공정 보드",
@@ -399,6 +410,22 @@
     "reviewNote": "검토 결정",
     "reviewNotePlaceholder": "확인한 산출물과 다음 단계로 진행해도 되는 근거를 기록하세요.",
     "reReview": "재검토:"
+  },
+  "copilot": {
+    "title": "코파일럿",
+    "description": "열려 있는 작업의 문서와 결정 기록을 읽고 답합니다. 읽기만 하므로 이 패널로는 작업이 바뀌지 않습니다.",
+    "question": "질문",
+    "placeholder": "이 작업에 대해 물어보세요. Ctrl+Enter 로 보냅니다.",
+    "ask": "묻기",
+    "clear": "대화 지우기",
+    "waiting": "{{agent}} 이(가) 작업 문서를 읽고 있습니다…",
+    "engineHint": "설정해 둔 기본 에이전트가 답합니다. 프로젝트에 지정한 에이전트가 있으면 그쪽을 씁니다.",
+    "defaultModel": "기본 모델",
+    "samples": {
+      "summary": "이 작업을 한 문단으로 요약해 줘",
+      "next": "지금 상태에서 다음에 할 일은 뭐야?",
+      "risk": "이 계획에서 놓치기 쉬운 위험은?"
+    }
   },
   "ledger": {
     "title": "워크플로 실행 장부",
@@ -501,6 +528,7 @@
     "documentChangedElsewhere": "다른 곳에서 문서가 변경되었습니다. 다시 불러온 뒤 저장하세요.",
     "titleAndDateRequired": "제목과 날짜가 필요합니다.",
     "launchNeedsDesktop": "실제 에이전트 실행은 Sawhorse 데스크톱 앱과 Herdr 연결이 필요합니다.",
+    "copilotAnswer": "체험 모드라 실제 에이전트를 부르지 않고 짜인 답을 보여 줍니다.\n\n- 물어본 것: **{{question}}**\n- 작업: **{{title}}** ({{stage}} 단계)\n\n데스크톱 앱에서는 설정해 둔 에이전트가 이 작업의 문서와 결정 기록을 읽고 답합니다.",
     "unsupportedCommand": "체험 모드에서 지원하지 않는 동작: {{command}}"
   },
   "api": {

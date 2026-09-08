@@ -433,3 +433,15 @@ export interface WorkflowEventRecord {
   facts: Record<string, unknown>;
   createdAt: string;
 }
+/** 작업 코파일럿의 한 마디. 질문과 답이 같은 목록에 시간순으로 쌓인다. */
+export interface CopilotTurn {
+  role: "question" | "answer";
+  text: string;
+}
+
+export interface CopilotAnswer {
+  answer: string;
+  /** 실제로 답한 엔진. 사용자가 설정해 둔 에이전트를 그대로 쓴다. */
+  agent: string;
+  model: string;
+}

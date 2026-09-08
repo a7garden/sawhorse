@@ -349,8 +349,19 @@
     "allMilestones": "All milestones",
     "results": "{{count}} work items",
     "resetFilters": "Reset filters",
-    "priorityOrder": "Priority order",
+    "sortAria": "Sort by",
+    "sortDirection": "Sort direction: {{direction}}",
+    "sortAscending": "Ascending",
+    "sortDescending": "Descending",
+    "sort": {
+      "priority": "Priority",
+      "id": "Issue number",
+      "due": "Due date",
+      "updated": "Last updated",
+      "title": "Title"
+    },
     "emptyFiltered": "Try a different search or reset your filters to find work.",
+    "intentOnly": "Intents",
     "title": "Work",
     "view": "Work view",
     "board": "Process board",
@@ -399,6 +410,22 @@
     "reviewNote": "Review decision",
     "reviewNotePlaceholder": "Record the artifacts you checked and why it is safe to proceed.",
     "reReview": "Re-review:"
+  },
+  "copilot": {
+    "title": "Copilot",
+    "description": "Answers from this work item's documents and decision log. It only reads — nothing in this panel changes the work.",
+    "question": "Question",
+    "placeholder": "Ask about this work item. Ctrl+Enter to send.",
+    "ask": "Ask",
+    "clear": "Clear conversation",
+    "waiting": "{{agent}} is reading the work item…",
+    "engineHint": "Answered by your configured default agent, or the project's agent when it sets one.",
+    "defaultModel": "default model",
+    "samples": {
+      "summary": "Summarize this work item in one paragraph",
+      "next": "What should happen next from here?",
+      "risk": "What risks does this plan miss?"
+    }
   },
   "ledger": {
     "title": "Workflow run ledger",
@@ -501,6 +528,7 @@
     "documentChangedElsewhere": "The document changed elsewhere. Reload before saving.",
     "titleAndDateRequired": "A title and date are required.",
     "launchNeedsDesktop": "Real agent runs require the Sawhorse desktop app connected to Herdr.",
+    "copilotAnswer": "Preview mode answers from a canned script instead of calling a real agent.\n\n- You asked: **{{question}}**\n- Work item: **{{title}}** (stage {{stage}})\n\nIn the desktop app your configured agent reads this work item's documents and decision log to answer.",
     "unsupportedCommand": "Unsupported action in preview mode: {{command}}"
   },
   "api": {

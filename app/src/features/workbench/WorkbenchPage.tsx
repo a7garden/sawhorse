@@ -2,6 +2,7 @@ import { JournalWidget } from "@/features/journal/JournalPage";
 import { MockupReview } from "@/features/mockups/MockupReview";
 import { IntentComposer } from "./IntentComposer";
 import { IntentFlowPanel } from "./IntentFlowPanel";
+import { WorkCopilot } from "./WorkCopilot";
 import { INTENT_WORKFLOW } from "./intent";
 import {
   ChecklistWidget,
@@ -31,8 +32,10 @@ import { isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
   AlertCircle,
+  ArrowDownWideNarrow,
   ArrowLeft,
   ArrowRight,
+  ArrowUpNarrowWide,
   Bot,
   CalendarDays,
   Check,
@@ -162,6 +165,50 @@ const PRIORITY_RANK: Record<Priority, number> = {
   normal: 2,
   low: 3,
 };
+/**
+ * 작업 목록과 공정 보드가 함께 쓰는 정렬 축. 값은 그 축을 처음 골랐을 때의 방향으로,
+ * 축마다 사람이 기대하는 쪽이 다르다 — 기한은 임박한 순, 수정은 최근 순이 먼저다.
+ */
+const WORK_SORTS: Record<string, "asc" | "desc"> = {
+  priority: "asc",
+  id: "asc",
+  due: "asc",
+  updated: "desc",
+  title: "asc",
+};
+type WorkSort = { key: string; direction: "asc" | "desc" };
+const WORK_SORT_KEY = "sawhorse.work-sort";
+function readWorkSort(): WorkSort {
+  try {
+    const [key, direction] = (localStorage.getItem(WORK_SORT_KEY) ?? "").split(":");
+    if (key && key in WORK_SORTS)
+      return { key, direction: direction === "desc" ? "desc" : "asc" };
+  } catch { /* Optional preference. */ }
+  return { key: "priority", direction: WORK_SORTS.priority };
+}
+/**
+ * 정렬 비교기. ID 는 숫자 조각을 수로 견주므로 `ISS-9` 가 `ISS-10` 앞에 온다 —
+ * 이슈 번호는 문자열 순서가 아니라 번호 순서로 읽힌다. 어떤 축을 고르든 같은 값끼리는
+ * ID 오름차순으로 묶어 목록과 보드가 같은 자리를 지킨다.
+ */
+function workComparator({ key, direction }: WorkSort) {
+  const text = new Intl.Collator(i18n.language, { numeric: true, sensitivity: "base" });
+  const byId = (a: WorkItem, b: WorkItem) => text.compare(a.id, b.id);
+  const axis: Record<string, (a: WorkItem, b: WorkItem) => number> = {
+    priority: (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority],
+    id: byId,
+    due: (a, b) => (a.dueDate ?? "").localeCompare(b.dueDate ?? ""),
+    updated: (a, b) => a.updatedAt.localeCompare(b.updatedAt),
+    title: (a, b) => text.compare(a.title, b.title),
+  };
+  const compare = axis[key] ?? axis.priority;
+  return (a: WorkItem, b: WorkItem) => {
+    // 기한이 없는 항목은 방향과 무관하게 뒤에 둔다. 빈 값이 첫머리를 차지하면 안 된다.
+    if (key === "due" && !a.dueDate !== !b.dueDate) return a.dueDate ? -1 : 1;
+    const primary = compare(a, b);
+    return (direction === "desc" ? -primary : primary) || byId(a, b);
+  };
+}
 const dateText = () => new Intl.DateTimeFormat(i18n.language, {
   month: "short",
   day: "numeric",
@@ -2077,6 +2124,12 @@ function WorkView({
     setDisplay(next);
     try { localStorage.setItem("sawhorse.work-view", next); } catch { /* Optional preference. */ }
   };
+  // 정렬은 보기와 함께 기억한다. 목록과 공정 보드가 같은 기준으로 줄을 선다.
+  const [sort, setSort] = useState<WorkSort>(readWorkSort);
+  const chooseSort = (next: WorkSort) => {
+    setSort(next);
+    try { localStorage.setItem(WORK_SORT_KEY, `${next.key}:${next.direction}`); } catch { /* Optional preference. */ }
+  };
   const [query, setQuery] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [showMilestones, setShowMilestones] = useState(false);
@@ -2094,6 +2147,8 @@ function WorkView({
   const [stateFilter, setStateFilter] = useState<"open" | "closed" | "all">(
     "open",
   );
+  // 의도 흐름만 모아 보는 축. 상태 탭과 다른 축이라 열림·닫힘 선택을 지우지 않는다.
+  const [intentOnly, setIntentOnly] = useState(false);
   const [executionFilter, setExecutionFilter] = useState("all");
   const [milestoneFilter, setMilestoneFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
@@ -2126,6 +2181,7 @@ function WorkView({
   // 태그 후보는 태그를 뺀 나머지 조건까지 걸린 범위에서 뽑는다 — 고른 태그로 목록이 비지 않게.
   const tagPool = work.filter(
     (item) =>
+      (!intentOnly || item.workflowId === INTENT_WORKFLOW) &&
       (stageFilter === "all" || processStageKey(item) === stageFilter) &&
       (priorityFilter === "all" || item.priority === priorityFilter) &&
       (projectFilter === "all" || item.projectId === projectFilter) &&
@@ -2142,11 +2198,7 @@ function WorkView({
     .filter((item) => tagFilter === "all" || tagsOf(item).includes(tagFilter))
     .filter((item) => !search || [item.title, item.id, item.description, item.owner,
       ...item.assignees, ...tagsOf(item)].join(" ").toLocaleLowerCase().includes(search))
-    .sort(
-      (a, b) =>
-        PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority] ||
-        a.id.localeCompare(b.id),
-    );
+    .sort(workComparator(sort));
 
   // 고른 태그가 다른 필터 때문에 사라지면 태그 필터를 풀어 준다.
   const tagKey = tagOptions.join("\n");
@@ -2269,17 +2321,24 @@ function WorkView({
     .filter((value) => value !== "all").length;
   const resetFilters = () => {
     setQuery("");
+    setIntentOnly(false);
     setStageFilter("all");
     setPriorityFilter("all");
     setExecutionFilter("all");
     setMilestoneFilter("all");
     setTagFilter("all");
   };
+  // 좁혀 보는 중인지. 결과가 비었을 때 빠져나갈 길을 열어 줄지 이 값으로 정한다.
+  const narrowed = activeFilters > 0 || Boolean(search) || intentOnly;
   const stateCounts = {
     open: work.filter((item) => (item.state || "open") === "open").length,
     closed: work.filter((item) => item.state === "closed").length,
     all: work.length,
   };
+  // 의도 탭은 지금 고른 상태 범위 안에서 센다. 눌렀을 때 나올 수와 같아야 한다.
+  const intents = work.filter((item) => item.workflowId === INTENT_WORKFLOW);
+  const intentCount = intents.filter((item) =>
+    stateFilter === "all" || (item.state || "open") === stateFilter).length;
 
   return (
     <>
@@ -2292,14 +2351,20 @@ function WorkView({
       </header>
 
       <div className="wb-work-navigation">
-        <div className="wb-work-state-tabs" role="group" aria-label={t("issues.stateAria")}>
-          {(["open", "closed", "all"] as const).map((state) => (
-            <button key={state} type="button" aria-pressed={stateFilter === state}
-              onClick={() => setStateFilter(state)}>
-              {t(state === "open" ? "issues.openIssues" : state === "closed" ? "issues.closedIssues" : "issues.all")}
-              <span>{stateCounts[state]}</span>
-            </button>
-          ))}
+        <div className="wb-work-tabs">
+          <div className="wb-work-state-tabs" role="group" aria-label={t("issues.stateAria")}>
+            {(["open", "closed", "all"] as const).map((state) => (
+              <button key={state} type="button" aria-pressed={stateFilter === state}
+                onClick={() => setStateFilter(state)}>
+                {t(state === "open" ? "issues.openIssues" : state === "closed" ? "issues.closedIssues" : "issues.all")}
+                <span>{stateCounts[state]}</span>
+              </button>
+            ))}
+          </div>
+          {intents.length > 0 && <button type="button" className="wb-work-intent-tab"
+            aria-pressed={intentOnly} onClick={() => setIntentOnly((value) => !value)}>
+            {t("work.intentOnly")}<span>{intentCount}</span>
+          </button>}
         </div>
         <div className="wb-view-switch" role="group" aria-label={t("work.view")}>
           <Button variant="ghost" aria-pressed={display === "board"} onClick={() => chooseDisplay("board")}><Columns3 />{t("work.board")}</Button>
@@ -2423,8 +2488,19 @@ function WorkView({
         <p role="status">{t("work.results", { count: rows.length })}
           {milestoneFilter !== "all" && <span> · {milestoneFilter === "none" ? t("issues.noMilestone") : milestoneName(milestoneFilter)}</span>}
         </p>
-        {(activeFilters > 0 || search) && <Button size="sm" variant="ghost" onClick={resetFilters}><X />{t("work.resetFilters")}</Button>}
-        <span className="wb-work-sort-hint">{t("work.priorityOrder")}</span>
+        {narrowed && <Button size="sm" variant="ghost" onClick={resetFilters}><X />{t("work.resetFilters")}</Button>}
+        <div className="wb-work-sort">
+          <Select size="sm" value={sort.key} aria-label={t("work.sortAria")}
+            onChange={(key) => chooseSort({ key, direction: WORK_SORTS[key] ?? "asc" })}
+            options={Object.keys(WORK_SORTS).map((key) => ({ value: key, label: t(`work.sort.${key}`) }))} />
+          <Button size="sm" variant="ghost"
+            aria-label={t("work.sortDirection", {
+              direction: t(sort.direction === "asc" ? "work.sortAscending" : "work.sortDescending"),
+            })}
+            onClick={() => chooseSort({ ...sort, direction: sort.direction === "asc" ? "desc" : "asc" })}>
+            {sort.direction === "asc" ? <ArrowUpNarrowWide size={14} /> : <ArrowDownWideNarrow size={14} />}
+          </Button>
+        </div>
       </div>
       <div className="wb-issue-layout">
         <div className="wb-issue-main">
@@ -2551,8 +2627,8 @@ function WorkView({
           )) : (
             <EmptyState
               title={t("issues.emptyTitle")}
-              description={t(activeFilters > 0 || search ? "work.emptyFiltered" : "issues.emptyDescription")}
-              action={activeFilters > 0 || search ? (
+              description={t(narrowed ? "work.emptyFiltered" : "issues.emptyDescription")}
+              action={narrowed ? (
                 <Button variant="outline" onClick={resetFilters}>{t("work.resetFilters")}</Button>
               ) : (
                 <Button onClick={() => onNewWork()}><Plus /> {t("issues.register")}</Button>
@@ -3562,6 +3638,8 @@ function EventFormDialog({
     </Dialog>
   );
 }
+/** 코파일럿 레일을 열어 두는지. 좁은 화면에서 접어 둔 선택이 다음 상세에도 남는다. */
+const COPILOT_PANEL_KEY = "sawhorse.workbench.copilot";
 function WorkDetailDialog({
   work,
   projects,
@@ -3588,6 +3666,12 @@ function WorkDetailDialog({
   onFollowUp: () => void;
 }) {
   const [transitioning, setTransitioning] = useState(false);
+  const [copilotOpen, setCopilotOpen] = useState(() => {
+    try {
+      return localStorage.getItem(COPILOT_PANEL_KEY) !== "off";
+    } catch { /* Optional preference. */ }
+    return true;
+  });
   const [editorDirty, setEditorDirty] = useState(false);
   const [reviewNote, setReviewNote] = useState("");
   const { t } = useTranslation("workbench");
@@ -3725,185 +3809,209 @@ function WorkDetailDialog({
                 <Plus /> {t("detail.followUp")}
               </Button>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              aria-pressed={copilotOpen}
+              onClick={() => {
+                const next = !copilotOpen;
+                setCopilotOpen(next);
+                try {
+                  localStorage.setItem(COPILOT_PANEL_KEY, next ? "on" : "off");
+                } catch { /* Optional preference. */ }
+              }}
+            >
+              <Bot /> {t("copilot.title")}
+            </Button>
             <Button size="sm" variant="outline" onClick={onEdit}>
               <FilePenLine /> {t("detail.edit")}
             </Button>
           </div>
         </div>
-        {!intentFlow && <div className="wb-stepper">
-          {nodes.map((node, stageIndex) => (
-            <button
-              key={node.id}
-              className={cx(
-                node.id === currentNodeId && "is-current",
-                stageIndex < index && "is-complete",
-              )}
-              onClick={() =>
-                node.id !== currentNodeId &&
-                outgoing?.some((edge) => edge.to === node.id) &&
-                void transition(node.id)
-              }
-              disabled={
-                transitioning || !canTransition ||
-                node.id === currentNodeId ||
-                (workflow
-                  ? !outgoing?.some((edge) => edge.to === node.id)
-                  : Math.abs(stageIndex - index) > 1)
-              }
-              title={
-                workflow && !outgoing?.some((edge) => edge.to === node.id)
-                  ? t("detail.noTransition")
-                  : undefined
-              }
-            >
-              <i>{stageIndex < index ? <Check size={11} /> : stageIndex + 1}</i>
-              <span>{node.label}</span>
-            </button>
-          ))}
-        </div>
-        }
-        {!intentFlow && <div className="wb-detail-meta">
-          <span>
-            {t("detail.project")}{" "}
-            <strong>
-              {projects.find((project) => project.id === work.projectId)
-                ?.name ?? t("detail.none")}
-            </strong>
-          </span>
-          <span>
-            {t("detail.due")} <strong>{formatDate(work.dueDate)}</strong>
-          </span>
-          <span>
-            {t("detail.owner")}{" "}
-            <strong>{work.owner || t("detail.unassigned")}</strong>
-          </span>
-          {work.dependsOn.length > 0 && (
-            <span>
-              {t("detail.predecessorsLabel")}{" "}
-              <strong>
-                {t("common.nCount", { count: work.dependsOn.length })}
-              </strong>
-            </span>
-          )}
-        </div>
-        }
-        {intentFlow ? <IntentFlowPanel key={work.id} onDirtyChange={setEditorDirty} work={work} project={projects.find((project) => project.id === work.projectId)} onReload={onReload} /> : <div className="wb-detail-split">
-          <ArtifactEditor
-            work={work}
-            workflow={workflow}
-            selected={selectedArtifact}
-            revealText={revealText}
-            onSelect={onArtifact}
-            onNotice={onNotice}
-            onDirtyChange={setEditorDirty}
-          />
-          {!closed && !["blocked", "review"].includes(work.status) && (
-          <RunLauncher
-            work={work}
-            workflow={workflow}
-            project={
-              projects.find((project) => project.id === work.projectId) ?? null
-            }
-            onNotice={onNotice}
-          />
-          )}
-        </div>
-        }
-        {work.decisions.length > 0 && (
-          <div className="wb-ledger">
-            <h3>{t("detail.decisions")}</h3>
-            {work.decisions
-              .slice()
-              .reverse()
-              .map((decision, itemIndex) => (
-                <div key={`${decision.at}-${itemIndex}`}>
-                  <span>
-                    {stageLabel(workflow ? [workflow] : [], decision.stage)}
-                  </span>
-                  <p>{decision.note}</p>
-                  <time>{dateTimeText().format(new Date(decision.at))}</time>
-                </div>
+        <div className="wb-detail-body">
+          <div className="wb-detail-main">
+            {!intentFlow && <div className="wb-stepper">
+              {nodes.map((node, stageIndex) => (
+                <button
+                  key={node.id}
+                  className={cx(
+                    node.id === currentNodeId && "is-current",
+                    stageIndex < index && "is-complete",
+                  )}
+                  onClick={() =>
+                    node.id !== currentNodeId &&
+                    outgoing?.some((edge) => edge.to === node.id) &&
+                    void transition(node.id)
+                  }
+                  disabled={
+                    transitioning || !canTransition ||
+                    node.id === currentNodeId ||
+                    (workflow
+                      ? !outgoing?.some((edge) => edge.to === node.id)
+                      : Math.abs(stageIndex - index) > 1)
+                  }
+                  title={
+                    workflow && !outgoing?.some((edge) => edge.to === node.id)
+                      ? t("detail.noTransition")
+                      : undefined
+                  }
+                >
+                  <i>{stageIndex < index ? <Check size={11} /> : stageIndex + 1}</i>
+                  <span>{node.label}</span>
+                </button>
               ))}
-          </div>
-        )}
-        {work.workflowInstanceId && (
-          <RuntimeLedger instanceId={work.workflowInstanceId} revision={work.updatedAt} />
-        )}
-        {!closed && !intentFlow && <>
-        <label className="wb-review-note">
-          {t("detail.reviewNote")}
-          <textarea
-            aria-label={t("detail.reviewNote")}
-            value={reviewNote}
-            onChange={(event) => setReviewNote(event.target.value)}
-            placeholder={t("detail.reviewNotePlaceholder")}
-          />
-        </label>
-        <div className="wb-step-actions">
-          {actions.map((action) => <Button key={action} size="sm"
-            variant={["accept", "start", "submit", "complete", "resume"].includes(action) ? "default" : "outline"}
-            disabled={transitioning} onClick={() => void decide(action)}>
-            {t(`work.actions.${action}`)}
-          </Button>)}
-          {!workflow && previous && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={transitioning}
-              onClick={() => void transition(previous)}
-            >
-              <ArrowLeft /> {t("detail.reReview")}{" "}
-              {stageLabel(workflow ? [workflow] : [], previous)}
-            </Button>
-          )}
-          <span />
-          {workflow &&
-            outgoing?.map((edge) => {
-              const targetLabel = stageLabel(
-                [workflow],
-                edge.to,
-                workflow.id,
-                workflow.version,
-              );
-              return (
+            </div>
+            }
+            {!intentFlow && <div className="wb-detail-meta">
+              <span>
+                {t("detail.project")}{" "}
+                <strong>
+                  {projects.find((project) => project.id === work.projectId)
+                    ?.name ?? t("detail.none")}
+                </strong>
+              </span>
+              <span>
+                {t("detail.due")} <strong>{formatDate(work.dueDate)}</strong>
+              </span>
+              <span>
+                {t("detail.owner")}{" "}
+                <strong>{work.owner || t("detail.unassigned")}</strong>
+              </span>
+              {work.dependsOn.length > 0 && (
+                <span>
+                  {t("detail.predecessorsLabel")}{" "}
+                  <strong>
+                    {t("common.nCount", { count: work.dependsOn.length })}
+                  </strong>
+                </span>
+              )}
+            </div>
+            }
+            {intentFlow ? <IntentFlowPanel key={work.id} onDirtyChange={setEditorDirty} work={work} project={projects.find((project) => project.id === work.projectId)} onReload={onReload} /> : <div className="wb-detail-split">
+              <ArtifactEditor
+                work={work}
+                workflow={workflow}
+                selected={selectedArtifact}
+                revealText={revealText}
+                onSelect={onArtifact}
+                onNotice={onNotice}
+                onDirtyChange={setEditorDirty}
+              />
+              {!closed && !["blocked", "review"].includes(work.status) && (
+              <RunLauncher
+                work={work}
+                workflow={workflow}
+                project={
+                  projects.find((project) => project.id === work.projectId) ?? null
+                }
+                onNotice={onNotice}
+              />
+              )}
+            </div>
+            }
+            {work.decisions.length > 0 && (
+              <div className="wb-ledger">
+                <h3>{t("detail.decisions")}</h3>
+                {work.decisions
+                  .slice()
+                  .reverse()
+                  .map((decision, itemIndex) => (
+                    <div key={`${decision.at}-${itemIndex}`}>
+                      <span>
+                        {stageLabel(workflow ? [workflow] : [], decision.stage)}
+                      </span>
+                      <p>{decision.note}</p>
+                      <time>{dateTimeText().format(new Date(decision.at))}</time>
+                    </div>
+                  ))}
+              </div>
+            )}
+            {work.workflowInstanceId && (
+              <RuntimeLedger instanceId={work.workflowInstanceId} revision={work.updatedAt} />
+            )}
+            {!closed && !intentFlow && <>
+            <label className="wb-review-note">
+              {t("detail.reviewNote")}
+              <textarea
+                aria-label={t("detail.reviewNote")}
+                value={reviewNote}
+                onChange={(event) => setReviewNote(event.target.value)}
+                placeholder={t("detail.reviewNotePlaceholder")}
+              />
+            </label>
+            <div className="wb-step-actions">
+              {actions.map((action) => <Button key={action} size="sm"
+                variant={["accept", "start", "submit", "complete", "resume"].includes(action) ? "default" : "outline"}
+                disabled={transitioning} onClick={() => void decide(action)}>
+                {t(`work.actions.${action}`)}
+              </Button>)}
+              {!workflow && previous && (
                 <Button
-                  key={`${edge.on}:${edge.to}`}
-                  variant={edge.on === "approved" ? "default" : "outline"}
+                  variant="outline"
                   size="sm"
                   disabled={transitioning}
-                  onClick={() => void transition(edge.to)}
+                  onClick={() => void transition(previous)}
+                >
+                  <ArrowLeft /> {t("detail.reReview")}{" "}
+                  {stageLabel(workflow ? [workflow] : [], previous)}
+                </Button>
+              )}
+              <span />
+              {workflow &&
+                outgoing?.map((edge) => {
+                  const targetLabel = stageLabel(
+                    [workflow],
+                    edge.to,
+                    workflow.id,
+                    workflow.version,
+                  );
+                  return (
+                    <Button
+                      key={`${edge.on}:${edge.to}`}
+                      variant={edge.on === "approved" ? "default" : "outline"}
+                      size="sm"
+                      disabled={transitioning}
+                      onClick={() => void transition(edge.to)}
+                    >
+                      {transitioning ? (
+                        <Loader2 className="wb-spin" />
+                      ) : edge.on === "approved" ? (
+                        <CircleCheck />
+                      ) : (
+                        <ArrowLeft />
+                      )}
+                      {transitionActionLabel(edge.on, targetLabel)}
+                    </Button>
+                  );
+                })}
+              {!workflow && next && (
+                <Button
+                  size="sm"
+                  disabled={transitioning}
+                  onClick={() => void transition(next)}
                 >
                   {transitioning ? (
                     <Loader2 className="wb-spin" />
-                  ) : edge.on === "approved" ? (
-                    <CircleCheck />
                   ) : (
-                    <ArrowLeft />
+                    <>
+                      {t("workflow.reviewThenNext", {
+                        target: stageLabel(workflow ? [workflow] : [], next),
+                      })}{" "}
+                      <ArrowRight />
+                    </>
                   )}
-                  {transitionActionLabel(edge.on, targetLabel)}
                 </Button>
-              );
-            })}
-          {!workflow && next && (
-            <Button
-              size="sm"
-              disabled={transitioning}
-              onClick={() => void transition(next)}
-            >
-              {transitioning ? (
-                <Loader2 className="wb-spin" />
-              ) : (
-                <>
-                  {t("workflow.reviewThenNext", {
-                    target: stageLabel(workflow ? [workflow] : [], next),
-                  })}{" "}
-                  <ArrowRight />
-                </>
               )}
-            </Button>
+            </div>
+            </>}
+          </div>
+          {copilotOpen && (
+            <WorkCopilot
+              work={work}
+              project={projects.find((project) => project.id === work.projectId)}
+            />
           )}
         </div>
-        </>}
       </div>
     </Dialog>
   );

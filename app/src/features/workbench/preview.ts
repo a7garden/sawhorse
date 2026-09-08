@@ -731,6 +731,22 @@ export async function previewInvoke(
       if (!run) throw new Error("실행 기록을 찾을 수 없습니다");
       return structuredClone(run);
     }
+    case "sdd_work_copilot": {
+      // 체험 모드에는 부를 에이전트가 없다. 질문이 어떻게 흘러가는지만 보여 준다.
+      const input = (args.input ?? {}) as { workId?: string; question?: string };
+      const work = s.work.find((candidate) => candidate.id === input.workId);
+      if (!work) throw new Error(i18n.t("workbench:errors.workNotFound"));
+      const project = s.projects.find((candidate) => candidate.id === work.projectId);
+      return {
+        answer: i18n.t("workbench:preview.copilotAnswer", {
+          question: (input.question ?? "").trim(),
+          title: work.title,
+          stage: i18n.t(`workbench:stage.${work.stage}`, { defaultValue: work.stage }),
+        }),
+        agent: project?.defaultAgent || "claude",
+        model: project?.defaultModel || "",
+      };
+    }
     case "sdd_launch":
       throw new Error(i18n.t("workbench:preview.launchNeedsDesktop"));
     case "sdd_run_output":

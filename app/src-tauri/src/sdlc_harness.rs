@@ -2434,6 +2434,336 @@ pub async fn sdd_analyze_project(app: tauri::AppHandle, project_id: String) -> R
     Ok(())
 }
 
+// ---------- 작업 코파일럿 ----------
+//
+// 실행 하네스가 작업을 "하는" 입구라면, 코파일럿은 작업을 "묻는" 입구다.
+// 같은 CLI 에이전트를 쓰되 읽기 전용 한 번짜리 호출로 끝나고, 작업 상태·문서·
+// 실행 기록 어느 것도 바꾸지 않는다.
+
+const COPILOT_MAX_QUESTION: usize = 4_000;
+/// 문서 하나에서 프롬프트로 넘길 최대 글자. 의도와 결론이 앞에 오므로 뒤를 자른다.
+const COPILOT_MAX_DOCUMENT: usize = 6_000;
+/// 프롬프트에 싣는 이전 대화 수. 오래된 것부터 버린다.
+const COPILOT_MAX_TURNS: usize = 8;
+const COPILOT_MAX_TURN: usize = 1_200;
+const COPILOT_MAX_DECISIONS: usize = 5;
+
+/// 답하는 중인 작업. 같은 작업에 두 질문이 겹치면 CLI 두 개가 같은 저장소를 훑게 되므로
+/// 앞선 답이 끝날 때까지 막는다.
+static COPILOT_IN_FLIGHT: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// 미래가 버려져도 자리를 반납한다 — 한 번 새면 앱을 다시 켤 때까지 그 작업은 못 묻는다.
+struct CopilotSlot(String);
+impl Drop for CopilotSlot {
+    fn drop(&mut self) {
+        if let Ok(mut set) = COPILOT_IN_FLIGHT.lock() {
+            set.remove(&self.0);
+        }
+    }
+}
+
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CopilotTurn {
+    /// `question` 또는 `answer`.
+    pub role: String,
+    pub text: String,
+}
+
+#[derive(Deserialize, Clone, Debug, Default)]
+#[serde(default, rename_all = "camelCase")]
+pub struct CopilotAsk {
+    pub work_id: String,
+    pub question: String,
+    pub history: Vec<CopilotTurn>,
+}
+
+#[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct CopilotAnswer {
+    pub answer: String,
+    /// 실제로 답한 엔진. 화면이 "무엇이 답했는지" 를 사람에게 그대로 보인다.
+    pub agent: String,
+    pub model: String,
+}
+
+fn head_chars(text: &str, max: usize) -> String {
+    let text = text.trim();
+    if text.chars().count() <= max {
+        return text.to_string();
+    }
+    let kept: String = text.chars().take(max).collect();
+    format!("{kept}\n…(이 뒤는 생략했습니다)")
+}
+
+/// 코파일럿 엔진 결정. 프로젝트가 정해 둔 에이전트·모델이 먼저이고, 프로젝트가 없거나
+/// 비어 있으면 설정의 기본 에이전트로 간다.
+fn copilot_engine(project: Option<&sdlc::Project>, fallback_agent: &str) -> (String, String) {
+    let agent = project
+        .map(|project| project.default_agent.trim().to_string())
+        .filter(|agent| !agent.is_empty())
+        .unwrap_or_else(|| fallback_agent.trim().to_string());
+    let model = project
+        .map(|project| project.default_model.trim().to_string())
+        .unwrap_or_default();
+    (agent, model)
+}
+
+/// 작업 하나의 문맥과 지금까지의 문답을 프롬프트로 묶는다. 순수 함수라 단위 테스트 대상이다.
+fn copilot_prompt(
+    work: &sdlc::WorkItem,
+    project: Option<&sdlc::Project>,
+    documents: &[sdlc::Document],
+    history: &[CopilotTurn],
+    question: &str,
+) -> String {
+    let mut prompt = String::from(
+        "너는 Sawhorse 작업대의 코파일럿이다. 아래 한 작업에 대한 질문에 답한다.\n\
+         규칙:\n\
+         - 질문과 같은 언어로 답한다.\n\
+         - 아래 문맥과 저장소에서 읽은 것만 근거로 삼는다. 없는 사실은 지어내지 말고 모르면 모른다고 답한다.\n\
+         - 근거가 문서에 있으면 어느 문서인지 함께 밝힌다.\n\
+         - 마크다운으로 짧게 답한다. 문단 서너 개를 넘기지 않는다.\n\
+         - 읽기만 한다. 파일을 고치거나 명령을 실행하거나 작업 상태를 바꾸지 않는다.\n\n",
+    );
+    prompt.push_str("## 작업\n");
+    prompt.push_str(&format!(
+        "- ID: {}\n- 제목: {}\n- 단계: {}\n- 상태: {}\n- 중요도: {}\n- 담당: {}\n- 기한: {}\n- 워크플로: {}@{}\n",
+        work.id,
+        work.title,
+        work.stage,
+        work.status,
+        work.priority,
+        if work.owner.trim().is_empty() {
+            "미지정"
+        } else {
+            work.owner.trim()
+        },
+        work.due_date.as_deref().unwrap_or("없음"),
+        work.workflow_id,
+        work.workflow_version,
+    ));
+    if !work.depends_on.is_empty() {
+        prompt.push_str(&format!("- 선행 작업: {}\n", work.depends_on.join(", ")));
+    }
+    if !work.labels.is_empty() {
+        prompt.push_str(&format!("- 라벨: {}\n", work.labels.join(", ")));
+    }
+    if !work.description.trim().is_empty() {
+        prompt.push_str(&format!(
+            "\n### 설명\n{}\n",
+            head_chars(&work.description, COPILOT_MAX_DOCUMENT)
+        ));
+    }
+    match project {
+        Some(project) => prompt.push_str(&format!(
+            "\n## 프로젝트\n- 이름: {}\n- 저장소: {}\n- 설명: {}\n- 검증 명령: {}\n",
+            project.name,
+            project.repo_path,
+            head_chars(&project.description, 600),
+            if project.verify_commands.is_empty() {
+                "등록된 명령 없음".to_string()
+            } else {
+                project.verify_commands.join(", ")
+            },
+        )),
+        None => prompt.push_str("\n## 프로젝트\n연결된 프로젝트가 없다.\n"),
+    }
+    let decisions: Vec<_> = work
+        .decisions
+        .iter()
+        .rev()
+        .take(COPILOT_MAX_DECISIONS)
+        .collect();
+    if !decisions.is_empty() {
+        prompt.push_str("\n## 최근 결정 기록\n");
+        for decision in decisions {
+            prompt.push_str(&format!(
+                "- [{}] {} — {}\n",
+                decision.at,
+                decision.stage,
+                head_chars(&decision.note, 300).replace('\n', " ")
+            ));
+        }
+    }
+    if documents.is_empty() {
+        prompt.push_str("\n## 문서\n아직 작성된 산출물이 없다.\n");
+    } else {
+        prompt.push_str("\n## 문서\n");
+        for document in documents {
+            prompt.push_str(&format!(
+                "\n### {} ({})\n{}\n",
+                document.artifact,
+                document.path,
+                head_chars(&document.markdown, COPILOT_MAX_DOCUMENT)
+            ));
+        }
+    }
+    let dropped = history.len().saturating_sub(COPILOT_MAX_TURNS);
+    let turns = &history[dropped..];
+    if !turns.is_empty() {
+        prompt.push_str("\n## 지금까지의 대화\n");
+        for turn in turns {
+            let speaker = if turn.role == "answer" {
+                "코파일럿"
+            } else {
+                "사용자"
+            };
+            prompt.push_str(&format!(
+                "{speaker}: {}\n",
+                head_chars(&turn.text, COPILOT_MAX_TURN)
+            ));
+        }
+    }
+    prompt.push_str(&format!("\n## 질문\n{question}\n"));
+    prompt
+}
+
+/// 코파일럿 호출 계획. 분석과 같은 읽기 전용 실행이되 프롬프트는 stdin 으로 넘긴다 —
+/// 작업 문맥은 커맨드라인 인자로 넘기기에는 길다.
+fn copilot_plan(
+    agent: &str,
+    model: &str,
+    cwd: &Path,
+    prompt: String,
+    last_message: &Path,
+) -> AnalyzePlan {
+    let model = model.trim();
+    if agent == "codex" {
+        let mut args = vec!["exec".to_string()];
+        if !model.is_empty() {
+            args.extend(["-m".to_string(), model.to_string()]);
+        }
+        args.extend([
+            "-C".to_string(),
+            cwd.display().to_string(),
+            "-s".to_string(),
+            "read-only".to_string(),
+            "--skip-git-repo-check".to_string(),
+            "-o".to_string(),
+            last_message.display().to_string(),
+            // 프롬프트를 stdin 에서 읽으라는 codex 의 위치 인자.
+            "-".to_string(),
+        ]);
+        AnalyzePlan {
+            program: "codex",
+            args,
+            cwd: cwd.to_path_buf(),
+            stdin_text: Some(prompt),
+            last_message_path: Some(last_message.to_path_buf()),
+        }
+    } else {
+        let mut args = vec![
+            "-p".to_string(),
+            "--output-format".to_string(),
+            "json".to_string(),
+        ];
+        if !model.is_empty() {
+            args.extend(["--model".to_string(), model.to_string()]);
+        }
+        args.extend([
+            "--disallowedTools".to_string(),
+            ANALYZE_DISALLOWED_TOOLS.to_string(),
+        ]);
+        AnalyzePlan {
+            program: "claude",
+            args,
+            cwd: cwd.to_path_buf(),
+            stdin_text: Some(prompt),
+            last_message_path: None,
+        }
+    }
+}
+
+/// 작업 하나에 대해 묻고 답을 받는다. 사용자가 설정해 둔 에이전트를 그대로 엔진으로 쓴다.
+#[tauri::command]
+pub async fn sdd_work_copilot(input: CopilotAsk) -> Result<CopilotAnswer, String> {
+    let question = input.question.trim().to_string();
+    if question.is_empty() {
+        return Err("질문을 입력해 주세요".into());
+    }
+    if question.chars().count() > COPILOT_MAX_QUESTION {
+        return Err(format!("질문은 {COPILOT_MAX_QUESTION}자를 넘을 수 없습니다"));
+    }
+    let root = sdlc::vault_root()?;
+    sdlc::validate_id(&input.work_id)?;
+    let snapshot = sdlc::snapshot(&root)?;
+    if !snapshot.initialized {
+        return Err("SDD vault를 먼저 초기화해야 합니다".into());
+    }
+    let work = snapshot
+        .work
+        .iter()
+        .find(|work| work.id == input.work_id)
+        .cloned()
+        .ok_or_else(|| "작업을 찾을 수 없습니다".to_string())?;
+    let project = snapshot
+        .projects
+        .iter()
+        .find(|project| project.id == work.project_id)
+        .cloned();
+    let (agent, model) = copilot_engine(
+        project.as_ref(),
+        &crate::agents::effective_default(&config::load_view().dashboard),
+    );
+    if agent != "claude" && agent != "codex" {
+        return Err(format!(
+            "코파일럿은 Claude Code 와 Codex CLI 로만 답합니다. 지금 설정된 에이전트: {agent}"
+        ));
+    }
+    let acquired = COPILOT_IN_FLIGHT
+        .lock()
+        .map(|mut set| set.insert(work.id.clone()))
+        .unwrap_or(false);
+    if !acquired {
+        return Err("이 작업의 코파일럿이 아직 답하는 중입니다".into());
+    }
+    let _slot = CopilotSlot(work.id.clone());
+    let documents: Vec<sdlc::Document> = work
+        .artifacts
+        .iter()
+        .filter_map(|artifact| sdlc::read_document(&root, &work.id, artifact).ok())
+        .collect();
+    let prompt = copilot_prompt(&work, project.as_ref(), &documents, &input.history, &question);
+    let scratch = std::env::temp_dir().join(format!("sawhorse-copilot-{}", Uuid::new_v4()));
+    fs::create_dir_all(&scratch).map_err(|error| error.to_string())?;
+    let last_message = scratch.join("answer.md");
+    // 저장소가 있으면 거기서 돌려 코드까지 읽게 한다. 없으면 빈 임시 폴더가 작업 폴더다.
+    let cwd = project
+        .as_ref()
+        .map(|project| PathBuf::from(project.repo_path.trim()))
+        .filter(|path| path.is_dir())
+        .unwrap_or_else(|| scratch.clone());
+    let plan = copilot_plan(&agent, &model, &cwd, prompt, &last_message);
+    let answer = async {
+        let output = run_analyze_plan(&plan).await?;
+        if !output.success {
+            return Err(format!(
+                "코파일럿 응답 실패: {}",
+                tail_chars(output.stderr.trim(), 200)
+            ));
+        }
+        let raw = match plan.last_message_path.as_deref() {
+            Some(path) => fs::read_to_string(path)
+                .map_err(|error| format!("코파일럿 답을 읽을 수 없습니다: {error}"))?,
+            None => claude_result(&output.stdout)?,
+        };
+        let answer = raw.trim().to_string();
+        if answer.is_empty() {
+            return Err("코파일럿이 빈 답을 돌려주었습니다".into());
+        }
+        Ok(answer)
+    }
+    .await;
+    let _ = fs::remove_dir_all(&scratch);
+    Ok(CopilotAnswer {
+        answer: answer?,
+        agent,
+        model,
+    })
+}
+
 /// Parent-owned app setup may call this periodically. It performs no UI action,
 /// sends no approval response, and bounds child inbox processing to eight files.
 pub async fn tick() -> Result<(), String> {
@@ -2455,6 +2785,148 @@ pub async fn tick() -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn copilot_engine_prefers_project_then_configured_default() {
+        let project = sdlc::Project {
+            default_agent: "codex".into(),
+            default_model: " gpt-5.1-codex ".into(),
+            ..Default::default()
+        };
+        assert_eq!(
+            copilot_engine(Some(&project), "claude"),
+            ("codex".to_string(), "gpt-5.1-codex".to_string())
+        );
+
+        let blank = sdlc::Project::default();
+        assert_eq!(
+            copilot_engine(Some(&blank), "codex"),
+            ("codex".to_string(), String::new()),
+            "프로젝트가 에이전트를 정하지 않았으면 설정의 기본으로 간다"
+        );
+        assert_eq!(
+            copilot_engine(None, "claude"),
+            ("claude".to_string(), String::new()),
+            "프로젝트가 없어도 설정의 기본 에이전트로 답한다"
+        );
+    }
+
+    #[test]
+    fn copilot_prompt_carries_work_documents_and_recent_turns() {
+        let work = sdlc::WorkItem {
+            id: "WORK-1".into(),
+            title: "코파일럿 붙이기".into(),
+            description: "작업 화면에서 바로 묻는다".into(),
+            stage: "build".into(),
+            status: "running".into(),
+            depends_on: vec!["WORK-0".into()],
+            decisions: vec![sdlc::Decision {
+                at: "2026-09-08T00:00:00Z".into(),
+                stage: "design".into(),
+                note: "설계 승인".into(),
+            }],
+            ..Default::default()
+        };
+        let documents = vec![sdlc::Document {
+            work_id: "WORK-1".into(),
+            artifact: "spec".into(),
+            path: "work/WORK-1/spec.md".into(),
+            markdown: "# 명세\n오른쪽 레일에 코파일럿을 둔다".into(),
+            revision: "r1".into(),
+        }];
+        let history: Vec<CopilotTurn> = (0..COPILOT_MAX_TURNS + 2)
+            .map(|index| CopilotTurn {
+                role: if index % 2 == 0 { "question" } else { "answer" }.into(),
+                text: format!("turn-{index}"),
+            })
+            .collect();
+        let prompt = copilot_prompt(&work, None, &documents, &history, "지금 무엇이 남았나?");
+
+        assert!(prompt.contains("WORK-1") && prompt.contains("코파일럿 붙이기"));
+        assert!(prompt.contains("- 선행 작업: WORK-0"));
+        assert!(prompt.contains("설계 승인"), "최근 결정 기록을 싣는다");
+        assert!(prompt.contains("work/WORK-1/spec.md") && prompt.contains("오른쪽 레일에"));
+        assert!(prompt.contains("연결된 프로젝트가 없다"));
+        assert!(prompt.ends_with("## 질문\n지금 무엇이 남았나?\n"));
+        assert!(
+            !prompt.contains("turn-0") && !prompt.contains("turn-1"),
+            "오래된 대화는 버린다"
+        );
+        assert!(prompt.contains("코파일럿: turn-9"), "최근 대화는 남긴다");
+        assert!(
+            prompt.contains("읽기만 한다"),
+            "읽기 전용이라는 규칙이 프롬프트에 남아야 한다"
+        );
+    }
+
+    #[test]
+    fn copilot_prompt_clips_long_documents() {
+        let markdown = "가".repeat(COPILOT_MAX_DOCUMENT + 500);
+        let documents = vec![sdlc::Document {
+            artifact: "plan".into(),
+            markdown,
+            ..Default::default()
+        }];
+        let prompt = copilot_prompt(
+            &sdlc::WorkItem::default(),
+            None,
+            &documents,
+            &[],
+            "요약해 줘",
+        );
+        assert!(prompt.contains("…(이 뒤는 생략했습니다)"));
+        assert!(
+            !prompt.contains(&"가".repeat(COPILOT_MAX_DOCUMENT + 1)),
+            "긴 문서는 한도까지만 싣는다"
+        );
+    }
+
+    #[test]
+    fn copilot_plan_builds_read_only_commands_for_both_agents() {
+        let cwd = Path::new("/repo");
+        let last = Path::new("/tmp/answer.md");
+
+        let plan = copilot_plan("codex", " gpt-5.1-codex ", cwd, "질문".into(), last);
+        assert_eq!(plan.program, "codex");
+        assert_eq!(
+            plan.args,
+            vec![
+                "exec",
+                "-m",
+                "gpt-5.1-codex",
+                "-C",
+                "/repo",
+                "-s",
+                "read-only",
+                "--skip-git-repo-check",
+                "-o",
+                "/tmp/answer.md",
+                "-",
+            ]
+        );
+        assert_eq!(plan.stdin_text.as_deref(), Some("질문"));
+        assert_eq!(plan.last_message_path.as_deref(), Some(last));
+
+        let plan = copilot_plan("claude", "", cwd, "질문".into(), last);
+        assert_eq!(plan.program, "claude");
+        assert_eq!(
+            plan.args,
+            vec![
+                "-p",
+                "--output-format",
+                "json",
+                "--disallowedTools",
+                ANALYZE_DISALLOWED_TOOLS,
+            ],
+            "모델이 비면 모델 플래그를 빼고, 쓰기 도구는 언제나 막는다"
+        );
+        assert_eq!(plan.stdin_text.as_deref(), Some("질문"));
+        assert!(
+            plan.last_message_path.is_none(),
+            "claude 답은 stdout .result 로 온다"
+        );
+        assert_eq!(plan.cwd, PathBuf::from("/repo"));
+    }
 
     fn tempdir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("sawhorse-harness-{tag}-{}", Uuid::new_v4()));

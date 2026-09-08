@@ -337,6 +337,7 @@ pub fn run() {
             sdlc_harness::sdd_resume_run,
             sdlc_harness::agent_models,
             sdlc_harness::sdd_analyze_project,
+            sdlc_harness::sdd_work_copilot,
             commands::get_config,
             commands::save_config,
             commands::diagnostics,
