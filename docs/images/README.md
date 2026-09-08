@@ -8,8 +8,8 @@ launched and no desktop workspace files are used.
 
 ```bash
 cd app
-npm ci
-npm run dev -- --port 1430
+bun install
+bun run dev --port 1430
 ```
 
 Open `http://127.0.0.1:1430/showcase/?preview=1` for the workbench, or append
@@ -43,6 +43,6 @@ logo and the unaltered `workbench.png` capture, with English product copy.
 ```bash
 # Validate the app and documentation fixture.
 cd app
-npm run build
-npx tsc --project showcase/tsconfig.json
+bun run build
+bun --bun tsc --project showcase/tsconfig.json
 ```

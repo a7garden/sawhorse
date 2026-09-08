@@ -1,30 +1,31 @@
 # Sawhorse 데스크톱
 
-React + TypeScript + Tauri 2. SDD 코어는 앱에 내장되며 기존 팩과 협업 기능도 유지한다.
+React + TypeScript + Tauri 2. 코어는 특정 방법론이 아니라 결정론적 워크플로 실행을 제공한다.
+SDD와 intent 흐름은 같은 공개 계약으로 제공되는 번들 예시이며 기존 팩과 협업 기능도 유지한다.
 
 작업대 위젯·작업과 예약·확장·전체 검색의 역할과 데이터 호환성은 [작업 중심 앱 구조](../docs/architecture/product-organization.md)를 참고한다.
 
 ```bash
-npm ci
-npm run tauri dev
-npm run build
-npx playwright install chromium
-npm run test:e2e
+bun install
+bun run tauri dev
+bun run build
+bunx playwright install chromium
+bun run test:e2e
 (cd src-tauri && cargo test --lib)
-npm run tauri build
+bun run tauri build
 ```
 
-프론트엔드만 실행할 때 `npm run dev` 후 `?preview=1`로 브라우저 체험을 연다.
+프론트엔드만 실행할 때 `bun run dev` 후 `?preview=1`로 브라우저 체험을 연다.
 체험 데이터는 브라우저의 localStorage에만 저장된다. 데스크톱 오류를 예제로 숨기지 않는다.
 
-README 촬영용 영문 데모는 `npm run dev -- --port 1430` 후
+README 촬영용 영문 데모는 `bun run dev --port 1430` 후
 `http://127.0.0.1:1430/showcase/?preview=1`에서 연다.
 [샘플 데이터와 이미지 재생성 안내](../docs/images/README.md)를 참고한다.
 
 | 위치 | 역할 |
 |---|---|
 | src/features/workbench | 작업대·산출물 편집·동적 workflow UI·runtime ledger·SDD 호환 IPC |
-| src/features/workflow-studio | 노드/산출물/하위 workflow 편집·검증·시뮬레이션·발행 |
+| src/features/workflow-studio | 노드/산출물/하위 workflow/요구 확장·프로그램 편집·검증·시뮬레이션·발행 |
 | src/features/schema-studio | 문서 타입/필드/경로/템플릿 편집과 migration preview/apply |
 | src/pages/OnboardingPage.tsx | snapshot 기반 프로젝트 가져오기·재개·근거·충돌 검토 |
 | src-tauri/src/sdlc.rs | Markdown 스키마·CRUD·검토 결정·의존성·문서 충돌·검색 |
@@ -55,8 +56,8 @@ refresh token으로 갱신한다. 등록된 리디렉션 URI `http://127.0.0.1`�
 별도 OAuth App을 사용하려면 해당 앱의 `Enable Device Flow`를 켜고 Client ID를 다음처럼 지정한다.
 
 ```bash
-SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID npm run tauri dev
-SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID npm run tauri build
+SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID bun run tauri dev
+SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID bun run tauri build
 ```
 
 환경변수는 실행 시 값, 빌드 시 값, 기본 Client ID 순서로 적용된다. 비공개 저장소
