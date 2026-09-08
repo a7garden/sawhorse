@@ -533,6 +533,12 @@
     "background": "Background",
     "terminal": "herdr",
     "noAttention": "No tasks need attention.",
+    "dismiss": "Dismiss",
+    "dismissHint": "Takes it off the attention list without retrying. The run record is kept.",
+    "restore": "Show again",
+    "dismissedToast": "Dismissed from the attention list. You can show it again from the run detail.",
+    "restoredToast": "Back on the attention list.",
+    "dismissRunning": "A run that is still going cannot be dismissed.",
     "backgroundHint": "Runs without a window. View in herdr opens live logs while execution continues in the background."
   },
   "preview": {

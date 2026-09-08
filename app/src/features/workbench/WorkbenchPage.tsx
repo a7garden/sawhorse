@@ -50,6 +50,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  Eye,
   FilePenLine,
   FileText,
   Columns3,
@@ -153,6 +154,7 @@ function attentionRuns(runs: HarnessRun[], work: WorkItem[]) {
     if (!latest.has(key)) latest.set(key, run);
   }
   return [...latest.values()].filter((run) => ATTENTION_RUN_STATUS.includes(run.status)
+    && !run.dismissedAt
     && !work.some((item) => item.id === run.workId && isClosedStatus(item.status)));
 }
 
@@ -885,6 +887,7 @@ function OverviewView({
   workflows,
   events,
   reload,
+  setNotice,
   onNewWork,
   onSelectWork,
   onEditWork,
@@ -895,6 +898,7 @@ function OverviewView({
   workflows: WorkflowDefinition[];
   events: CalendarEvent[];
   reload: () => Promise<void>;
+  setNotice: (notice: Notice) => void;
   onNewWork: () => void;
   onSelectWork: (id: string) => void;
   onEditWork: (item: WorkItem) => void;
@@ -918,6 +922,21 @@ function OverviewView({
     const timer = window.setInterval(load, 8000);
     return () => { alive = false; window.clearInterval(timer); };
   }, [project?.id]);
+  // 다시 실행하지 않고 목록에서만 내린다. 기록은 남으므로 실행 상세에서 되돌릴 수 있다.
+  const dismissRun = async (run: HarnessRun) => {
+    // 8초 주기 갱신 사이에 실행이 다시 살아났을 수 있다. 그때는 아직 볼 것이 남아 있다.
+    if (["starting", "running"].includes(run.status)) {
+      setNotice({ tone: "error", text: t("harness.dismissRunning") });
+      return;
+    }
+    try {
+      const next = await sddApi.dismissRun(run.id, true);
+      setRuns((previous) => previous.map((run) => (run.id === next.id ? next : run)));
+      setNotice({ tone: "success", text: t("harness.dismissedToast") });
+    } catch (error) {
+      setNotice({ tone: "error", text: errorText(error) });
+    }
+  };
   const processes = groupProcesses(work, workflows, project);
   const latestVersion = latestWorkflowVersions(workflows);
   const today = isoToday();
@@ -1238,11 +1257,16 @@ function OverviewView({
           <h2>{t("harness.attention")} · {attentionRuns(runs, work).length}</h2>
           <p>{t("harness.attentionHint")}</p>
           {attentionRuns(runs, work).map((run) => (
-            <button className="wb-project-summary" key={run.id} onClick={() => useApp.getState().openRun(run.id, run.projectId)}>
-              <strong>{work.find((item) => item.id === run.workId)?.title ?? run.workId}</strong>
-              <span>{roleText(run.role)} · {t(`runStatus.${run.status}`)}</span>
-              <small>{run.error || t(`runStatus.${run.status}`)}</small>
-            </button>
+            <div className="wb-project-summary" key={run.id}>
+              <button className="wb-run-attention-open" onClick={() => useApp.getState().openRun(run.id, run.projectId)}>
+                <strong>{work.find((item) => item.id === run.workId)?.title ?? run.workId}</strong>
+                <span>{roleText(run.role)} · {t(`runStatus.${run.status}`)}</span>
+                <small>{run.error || t(`runStatus.${run.status}`)}</small>
+              </button>
+              <Button size="xs" variant="ghost" title={t("harness.dismissHint")} onClick={() => void dismissRun(run)}>
+                <X /> {t("harness.dismiss")}
+              </Button>
+            </div>
           ))}
         </section>
       )}
@@ -4668,6 +4692,31 @@ function HarnessView({
     } catch (e) { onNotice({ tone: "error", text: errorText(e) }); }
     finally { setBusy(false); }
   };
+  /** 다시 실행하지 않고 확인 필요 목록에서만 내린다. 되돌리기는 같은 자리의 「다시 표시」다. */
+  const dismiss = async (dismissed: boolean) => {
+    if (!selected) return;
+    // 5초 주기 갱신 사이에 실행이 다시 살아났을 수 있다. 그때는 아직 볼 것이 남아 있다.
+    if (dismissed && ["starting", "running"].includes(selected.status)) {
+      onNotice({ tone: "error", text: t("harness.dismissRunning") });
+      return;
+    }
+    setBusy(true);
+    try {
+      const next = await sddApi.dismissRun(selected.id, dismissed);
+      setSelected(next);
+      setRuns((previous) =>
+        previous.map((run) => (run.id === next.id ? next : run)),
+      );
+      onNotice({
+        tone: "success",
+        text: t(dismissed ? "harness.dismissedToast" : "harness.restoredToast"),
+      });
+    } catch (e) {
+      onNotice({ tone: "error", text: errorText(e) });
+    } finally {
+      setBusy(false);
+    }
+  };
   const sendKey = async (key: string) => {
     if (!selected) return;
     setBusy(true);
@@ -4830,6 +4879,15 @@ function HarnessView({
                       disabled={busy}
                     >
                       <StopCircle /> {t("harness.stop")}
+                    </Button>
+                  )}
+                  {selected.dismissedAt ? (
+                    <Button variant="outline" size="sm" onClick={() => void dismiss(false)} disabled={busy}>
+                      <Eye /> {t("harness.restore")}
+                    </Button>
+                  ) : ATTENTION_RUN_STATUS.includes(selected.status) && (
+                    <Button variant="outline" size="sm" title={t("harness.dismissHint")} onClick={() => void dismiss(true)} disabled={busy}>
+                      <X /> {t("harness.dismiss")}
                     </Button>
                   )}
                 </div>

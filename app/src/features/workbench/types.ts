@@ -278,6 +278,8 @@ export interface HarnessRun {
   tabClosedAt: string | null;
   /** 화면을 닫기 직전에 갈무리한 에이전트의 마지막 보고. */
   finalReport: string | null;
+  /** 사람이 주의 목록에서 내린 시각. 기록은 남으므로 언제든 되돌릴 수 있다. */
+  dismissedAt?: string | null;
   /** 세션 이어하기가 가능한 실행인지 (세션 id 가 기록된 claude 실행). */
   resumable: boolean;
 }

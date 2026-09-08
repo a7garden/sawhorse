@@ -351,6 +351,7 @@ pub fn run() {
             sdlc_harness::sdd_continue_run,
             sdlc_harness::sdd_run_key,
             sdlc_harness::sdd_resume_run,
+            sdlc_harness::sdd_dismiss_run,
             sdlc_harness::agent_models,
             sdlc_harness::sdd_analyze_project,
             sdlc_harness::sdd_work_copilot,
