@@ -7,9 +7,8 @@ export const PERMISSION_OPTIONS: { value: PermissionMode; key: string }[] = [
 ];
 
 export const HERDR_MODE_OPTIONS: { value: HerdrMode; key: string }[] = [
-  { value: "auto", key: "exec.herdrMode.auto" },
-  { value: "herdr", key: "exec.herdrMode.herdr" },
   { value: "headless", key: "exec.herdrMode.headless" },
+  { value: "herdr", key: "exec.herdrMode.herdr" },
 ];
 
 export const HERDR_CLEANUP_OPTIONS: { value: HerdrCleanup; key: string }[] = [

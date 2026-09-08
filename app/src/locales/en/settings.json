@@ -365,13 +365,14 @@
     "noResults": "No results yet.",
     "configFile": "Config file",
     "claudeCli": "claude CLI",
-    "herdrDisabled": "Disabled",
     "serverConnected": "Server connected",
     "noServer": "No server",
     "notInstalled": "Not installed",
     "nextJob": "Next job: {{runner}}",
     "runnerHerdr": "herdr session",
-    "runnerFallback": "Running headless — {{reason}}",
+    "herdrBlocked": "Cannot run in herdr — {{reason}}",
+    "viewerOk": "Can open in herdr",
+    "viewerOff": "Cannot open in herdr",
     "requirementsTitle": "Core setup",
     "requirementsDesc": "Shared Obsidian and herdr integrations. Feature-specific tools are declared by each workflow.",
     "agentsDesc": "Detected agents and what they can do",
@@ -396,9 +397,8 @@
       "bypass": "Bypass permissions (unattended)"
     },
     "herdrMode": {
-      "auto": "Auto (run in background)",
-      "herdr": "herdr only",
-      "headless": "Background only"
+      "herdr": "Run in a herdr session",
+      "headless": "Run in the background (default)"
     },
     "cleanup": {
       "closeOnSuccess": "Close on success",
@@ -406,7 +406,7 @@
       "closeAlways": "Always close (default)"
     },
     "permissionHint": "Unattended routine and implement runs need permission bypass. The safety net is plugin approvals, scope gates, and hooks.",
-    "herdrHint": "With herdr the job runs in a visible terminal session — take over mid-run, answer approval prompts directly, and the session survives a dashboard restart.",
+    "herdrHint": "Background is the default — the job runs with no window, and you follow it live by opening its progress in a herdr pane with \"Open in herdr\". Pick the herdr session instead and the job itself becomes a visible terminal: take over mid-run, answer approval prompts directly, and the session survives a dashboard restart. Either way, the herdr server has to be running.",
     "sessionName": "Session name",
     "sessionPlaceholder": "(default session)",
     "cleanupLabel": "Tab when finished",

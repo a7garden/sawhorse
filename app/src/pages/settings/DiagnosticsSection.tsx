@@ -77,22 +77,25 @@ export default function DiagnosticsSection({
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-24 text-xs font-medium">herdr</span>
+                {/* 서버 상태는 모드와 무관하게 늘 답해야 한다 — 백그라운드로 돌더라도
+                    「herdr로 보기」가 서버를 쓰므로 "사용 안 함"은 사실이 아니다. */}
                 <Badge
                   variant={
-                    diag.herdr.mode === "headless"
-                      ? "secondary"
-                      : diag.herdr.serverOk
-                        ? "success"
-                        : "warning"
+                    diag.herdr.serverOk
+                      ? "success"
+                      : diag.herdr.mode === "herdr"
+                        ? "warning"
+                        : "secondary"
                   }
                 >
-                  {diag.herdr.mode === "headless"
-                    ? t("diag.herdrDisabled")
-                    : diag.herdr.serverOk
-                      ? t("diag.serverConnected")
-                      : diag.herdr.binOk
-                        ? t("diag.noServer")
-                        : t("diag.notInstalled")}
+                  {diag.herdr.serverOk
+                    ? t("diag.serverConnected")
+                    : diag.herdr.binOk
+                      ? t("diag.noServer")
+                      : t("diag.notInstalled")}
+                </Badge>
+                <Badge variant={diag.herdr.viewerOk ? "success" : "secondary"}>
+                  {diag.herdr.viewerOk ? t("diag.viewerOk") : t("diag.viewerOff")}
                 </Badge>
                 <span className="truncate text-[11px] text-muted-foreground">
                   {t(
@@ -106,11 +109,15 @@ export default function DiagnosticsSection({
                   )}
                   {diag.herdr.version ? ` · ${diag.herdr.version}` : ""}
                 </span>
-                  {diag.herdr.reason && (
-                    <span className="text-[11px] text-muted-foreground">
-                      {t("diag.runnerFallback", { reason: diag.herdr.reason })}
-                    </span>
-                  )}
+                {/* herdr 모드를 골랐는데 herdr를 못 쓰는 건 고장이다. 기본 headless일 때의
+                    같은 자리 문구는 그냥 왜 그런지 설명하는 한 줄이라 라벨을 붙이지 않는다. */}
+                {diag.herdr.reason && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {diag.herdr.mode === "herdr"
+                      ? t("diag.herdrBlocked", { reason: diag.herdr.reason })
+                      : diag.herdr.reason}
+                  </span>
+                )}
               </div>
               {diag.projects.map((p) => (
                 <div
