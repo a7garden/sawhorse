@@ -868,5 +868,18 @@
       "discarding": "복구 보기",
       "other": "단계 보기"
     }
+  },
+  "menu": {
+    "openDetail": "상세 열기",
+    "run": "실행…",
+    "select": "선택",
+    "deselect": "선택 해제",
+    "priority": "우선순위",
+    "milestone": "마일스톤",
+    "copyId": "ID 복사",
+    "copyTitle": "제목 복사",
+    "copyMarkdown": "본문 복사",
+    "openInEditor": "편집기에서 열기",
+    "copied": "클립보드에 복사했습니다."
   }
 }

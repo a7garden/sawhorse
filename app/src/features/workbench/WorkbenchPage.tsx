@@ -33,6 +33,7 @@ import {
   useRef,
   useState,
   type FormEvent,
+  type MouseEvent,
 } from "react";
 import { AtomicCodeMirrorEditor } from "@atomic-editor/editor";
 import "@atomic-editor/editor/styles.css";
@@ -50,13 +51,16 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleCheck,
+  Copy,
   FilePenLine,
   FileText,
+  Flag,
   Columns3,
   Github,
   Folder,
   FolderPlus,
   List,
+  SquareCheck,
   X,
   LayoutDashboard,
   Loader2,
@@ -71,6 +75,7 @@ import {
   SquareTerminal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useContextMenu } from "@/components/ui/context-menu";
 import { Dialog } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
@@ -2326,6 +2331,66 @@ function WorkView({
   const showAttention = (stage: "approval" | "unconfirmed") => { resetFilters(); setArea("flow"); setStageFilter(stage); };
   const queueable = rows.filter((w) => isLifecycleV2(w) && w.stage === "queued");
 
+  // 우클릭 메뉴. 카드·목록 행·인박스 노트가 같은 빌더를 쓰고, 항목의 영역과
+  // 상태에 따라 실행·선택·우선순위 같은 액션이 붙거나 빠진다.
+  const workMenu = useContextMenu();
+  const copyText = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast({ tone: "success", text: t("menu.copied") });
+    } catch (e) {
+      toast({ tone: "error", text: errorText(e) });
+    }
+  };
+  const patchWork = async (item: WorkItem, patch: Partial<WorkItem>) => {
+    try {
+      await sddApi.saveWork({ ...item, ...patch, updatedAt: new Date().toISOString() });
+      await reload();
+    } catch (e) {
+      setNotice({ tone: "error", text: errorText(e) });
+    }
+  };
+  const openWorkMenu = (event: MouseEvent, item: WorkItem) => {
+    const inFlow = workArea(item) === "flow";
+    const selected = selectedSet.has(item.id);
+    const closed = isClosedStatus(item.status);
+    workMenu.open(event, [
+      { type: "label", label: `${item.id} · ${statusText(item.status)}` },
+      { label: t("menu.openDetail"), icon: <FileText />, onSelect: () => onSelectWork(item.id) },
+      inFlow && runnable(item) && { label: t("menu.run"), icon: <Play />, disabled: busy !== null, onSelect: () => setLaunchTargets([item]) },
+      inFlow && area === "flow" && { label: t(selected ? "menu.deselect" : "menu.select"), icon: <SquareCheck />, disabled: busy !== null, onSelect: () => toggleSelection(item.id, !selected) },
+      { type: "separator" },
+      !closed && {
+        type: "submenu" as const,
+        label: t("menu.priority"),
+        icon: <Flag />,
+        disabled: busy !== null,
+        items: (["urgent", "high", "normal", "low"] as Priority[]).map((priority) => ({
+          label: priorityText(priority),
+          checked: item.priority === priority,
+          onSelect: () => void patchWork(item, { priority }),
+        })),
+      },
+      !closed && milestones.length > 0 && {
+        type: "submenu" as const,
+        label: t("menu.milestone"),
+        icon: <CalendarDays />,
+        disabled: busy !== null,
+        items: [
+          { label: t("issues.noMilestone"), checked: !item.milestone, onSelect: () => void patchWork(item, { milestone: "" }) },
+          ...milestones.map((entry) => ({
+            label: entry.title,
+            checked: item.milestone === entry.id,
+            onSelect: () => void patchWork(item, { milestone: entry.id }),
+          })),
+        ],
+      },
+      !closed && { type: "separator" as const },
+      { label: t("menu.copyId"), icon: <Copy />, onSelect: () => void copyText(item.id) },
+      { label: t("menu.copyTitle"), icon: <Copy />, onSelect: () => void copyText(item.title) },
+    ]);
+  };
+
   return (
     <>
       <header className="wb-work-header">
@@ -2515,9 +2580,9 @@ function WorkView({
             {goalBatch.some((r) => r.outcome === "skipped") && <ul>{goalBatch.filter((r) => r.outcome === "skipped").map((r) => <li key={r.workId}>{work.find((w) => w.id === r.workId)?.title ?? r.workId}: {r.reason}</li>)}</ul>}
           </div>}
           {area === "archive" && <p className="wb-task-archive-hint">{t("taskBoard.archiveHint")}</p>}
-          {area === "inbox" ? <IntentInbox work={rows} projects={projects} onSelectWork={onSelectWork} onNewWork={() => onNewWork()} /> : area === "mockups" ? <MockupLibrary work={rows} projects={projects} onSelectWork={onSelectWork} /> : area === "flow" && display === "board" ? <>
+          {area === "inbox" ? <IntentInbox work={rows} projects={projects} onSelectWork={onSelectWork} onNewWork={() => onNewWork()} onWorkMenu={openWorkMenu} /> : area === "mockups" ? <MockupLibrary work={rows} projects={projects} onSelectWork={onSelectWork} /> : area === "flow" && display === "board" ? <>
             {(activeFilters > 0 || search) && !rows.length && <EmptyState title={t("issues.emptyTitle")} description={t("work.emptyFiltered")} action={<Button variant="outline" onClick={resetFilters}>{t("work.resetFilters")}</Button>} />}
-            <TaskBoard work={rows} projects={projects} workflows={workflows} onSelectWork={onSelectWork} selectedIds={selectedSet} onToggle={toggleSelection} selectionDisabled={busy !== null} />
+            <TaskBoard work={rows} projects={projects} workflows={workflows} onSelectWork={onSelectWork} selectedIds={selectedSet} onToggle={toggleSelection} selectionDisabled={busy !== null} onWorkMenu={openWorkMenu} />
           </> : rows.length ? (
             <table className="wb-issue-table">
               <thead>
@@ -2552,7 +2617,7 @@ function WorkView({
               </thead>
               <tbody>
                 {rows.map((item) => (
-                  <tr key={item.id} data-selected={selectedSet.has(item.id) || undefined} onClick={() => onSelectWork(item.id)}>
+                  <tr key={item.id} data-selected={selectedSet.has(item.id) || undefined} onClick={() => onSelectWork(item.id)} onContextMenu={(event) => openWorkMenu(event, item)}>
                     <td
                       className="wb-issue-check"
                       onClick={(event) => event.stopPropagation()}
@@ -2738,6 +2803,7 @@ function WorkView({
           </div>
         </div>
       </Dialog>
+      {workMenu.element}
     </>
   );
 }

@@ -33,5 +33,10 @@
   "remaining": "{{count}}개 남았어요",
   "allDone": "오늘 할 일을 모두 마쳤어요",
   "viewChecklist": "체크리스트 열기",
-  "more": "전체 {{count}}개 보기"
+  "more": "전체 {{count}}개 보기",
+  "menu": {
+    "read": "읽기",
+    "copyPath": "경로 복사",
+    "copied": "클립보드에 복사했습니다."
+  }
 }

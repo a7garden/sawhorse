@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import { ArrowRight, Check, Inbox, MessageSquare, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { isLifecycleV2 } from "./lifecycle-v2";
@@ -5,8 +6,8 @@ import { taskStage, taskStages } from "./task-board";
 import type { WorkItem, Project, WorkflowDefinition } from "./types";
 import "./task-board.css";
 
-type Props = { work: WorkItem[]; projects: Project[]; workflows: WorkflowDefinition[]; onSelectWork: (id: string) => void; selectedIds?: Set<string>; onToggle?: (id: string, checked: boolean) => void; selectionDisabled?: boolean };
-export function TaskBoard({ work, projects, workflows, onSelectWork, selectedIds, onToggle, selectionDisabled }: Props) {
+type Props = { work: WorkItem[]; projects: Project[]; workflows: WorkflowDefinition[]; onSelectWork: (id: string) => void; selectedIds?: Set<string>; onToggle?: (id: string, checked: boolean) => void; selectionDisabled?: boolean; onWorkMenu?: (event: MouseEvent, item: WorkItem) => void };
+export function TaskBoard({ work, projects, workflows, onSelectWork, selectedIds, onToggle, selectionDisabled, onWorkMenu }: Props) {
   const { t } = useTranslation("workbench");
   const extra = (["discarding", "other"] as const).filter((stage) => work.some((w) => taskStage(w, workflows) === stage));
   return <section className="wb-task-board" aria-label={t("taskBoard.flow")}>
@@ -19,7 +20,7 @@ export function TaskBoard({ work, projects, workflows, onSelectWork, selectedIds
             {members.map((item) => {
               const workflow = workflows.find((w) => w.id === item.workflowId && w.version === item.workflowVersion);
               const original = workflow?.nodes.find((n) => n.id === item.stage)?.label ?? item.stage;
-              return <article className="wb-task-card wb-board-card" key={item.id} data-selected={selectedIds?.has(item.id) || undefined}>
+              return <article className="wb-task-card wb-board-card" key={item.id} data-selected={selectedIds?.has(item.id) || undefined} onContextMenu={onWorkMenu ? (event) => onWorkMenu(event, item) : undefined}>
                 {onToggle && <label className="wb-task-card-select"><input type="checkbox" checked={selectedIds?.has(item.id) ?? false} disabled={selectionDisabled} onChange={(e) => onToggle(item.id, e.target.checked)} aria-label={t("issues.selectRowAria", { id: item.id, title: item.title })} />{t("goal.select")}</label>}
                 <button onClick={() => onSelectWork(item.id)} aria-label={item.title}>
                   <div className="wb-card-top"><span className="wb-work-card-id">{item.id}</span><span className={`wb-priority is-${item.priority}`}>{t(`priority.${item.priority}`)}</span></div>
@@ -41,11 +42,11 @@ export function TaskBoard({ work, projects, workflows, onSelectWork, selectedIds
   </section>;
 }
 
-export function IntentInbox({ work, projects, onSelectWork, onNewWork }: Omit<Props, "workflows"> & { onNewWork: () => void }) {
+export function IntentInbox({ work, projects, onSelectWork, onNewWork, onWorkMenu }: Omit<Props, "workflows"> & { onNewWork: () => void }) {
   const { t } = useTranslation("workbench");
   return <section className="wb-intent-inbox" aria-label={t("taskBoard.inbox")}>
     <header><div className="wb-inbox-symbol"><Inbox size={22} /></div><div><h2>{t("taskBoard.inboxTitle")}</h2><p>{t("taskBoard.inboxHint")}</p></div></header>
-    {work.length ? <div className="wb-inbox-notes">{work.map((item) => <article key={item.id}>
+    {work.length ? <div className="wb-inbox-notes">{work.map((item) => <article key={item.id} onContextMenu={onWorkMenu ? (event) => onWorkMenu(event, item) : undefined}>
       <button onClick={() => onSelectWork(item.id)} aria-label={item.title}><small>{projects.find((p) => p.id === item.projectId)?.name ?? t("board.uncategorized")}</small><h3>{item.title}</h3>{item.description && <p>{item.description}</p>}<footer><span>{t("taskBoard.notYetTask")}</span><span>{t("taskBoard.readIntent")}<ArrowRight size={14} /></span></footer></button>
     </article>)}</div> : <div className="wb-inbox-empty"><p>{t("taskBoard.emptyInbox")}</p><button onClick={onNewWork}>{t("board.newWork")}<ArrowRight size={14} /></button></div>}
   </section>;

@@ -33,5 +33,10 @@
   "remaining": "{{count}} left for today",
   "allDone": "Everything is done for today",
   "viewChecklist": "Open checklist",
-  "more": "View all {{count}} items"
+  "more": "View all {{count}} items",
+  "menu": {
+    "read": "Read",
+    "copyPath": "Copy path",
+    "copied": "Copied to the clipboard."
+  }
 }

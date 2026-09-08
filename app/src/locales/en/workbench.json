@@ -868,5 +868,18 @@
       "discarding": "View rollback",
       "other": "View stage"
     }
+  },
+  "menu": {
+    "openDetail": "Open details",
+    "run": "Run…",
+    "select": "Select",
+    "deselect": "Deselect",
+    "priority": "Priority",
+    "milestone": "Milestone",
+    "copyId": "Copy ID",
+    "copyTitle": "Copy title",
+    "copyMarkdown": "Copy content",
+    "openInEditor": "Open in editor",
+    "copied": "Copied to the clipboard."
   }
 }

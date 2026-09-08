@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { Plus, Sparkles, Upload, Download, Loader2 } from "lucide-react";
+import { Plus, Sparkles, Upload, Download, Loader2, Copy, FilePenLine } from "lucide-react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
+import { useContextMenu } from "@/components/ui/context-menu";
+import { toast } from "@/components/ui/toast";
 import { Select } from "@/components/ui/select";
 import { MarkdownView } from "@/pages/common";
 import { isWorkbenchPreview, sddApi } from "./api";
@@ -26,10 +28,22 @@ export function ResourceLibrary({ projects, initialProjectId = "" }: { projects:
   const select = (doc: ResourceDocument) => { if (dirty && !window.confirm(t("detail.confirmClose"))) return; setDraft(doc); setSource(""); setDirty(false); setNotice(""); };
   const update = (patch: Partial<ResourceDocument>) => { setDraft((doc) => ({ ...doc, ...patch })); setDirty(true); };
   async function perform(task: () => Promise<unknown>) { if (lock.current) return; lock.current = true; setBusy(true); setError(""); setNotice(""); try { await task(); } catch (e) { setError(String(e)); } finally { setBusy(false); lock.current = false; } }
+  const exportDoc = (doc: ResourceDocument) => void perform(async () => {
+    if (isWorkbenchPreview) { const url = URL.createObjectURL(new Blob([doc.markdown], { type: "text/markdown" })); const a = document.createElement("a"); a.href = url; a.download = doc.kind === "design" ? "DESIGN.md" : "template.md"; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); return; }
+    const path = await save({ defaultPath: doc.kind === "design" ? "DESIGN.md" : "template.md", filters: [{ name: "Markdown", extensions: ["md"] }] }); if (path) await sddApi.exportResource(doc.id, path);
+  });
+  const menu = useContextMenu();
+  const openDocMenu = (event: MouseEvent, doc: ResourceDocument) => menu.open(event, [
+    { type: "label", label: doc.title },
+    { label: t("menu.openInEditor"), icon: <FilePenLine />, disabled: busy, onSelect: () => select(doc) },
+    { type: "separator" },
+    { label: t("menu.copyMarkdown"), icon: <Copy />, onSelect: () => void navigator.clipboard.writeText(doc.markdown).then(() => toast({ tone: "success", text: t("menu.copied") }), (e) => toast({ tone: "error", text: String(e) })) },
+    { label: t("resources.export"), icon: <Download />, disabled: busy, onSelect: () => exportDoc(doc) },
+  ]);
   return <section className="wb-resources" aria-label={t("resources.title")}>
     <div className="wb-intent-flow-head"><div><h2>{t("resources.title")}</h2><p>{t("resources.hint")}</p></div><div className="wb-lifecycle-actions"><Button size="sm" variant="outline" disabled={busy} onClick={() => select(blank("design"))}><Plus />DESIGN.md</Button><Button size="sm" variant="outline" disabled={busy} onClick={() => select(blank("template"))}><Plus />{t("resources.template")}</Button></div></div>
     <div className="wb-resource-layout"><aside className="wb-resource-list">
-      {items.map((doc) => <button disabled={busy} key={doc.id} aria-pressed={draft.id === doc.id} onClick={() => select(doc)}><strong>{doc.title}</strong><small>{doc.kind === "design" ? "DESIGN.md" : t("resources.template")}</small></button>)}
+      {items.map((doc) => <button disabled={busy} key={doc.id} aria-pressed={draft.id === doc.id} onClick={() => select(doc)} onContextMenu={(event) => openDocMenu(event, doc)}><strong>{doc.title}</strong><small>{doc.kind === "design" ? "DESIGN.md" : t("resources.template")}</small></button>)}
       {!items.length && <p>{t("resources.empty")}</p>}
     </aside><div className="wb-resource-editor">
       <label htmlFor="resource-title">{t("resources.name")}</label><input id="resource-title" value={draft.title} disabled={busy} onChange={(e) => update({ title: e.target.value })} placeholder={draft.kind === "design" ? "DESIGN.md" : t("resources.template")} />
@@ -49,11 +63,9 @@ export function ResourceLibrary({ projects, initialProjectId = "" }: { projects:
         {draft.kind === "template" && <Select aria-label={t("resources.role")} value={role} onChange={setRole} options={["brief", "spec", "plan", "verification", "rollback"].map((value) => ({ value, label: t(`lifecycle.docs.${value}`) }))} />}
         <Button variant="outline" disabled={busy || !draft.id || dirty || !project} onClick={() => void perform(async () => { setAssignment(await sddApi.assignResource(projectId, draft.id, draft.kind === "design" ? "design" : role)); setNotice(t("resources.applied")); })}>{t("resources.apply")}</Button>
         <Button variant="ghost" disabled={busy || !project || !(draft.kind === "design" ? assignment.designId : assignment.templates[role])} onClick={() => void perform(async () => { setAssignment(await sddApi.assignResource(projectId, "", draft.kind === "design" ? "design" : role)); setNotice(t("resources.detached")); })}>{t("resources.detach")}</Button>
-        <Button variant="ghost" disabled={busy || !draft.id || dirty} onClick={() => void perform(async () => {
-          if (isWorkbenchPreview) { const url = URL.createObjectURL(new Blob([draft.markdown], { type: "text/markdown" })); const a = document.createElement("a"); a.href = url; a.download = draft.kind === "design" ? "DESIGN.md" : "template.md"; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); return; }
-          const path = await save({ defaultPath: draft.kind === "design" ? "DESIGN.md" : "template.md", filters: [{ name: "Markdown", extensions: ["md"] }] }); if (path) await sddApi.exportResource(draft.id, path);
-        })}><Download />{t("resources.export")}</Button>
+        <Button variant="ghost" disabled={busy || !draft.id || dirty} onClick={() => exportDoc(draft)}><Download />{t("resources.export")}</Button>
       </div><p className="wb-lifecycle-notice">{t("resources.applyHint")}</p>
     </div></div>
+    {menu.element}
   </section>;
 }

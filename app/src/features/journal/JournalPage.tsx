@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, ArrowUpRight, BookOpen, CalendarDays, ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, BookOpen, CalendarDays, ChevronLeft, ChevronRight, Copy, RefreshCw, Search } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/lib/store";
 import { Button } from "@/components/ui/button";
+import { useContextMenu } from "@/components/ui/context-menu";
+import { toast } from "@/components/ui/toast";
 import { MarkdownView, PageHeader } from "@/pages/common";
 import { cn } from "@/lib/utils";
 import { dateKey, fieldText, journalPage, noteDate, useJournal } from "./journal";
@@ -56,6 +58,14 @@ export default function JournalPage() {
     setPath(rows.find((row) => noteDate(row) === key)?.path ?? null);
     setMobileReader(true);
   }
+  const menu = useContextMenu();
+  const openEntryMenu = (event: MouseEvent, row: (typeof rows)[number]) => menu.open(event, [
+    { type: "label", label: row.rel },
+    { label: t("menu.read"), icon: <BookOpen />, onSelect: () => { setPath(row.path); const date = noteDate(row); if (date) setMonth(date.slice(0, 7)); setMobileReader(true); } },
+    { label: t("openFile"), icon: <ArrowUpRight />, onSelect: () => { void api.openPath(row.path).catch((cause) => toast({ tone: "error", text: String(cause) })); } },
+    { type: "separator" },
+    { label: t("menu.copyPath"), icon: <Copy />, onSelect: () => { void navigator.clipboard.writeText(row.path).then(() => toast({ tone: "success", text: t("menu.copied") }), (cause) => toast({ tone: "error", text: String(cause) })); } },
+  ]);
   return <div className="journal-page">
     <PageHeader title={t("title")}>
       <Button size="sm" variant="ghost" onClick={refresh} disabled={loading}><RefreshCw className={cn("size-3", loading && "animate-spin")} />{t("refresh")}</Button>
@@ -86,7 +96,7 @@ export default function JournalPage() {
         <div className="journal-entry-list" aria-busy={loading}>
           {error ? <p className="journal-empty" role="alert">{error}</p> : loading && !result ? <p className="journal-empty" role="status">{t("loading")}</p> : visible.length === 0 ? <div className="journal-empty"><BookOpen size={24} /><p>{query ? t("noResults") : t("emptyMonth")}</p>{rows.length > 0 && !query && <button onClick={() => { const latest = rows.find(noteDate); if (latest) chooseDate(noteDate(latest)!); }}>{t("latest")}</button>}</div> : visible.map((row) => {
             const date = noteDate(row);
-            return <button className={cn("journal-entry", selectedPath === row.path && "is-selected")} key={row.path} aria-pressed={selectedPath === row.path} onClick={() => { setPath(row.path); if (date) setMonth(date.slice(0, 7)); setMobileReader(true); }}>
+            return <button className={cn("journal-entry", selectedPath === row.path && "is-selected")} key={row.path} aria-pressed={selectedPath === row.path} onClick={() => { setPath(row.path); if (date) setMonth(date.slice(0, 7)); setMobileReader(true); }} onContextMenu={(event) => openEntryMenu(event, row)}>
               <span className="journal-date-tile"><strong>{date ? date.slice(8) : <BookOpen size={20} />}</strong><small>{date ? format(date, { weekday: "short" }) : "—"}</small></span>
               <span className="journal-entry-copy"><strong>{date === today ? t("todayEntry") : row.title}</strong><small>{fieldText(row.fields.summary) || fieldText(row.fields.tags) || (date ? format(date, { month: "long", day: "numeric" }) : row.rel)}</small></span><ChevronRight size={14} />
             </button>;
@@ -109,6 +119,7 @@ export default function JournalPage() {
         </article> : <div className="journal-reader-empty"><BookOpen size={36} strokeWidth={1} /><h2>{t("emptyTitle")}</h2><p>{error || (loading ? t("loading") : t(rows.length ? "chooseEntry" : "emptyHint"))}</p></div>}
       </section>
     </div>
+    {menu.element}
   </div>;
 }
 
