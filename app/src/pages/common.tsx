@@ -1,5 +1,5 @@
 // Shared building blocks for the six pages. Page-local concerns stay in each page file.
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import { useTranslation } from "react-i18next";
 import remarkGfm from "remark-gfm";
@@ -341,6 +341,12 @@ function MarkdownImage({
   );
 }
 
+const MD_PLUGINS = [remarkGfm];
+const mdUrlTransform = (url: string, key: string) =>
+  key === "src" && /^(blob:|data:image\/(png|jpeg|webp|gif);base64,)/i.test(url)
+    ? url
+    : defaultUrlTransform(url);
+
 export function MarkdownView({
   src,
   notePath,
@@ -351,6 +357,21 @@ export function MarkdownView({
   notePath?: string;
   className?: string;
 }) {
+  // 폴링이 부모를 다시 그릴 때마다 img 렌더러가 새로 만들어지면 React 가 이미지를 다시 마운트해
+  // 로딩 자리표시자가 깜빡인다. notePath 가 바뀔 때만 새로 만든다.
+  const components = useMemo(
+    () => ({
+      img: ({ src: imgSrc, alt, title }: { src?: unknown; alt?: unknown; title?: unknown }) => (
+        <MarkdownImage
+          notePath={notePath}
+          src={typeof imgSrc === "string" ? imgSrc : undefined}
+          alt={typeof alt === "string" ? alt : undefined}
+          title={typeof title === "string" ? title : undefined}
+        />
+      ),
+    }),
+    [notePath],
+  );
   return (
     <div
       className={cn(
@@ -360,18 +381,9 @@ export function MarkdownView({
       )}
     >
       <ReactMarkdown
-        urlTransform={(url, key) => key === "src" && /^(blob:|data:image\/(png|jpeg|webp|gif);base64,)/i.test(url) ? url : defaultUrlTransform(url)}
-        remarkPlugins={[remarkGfm]}
-        components={{
-          img: ({ src: imgSrc, alt, title }) => (
-            <MarkdownImage
-              notePath={notePath}
-              src={typeof imgSrc === "string" ? imgSrc : undefined}
-              alt={typeof alt === "string" ? alt : undefined}
-              title={typeof title === "string" ? title : undefined}
-            />
-          ),
-        }}
+        urlTransform={mdUrlTransform}
+        remarkPlugins={MD_PLUGINS}
+        components={components}
       >
         {preprocessObsidianMd(src)}
       </ReactMarkdown>

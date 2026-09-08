@@ -43,13 +43,20 @@ export function refreshWorkspaceSnapshot(): Promise<WorkspaceSnapshot | null> {
   inFlight = sddApi
     .snapshot()
     .then((snapshot) => {
+      // 내용이 같으면 이전 객체를 그대로 둔다. 새 객체를 넣으면 볼트 watcher 가 울릴 때마다
+      // 구독 화면 전체가 다시 그려져 문서 뷰와 목록이 튄다.
+      const previous = useWorkspaceSnapshot.getState().snapshot;
+      const next =
+        previous && JSON.stringify(previous) === JSON.stringify(snapshot)
+          ? previous
+          : snapshot;
       useWorkspaceSnapshot.setState({
-        snapshot,
+        snapshot: next,
         loading: false,
         error: null,
         loadedAt: Date.now(),
       });
-      return snapshot;
+      return next;
     })
     .catch((error) => {
       useWorkspaceSnapshot.setState({

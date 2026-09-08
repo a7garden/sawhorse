@@ -1,4 +1,4 @@
-import { TaskBoard, IntentInbox } from "./TaskBoard";
+import { TaskBoard, IntentInbox, QuickDecision, type QuickAction } from "./TaskBoard";
 import { workArea, isTaskRecord, taskStage, taskStages, type WorkArea } from "./task-board";
 import { MockupLibrary } from "@/features/mockups/MockupLibrary";
 import { LifecyclePanel } from "./LifecyclePanel";
@@ -2414,6 +2414,35 @@ function WorkView({
       { label: t("menu.copyTitle"), icon: <Copy />, onSelect: () => void copyText(item.title) },
     ]);
   };
+  // 목록에서 바로 내리는 결정. 상세를 열지 않고 승인·수정 요청·확인만 끝낸다.
+  // 승인은 구현 대기로만 옮긴다 — 큐에 넣기 전까지 에이전트는 시작하지 않는다.
+  const [deciding, setDeciding] = useState<string | null>(null);
+  const decisionLock = useRef(false);
+  const decideNow = async (item: WorkItem, action: QuickAction) => {
+    if (decisionLock.current) return;
+    decisionLock.current = true; setDeciding(item.id);
+    try {
+      if (action === "queue") await sddApi.queueImplementation([item.id]);
+      else {
+        // revision·inputDigest 는 누르는 순간의 최신 값이어야 한다. 목록 스냅샷은 이미 오래됐을 수 있다.
+        const [state, review] = await Promise.all([sddApi.lifecycle(item.id), sddApi.intentReview(item.id)]);
+        await sddApi.lifecycleAction({
+          workId: item.id, action, expectedStage: item.stage, revision: state.revision,
+          inputDigest: review.inputDigest, note: t(`lifecycle.actions.${action}`),
+        });
+      }
+      await reload();
+      setNotice({ tone: "success", text: t(`taskBoard.decide.toast.${action}`) });
+    } catch (error) {
+      // 다른 곳에서 먼저 바뀌었을 수 있다. 알리고 최신 목록을 다시 읽는다.
+      setNotice({ tone: "error", text: t("taskBoard.decide.failed", { error: errorText(error) }) });
+      await reload();
+    } finally {
+      setDeciding(null); decisionLock.current = false;
+    }
+  };
+  const quickDecision = (item: WorkItem) => <QuickDecision item={item} stage={taskStage(item, workflows)}
+    busy={deciding === item.id} disabled={busy !== null || deciding !== null} onDecide={(target, action) => void decideNow(target, action)} />;
 
   return (
     <>
@@ -2606,7 +2635,8 @@ function WorkView({
           {area === "archive" && <p className="wb-task-archive-hint">{t("taskBoard.archiveHint")}</p>}
           {area === "inbox" ? <IntentInbox work={rows} projects={projects} onSelectWork={onSelectWork} onNewWork={() => onNewWork()} onWorkMenu={openWorkMenu} /> : area === "mockups" ? <MockupLibrary work={rows} projects={projects} onSelectWork={onSelectWork} /> : area === "flow" && display === "board" ? <>
             {(activeFilters > 0 || search) && !rows.length && <EmptyState title={t("issues.emptyTitle")} description={t("work.emptyFiltered")} action={<Button variant="outline" onClick={resetFilters}>{t("work.resetFilters")}</Button>} />}
-            <TaskBoard work={rows} projects={projects} workflows={workflows} onSelectWork={onSelectWork} selectedIds={selectedSet} onToggle={toggleSelection} selectionDisabled={busy !== null} onWorkMenu={openWorkMenu} />
+            <TaskBoard work={rows} projects={projects} workflows={workflows} onSelectWork={onSelectWork} selectedIds={selectedSet} onToggle={toggleSelection} selectionDisabled={busy !== null} onWorkMenu={openWorkMenu}
+              onDecide={(item, action) => void decideNow(item, action)} decidingId={deciding} decisionsDisabled={busy !== null} />
           </> : rows.length ? (
             <table className="wb-issue-table">
               <thead>
@@ -2698,7 +2728,10 @@ function WorkView({
                           <Play size={14} /> {stageNameOf(item)}
                         </Button>
                       ) : (
-                        <span className="wb-muted">{area === "archive" ? stageNameOf(item) : t(`taskBoard.stages.${taskStage(item, workflows)}`)}</span>
+                        <>
+                          <span className="wb-muted">{area === "archive" ? stageNameOf(item) : t(`taskBoard.stages.${taskStage(item, workflows)}`)}</span>
+                          {area === "flow" && quickDecision(item)}
+                        </>
                       )}
                     </td>
                     <td>{item.owner || item.assignees.join(", ") || "-"}</td>
