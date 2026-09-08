@@ -37,3 +37,11 @@ Apply the sibling [delegate skill](../delegate/SKILL.md) automatically when deco
 When the harness prompt supplies a child-request inbox, submit only supported roles and scope using a new request ID and the current run as parent. Children write evidence to their own run evidence file; the parent owns canonical artifacts. Read the resulting child run and evidence before using its conclusions. The host validates requests, concurrency, ancestry, model selection and role boundaries. Without an inbox, complete the work locally or use an available tracked child-run action; do not invent a schema or directly spawn untracked agents.
 
 Finish with the changed artifact paths, checks actually run, results, and any remaining blocker. The app records review decisions and advances stages.
+
+## Default SDD lifecycle (intent-flow 2.0.0)
+
+An inbox intent is not yet an accepted task. Clarify it into `brief.md`, request user decisions through the supplied interview protocol, and stop for the user to accept the direction. Design `spec.md` and `plan.md` only after that decision. Inspect the workspace work graph and submit dependency IDs and affected file paths with design completion. The host records design approval separately from starting implementation.
+
+Implementation follows the approved scope in its assigned worktree. Coordinate with other runs through the supplied A2A request/reply files, respect scope ownership and dependency order, verify, then commit all task changes without requesting a second approval for local commits. Include `Sawhorse-Work: <workId>` in every implementation/revert commit and submit full hashes. Preserve unrelated changes. Remote publishing follows the user's existing authorization.
+
+An agent must explicitly submit the completion request and durable evidence. The host integrates verified commit identities and marks the result unconfirmed; the user alone confirms completion. Discard requests authorize an agent to revert the exact recorded hashes and verify, preserving history with new revert commits. Follow project DESIGN.md and registered artifact templates supplied in the prompt.

@@ -1,9 +1,7 @@
 // 마법사 「에이전트」 단계 — 이 PC의 터미널 에이전트를 훑고 그중 기본을 고른다.
 //
-// 기본 에이전트가 정하는 것과 정하지 않는 것을 화면이 분명히 말해야 한다. 스킬 설치
-// 대상과 안내의 기준은 이 값이 정하지만, **잡 실행기는 아직 Claude Code 하나뿐이다**
-// (진행 스트림 파싱이 그 CLI 의 형식에 묶여 있다). 고른 값이 실행기를 바꾼다고 착각하면
-// "왜 codex 로 안 돌지" 로 시간을 버린다.
+// Herdr가 지원하는 로컬 에이전트는 같은 실행 수명주기 계약으로 다룬다. 스킬 설치는
+// 에이전트별 형식이 있어 Claude/Codex에만 별도로 제공될 수 있다.
 import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AgentPresence } from "@/lib/types";
@@ -54,9 +52,9 @@ export default function StepAgents({
           key={a.id}
           name={a.name}
           ok
-          selectable
+          selectable={a.runsJobs}
           selected={a.id === defaultAgent}
-          onSelect={() => onPick(a.id)}
+          onSelect={a.runsJobs ? () => onPick(a.id) : undefined}
           badge={
             <>
               {a.id === defaultAgent && (

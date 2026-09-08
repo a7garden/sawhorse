@@ -22,6 +22,68 @@ pub fn definition_digest(definition: &WorkflowDefinition) -> Result<String, Stri
     Ok(hex::encode(Sha256::digest(bytes)))
 }
 
+/// Enforce only workflow-owned hard dependencies at execution time. Recommended
+/// and optional entries stay visible metadata and never turn Sawhorse itself into
+/// a feature-specific installer.
+pub fn preflight_requirements(
+    root: &Path,
+    project_id: &str,
+    definition: &WorkflowDefinition,
+) -> Result<(), String> {
+    let locked = crate::extensions::package::read_lock(root)?;
+    let project_extensions = locked.projects.get(project_id);
+    let mut missing = Vec::new();
+    for requirement in definition
+        .requirements
+        .iter()
+        .filter(|requirement| requirement.level == WorkflowRequirementLevel::Required)
+    {
+        let ready = match requirement.kind {
+            WorkflowRequirementKind::Program => requirement.commands.iter().any(|command| {
+                let Some(path) = crate::detect::resolve_bin(command) else {
+                    return false;
+                };
+                requirement.minimum_major == 0
+                    || crate::detect::version_of_sync(&path, &requirement.version_args)
+                        .as_deref()
+                        .and_then(crate::detect::major_of)
+                        .is_some_and(|major| major >= requirement.minimum_major)
+            }),
+            WorkflowRequirementKind::Extension => {
+                let range = semver::VersionReq::parse(&requirement.version)
+                    .map_err(|error| format!("workflow extension 버전 범위 오류: {error}"))?;
+                project_extensions
+                    .and_then(|packages| {
+                        packages.iter().find(|package| package.id == requirement.id)
+                    })
+                    .and_then(|package| semver::Version::parse(&package.version).ok())
+                    .is_some_and(|version| range.matches(&version))
+            }
+        };
+        if !ready {
+            let hint = if !requirement.install_hint.trim().is_empty() {
+                format!(" — {}", requirement.install_hint.trim())
+            } else if !requirement.install_url.trim().is_empty() {
+                format!(" — {}", requirement.install_url.trim())
+            } else {
+                String::new()
+            };
+            missing.push(format!(
+                "{} ({}){hint}",
+                requirement.label, requirement.reason
+            ));
+        }
+    }
+    if missing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "이 워크플로우에 필요한 확장 또는 프로그램이 준비되지 않았습니다: {}",
+            missing.join("; ")
+        ))
+    }
+}
+
 fn definition_path(root: &Path, id: &str, version: &str) -> PathBuf {
     root.join(".sawhorse")
         .join("workflows")
@@ -500,6 +562,39 @@ mod tests {
         let definition = builtins::tdd();
         let path = resolve_artifact_path(&root, &definition, "w-1", "p-1", "red-evidence").unwrap();
         assert_eq!(path, root.join("work/w-1/red-evidence.md"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn empty_requirements_preserve_legacy_json_and_workflow_digests() {
+        let definition = builtins::sdd();
+        let json = serde_json::to_string(&definition).unwrap();
+        assert!(!json.contains("\"requirements\""));
+        let restored: WorkflowDefinition = serde_json::from_str(&json).unwrap();
+        assert!(restored.requirements.is_empty());
+        assert_eq!(
+            definition_digest(&definition).unwrap(),
+            definition_digest(&restored).unwrap()
+        );
+    }
+
+    #[test]
+    fn execution_preflight_enforces_only_required_workflow_dependencies() {
+        let root = tempdir();
+        let mut definition = builtins::sdd();
+        definition.requirements.push(WorkflowRequirement {
+            kind: WorkflowRequirementKind::Program,
+            id: "missing-tool".into(),
+            label: "Missing tool".into(),
+            level: WorkflowRequirementLevel::Optional,
+            reason: "only one optional export step uses it".into(),
+            commands: vec!["sawhorse-definitely-missing-command".into()],
+            ..Default::default()
+        });
+        assert!(preflight_requirements(&root, "project", &definition).is_ok());
+        definition.requirements[0].level = WorkflowRequirementLevel::Required;
+        let error = preflight_requirements(&root, "project", &definition).unwrap_err();
+        assert!(error.contains("Missing tool"), "{error}");
         fs::remove_dir_all(root).unwrap();
     }
 

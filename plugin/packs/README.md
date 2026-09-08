@@ -1,19 +1,19 @@
 # 문서·자동화 팩 만들기
 
-팩은 지식 문서와 자동화 루틴을 묶는다. 작업의 단계·승인·산출물은 앱의 공통 워크플로우가 관리한다. 설치 권한·의존성을 가진 새 기능은 [확장 패키지 v2](../extension-packages/README.md)를 사용한다.
+팩은 사용자가 독립적으로 켜고 끌 수 있는 **기능 하나**와 그 기능의 문서·자동화 루틴을 묶는다. 업종·고객·업무방식 전체를 한 팩에 넣지 않는다. 작업의 단계·승인·산출물은 앱의 공통 워크플로우가 관리한다. 설치 권한·의존성을 가진 새 기능은 [확장 패키지 v2](../extension-packages/README.md)를 사용한다.
 **코드는 필요 없다** — 선언하면 앱이 렌더·검증·실행을 맡는다.
 
 ## 5분 만에 만들기
 
 ```bash
-cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
+cp -R packs/journal ~/.claude/sawhorse/packs/my-feature
 # pack.json 의 "id" 를 "my-pack" 으로 바꾼다 (소문자·숫자·하이픈)
 ```
 
 앱의 **확장 관리**에서 새로고침하면 목록에 나타난다. `views`가 있는 팩만 업무 화면을 추가한다.
 
-같은 `id` 의 사용자 팩은 내장 팩을 **덮어쓴다**. 내장 SI 확장을 내 방식대로 고치고
-싶으면 `packs/si/` 를 `~/.claude/sawhorse/packs/si/` 로 복사해 고치면 된다.
+같은 `id` 의 사용자 팩은 내장 팩을 **덮어쓴다**. 내장 기능 팩을 내 방식대로 고치고
+싶으면 해당 기능 폴더를 `~/.claude/sawhorse/packs/<기능-id>/` 로 복사해 고치면 된다.
 
 ## 폴더
 
@@ -83,8 +83,8 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
 - 컬럼 타입: `text` `badge` `list` `check` `date`.
 - `source` 는 프론트매터가 아니라 노트 자체에서 오는 값: `title`(첫 `# 헤딩`, 없으면 파일명)
   `mtime` `path`.
-- `type: "native"` 는 앱이 이미 가진 업무 화면(`issues` `todos` `vault`)을 가리킨다.
-  내장 SI 확장만 쓴다.
+- `type: "native"` 는 앱이 이미 가진 업무 화면(`issues` `todos`)을 가리킨다.
+  네이티브 화면을 선택 기능으로 노출할 때만 쓴다. 점검처럼 항상 필요한 코어 기능은 팩에 넣지 않는다.
 
 ### settings
 
@@ -105,7 +105,7 @@ cp -R packs/starter ~/.claude/sawhorse/packs/my-pack
    그래서 어떤 스키마를 쓰든 상관없다.
 2. **기존 파일은 덮지 않는다.** `workspace.files` 는 없을 때만 복사하고, 스킬 설치는
    내용이 다르면 `수정됨` 으로 표시만 한다.
-3. **꺼진 팩은 없는 팩이다.** 화면·예약·액션이 함께 사라진다(노트는 남는다).
+3. **꺼진 팩은 없는 팩이다.** 화면·예약·액션이 함께 사라진다(노트는 남는다). 따라서 서로 독립적으로 꺼야 하는 두 기능은 같은 팩에 넣지 않는다.
 
 ## 흔한 실수
 

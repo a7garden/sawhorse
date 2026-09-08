@@ -17,13 +17,37 @@ CI도 같은 명령으로 번들 패키지의 전체 파일 목록, SHA-256, con
 참조되는 하위 워크플로우부터 발행한다. 하위 흐름은 정확한 ID·버전으로 참조해야 하며,
 누락된 버전·순환 참조·동일 버전의 내용 충돌은 활성화 전에 오류로 반환한다.
 
+기능별 런타임 의존성도 워크플로우가 선언한다. `requirements`의 `extension` 항목은 프로젝트
+lock의 semver를, `program` 항목은 이식 가능한 실행 파일 후보를 가리킨다. `required`는 실행
+전에 강제하고 `recommended`·`optional`은 환경 안내로 사용한다. 예를 들어 XLSX 산출물이 있는
+흐름은 `xlsx-export`를, DOCX 원문을 읽는 흐름은 해당 reader 확장이나 `pandoc`을 선언한다.
+이 요구사항을 앱 공통 설치 목록이나 관계없는 팩에 올리지 않는다.
+
+```json
+"requirements": [
+  {
+    "kind": "extension", "id": "xlsx-export", "label": "XLSX Export",
+    "level": "required", "reason": "최종 보고서를 XLSX로 제출",
+    "commands": [], "versionArgs": [], "minimumMajor": 0,
+    "version": "^1.1", "installUrl": "", "installHint": ""
+  },
+  {
+    "kind": "program", "id": "pandoc", "label": "Pandoc",
+    "level": "recommended", "reason": "DOCX 제안서의 텍스트 추출",
+    "commands": ["pandoc"], "versionArgs": ["--version"], "minimumMajor": 3,
+    "version": "",
+    "installUrl": "https://pandoc.org/installing.html", "installHint": ""
+  }
+]
+```
+
 필수 의존성은 설치된 버전 중 함께 사용할 수 있는 조합을 찾는다. 최신 버전이 다른
 요구 범위와 충돌하면 이전 후보로 되돌아가며, 선택 의존성은 자동 활성화하지 않는다.
 같은 ID·버전에 서로 다른 digest를 배포하지 말고 내용이 바뀌면 새 버전을 사용한다.
 활성화할 조합이 기존 프로젝트 확장의 의존성을 깨뜨리거나 고정된 digest가 누락되면
 기존 lock과 profile을 유지한 채 필요한 패키지·버전을 안내한다.
 
-현재 `xlsx-export`는 기본 코어와 SI 팩에서 분리된 선택 확장이다. 활성화하지 않은 프로젝트에는
+현재 `xlsx-export`는 기본 코어와 다른 기능 확장에서 분리된 선택 확장이다. 활성화하지 않은 프로젝트에는
 XLSX 액션과 화면이 나타나지 않으며, 활성화할 때 `adapter:xlsx-export`와 볼트 권한을 명시적으로
 승인해야 한다.
 

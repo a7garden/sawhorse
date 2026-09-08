@@ -4,8 +4,8 @@ import { PathInput } from "@/components/ui/path-input";
 // 예전에는 플러그인을 먼저 깔고 스킬로 볼트를 만든 다음 앱을 열었다. 이제 순서가 뒤집혔다:
 // 앱이 이 PC를 훑고, 작업공간을 만들고, 확장을 고르고, **에이전트에 스킬을 설치해 준다.**
 //
-// 앞의 두 단계(프로그램·에이전트)는 아무것도 바꾸지 않는 읽기 전용 점검이다. 무엇이
-// 없는지 먼저 보여 주고 나서 설정을 받아야, 나중에 "왜 안 되지" 로 되돌아오지 않는다.
+// 앞의 두 단계(기본 환경·에이전트)는 아무것도 바꾸지 않는 읽기 전용 점검이다. 기본
+// 환경은 Obsidian·herdr만 다루며 기능별 도구는 선택한 workflow가 별도로 선언한다.
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, FolderOpen, Sparkles, SquareTerminal } from "lucide-react";

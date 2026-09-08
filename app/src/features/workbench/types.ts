@@ -226,13 +226,16 @@ export interface LaunchInput {
   workId: string;
   projectId: string;
   role: AgentRole;
-  agent: "claude" | "codex";
+  /** Herdr의 canonical agent kind. */
+  agent: string;
   model: string;
   instructions: string;
   parentRunId: string | null;
   modelAssessment?: { complexity: "routine" | "standard" | "complex"; reason: string };
 }
 export interface HarnessRun {
+  runner?: "headless" | "herdr";
+  instructions?: string;
   id: string;
   workId: string;
   projectId: string;
@@ -335,6 +338,24 @@ export interface WorkflowLoop {
   maxIterations: number;
   onLimit: "pause" | "fail";
 }
+export type WorkflowRequirementKind = "program" | "extension";
+export type WorkflowRequirementLevel = "required" | "recommended" | "optional";
+export interface WorkflowRequirement {
+  kind: WorkflowRequirementKind;
+  id: string;
+  label: string;
+  level: WorkflowRequirementLevel;
+  reason: string;
+  /** Alternative executable names for a program requirement. */
+  commands: string[];
+  /** Safe arguments used only to read a program version. */
+  versionArgs: string[];
+  minimumMajor: number;
+  /** SemVer range for an extension requirement; empty for programs. */
+  version: string;
+  installUrl: string;
+  installHint: string;
+}
 export interface WorkflowDefinition {
   definitionVersion: number;
   id: string;
@@ -342,6 +363,8 @@ export interface WorkflowDefinition {
   description: string;
   version: string;
   entry: string;
+  /** Feature-specific dependencies pinned with this immutable workflow revision. */
+  requirements?: WorkflowRequirement[];
   artifacts: WorkflowArtifact[];
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];

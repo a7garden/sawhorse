@@ -279,26 +279,25 @@ mod tests {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugin");
         let reg = crate::packs::load_registry_from(Some(&root), Path::new("/nonexistent"), &[]);
         let enabled: Vec<&Pack> = reg.enabled().collect();
-        assert!(enabled.len() >= 2, "si + starter 가 있어야 한다");
+        assert!(enabled.len() >= 4, "기능 확장 네 개가 있어야 한다");
 
         let planned = plan(&vault, &enabled).len();
         let report = provision(&vault, &enabled).unwrap();
         assert!(report.failed.is_empty(), "{:?}", report.failed);
         assert_eq!(report.created.len(), planned, "계획과 결과가 같아야 한다");
 
-        // SI 팩
+        // 일지·개념·프로젝트 문서화 확장
         assert!(vault.join("일지").is_dir());
         assert!(vault.join("프로젝트").is_dir());
+        assert!(vault.join("개념").is_dir());
         assert!(vault.join("템플릿/일지.md").is_file());
         assert!(!vault.join("템플릿/이슈.md").exists());
         assert!(!vault.join("템플릿/개선.md").exists());
         assert!(vault.join("프로젝트/프로젝트.base").is_file());
         assert!(!vault.join("프로젝트/이슈.base").exists());
-        assert!(vault.join("대시보드.md").is_file());
-        // starter 팩
         assert!(vault.join("문서").is_dir());
-        assert!(vault.join("템플릿/starter/문서.md").is_file());
-        assert!(vault.join("템플릿/starter/일지.md").is_file());
+        assert!(vault.join("템플릿/journal/문서.md").is_file());
+        assert!(vault.join("템플릿/journal/일지.md").is_file());
 
         // 선언형 뷰가 갓 만든 작업공간에서 오류 없이 빈 결과를 낸다
         for pack in &enabled {

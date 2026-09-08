@@ -288,6 +288,19 @@
     "name": "이름",
     "nameAria": "워크플로 이름",
     "entryStep": "시작 단계",
+    "requirements": "워크플로 요구사항",
+    "addRequirement": "요구사항",
+    "requirementsHint": "이 워크플로에서만 필요한 확장과 프로그램을 선언합니다. 필수 항목은 실행 전에 검사하며 앱 공통 설치 항목이 되지 않습니다.",
+    "requirementKind": "종류",
+    "requirementKinds": { "extension": "확장", "program": "프로그램" },
+    "requirementLevel": "필요 수준",
+    "commands": "실행 파일 후보(쉼표)",
+    "versionArgs": "버전 확인 인자(쉼표)",
+    "minimumMajor": "최소 메이저 버전(0은 제한 없음)",
+    "versionRange": "확장 버전 범위",
+    "requirementReason": "필요한 이유",
+    "installUrl": "설치 안내 URL (선택)",
+    "installHint": "설치 안내 (선택)",
     "documents": "작성할 문서",
     "addDocument": "문서",
     "noDocuments": "각 단계에서 작성하거나 참고할 문서를 추가하세요.",
@@ -438,6 +451,13 @@
     "approvalHint": "아래 단계에서 사람이 판단하도록 구성되어 있어요.",
     "noApproval": "별도의 사람 확인 단계가 없습니다. 필요하면 에이전트에게 추가를 요청하세요.",
     "deliverables": "남겨지는 결과물",
+    "requirements": "이 흐름에 필요한 것",
+    "requirementsHint": "이 요구사항은 이 워크플로 버전과 함께 이식됩니다.",
+    "requirementLevels": {
+      "required": "필수",
+      "recommended": "권장",
+      "optional": "선택"
+    },
     "publishHint": "발행하면 프로젝트에서 선택할 수 있어요. 기존 작업은 현재 버전을 유지합니다.",
     "examples": {
       "development": {

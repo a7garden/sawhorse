@@ -1,6 +1,6 @@
-// packs.rs — 확장(pack) 레지스트리.
+// packs.rs — 기능 확장(pack) 레지스트리.
 //
-// 팩 하나가 "한 가지 일하는 방식" 전체다: 작업공간 레이아웃 + 설정 스키마 + 실행 액션 +
+// 팩 하나가 사용자가 독립적으로 켜고 끌 수 있는 기능 하나다: 작업공간 레이아웃 + 설정 스키마 + 실행 액션 +
 // 화면(뷰) + 에이전트 스킬. 팩은 선언만 하고 코드를 들고 오지 않는다 — 렌더·검증·실행은
 // 전부 호스트가 한다. 표현력의 상한은 의도한 것이고, 모자란 부분은 스킬이 채운다.
 //
@@ -167,7 +167,7 @@ pub struct PackView {
     /// notes | native
     #[serde(rename = "type", alias = "kind", default = "default_view_kind")]
     pub kind: String,
-    /// kind=native 일 때 앱이 이미 들고 있는 화면 이름 (issues/todos/docs/vault)
+    /// kind=native 일 때 앱이 이미 들고 있는 화면 이름 (issues/todos/docs)
     pub component: String,
     /// 사이드바 섹션 태그 — VIEW_GROUPS 중 하나. 빈 값은 「기타」.
     #[serde(default)]
@@ -464,8 +464,37 @@ pub fn load_registry_from(
         }
     }
 
+    // Tauri copies bundled resources into target/{debug,release} but does not remove files
+    // deleted from the source directory.  During the feature-pack migration that can leave
+    // the retired starter/si bundles beside their replacements, contributing the same
+    // journal, concepts and vault navigation a second time.  Ignore only stale *builtin*
+    // bundles when the complete replacement set is present; an explicitly installed user
+    // pack with either id remains a valid override/custom extension.
+    let has_builtin = |id: &str| {
+        packs
+            .iter()
+            .any(|p| p.source == PackSource::Builtin && p.manifest.id == id)
+    };
+    let journal_replaced = has_builtin("journal");
+    let si_replaced = ["concepts", "todos", "project-docs"]
+        .iter()
+        .all(|id| has_builtin(id));
+    packs.retain(|p| {
+        p.source != PackSource::Builtin
+            || !((p.manifest.id == "starter" && journal_replaced)
+                || (p.manifest.id == "si" && si_replaced))
+    });
+
     for p in &mut packs {
-        p.enabled = enabled.is_empty() || enabled.iter().any(|e| e == &p.manifest.id);
+        p.enabled = enabled.is_empty()
+            || enabled.iter().any(|e| e == &p.manifest.id)
+            // 1.0의 업무방식 묶음을 켜 둔 사용자는 기능별 확장으로 자연스럽게
+            // 넘어간다. 첫 토글 저장 때 정규 id 목록으로 치환된다.
+            || match p.manifest.id.as_str() {
+                "journal" => enabled.iter().any(|e| e == "starter" || e == "si"),
+                "concepts" | "project-docs" | "todos" => enabled.iter().any(|e| e == "si"),
+                _ => false,
+            };
     }
     packs.sort_by(|a, b| a.manifest.id.cmp(&b.manifest.id));
     Registry { packs, broken }
@@ -548,7 +577,7 @@ pub fn render_prompt(template: &str, ns: &str, params: &Map<String, Value>) -> S
         .to_string()
 }
 
-/// 액션이 어디서 돌아야 하는가. project 는 SI 팩의 `improve.projects` 를 그대로 쓴다 —
+/// 액션이 어디서 돌아야 하는가. project 는 레거시 `improve.projects` 도 호환 입력으로 쓴다 —
 /// 코드 프로젝트 경로 등록은 이미 그쪽이 정본이고, 없으면 작업공간으로 떨어진다.
 pub fn resolve_cwd(
     action: &PackAction,
@@ -872,6 +901,47 @@ mod tests {
     }
 
     #[test]
+    fn stale_builtin_bundles_do_not_duplicate_replacement_navigation() {
+        let builtin = tempdir("stale-bundles");
+        let packs = builtin.join("packs");
+        write_pack(
+            &packs,
+            "starter",
+            r#", "views": [{"id":"logs","label":"일지","group":"vault"}]"#,
+        );
+        write_pack(
+            &packs,
+            "si",
+            r#", "views": [
+                {"id":"concepts","label":"개념","group":"vault"},
+                {"id":"vault","label":"점검","type":"native","component":"vault","group":"vault"}
+            ]"#,
+        );
+        write_pack(
+            &packs,
+            "journal",
+            r#", "views": [{"id":"logs","label":"일지","group":"vault"}]"#,
+        );
+        write_pack(
+            &packs,
+            "concepts",
+            r#", "views": [{"id":"concepts","label":"개념","group":"vault"}]"#,
+        );
+        write_pack(&packs, "todos", "");
+        write_pack(&packs, "project-docs", "");
+
+        let reg = load_registry_from(Some(&builtin), Path::new("/nonexistent"), &[]);
+        assert!(reg.get("starter").is_none());
+        assert!(reg.get("si").is_none());
+        let nav = nav_entries(&reg);
+        assert_eq!(nav.iter().filter(|entry| entry.label == "일지").count(), 1);
+        assert_eq!(nav.iter().filter(|entry| entry.label == "개념").count(), 1);
+        assert_eq!(nav.iter().filter(|entry| entry.label == "점검").count(), 0);
+
+        fs::remove_dir_all(&builtin).unwrap();
+    }
+
+    #[test]
     fn empty_enabled_list_means_everything_on() {
         let builtin = tempdir("enable");
         write_pack(&builtin.join("packs"), "a", "");
@@ -1071,91 +1141,76 @@ mod tests {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugin");
         let reg = load_registry_from(Some(&root), Path::new("/nonexistent"), &[]);
         assert!(reg.broken.is_empty(), "깨진 팩: {:?}", reg.broken);
-
-        let si = reg.get("si").expect("si 팩이 있어야 한다");
-        assert!(si.manifest.skills.contains(&"issues".to_string()));
-        for retired in ["improve", "improve-excel"] {
-            assert!(!si.manifest.skills.iter().any(|name| name == retired));
-            assert!(!si.skills_dir.join(retired).exists());
-        }
-        assert!(si.manifest.workspace.files.iter().all(|seed| ![
-            "이슈.md",
-            "개선.md",
-            "마일스톤.md"
-        ]
-        .iter()
-        .any(|name| seed.dest.ends_with(name))));
-        assert_eq!(
-            si.skills_dir,
-            root.join("packs/si/skills"),
-            "SI 팩은 자기 skills/ 를 쓴다"
-        );
-        // 선언한 스킬이 실제로 존재해야 설치 버튼이 거짓말을 하지 않는다
-        for name in &si.manifest.skills {
-            assert!(
-                si.skills_dir.join(name).join("SKILL.md").is_file(),
-                "SI 팩이 없는 스킬을 선언했다: {name}"
-            );
-        }
-        // 워크스페이스 시드의 원본 파일도 실제로 있어야 한다
-        for seed in &si.manifest.workspace.files {
-            assert!(si.dir.join(&seed.src).is_file(), "없는 원본: {}", seed.src);
-        }
-        assert!(si.manifest.views.iter().any(|v| v.kind == "native"));
+        assert!(reg.get("si").is_none(), "업종 묶음은 확장 단위가 아니다");
         assert!(
-            si.manifest.views.iter().all(|v| v.id != "milestones"),
-            "마일스톤은 이슈 화면에서만 관리한다"
-        );
-        assert!(
-            si.manifest.actions.iter().any(|a| a.id == "milestone"),
-            "마일스톤 계획은 화면이 아니라 실행할 작업으로 남는다"
-        );
-        assert!(
-            si.manifest
-                .views
-                .iter()
-                .any(|v| v.id == "concepts" && v.group == "vault"),
-            "개념은 볼트 카테고리의 문서 보기다"
-        );
-        assert!(
-            si.manifest
-                .views
-                .iter()
-                .any(|v| v.component == "vault" && v.label == "점검"),
-            "볼트 진단은 볼트 카테고리의 점검 화면이다"
+            reg.get("starter").is_none(),
+            "starter는 일지 기능으로 대체됐다"
         );
 
-        let starter = reg.get("starter").expect("starter 팩이 있어야 한다");
-        assert_eq!(
-            starter.skills_dir,
-            root.join("packs/starter/skills"),
-            "자기 스킬을 든 팩은 자기 폴더를 쓴다"
-        );
-        for name in &starter.manifest.skills {
+        for id in ["journal", "concepts", "todos", "project-docs"] {
+            let pack = reg
+                .get(id)
+                .unwrap_or_else(|| panic!("{id} 기능 확장이 있어야 한다"));
+            for name in &pack.manifest.skills {
+                assert!(
+                    pack.skills_dir.join(name).join("SKILL.md").is_file(),
+                    "{id} 확장이 없는 스킬을 선언했다: {name}"
+                );
+            }
+            for seed in &pack.manifest.workspace.files {
+                assert!(
+                    pack.dir.join(&seed.src).is_file(),
+                    "없는 원본: {}",
+                    seed.src
+                );
+            }
             assert!(
-                starter.skills_dir.join(name).join("SKILL.md").is_file(),
-                "{name}"
+                pack.manifest
+                    .views
+                    .iter()
+                    .all(|view| view.component != "vault"),
+                "점검은 네이티브 코어 화면이어야 한다"
             );
         }
-        for seed in &starter.manifest.workspace.files {
-            assert!(
-                starter.dir.join(&seed.src).is_file(),
-                "없는 원본: {}",
-                seed.src
-            );
+
+        let journal = reg.get("journal").unwrap();
+        assert!(journal.manifest.views.iter().any(|view| view.id == "logs"));
+        assert!(journal.manifest.skills.contains(&"daily-log".to_string()));
+        assert!(!journal.manifest.settings.is_empty());
+
+        let concepts = reg.get("concepts").unwrap();
+        assert!(concepts
+            .manifest
+            .views
+            .iter()
+            .any(|view| view.id == "concepts"));
+        assert_eq!(concepts.manifest.skills, vec!["wiki".to_string()]);
+
+        let todos = reg.get("todos").unwrap();
+        assert!(todos
+            .manifest
+            .views
+            .iter()
+            .any(|view| view.component == "todos"));
+        assert!(todos.manifest.skills.is_empty());
+    }
+
+    #[test]
+    fn legacy_bundle_ids_enable_their_replacement_features() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../plugin");
+        let old_si = load_registry_from(Some(&root), Path::new("/nonexistent"), &["si".into()]);
+        for id in ["journal", "concepts", "todos", "project-docs"] {
+            assert!(old_si.get(id).is_some_and(|pack| pack.enabled), "{id}");
         }
-        assert!(
-            starter
-                .manifest
-                .views
-                .iter()
-                .any(|v| v.label == "일지" && v.group == "vault"),
-            "일지는 볼트 카테고리의 문서 보기다"
-        );
-        assert!(
-            !starter.manifest.settings.is_empty(),
-            "설정 스키마 예제가 있어야 한다"
-        );
+
+        let old_starter =
+            load_registry_from(Some(&root), Path::new("/nonexistent"), &["starter".into()]);
+        assert!(old_starter.get("journal").is_some_and(|pack| pack.enabled));
+        assert!(old_starter
+            .packs
+            .iter()
+            .filter(|pack| pack.manifest.id != "journal")
+            .all(|pack| !pack.enabled));
     }
 
     #[test]

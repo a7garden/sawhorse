@@ -36,6 +36,7 @@ import type {
   WorkflowArtifact,
   WorkflowDraftRecord,
   WorkflowNode,
+  WorkflowRequirement,
   WorkspaceSnapshot,
 } from "@/features/workbench/types";
 
@@ -95,6 +96,22 @@ function blankArtifact(index: number): WorkflowArtifact {
   };
 }
 
+function blankRequirement(index: number): WorkflowRequirement {
+  return {
+    kind: "extension",
+    id: `extension-${index}`,
+    label: `Extension ${index}`,
+    level: "required",
+    reason: "",
+    commands: [],
+    versionArgs: [],
+    minimumMajor: 0,
+    version: "^1.0",
+    installUrl: "",
+    installHint: "",
+  };
+}
+
 function comma(value: string): string[] {
   return value
     .split(",")
@@ -105,6 +122,18 @@ function comma(value: string): string[] {
 export default function WorkflowStudioPage() {
   const { t } = useTranslation("dashboard");
   const initial = useApp((s) => s.workflowToEdit);
+  const defaultAgent = useApp((s) => s.defaultAgent);
+  const localAgents = useApp((s) => s.agents);
+  const generatorAgents = useMemo(
+    () =>
+      localAgents
+        .filter(
+          (candidate) =>
+            candidate.detected && ["claude", "codex", "omp"].includes(candidate.id),
+        )
+        .map((candidate) => ({ value: candidate.id, label: candidate.name })),
+    [localAgents],
+  );
   const mainRef = useRef<HTMLElement>(null);
   const [catalog, setCatalog] = useState<WorkflowDefinition[]>([]);
   const [drafts, setDrafts] = useState<WorkflowDraftRecord[]>([]);
@@ -117,7 +146,7 @@ export default function WorkflowStudioPage() {
   const [editing, setEditing] = useState(false);
   const [hasDraft, setHasDraft] = useState(!!initial);
   const [request, setRequest] = useState("");
-  const [agent, setAgent] = useState("claude");
+  const [agent, setAgent] = useState(defaultAgent);
   const [advanced, setAdvanced] = useState(false);
   const [source, setSource] = useState("");
   const [events, setEvents] = useState("approved");
@@ -127,6 +156,16 @@ export default function WorkflowStudioPage() {
   const [busy, setBusy] = useState(false);
   const [snapshot, setSnapshot] = useState<WorkspaceSnapshot | null>(null);
   const loadSequence = useRef(0);
+
+  useEffect(() => {
+    if (!generatorAgents.length) return;
+    if (!generatorAgents.some((candidate) => candidate.value === agent)) {
+      setAgent(
+        generatorAgents.find((candidate) => candidate.value === defaultAgent)?.value ??
+          generatorAgents[0].value,
+      );
+    }
+  }, [agent, defaultAgent, generatorAgents]);
 
   async function load() {
     const sequence = ++loadSequence.current;
@@ -494,6 +533,210 @@ export default function WorkflowStudioPage() {
                           }))}
                         />
                       </label>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center justify-between">
+                        {t("workflowStudio.requirements")}
+                        <Button
+                          size="xs"
+                          variant="outline"
+                          onClick={() =>
+                            updateDefinition({
+                              requirements: [
+                                ...(definition.requirements ?? []),
+                                blankRequirement(
+                                  (definition.requirements?.length ?? 0) + 1,
+                                ),
+                              ],
+                            })
+                          }
+                        >
+                          <Plus /> {t("workflowStudio.addRequirement")}
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <p className="text-xs text-muted-foreground">
+                        {t("workflowStudio.requirementsHint")}
+                      </p>
+                      {(definition.requirements ?? []).map((requirement, index) => {
+                        const updateRequirement = (
+                          patch: Partial<WorkflowRequirement>,
+                        ) =>
+                          updateDefinition({
+                            requirements: (definition.requirements ?? []).map(
+                              (item, itemIndex) =>
+                                itemIndex === index ? { ...item, ...patch } : item,
+                            ),
+                          });
+                        return (
+                          <div
+                            key={`${requirement.kind}-${requirement.id}-${index}`}
+                            className="grid gap-2 rounded-md border p-3 md:grid-cols-2"
+                          >
+                            <label className="text-xs">
+                              {t("workflowStudio.requirementKind")}
+                              <Select
+                                className="mt-1"
+                                value={requirement.kind}
+                                onChange={(value) =>
+                                  updateRequirement({
+                                    kind: value as WorkflowRequirement["kind"],
+                                    commands:
+                                      value === "program" ? [requirement.id] : [],
+                                    versionArgs:
+                                      value === "program" ? ["--version"] : [],
+                                    minimumMajor: 0,
+                                    version:
+                                      value === "extension" ? "^1.0" : "",
+                                  })
+                                }
+                                options={[
+                                  {
+                                    value: "extension",
+                                    label: t("workflowStudio.requirementKinds.extension"),
+                                  },
+                                  {
+                                    value: "program",
+                                    label: t("workflowStudio.requirementKinds.program"),
+                                  },
+                                ]}
+                              />
+                            </label>
+                            <label className="text-xs">
+                              {t("workflowStudio.requirementLevel")}
+                              <Select
+                                className="mt-1"
+                                value={requirement.level}
+                                onChange={(value) =>
+                                  updateRequirement({
+                                    level: value as WorkflowRequirement["level"],
+                                  })
+                                }
+                                options={[
+                                  "required",
+                                  "recommended",
+                                  "optional",
+                                ].map((value) => ({
+                                  value,
+                                  label: t(`studio.requirementLevels.${value}`),
+                                }))}
+                              />
+                            </label>
+                            <label className="text-xs">
+                              ID
+                              <Input
+                                value={requirement.id}
+                                onChange={(event) =>
+                                  updateRequirement({ id: event.target.value })
+                                }
+                              />
+                            </label>
+                            <label className="text-xs">
+                              {t("workflowStudio.displayName")}
+                              <Input
+                                value={requirement.label}
+                                onChange={(event) =>
+                                  updateRequirement({ label: event.target.value })
+                                }
+                              />
+                            </label>
+                            <label className="text-xs md:col-span-2">
+                              {requirement.kind === "program"
+                                ? t("workflowStudio.commands")
+                                : t("workflowStudio.versionRange")}
+                              <Input
+                                value={
+                                  requirement.kind === "program"
+                                    ? requirement.commands.join(", ")
+                                    : requirement.version
+                                }
+                                onChange={(event) =>
+                                  updateRequirement(
+                                    requirement.kind === "program"
+                                      ? { commands: comma(event.target.value) }
+                                      : { version: event.target.value },
+                                  )
+                                }
+                              />
+                            </label>
+                            {requirement.kind === "program" && (
+                              <>
+                                <label className="text-xs">
+                                  {t("workflowStudio.versionArgs")}
+                                  <Input
+                                    value={requirement.versionArgs.join(", ")}
+                                    onChange={(event) =>
+                                      updateRequirement({
+                                        versionArgs: comma(event.target.value),
+                                      })
+                                    }
+                                  />
+                                </label>
+                                <label className="text-xs">
+                                  {t("workflowStudio.minimumMajor")}
+                                  <Input
+                                    type="number"
+                                    min={0}
+                                    value={requirement.minimumMajor}
+                                    onChange={(event) =>
+                                      updateRequirement({
+                                        minimumMajor: Math.max(
+                                          0,
+                                          Number(event.target.value) || 0,
+                                        ),
+                                      })
+                                    }
+                                  />
+                                </label>
+                              </>
+                            )}
+                            <label className="text-xs md:col-span-2">
+                              {t("workflowStudio.requirementReason")}
+                              <Input
+                                value={requirement.reason}
+                                onChange={(event) =>
+                                  updateRequirement({ reason: event.target.value })
+                                }
+                              />
+                            </label>
+                            <label className="text-xs md:col-span-2">
+                              {t("workflowStudio.installUrl")}
+                              <Input
+                                value={requirement.installUrl}
+                                onChange={(event) =>
+                                  updateRequirement({ installUrl: event.target.value })
+                                }
+                              />
+                            </label>
+                            <label className="text-xs md:col-span-2">
+                              {t("workflowStudio.installHint")}
+                              <Input
+                                value={requirement.installHint}
+                                onChange={(event) =>
+                                  updateRequirement({ installHint: event.target.value })
+                                }
+                              />
+                            </label>
+                            <Button
+                              className="justify-self-start"
+                              size="xs"
+                              variant="ghost"
+                              onClick={() =>
+                                updateDefinition({
+                                  requirements: (definition.requirements ?? []).filter(
+                                    (_, itemIndex) => itemIndex !== index,
+                                  ),
+                                })
+                              }
+                            >
+                              <Trash2 /> {t("workflowStudio.delete")}
+                            </Button>
+                          </div>
+                        );
+                      })}
                     </CardContent>
                   </Card>
                   <Card>
@@ -1066,6 +1309,7 @@ export default function WorkflowStudioPage() {
               request={request}
               onRequest={setRequest}
               agent={agent}
+              agentOptions={generatorAgents}
               onAgent={setAgent}
               busy={busy}
               onGenerate={() => void generate()}

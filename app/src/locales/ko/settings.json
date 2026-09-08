@@ -374,8 +374,8 @@
     "runnerFallback": "headless 실행 — {{reason}}",
     "badgePath": "경로",
     "badgeBranch": "브랜치",
-    "requirementsTitle": "필요한 프로그램",
-    "requirementsDesc": "잡 실행에 필요한 프로그램",
+    "requirementsTitle": "기본 환경",
+    "requirementsDesc": "모든 워크플로에 공통인 Obsidian·herdr 연동. 기능별 도구는 워크플로가 정의합니다.",
     "agentsTitle": "에이전트",
     "noAgents": "감지된 에이전트가 없습니다.",
     "agentsDesc": "감지된 에이전트와 할 수 있는 일",
@@ -383,14 +383,14 @@
     "badgeSkillInstallable": "스킬 설치 가능",
     "badgeRunsJobs": "잡 실행",
     "defaultAgent": "기본 에이전트",
-    "defaultAgentHint": "스킬 설치 대상이며 안내의 기준이 됩니다. 잡 실행기는 현재 Claude Code입니다.",
+    "defaultAgentHint": "이 PC에서 감지된 Herdr 호환 에이전트가 작업 실행의 기본값이 됩니다.",
     "defaultAgentFailed": "기본 에이전트 변경 실패: {{error}}"
   },
   "exec": {
     "runOptions": "실행 옵션",
     "runOptionsDesc": "에이전트 명령과 승인 정책",
     "herdrTitle": "herdr 세션",
-    "herdrDesc": "잡을 보이는 터미널 세션에서 실행",
+    "herdrDesc": "기본은 백그라운드 · 필요할 때 herdr로 보기",
     "mode": "실행 방식",
     "perm": {
       "default": "기본",
@@ -398,7 +398,7 @@
       "bypass": "권한 우회 (무인 실행)"
     },
     "herdrMode": {
-      "auto": "자동 (herdr 가능하면 herdr, 아니면 백그라운드)",
+      "auto": "자동 (백그라운드 실행)",
       "herdr": "herdr 전용",
       "headless": "백그라운드 전용"
     },

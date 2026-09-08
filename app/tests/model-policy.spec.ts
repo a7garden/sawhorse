@@ -21,10 +21,11 @@ test("child model policy persists and explains a single-slot limit", async ({ pa
 test("harness shows the chosen child model and the skill's reasoning", async ({ page }) => {
   await page.goto("/?preview=1");
   await expect(page.locator(".wb-header")).toBeVisible();
-  // Reading then saving a real preview artifact initializes the disposable store.
-  await page.getByRole("button", { name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/ }).click();
-  await page.locator(".cm-content").fill("# 의도\n\n하위 모델의 선택 근거를 확인합니다.");
-  await page.locator(".wb-editor-toolbar").getByRole("button", { name: "저장", exact: true }).click();
+  // Saving project settings initializes the disposable preview store.
+  await page.locator("aside nav").getByRole("button", { name: "프로젝트", exact: true }).click();
+  await page.locator(".wb-project-card").filter({ hasText: "Sawhorse" }).getByRole("button", { name: "프로젝트 설정", exact: true }).click();
+  await page.locator("form").getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.evaluate(() => {
     const key = "sawhorse.workflow.preview.v2";
     const state = JSON.parse(localStorage.getItem(key)!);
@@ -41,7 +42,7 @@ test("harness shows the chosen child model and the skill's reasoning", async ({ 
     localStorage.setItem(key, JSON.stringify(state));
   });
   await page.reload();
-  await page.locator("aside nav").getByRole("button", { name: "개발 실행", exact: true }).click();
+  await page.locator("aside nav").getByRole("button", { name: "실행", exact: true }).click();
   await expect(page.locator(".wb-run-detail header")).toContainText("sonnet");
   await expect(page.getByTestId("model-selection")).toContainText("스킬 판단으로 모델 선택");
   await expect(page.getByTestId("model-selection")).toContainText("함수 한 곳의 호출 경로와 회귀 검증만 확인합니다.");

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,18 +20,29 @@ function change(root, path, mutate) {
   writeFileSync(file, JSON.stringify(data));
 }
 test("bundled public catalog and seeds are consistent", () => assert.doesNotThrow(() => validatePlugin(source)));
+test("built-in extensions are feature units and audit stays native", () => {
+  const ids = readdirSync(join(source, "packs"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+  assert.deepEqual(ids, ["concepts", "journal", "project-docs", "todos"]);
+  for (const id of ids) {
+    const pack = JSON.parse(readFileSync(join(source, "packs", id, "pack.json"), "utf8"));
+    assert((pack.views ?? []).every((view) => view.component !== "vault"), `${id} must not own native audit`);
+  }
+});
 test("an undeclared skill cannot silently ship", (t) => {
   const root = fixture(t);
-  change(root, "packs/si/pack.json", (pack) => pack.skills.pop());
+  change(root, "packs/journal/pack.json", (pack) => pack.skills.pop());
   assert.throws(() => validatePlugin(root), /undeclared or missing skill/);
 });
 test("conflicting templates cannot depend on pack installation order", (t) => {
   const root = fixture(t);
-  change(root, "packs/starter/pack.json", (pack) => pack.workspace.files[0].dest = "템플릿/일지.md");
+  change(root, "packs/concepts/pack.json", (pack) => pack.workspace.files[0].dest = "템플릿/일지.md");
   assert.throws(() => validatePlugin(root), /conflicting workspace seed/);
 });
 test("an action cannot invoke a retired command", (t) => {
   const root = fixture(t);
-  change(root, "packs/si/pack.json", (pack) => pack.actions[0].prompt = "/{{ns}}:improve");
+  change(root, "packs/journal/pack.json", (pack) => pack.actions[0].prompt = "/{{ns}}:improve");
   assert.throws(() => validatePlugin(root), /calls undeclared skill/);
 });

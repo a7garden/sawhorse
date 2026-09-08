@@ -2,13 +2,12 @@
 
 > 보관 규격: 이전 SI 볼트의 문서 유형과 개선 모델입니다. 새 작업·승인·스키마의 경계는 [현재 구조](architecture/extension-boundaries.md)를 따릅니다.
 
-> **호스트 우선(2026-09-05).** 제품은 데스크톱 앱(`app/`)이고, SI 업무 방식은
-> 그 위에 얹히는 **확장 하나**(`plugin/packs/si/`)다. 이 문서는 그 확장의 내용 — 볼트 구조,
-> 프로퍼티 스키마, 이슈 사이클, 스킬 규범 —  을 다룬다. 앱과 확장의 관계는
-> [워크벤치 플랫폼 설계](superpowers/specs/2026-09-05-workbench-platform-design.md)에 있다.
+> **보관 문서.** SI 업무방식을 확장 하나로 보던 경계는 폐기했다. 현재 기능 경계는
+> [워크플로우·문서 스키마·확장의 경계](architecture/extension-boundaries.md)를 따른다.
+> 아래 내용은 기존 볼트 구조와 문서 규범을 해석할 때만 사용한다.
 
 Obsidian vault를 개인 지식베이스(위키)로 쓰고, 업무일지·업무 보고·제안서/코드베이스
-분석 문서화를 자동화하는 SI 업무 확장.
+분석 문서화에 쓰였던 이전 SI 업무 구성.
 
 ## 대상 환경
 
@@ -19,7 +18,7 @@ Obsidian vault를 개인 지식베이스(위키)로 쓰고, 업무일지·업무
 
 ## 저장소 구조 (앱 + 확장 + 플러그인 배포면)
 
-이 저장소는 **앱 하나와 확장 두 벌**이고, Claude Code 플러그인은 같은 내용물의
+이 저장소는 **앱 하나와 기능별 확장**으로 구성되고, Claude Code 플러그인은 같은 내용물의
 배포 채널이다. 주종 관계와 팩(확장) 아키텍처는
 [워크벤치 플랫폼 설계](superpowers/specs/2026-09-05-workbench-platform-design.md)가 정본이다.
 
@@ -28,11 +27,13 @@ sawhorse/
   .claude-plugin/marketplace.json   # 단일 플러그인, source: "./plugin"
   plugin/                           # 콘텐츠 계층 = 배포 단위
     .claude-plugin/plugin.json      # name, version, skills 배열
-    packs/si/                       # 확장: SI 업무 (pack.json + skills/ + templates/ + assets/)
-    packs/starter/                  # 확장: 기본 작업 — 팩 저작 예제
+    packs/journal/                  # 확장: 일지·루틴·회고
+    packs/todos/                    # 확장: 할 일 화면
+    packs/concepts/                 # 확장: 개념 지식
+    packs/project-docs/             # 확장: 프로젝트 문서화
     skills/workbench/               # 앱 고유 스킬
     hooks/hooks.json                # SessionEnd, PreToolUse (Node)
-    scripts/vault-hygiene.mjs       # 볼트 위생 (SI 스킬들이 부른다)
+    scripts/vault-hygiene.mjs       # 네이티브 점검과 문서 루틴이 공유하는 볼트 위생
     .mcp.json                       # Playwright MCP
   app/                              # 데스크톱 앱(Tauri 2) = 호스트. 이것이 제품
   README.md, LICENSE(MIT), docs/design.md

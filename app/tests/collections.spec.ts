@@ -80,7 +80,8 @@ test("run history filters retain active runs and expose logs and reports", async
     );
   });
   await openPreview(page);
-  await nav(page, "실행 기록");
+  await nav(page, "실행");
+  await page.getByLabel("화면 선택", { exact: true }).getByRole("button", { name: "자동화·도구 실행", exact: true }).click();
   const history = page.getByRole("region", { name: "지난 실행" });
   await page
     .getByRole("group", { name: "실행 결과 필터" })

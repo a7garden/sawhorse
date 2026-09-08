@@ -6,6 +6,7 @@ import {
   FileText,
   GitBranch,
   Loader2,
+  PackageCheck,
   Save,
   SlidersHorizontal,
   FilePenLine,
@@ -22,6 +23,7 @@ export function WorkflowBrief({
   request,
   onRequest,
   agent,
+  agentOptions,
   onAgent,
   busy,
   onGenerate,
@@ -34,6 +36,7 @@ export function WorkflowBrief({
   request: string;
   onRequest: (value: string) => void;
   agent: string;
+  agentOptions: { value: string; label: string }[];
   onAgent: (value: string) => void;
   busy: boolean;
   onGenerate: () => void;
@@ -86,8 +89,11 @@ export function WorkflowBrief({
             disabled={busy}
             onChange={(event) => onAgent(event.target.value)}
           >
-            <option value="claude">Claude</option>
-            <option value="codex">Codex</option>
+            {agentOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           <span>
             {t(isWorkbenchPreview ? "studio.preview" : "studio.agentReady")}
@@ -279,6 +285,18 @@ export function WorkflowBrief({
               <p>{t("workflowStudio.noDocuments")}</p>
             )}
           </div>
+          {(definition.requirements?.length ?? 0) > 0 && (
+            <div className="studio-artifact-note">
+              <PackageCheck />
+              <h3>{t("studio.requirements")}</h3>
+              <p>{t("studio.requirementsHint")}</p>
+              {definition.requirements?.map((requirement) => (
+                <p key={`${requirement.kind}:${requirement.id}`}>
+                  {requirement.label} · {t(`studio.requirementLevels.${requirement.level}`)}
+                </p>
+              ))}
+            </div>
+          )}
         </aside>
       </div>
       {composer}

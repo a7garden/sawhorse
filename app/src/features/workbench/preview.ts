@@ -1,3 +1,5 @@
+import type { GoalState } from "./goals";
+import { isLifecycleV2, lifecycleStages, emptyLifecycle, type LifecycleState, type ResourceDocument, type ResourceAssignment } from "./lifecycle-v2";
 // Opt-in browser tour only. Failed desktop IPC never falls back to this store.
 import i18n from "@/i18n";
 import { demoHtml, mockupDemo } from "@/features/mockups/preview";
@@ -28,8 +30,15 @@ const intentWorkflow: WorkflowDefinition = {
   edges: [{ from: "design", to: "build", on: "approved", condition: null, loopRef: null }, { from: "build", to: "design", on: "revise", condition: null, loopRef: "intent-revision" }],
   loops: [{ id: "intent-revision", maxIterations: 20, onLimit: "pause" }],
 };
+const intentWorkflowV2: WorkflowDefinition = {
+  ...intentWorkflow, version: "2.0.0", label: "SDD · 의도에서 완료까지", entry: "inbox",
+  artifacts: ["intent", "brief", "spec", "plan", "verification", "rollback"].map((role) => ({ role, label: role, path: `work/{workId}/${role}.md`, template: role === "intent" ? "" : `# ${role}\n` })),
+  nodes: [...lifecycleStages, "discarding", "discarded", "cancelled"].map((id) => ({ id, label: id, kind: ["done", "discarded", "cancelled"].includes(id) ? "end" : ["clarify", "design", "build", "discarding"].includes(id) ? "agent" : "human", artifactRole: null, actionRef: null, workflowRef: null, decision: null, inputs: [], outputs: [], allowedRoles: ["build", "discarding"].includes(id) ? ["implementer"] : ["planner"], instructions: "", requiresCompletedDependencies: false })),
+  edges: lifecycleStages.slice(0, -1).map((stage, i) => ({ from: stage, to: lifecycleStages[i+1], on: "completed", condition: null, loopRef: null })), loops: [],
+};
 const previewWorkflows: WorkflowDefinition[] = [
   intentWorkflow,
+  intentWorkflowV2,
   {
     definitionVersion: 1,
     id: "sdd-main",
@@ -347,6 +356,11 @@ const seed: WorkspaceSnapshot = {
   ],
 };
 type Store = {
+  goalSources?: Record<string, WorkItem>;
+  goals?: Record<string, GoalState>;
+  lifecycle?: Record<string, LifecycleState>;
+  resources?: ResourceDocument[];
+  resourceAssignments?: Record<string, ResourceAssignment>;
   mockups?: Record<string, { manifest: Mockup; html: Record<string, string> }>;
   snapshot: WorkspaceSnapshot;
   documents: Record<string, Document>;
@@ -363,6 +377,7 @@ function load(): Store {
       const p = JSON.parse(raw) as Store;
       if (p.snapshot?.schemaVersion === 1) {
         if (!p.snapshot.workflows.some((w) => w.id === "intent-flow")) p.snapshot.workflows.push(structuredClone(intentWorkflow));
+        if (!p.snapshot.workflows.some((w) => w.id === "intent-flow" && w.version === "2.0.0")) p.snapshot.workflows.push(structuredClone(intentWorkflowV2));
         return p;
       }
     }
@@ -378,6 +393,17 @@ function load(): Store {
       for (const artifact of mockupWorkflow.artifacts) documents[`${id}/${artifact.role}`] = { workId: id, artifact: artifact.role, path: `work/${id}/${artifact.role}.md`, markdown: artifact.template, revision: "0" };
     }
     localStorage.setItem(KEY, JSON.stringify({ snapshot, documents }));
+  }
+  if (new URLSearchParams(window.location.search).get("lifecycle") === "1") {
+    const lifecycle: Record<string, LifecycleState> = {};
+    for (const stage of lifecycleStages) {
+      const item = { ...work(`lifecycle-${stage}`, i18n.t(`workbench:lifecycle.stages.${stage}`), stage, stage === "done" ? "done" : ["approval", "unconfirmed"].includes(stage) ? "review" : "ready", "sawhorse", 0), workflowId: "intent-flow", workflowVersion: "2.0.0", workflowDigest: "", status: stage === "done" ? "done" as const : ["approval", "unconfirmed"].includes(stage) ? "review" as const : stage === "inbox" ? "backlog" as const : "ready" as const, artifacts: intentWorkflowV2.artifacts.map((a) => a.role), activeNodes: [] };
+      snapshot.work.unshift(item);
+      lifecycle[item.id] = { ...emptyLifecycle(), clarified: stage !== "inbox", scope: ["src/search.ts"], commits: ["unconfirmed", "done"].includes(stage) ? ["a".repeat(40)] : [] };
+      for (const artifact of intentWorkflowV2.artifacts) documents[`${item.id}/${artifact.role}`] = { workId: item.id, artifact: artifact.role, path: `work/${item.id}/${artifact.role}.md`, markdown: `# ${artifact.role}\n\n검색 필터를 저장하고 다음 방문에 복원합니다. 테스트: 필터 저장·복원 확인.`, revision: "1" };
+      if (stage === "clarify") lifecycle[item.id].interviews = [{ id: "audience", runId: "demo", stage, question: "필터 설정을 어디에 저장할까요?", options: ["이 기기에만", "계정에 동기화"], answer: "", answeredAt: "" }];
+    }
+    const result = { snapshot, documents, lifecycle }; localStorage.setItem(KEY, JSON.stringify(result)); return result;
   }
   return { snapshot, documents };
 }
@@ -403,7 +429,7 @@ function doc(workId: string, artifact: string): Document {
       artifact: artifact as Document["artifact"],
       path: `work/${workId}/${artifact}.md`,
       revision: "0",
-      markdown: w.workflowId === "intent-flow" ? (artifact === "intent" ? "" : `# ${artifact}\n`) : `# ${w.title}\n\n## ${artifact === "intent" ? "문제" : "기록"}\n개발 의도, 코드 변경, 검증 근거가 떨어져 있어 맥락을 다시 찾는 시간이 듭니다.\n\n## 원하는 결과\n하나의 작업에서 문서를 편집하고 에이전트를 실행하며 실제 근거를 확인합니다.\n\n## 제약\n- 기록은 로컬 마크다운으로 남깁니다.\n- 프로젝트 의존성을 확인한 뒤 구현합니다.\n\n## 수용 기준\n- [ ] 문서와 실행 이력이 작업에 연결됩니다.\n- [ ] 검증 결과를 다음 단계에서 확인합니다.\n`,
+      markdown: (artifact !== "intent" ? state.resources?.find((r) => r.id === state.resourceAssignments?.[w.projectId]?.templates[artifact])?.markdown : undefined) ?? (w.workflowId === "intent-flow" ? (artifact === "intent" ? "" : `# ${artifact}\n`) : `# ${w.title}\n\n## ${artifact === "intent" ? "문제" : "기록"}\n개발 의도, 코드 변경, 검증 근거가 떨어져 있어 맥락을 다시 찾는 시간이 듭니다.\n\n## 원하는 결과\n하나의 작업에서 문서를 편집하고 에이전트를 실행하며 실제 근거를 확인합니다.\n\n## 제약\n- 기록은 로컬 마크다운으로 남깁니다.\n- 프로젝트 의존성을 확인한 뒤 구현합니다.\n\n## 수용 기준\n- [ ] 문서와 실행 이력이 작업에 연결됩니다.\n- [ ] 검증 결과를 다음 단계에서 확인합니다.\n`),
     };
   }
   return structuredClone(state.documents[key]);
@@ -413,7 +439,7 @@ function checkpoint(work: WorkItem, event: string, note = "") {
   state.history ??= {};
   state.history[work.id] ??= [];
   state.history[work.id].unshift({ id: crypto.randomUUID(), event, note, at: now(), stage: work.stage,
-    documents: ["intent", "spec", "plan", "verification"].map((role) => doc(work.id, role)) });
+    documents: (isLifecycleV2(work) ? ["intent", "brief", "spec", "plan", "verification", "rollback"] : ["intent", "spec", "plan", "verification"]).map((role) => doc(work.id, role)) });
 }
 export async function previewInvoke(
   command: string,
@@ -423,6 +449,124 @@ export async function previewInvoke(
   const s = state.snapshot;
   const id = String(args.id ?? "");
   switch (command) {
+    case "goal_start_selected": {
+      const ids = [...new Set(args.workIds as string[])];
+      if (!ids.length || ids.length > 100) throw new Error("한 번에 1~100개 작업을 선택하세요");
+      state.goals ??= {};
+      state.goalSources ??= {};
+      const results = ids.map((id) => {
+        const item = s.work.find((w) => w.id === id);
+        const goal = state.goals![id];
+        const reason = !item ? "작업을 찾을 수 없습니다" : isClosedStatus(item.status) ? "완료하거나 취소한 작업입니다"
+          : state.runs?.some((r) => r.workId === id && ["starting", "running", "blocked", "unknown"].includes(r.status)) ? "다른 에이전트가 실행 중인 작업입니다"
+          : goal?.parentId ? "하위 작업은 부모 목표에서 관리합니다"
+          : item.workflowId === "mockup-review" ? "목업 검토 항목은 작업 상세에서 진행하세요"
+          : !goal && isLifecycleV2(item) && ["build", "unconfirmed", "discarding"].includes(item.stage) ? "이미 구현한 작업의 통합·결과 확인을 먼저 마쳐 주세요"
+          : !s.projects.some((p) => p.id === item.projectId) ? "프로젝트가 필요합니다" : "";
+        if (reason || !item) return { workId: id, outcome: "skipped", reason };
+        if (goal && ["ready", "running", "waiting-quota"].includes(goal.status)) return { workId: id, outcome: "already-queued", reason: "" };
+        if (!goal) {
+          state.goalSources![id] = structuredClone(item);
+          state.goals![id] = { workId: id, parentId: null, objective: `${item.title}\n\n${item.description}`, status: "paused", phase: "plan", maxParallel: 3, iteration: 0, runId: null, nextRetryAt: null, lastError: "", evidence: "", scope: ["."], tasks: [] };
+          item.decisions.push({ stage: item.stage, at: now(), note: "선택한 작업을 골 모드로 전환하여 자율 실행" });
+          item.workflowId = "goal-main"; item.workflowVersion = "1.0.0"; item.workflowDigest = "preview-goal";
+          item.workflowInstanceId = null; item.activeNodes = []; item.artifacts = ["evidence"];
+        }
+        const current = state.goals![id];
+        const members = [current, ...current.tasks.map((t) => state.goals![t.id])].filter(Boolean);
+        if (members.some((g) => state.runs?.some((r) => r.workId === g.workId && ["starting", "running", "blocked", "unknown"].includes(r.status)))) return { workId: id, outcome: "skipped", reason: "실행 중단이 끝나면 목표를 재개할 수 있습니다" };
+        for (const member of members) {
+          if (["completed", "cancelled"].includes(member.status)) continue;
+          member.status = "ready"; member.iteration++; member.runId = null;
+          const w = s.work.find((w) => w.id === member.workId);
+          if (w) { w.status = "ready"; w.stage = "pursue"; w.updatedAt = now(); }
+        }
+        return { workId: id, outcome: "queued", reason: "" };
+      });
+      save(); return results;
+    }
+    case "goal_create": {
+      const input = args.input as { id: string; projectId: string; objective: string; maxParallel: number; start: boolean };
+      if (input.start) throw new Error(i18n.t("workbench:api.desktopOnly"));
+      if (!input.objective.trim() || !s.projects.some((p) => p.id === input.projectId) || input.maxParallel < 1 || input.maxParallel > 16) throw new Error("Invalid goal");
+      if (state.goals?.[input.id]) return structuredClone(s.work.find((w) => w.id === input.id));
+      const item = { ...work(input.id, input.objective.split("\n")[0].slice(0, 100), "pursue", "blocked", input.projectId, 0), description: input.objective,
+        workflowId: "goal-main", workflowVersion: "1.0.0", workflowDigest: "", artifacts: ["evidence"], activeNodes: [] };
+      s.work.push(item);
+      state.goals ??= {};
+      state.goals[item.id] = { workId: item.id, parentId: null, objective: input.objective, status: "paused", phase: "plan", maxParallel: input.maxParallel, iteration: 0, runId: null, nextRetryAt: null, lastError: "", evidence: "", scope: ["."], tasks: [] };
+      save(); return structuredClone(item);
+    }
+    case "goal_state": {
+      const goal = state.goals?.[String(args.workId)];
+      if (!goal) throw new Error("Goal not found");
+      return structuredClone([goal, ...goal.tasks.map((t) => state.goals![t.id])]);
+    }
+    case "goal_control": {
+      if (args.action === "resume") throw new Error(i18n.t("workbench:api.desktopOnly"));
+      const goal = state.goals?.[String(args.workId)];
+      if (!goal) throw new Error("Goal not found");
+      for (const id of [goal.workId, ...goal.tasks.map((t) => t.id)]) {
+        const member = state.goals![id];
+        if (["completed", "cancelled"].includes(member.status)) continue;
+        member.status = args.action === "cancel" ? "cancelled" : "paused";
+        const item = s.work.find((w) => w.id === id)!;
+        item.status = args.action === "cancel" ? "cancelled" : "blocked";
+      }
+      save(); return;
+    }
+    case "sdd_lifecycle": return structuredClone(state.lifecycle?.[String(args.workId)] ?? emptyLifecycle());
+    case "sdd_discard_impact": {
+      const ids = new Set([String(args.workId)]);
+      let count = 0;
+      while (count !== ids.size) { count = ids.size; for (const w of s.work) if (!["cancelled", "discarded"].includes(w.stage) && w.dependsOn.some((d) => ids.has(d))) ids.add(w.id); }
+      return s.work.filter((w) => w.id !== args.workId && ids.has(w.id));
+    }
+    case "sdd_lifecycle_action": {
+      const input = args.input as { workId: string; action: string; expectedStage: string; revision: number; note: string; inputDigest: string };
+      const w = s.work.find((w) => w.id === input.workId)!;
+      if (!w || !isLifecycleV2(w)) throw new Error("SDD v2 work required");
+      state.lifecycle ??= {}; const current = state.lifecycle[w.id] ??= emptyLifecycle();
+      if (w.stage !== input.expectedStage || current.revision !== input.revision) throw new Error("Work changed. Refresh first.");
+      const routes: Record<string, Record<string, string>> = { clarify: { inbox: "clarify" }, design: { clarify: "design" }, approve: { approval: "queued" }, revise: { approval: "design", queued: "design" }, confirm: { unconfirmed: "done" }, cancel: Object.fromEntries(["inbox", "clarify", "design", "approval", "queued"].map((s) => [s, "cancelled"])) };
+      const next = routes[input.action]?.[w.stage]; if (!next) throw new Error("Invalid lifecycle action");
+      if (input.action === "design" && (!current.clarified || current.interviews.some((q) => !q.answer))) throw new Error("Clarify and answer questions first");
+      if (input.action === "approve") {
+        const docs = ["intent", "brief", "spec", "plan", "verification", "rollback"].map((r) => doc(w.id, r));
+        if (input.inputDigest !== docs.map((d) => d.revision).join(":")) throw new Error("Design changed. Refresh first.");
+        if (["intent", "brief", "spec", "plan"].some((r) => !substantive(doc(w.id, r).markdown))) throw new Error("Design evidence required");
+        checkpoint(w, "design-review", input.note);
+      }
+      w.decisions.push({ stage: w.stage, at: now(), note: input.note }); w.stage = next;
+      w.status = next === "done" ? "done" : next === "cancelled" ? "cancelled" : "ready";
+      w.updatedAt = now(); current.revision++; save(); return structuredClone(w);
+    }
+    case "sdd_answer_interview": {
+      state.lifecycle ??= {}; const current = state.lifecycle[String(args.workId)] ??= emptyLifecycle();
+      if (current.revision !== args.revision) throw new Error("Interview changed");
+      const q = current.interviews.find((q) => q.id === args.questionId && !q.answer); if (!q || !String(args.answer).trim()) throw new Error("Answer required");
+      q.answer = String(args.answer).trim(); q.answeredAt = now(); current.revision++;
+      const w = s.work.find((w) => w.id === args.workId)!; if (!current.interviews.some((q) => !q.answer)) w.status = "ready";
+      save(); return structuredClone(current);
+    }
+    case "sdd_queue_implementation":
+    case "sdd_generate_resource":
+    case "sdd_design_source": throw new Error(i18n.t("workbench:preview.launchNeedsDesktop"));
+    case "sdd_resources": return structuredClone(state.resources ?? []);
+    case "sdd_project_resources": return structuredClone(state.resourceAssignments?.[String(args.projectId)] ?? { designId: "", templates: {} });
+    case "sdd_save_resource": {
+      const doc = structuredClone(args.input) as ResourceDocument; state.resources ??= [];
+      const old = state.resources.find((r) => r.id === doc.id);
+      if (old && old.revision !== doc.revision) throw new Error("Document changed");
+      if (!doc.title.trim() || !doc.markdown.trim()) throw new Error("Name and content required");
+      doc.id ||= crypto.randomUUID(); doc.revision = crypto.randomUUID(); state.resources = [...state.resources.filter((r) => r.id !== doc.id), doc]; save(); return doc;
+    }
+    case "sdd_assign_resource": {
+      state.resourceAssignments ??= {}; const assignment = state.resourceAssignments[String(args.projectId)] ??= { designId: "", templates: {} };
+      if (args.role === "design") assignment.designId = String(args.resourceId); else if (args.resourceId) assignment.templates[String(args.role)] = String(args.resourceId); else delete assignment.templates[String(args.role)];
+      save(); return structuredClone(assignment);
+    }
+
     case "sdd_read_mockup": {
       const workId = String(args.workId);
       if (state.mockups?.[workId]) return structuredClone(state.mockups[workId].manifest);
@@ -522,13 +666,14 @@ export async function previewInvoke(
         if (existing.workflowId === "intent-flow" && existing.projectId === input.work.projectId && doc(existing.id, "intent").markdown === markdown) return existing;
         throw new Error("An intent with this ID already exists");
       }
-      const work = await previewInvoke("sdd_save_work", { input: { ...input.work, description: input.markdown.slice(0, 180), workflowId: "intent-flow", workflowVersion: "1.0.0" } }) as WorkItem;
+      const work = await previewInvoke("sdd_save_work", { input: { ...input.work, description: input.markdown.slice(0, 180), workflowId: "intent-flow", workflowVersion: "2.0.0" } }) as WorkItem;
       state.documents[`${work.id}/intent`] = { workId: work.id, artifact: "intent", path: `work/${work.id}/intent.md`, markdown, revision: crypto.randomUUID() };
       checkpoint(work, "captured");
       save(); return work;
     }
     case "sdd_intent_review": {
-      const documents = ["intent", "spec", "plan", "verification"].map((role) => doc(String(args.workId), role));
+      const work = s.work.find((w) => w.id === args.workId)!;
+      const documents = (isLifecycleV2(work) ? ["intent", "brief", "spec", "plan", "verification", "rollback"] : ["intent", "spec", "plan", "verification"]).map((role) => doc(String(args.workId), role));
       return { documents, inputDigest: documents.map((document) => document.revision).join(":"),
         history: (state.history?.[String(args.workId)] ?? []).map(({ documents: _, ...entry }) => entry) };
     }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { NoteRow, QueryResult } from "@/lib/types";
 
-export const journalPage = "view:starter:logs";
+export const journalPage = "view:journal:logs";
 export function dateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
@@ -26,7 +26,7 @@ export function useJournal() {
     let alive = true;
     setLoading(true);
     setError("");
-    api.queryPackView("starter", "logs").then((value) => {
+    api.queryPackView("journal", "logs").then((value) => {
       if (alive) setResult({ ...value, rows: [...value.rows].sort((a, b) =>
         (noteDate(b) ?? "").localeCompare(noteDate(a) ?? "") || b.mtimeMs - a.mtimeMs) });
     }).catch((cause) => { if (alive) setError(String(cause)); })

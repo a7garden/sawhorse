@@ -357,15 +357,18 @@ pub fn list_nav() -> Vec<packs::NavEntry> {
 /// 나머지를 명시적으로 적어 둬야 의미가 유지된다.
 #[tauri::command]
 pub fn set_pack_enabled(id: String, on: bool) -> Result<config::ConfigView, String> {
-    let (reg, view) = registry();
+    let (reg, _) = registry();
     if reg.get(&id).is_none() {
         return Err(format!("설치되지 않은 팩입니다: {id}"));
     }
-    let mut enabled: Vec<String> = if view.packs.enabled.is_empty() {
-        reg.packs.iter().map(|p| p.manifest.id.clone()).collect()
-    } else {
-        view.packs.enabled.clone()
-    };
+    // 레거시 si/starter 별칭까지 해석된 현재 상태를 정규 기능 id로 저장한다.
+    // 그렇지 않으면 별칭이 꺼진 기능을 다시 켜 버린다.
+    let mut enabled: Vec<String> = reg
+        .packs
+        .iter()
+        .filter(|pack| pack.enabled)
+        .map(|pack| pack.manifest.id.clone())
+        .collect();
     enabled.retain(|e| e != &id);
     if on {
         enabled.push(id);
@@ -476,16 +479,17 @@ pub struct PackAgentStatus {
 #[serde(rename_all = "camelCase")]
 pub struct AgentsView {
     pub agents: Vec<agents::AgentPresence>,
-    /// 설정값을 정상화한 기본 에이전트 id (모르는 값이면 claude)
+    /// 저장값과 현재 PC의 감지 결과를 합쳐 고른 기본 에이전트 id
     pub default_agent: String,
 }
 
 #[tauri::command]
 pub async fn list_agents() -> AgentsView {
     let view = config::load_view();
+    let detected = agents::detect_agents(&view.dashboard).await;
     AgentsView {
-        default_agent: agents::effective_default(&view.dashboard),
-        agents: agents::detect_agents(&view.dashboard).await,
+        default_agent: agents::effective_default(&view.dashboard, &detected),
+        agents: detected,
     }
 }
 
@@ -500,16 +504,9 @@ pub async fn check_requirements() -> Vec<crate::detect::RequirementStatus> {
 /// 넘어가는 흐름이 흔하다), 앱이 전혀 모르는 id 는 거절한다.
 #[tauri::command]
 pub fn set_default_agent(id: String) -> Result<config::ConfigView, String> {
-    let id = id.trim().to_string();
-    let view = config::load_view();
-    let known = agents::spec(&id).is_some()
-        || view
-            .dashboard
-            .custom_agents
-            .iter()
-            .any(|c| c.id.trim() == id);
-    if !known {
-        return Err(format!("모르는 에이전트입니다: {id}"));
+    let id = agents::normalize_id(&id).to_string();
+    if !agents::can_run_jobs(&id) {
+        return Err(format!("Herdr에서 실행할 수 없는 에이전트입니다: {id}"));
     }
     config::save_patch(&serde_json::json!({"dashboard": {"defaultAgent": id}}))
 }

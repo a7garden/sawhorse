@@ -18,6 +18,12 @@ use crate::workflow::{self, ActiveNode, WorkflowDefinition};
 
 #[path = "intent_history.rs"]
 mod intent_history;
+#[path = "work_lifecycle.rs"]
+pub mod lifecycle;
+#[path = "project_resources.rs"]
+pub mod resources;
+#[path = "goals.rs"]
+pub mod goals;
 
 static DOMAIN_MUTATION_LOCK: OnceLock<parking_lot::Mutex<()>> = OnceLock::new();
 
@@ -206,6 +212,8 @@ pub struct LaunchInput {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HarnessRun {
+    pub runner: String,
+    pub instructions: String,
     pub id: String,
     pub work_id: String,
     pub project_id: String,
@@ -720,6 +728,10 @@ fn apply_closure(work: &mut WorkItem) {
 /// Older work records used queue review/running for agent turns. Project that
 /// vocabulary onto work progress without rewriting the pinned workflow or history.
 fn normalize_work_progress(work: &mut WorkItem, definition: &WorkflowDefinition) {
+    if lifecycle::supports(work) {
+        apply_closure(work);
+        return;
+    }
     let final_node = !definition
         .edges
         .iter()
@@ -1452,7 +1464,9 @@ pub fn project_revision_at(root: &Path, project_id: &str) -> Result<String, Stri
     validate_id(project_id)?;
     let path = project_path(root, project_id);
     safe_path(root, &path)?;
-    fs::read_to_string(path).map(|text| revision(&text)).map_err(|e| format!("project-read: {e}"))
+    fs::read_to_string(path)
+        .map(|text| revision(&text))
+        .map_err(|e| format!("project-read: {e}"))
 }
 
 pub fn activate_project_workflow_checked_at(
@@ -1480,7 +1494,10 @@ pub fn activate_project_workflow_checked_at(
         ("workflowVersion", workflow_version.to_string()),
         ("workflowDigest", workflow::definition_digest(&definition)?),
     ] {
-        header.insert(serde_yaml::Value::String(key.into()), serde_yaml::Value::String(value));
+        header.insert(
+            serde_yaml::Value::String(key.into()),
+            serde_yaml::Value::String(value),
+        );
     }
     let content = markdown(&header, &body)?;
     let (mut project, _) = parse_markdown::<Project>(&content)?;
@@ -1508,6 +1525,18 @@ fn save_work_locked(root: &Path, mut input: WorkItem) -> Result<WorkItem, String
     };
     let is_new = previous.is_none();
     if let Some(old) = &previous {
+        if old.workflow_id == goals::WORKFLOW && (old.project_id != input.project_id || old.description != input.description) {
+            return Err("목표와 프로젝트는 실행 중인 목표 기록에 고정됩니다. 다른 목표는 새로 만들어 주세요".into());
+        }
+        if lifecycle::supports(old)
+            && matches!(
+                old.stage.as_str(),
+                "queued" | "build" | "unconfirmed" | "done" | "discarding" | "discarded"
+            )
+            && (input.depends_on != old.depends_on || input.project_id != old.project_id)
+        {
+            return Err("승인 후 의존성과 프로젝트를 바꾸려면 설계를 다시 검토하세요".into());
+        }
         input.stage = old.stage.clone();
         input.created_at = old.created_at.clone();
         input.decisions = old.decisions.clone();
@@ -1597,7 +1626,9 @@ fn save_work_locked(root: &Path, mut input: WorkItem) -> Result<WorkItem, String
         for artifact in &definition.artifacts {
             let path = resolved_artifact_path(root, &input, &definition, &artifact.role)?;
             if !path.exists() {
-                write_atomic(root, &path, &artifact.template)?;
+                let template = resources::template(root, &input.project_id, &artifact.role)?
+                    .unwrap_or_else(|| artifact.template.clone());
+                write_atomic(root, &path, &template)?;
             }
         }
     }
@@ -1963,6 +1994,12 @@ fn transition_at(
     requested_note: Option<String>,
 ) -> Result<WorkItem, String> {
     let work = work_by_id(root, id)?;
+    if work.workflow_id == goals::WORKFLOW {
+        return Err("골 모드는 목표 실행기가 완료를 판정합니다. 목표 제어를 사용하세요".into());
+    }
+    if lifecycle::supports(&work) {
+        return Err("새 SDD 흐름은 생명주기 결정을 사용하세요".into());
+    }
     if let Some(instance_id) = work.workflow_instance_id.as_deref() {
         let instance = workflow::ledger::get_at(root, instance_id)?;
         let active = instance
@@ -2194,6 +2231,12 @@ fn workflow_command_at(root: &Path, input: WorkflowCommandInput) -> Result<WorkI
         return Err("workflow 전환 note는 비어 있을 수 없습니다".into());
     }
     let mut work = work_by_id(root, &input.work_id)?;
+    if work.workflow_id == goals::WORKFLOW {
+        return Err("골 모드는 목표 실행기가 완료를 판정합니다. 목표 제어를 사용하세요".into());
+    }
+    if lifecycle::supports(&work) {
+        return Err("새 SDD 흐름은 생명주기 결정을 사용하세요".into());
+    }
     let current_digest = work_input_digest(root, &work)?;
     if !input.input_digest.is_empty() && input.input_digest != current_digest {
         return Err(
@@ -2899,7 +2942,8 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
                 .to_string()
         };
         let kind = value("type");
-        if matches!(kind.as_str(), "이슈" | "개선") || (parts[2] == "개선" && kind.is_empty()) {
+        if matches!(kind.as_str(), "이슈" | "개선") || (parts[2] == "개선" && kind.is_empty())
+        {
             reference_sources.push((parts[1].to_string(), value("id"), rel.clone()));
         }
         let migrated = value("migrated_to");
@@ -2991,8 +3035,10 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
     // Resolve wiki links by their actual target, never by the display alias.
     let mut reference_ids = HashMap::new();
     for (project, old_id, rel) in &reference_sources {
-        let id = ids.get(&(project.clone(), old_id.clone()))
-            .cloned().unwrap_or_else(|| stable_id("legacy", rel));
+        let id = ids
+            .get(&(project.clone(), old_id.clone()))
+            .cloned()
+            .unwrap_or_else(|| stable_id("legacy", rel));
         let path = Path::new(rel);
         for target in [
             path.file_stem().unwrap().to_string_lossy().to_string(),
@@ -3021,8 +3067,19 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
             .depends_on
             .iter()
             .map(|dependency| {
-                if let Some(target) = dependency.trim().strip_prefix("[[").and_then(|v| v.strip_suffix("]]")) {
-                    let target = target.split('|').next().unwrap().split('#').next().unwrap().trim_end_matches(".md");
+                if let Some(target) = dependency
+                    .trim()
+                    .strip_prefix("[[")
+                    .and_then(|v| v.strip_suffix("]]"))
+                {
+                    let target = target
+                        .split('|')
+                        .next()
+                        .unwrap()
+                        .split('#')
+                        .next()
+                        .unwrap()
+                        .trim_end_matches(".md");
                     if let Some(id) = reference_ids.get(&(note.project.clone(), target.into())) {
                         return id.clone();
                     }
@@ -3223,7 +3280,7 @@ fn capture_intent_at(root: &Path, mut input: CaptureIntentInput) -> Result<WorkI
         images.push((filename, bytes));
     }
     input.work.workflow_id = "intent-flow".into();
-    input.work.workflow_version = "1.0.0".into();
+    input.work.workflow_version = "2.0.0".into();
     input.work.description = input
         .markdown
         .lines()
@@ -3312,14 +3369,23 @@ pub fn sdd_capture_intent(input: CaptureIntentInput) -> Result<WorkItem, String>
 }
 
 fn intent_design_revisions(root: &Path, work_id: &str) -> Result<Vec<String>, String> {
-    ["intent", "spec", "plan"]
-        .iter()
-        .map(|role| read_document(root, work_id, role).map(|doc| doc.revision))
-        .collect()
+    (if lifecycle::supports(&work_by_id(root, work_id)?) {
+        vec!["intent", "brief", "spec", "plan"]
+    } else {
+        vec!["intent", "spec", "plan"]
+    })
+    .iter()
+    .map(|role| read_document(root, work_id, role).map(|doc| doc.revision))
+    .collect()
 }
 
 pub fn ensure_intent_approval(root: &Path, work: &WorkItem) -> Result<(), String> {
-    if work.workflow_id != "intent-flow" || work.stage != "build" {
+    if lifecycle::supports(work) {
+        return lifecycle::check_approval(root, work);
+    }
+    if work.workflow_id != "intent-flow"
+        || !matches!(work.stage.as_str(), "queued" | "build" | "unconfirmed")
+    {
         return Ok(());
     }
     let path = work_path(root, &work.id).with_file_name("approved-design.json");
@@ -3353,7 +3419,19 @@ pub fn sdd_intent_review(work_id: String) -> Result<IntentReview, String> {
         return Err("의도 흐름이 아닙니다".into());
     }
     let before = work_input_digest(&root, &work)?;
-    let documents = ["intent", "spec", "plan", "verification"]
+    let roles = if lifecycle::supports(&work) {
+        vec![
+            "intent",
+            "brief",
+            "spec",
+            "plan",
+            "verification",
+            "rollback",
+        ]
+    } else {
+        vec!["intent", "spec", "plan", "verification"]
+    };
+    let documents = roles
         .iter()
         .map(|role| read_document(&root, &work_id, role))
         .collect::<Result<Vec<_>, _>>()?;
@@ -3368,16 +3446,30 @@ pub fn sdd_intent_review(work_id: String) -> Result<IntentReview, String> {
 }
 
 #[tauri::command]
-pub fn sdd_intent_checkpoint(work_id: String, checkpoint_id: String) -> Result<Vec<Document>, String> {
+pub fn sdd_intent_checkpoint(
+    work_id: String,
+    checkpoint_id: String,
+) -> Result<Vec<Document>, String> {
     let root = vault_root()?;
     let _guard = mutation_lock();
     intent_history::read(&root, &work_id, &checkpoint_id)
 }
 
 /// A queued execution must exist before the UI may describe an intent as started.
-pub fn record_intent_launch(root: &Path, work_id: &str, project_id: &str, stage: &str, run_id: &str) -> Result<(), String> {
+pub fn record_intent_launch(
+    root: &Path,
+    work_id: &str,
+    project_id: &str,
+    stage: &str,
+    run_id: &str,
+) -> Result<(), String> {
     let work = work_by_id(root, work_id)?;
-    if work.workflow_id != "intent-flow" { return Ok(()); }
+    if work.workflow_id != "intent-flow" {
+        return Ok(());
+    }
+    if lifecycle::supports(&work) {
+        return lifecycle::record_launch(root, &work, stage, run_id);
+    }
     if work.stage != stage || work.project_id != project_id {
         return Err("작업이 변경되었습니다. 새 상태를 읽고 다시 시작하세요".into());
     }
@@ -3389,12 +3481,19 @@ pub fn record_intent_launch(root: &Path, work_id: &str, project_id: &str, stage:
         intent_history::capture(root, &work, "run-input", run_id)?;
     }
     if matches!(work.status.as_str(), "backlog" | "ready") {
-        workflow_command_at(root, WorkflowCommandInput {
-            work_id: work.id, event: "work:start".into(), expected_node_id: stage.into(),
-            note: format!("에이전트 실행 접수: {run_id}"),
-            facts: [("expectedStatus".into(), serde_json::json!(work.status))].into_iter().collect(),
-            ..Default::default()
-        })?;
+        workflow_command_at(
+            root,
+            WorkflowCommandInput {
+                work_id: work.id,
+                event: "work:start".into(),
+                expected_node_id: stage.into(),
+                note: format!("에이전트 실행 접수: {run_id}"),
+                facts: [("expectedStatus".into(), serde_json::json!(work.status))]
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            },
+        )?;
     }
     Ok(())
 }
@@ -3477,6 +3576,14 @@ mod tests {
             ..Default::default()
         }
     }
+    fn capture_legacy_intent(root: &Path, input: CaptureIntentInput) -> Result<WorkItem, String> {
+        let mut work = capture_intent_at(root, input)?;
+        work.workflow_version = "1.0.0".into(); work.stage = "design".into();
+        work.workflow_digest = workflow::definition_digest(&workflow::builtins::intent_flow())?;
+        let body = work.description.clone(); work.description.clear();
+        write_atomic(root, &work_path(root, &work.id), &markdown(&work, &body)?)?;
+        work.description = body; Ok(work)
+    }
     #[test]
     fn intent_capture_preserves_note_images_and_retries_without_duplicates() {
         use base64::Engine;
@@ -3498,7 +3605,7 @@ mod tests {
         };
         let saved = capture_intent_at(&root, input()).unwrap();
         assert_eq!(saved.workflow_id, "intent-flow");
-        assert_eq!(saved.stage, "design");
+        assert_eq!(saved.stage, "inbox");
         assert_eq!(saved.status, "backlog");
         let document = read_document(&root, "capture", "intent").unwrap();
         assert!(document.markdown.starts_with(note));
@@ -3566,30 +3673,68 @@ mod tests {
     fn intent_history_preserves_original_design_and_accepted_result() {
         let root = tempdir("intent-history");
         initialize(&root).unwrap();
-        let captured = capture_intent_at(&root, CaptureIntentInput {
-            work: work("history", ""), markdown: "Original human intent".into(), attachments: vec![],
-        }).unwrap();
+        let captured = capture_legacy_intent(
+            &root,
+            CaptureIntentInput {
+                work: work("history", ""),
+                markdown: "Original human intent".into(),
+                attachments: vec![],
+            },
+        )
+        .unwrap();
         let original = intent_history::list(&root, &captured.id).unwrap();
         assert_eq!(original.len(), 1);
-        for (role, text) in [("intent", "Refined human intent"), ("spec", "Approved scope"), ("plan", "UNIT-1: implement and test")] {
+        for (role, text) in [
+            ("intent", "Refined human intent"),
+            ("spec", "Approved scope"),
+            ("plan", "UNIT-1: implement and test"),
+        ] {
             let document = read_document(&root, &captured.id, role).unwrap();
             write_document_at(&root, &captured.id, role, text.into(), &document.revision).unwrap();
         }
-        assert_eq!(intent_history::read(&root, &captured.id, &original[0].id).unwrap()[0].markdown, "Original human intent");
+        assert_eq!(
+            intent_history::read(&root, &captured.id, &original[0].id).unwrap()[0].markdown,
+            "Original human intent"
+        );
         let digest = work_input_digest(&root, &work_by_id(&root, &captured.id).unwrap()).unwrap();
-        workflow_command_at(&root, WorkflowCommandInput {
-            work_id: captured.id.clone(), event: "approved".into(), expected_node_id: "design".into(),
-            target_node_id: Some("build".into()), note: "Human approved UNIT-1".into(), input_digest: digest,
-            ..Default::default()
-        }).unwrap();
+        workflow_command_at(
+            &root,
+            WorkflowCommandInput {
+                work_id: captured.id.clone(),
+                event: "approved".into(),
+                expected_node_id: "design".into(),
+                target_node_id: Some("build".into()),
+                note: "Human approved UNIT-1".into(),
+                input_digest: digest,
+                ..Default::default()
+            },
+        )
+        .unwrap();
         let history = intent_history::list(&root, &captured.id).unwrap();
-        let design = history.iter().find(|entry| entry.event == "design-review").unwrap();
-        fs::write(root.join("work/history/spec.md"), "Unapproved expanded scope").unwrap();
-        assert_eq!(intent_history::read(&root, &captured.id, &design.id).unwrap()[1].markdown, "Approved scope");
-        fs::write(root.join("work/history/verification.md"), "UNIT-1 completed; cargo test passed").unwrap();
+        let design = history
+            .iter()
+            .find(|entry| entry.event == "design-review")
+            .unwrap();
+        fs::write(
+            root.join("work/history/spec.md"),
+            "Unapproved expanded scope",
+        )
+        .unwrap();
+        assert_eq!(
+            intent_history::read(&root, &captured.id, &design.id).unwrap()[1].markdown,
+            "Approved scope"
+        );
+        fs::write(
+            root.join("work/history/verification.md"),
+            "UNIT-1 completed; cargo test passed",
+        )
+        .unwrap();
         let command = |event: &str| WorkflowCommandInput {
-            work_id: captured.id.clone(), event: event.into(), expected_node_id: "build".into(),
-            note: "Human checked the result and evidence".into(), ..Default::default()
+            work_id: captured.id.clone(),
+            event: event.into(),
+            expected_node_id: "build".into(),
+            note: "Human checked the result and evidence".into(),
+            ..Default::default()
         };
         assert!(workflow_command_at(&root, command("work:submit")).is_err());
         fs::write(root.join("work/history/spec.md"), "Approved scope").unwrap();
@@ -3597,8 +3742,14 @@ mod tests {
         let done = workflow_command_at(&root, command("work:complete")).unwrap();
         assert_eq!(done.status, "done");
         let history = intent_history::list(&root, &captured.id).unwrap();
-        let result = history.iter().find(|entry| entry.event == "result-review").unwrap();
-        assert_eq!(intent_history::read(&root, &captured.id, &result.id).unwrap()[3].markdown, "UNIT-1 completed; cargo test passed");
+        let result = history
+            .iter()
+            .find(|entry| entry.event == "result-review")
+            .unwrap();
+        assert_eq!(
+            intent_history::read(&root, &captured.id, &result.id).unwrap()[3].markdown,
+            "UNIT-1 completed; cargo test passed"
+        );
         assert!(intent_history::read(&root, &captured.id, "../escape").is_err());
         fs::remove_dir_all(root).unwrap();
     }
@@ -3607,17 +3758,31 @@ mod tests {
     fn intent_launch_records_start_only_for_the_queued_stage() {
         let root = tempdir("intent-launch-record");
         initialize(&root).unwrap();
-        let item = capture_intent_at(&root, CaptureIntentInput {
-            work: work("launch", ""), markdown: "Human request".into(), attachments: vec![],
-        }).unwrap();
+        let item = capture_legacy_intent(
+            &root,
+            CaptureIntentInput {
+                work: work("launch", ""),
+                markdown: "Human request".into(),
+                attachments: vec![],
+            },
+        )
+        .unwrap();
         assert_eq!(work_by_id(&root, &item.id).unwrap().status, "backlog");
         assert!(record_intent_launch(&root, &item.id, "", "build", "queued-run").is_err());
         assert_eq!(work_by_id(&root, &item.id).unwrap().status, "backlog");
         record_intent_launch(&root, &item.id, "", "design", "queued-run").unwrap();
         let started = work_by_id(&root, &item.id).unwrap();
         assert_eq!(started.status, "running");
-        assert!(started.decisions.last().unwrap().note.contains("queued-run"));
-        assert!(intent_history::list(&root, &item.id).unwrap().iter().any(|entry| entry.event == "run-input" && entry.note == "queued-run"));
+        assert!(started
+            .decisions
+            .last()
+            .unwrap()
+            .note
+            .contains("queued-run"));
+        assert!(intent_history::list(&root, &item.id)
+            .unwrap()
+            .iter()
+            .any(|entry| entry.event == "run-input" && entry.note == "queued-run"));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -3625,7 +3790,7 @@ mod tests {
     fn intent_approval_requires_reviewed_design_and_changes_invalidate_launch() {
         let root = tempdir("intent-approval");
         initialize(&root).unwrap();
-        capture_intent_at(
+        capture_legacy_intent(
             &root,
             CaptureIntentInput {
                 work: work("capture", ""),

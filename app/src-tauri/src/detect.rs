@@ -1,8 +1,11 @@
 // detect.rs — 이 PC에 무엇이 깔려 있는지 본다.
 //
 // 마법사 첫 화면이 여기에 기대는 것은 두 가지다. (1) 이 PC의 터미널 에이전트 목록,
-// (2) 제품이 실제로 쓰는 외부 프로그램이 갖춰졌는지. 둘 다 "없으면 어디서 받는지"까지
+// (2) 모든 워크플로우에 공통인 기본 환경이 갖춰졌는지. 둘 다 "없으면 어디서 받는지"까지
 // 함께 돌려줘야 사용자가 화면을 떠나 검색하지 않는다.
+//
+// Git, Node.js, pandoc 같은 도구는 여기에 두지 않는다. 그런 의존성은 그것을 실제로
+// 사용하는 workflow revision의 `requirements`가 선언하고 실행 직전에 검사한다.
 //
 // 감지 판정은 `--version` 성공이 아니라 **실행 파일의 존재**다. 버전 플래그가 없거나
 // 로그인을 먼저 요구하는 CLI 가 흔해서, 버전 조회 실패를 미설치로 읽으면 오탐이 난다.
@@ -198,6 +201,44 @@ pub async fn version_of(path: &Path, args: &[&str]) -> Option<String> {
         .map(|l| truncate_chars(l, 80))
 }
 
+/// Synchronous launch-gate probe for workflow-owned program requirements. The
+/// accepted arguments are validated by the workflow schema; the timeout keeps a
+/// broken executable from holding the launch mutex indefinitely.
+pub fn version_of_sync(path: &Path, args: &[String]) -> Option<String> {
+    if args.is_empty() {
+        return None;
+    }
+    let refs = args.iter().map(String::as_str).collect::<Vec<_>>();
+    let mut command = crate::spawn::platform_command(path, &refs);
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = command.spawn().ok()?;
+    let started = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                let output = child.wait_with_output().ok()?;
+                let text = if output.stdout.is_empty() {
+                    String::from_utf8_lossy(&output.stderr).into_owned()
+                } else {
+                    String::from_utf8_lossy(&output.stdout).into_owned()
+                };
+                return Some(truncate_chars(text.trim(), 160));
+            }
+            Ok(None) if started.elapsed() < PROBE_TIMEOUT => {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    }
+}
+
 /// 여러 대상의 버전을 동시에 조회한다. 결과 순서는 입력 순서를 지킨다 — 호출한 쪽이
 /// 카탈로그 순서와 짝지어 읽기 때문이다.
 pub async fn versions_of(targets: Vec<(PathBuf, &'static [&'static str])>) -> Vec<Option<String>> {
@@ -227,12 +268,12 @@ pub fn major_of(version: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-// ---------- 필요한 프로그램 카탈로그 ----------
+// ---------- 앱 공통 기본 환경 카탈로그 ----------
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Need {
-    /// 없으면 제품의 핵심 흐름이 막힌다
+    /// 없으면 제품의 모든 워크플로우가 막힌다
     Required,
     /// 없어도 돌지만 기능이 줄거나 폴백으로 떨어진다
     Recommended,
@@ -259,18 +300,6 @@ pub struct RequirementSpec {
 }
 
 pub const REQUIREMENTS: &[RequirementSpec] = &[
-    RequirementSpec {
-        id: "git",
-        name: "Git",
-        need: Need::Required,
-        why: "코드 이슈 실행과 진단이 저장소 상태를 읽습니다.",
-        bins: &["git"],
-        version_args: &["--version"],
-        paths: &[],
-        install_url: "https://git-scm.com/downloads",
-        install_hint: "macOS: xcode-select --install · Windows: winget install Git.Git",
-        min_major: 0,
-    },
     RequirementSpec {
         id: "obsidian",
         name: "Obsidian",
@@ -300,32 +329,8 @@ pub const REQUIREMENTS: &[RequirementSpec] = &[
         bins: &["herdr"],
         version_args: &["--version"],
         paths: &[],
-        install_url: "",
+        install_url: "https://herdr.dev",
         install_hint: "깔려 있는데 잡히지 않으면 설정 → 실행에서 herdr 실행 파일 경로를 지정하세요.",
-        min_major: 0,
-    },
-    RequirementSpec {
-        id: "node",
-        name: "Node.js",
-        need: Need::Recommended,
-        why: "엑셀 내보내기 스크립트와 일부 스킬이 node 로 돕니다. 18 이상이 필요합니다.",
-        bins: &["node"],
-        version_args: &["--version"],
-        paths: &[],
-        install_url: "https://nodejs.org/en/download",
-        install_hint: "macOS: brew install node · Windows: winget install OpenJS.NodeJS.LTS",
-        min_major: 18,
-    },
-    RequirementSpec {
-        id: "pandoc",
-        name: "pandoc",
-        need: Need::Optional,
-        why: "docx 를 읽을 때 씁니다. 없으면 Word 자동화로 폴백합니다.",
-        bins: &["pandoc"],
-        version_args: &["--version"],
-        paths: &[],
-        install_url: "https://pandoc.org/installing.html",
-        install_hint: "macOS: brew install pandoc · Windows: winget install JohnMacFarlane.Pandoc",
         min_major: 0,
     },
 ];
@@ -464,6 +469,27 @@ mod tests {
     }
 
     #[test]
+    fn workflow_version_probe_reads_a_bounded_program_version() {
+        let dir = tempdir("workflow-version");
+        let exe = dir.join(if cfg!(windows) {
+            "version.cmd"
+        } else {
+            "version"
+        });
+        #[cfg(windows)]
+        fs::write(&exe, "@echo off\r\necho v18.4.0\r\n").unwrap();
+        #[cfg(not(windows))]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::write(&exe, "#!/bin/sh\necho v18.4.0\n").unwrap();
+            fs::set_permissions(&exe, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let version = version_of_sync(&exe, &["--version".into()]).unwrap();
+        assert_eq!(major_of(&version), Some(18));
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
     fn install_paths_win_over_a_same_named_cli_on_path() {
         // `obsidian` 이라는 npm CLI 가 PATH 에 있는 PC 가 실제로 있다. 앱 번들이 있으면
         // 그쪽을 답으로 삼아야 "앱이 깔려 있나" 라는 질문에 바르게 답한다.
@@ -524,11 +550,11 @@ mod tests {
                 "카탈로그 순서가 어긋나면 버전이 엉뚱한 줄에 붙는다"
             );
         }
-        // git 은 이 저장소를 빌드하는 환경이면 반드시 있다
-        let git = rows.iter().find(|r| r.id == "git").unwrap();
-        assert!(git.detected, "git 을 찾지 못했습니다");
-        assert!(git.version.is_some(), "git 버전 조회 실패");
-        assert!(!git.outdated);
+        assert_eq!(
+            rows.iter().map(|row| row.id.as_str()).collect::<Vec<_>>(),
+            vec!["obsidian", "herdr"],
+            "기능별 도구는 workflow requirements로 이동해야 한다"
+        );
         // 감지되지 않은 항목은 경로도 버전도 비어 있어야 한다
         for r in rows.iter().filter(|r| !r.detected) {
             assert!(r.path.is_empty() && r.version.is_none(), "{}", r.id);

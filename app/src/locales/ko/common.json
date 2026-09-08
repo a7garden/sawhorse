@@ -1,6 +1,7 @@
 {
   "language": "언어",
   "nav": {
+    "runs": "실행",
     "section": {
       "work": "전체 작업공간",
       "vault": "볼트",
@@ -17,6 +18,7 @@
     "terminal": "에이전트",
     "docs": "모든 문서",
     "todos": "할 일",
+    "vault": "점검",
     "reading": "읽을거리",
     "github": "GitHub",
     "packs": "확장 관리",
@@ -25,9 +27,9 @@
       "taskLibrary": "자동화 작업",
       "tasks": "예약과 반복",
       "terminal": "에이전트 터미널",
-      "harness": "개발 실행",
+      "harness": "작업 실행",
       "sessions": "협업 세션",
-      "jobs": "실행 기록",
+      "jobs": "자동화·도구 실행",
       "review": "검토"
     },
     "other": "기타",

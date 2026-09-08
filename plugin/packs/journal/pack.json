@@ -1,0 +1,174 @@
+{
+  "id": "journal",
+  "name": "일지",
+  "version": "1.0.0",
+  "author": "sawhorse",
+  "icon": "notebook-pen",
+  "description": "하루 기록, 빠른 메모, 업무 보고와 주간 회고를 관리하는 기능 확장.",
+  "skills": [
+    "capture",
+    "weekly-review",
+    "morning",
+    "lunch",
+    "evening",
+    "daily-log",
+    "daily-report"
+  ],
+  "workspace": {
+    "folders": [
+      "템플릿",
+      "일지",
+      "문서",
+      "보관"
+    ],
+    "files": [
+      {
+        "src": "templates/업무일지.md",
+        "dest": "템플릿/일지.md"
+      },
+      {
+        "src": "templates/기록.md",
+        "dest": "템플릿/journal/일지.md"
+      },
+      {
+        "src": "templates/노트.md",
+        "dest": "템플릿/journal/문서.md"
+      },
+      {
+        "src": "assets/bases/일지.base",
+        "dest": "일지/일지.base"
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "ownerName",
+      "type": "text",
+      "label": "이름",
+      "description": "회고·요약 문서에 적을 이름. 비워두면 이름 없이 씁니다.",
+      "placeholder": "예: 김워크"
+    },
+    {
+      "key": "reviewDay",
+      "type": "select",
+      "label": "회고 기준 요일",
+      "description": "주간 회고가 한 주의 끝으로 볼 요일",
+      "options": [
+        { "value": "금", "label": "금요일" },
+        { "value": "토", "label": "토요일" },
+        { "value": "일", "label": "일요일" }
+      ]
+    },
+    {
+      "key": "archiveAfterDays",
+      "type": "number",
+      "label": "보관 기준 일수",
+      "description": "이 일수보다 오래된 기록을 회고 때 '보관/' 이동 후보로 제안합니다 (0 = 제안 안 함)"
+    },
+    {
+      "key": "useWikiLinks",
+      "type": "bool",
+      "label": "문서를 위키링크로 연결",
+      "description": "켜면 일지에서 언급한 주제를 [[문서 이름]]으로 잇고, 없는 문서는 만듭니다"
+    }
+  ],
+  "actions": [
+    {
+      "id": "today",
+      "label": "오늘 일지 준비",
+      "description": "오늘 날짜 일지를 만들고 어제 미완료 항목을 이월한다",
+      "prompt": "/{{ns}}:capture --today",
+      "cwd": "workspace",
+      "featured": true
+    },
+    {
+      "id": "capture",
+      "label": "빠른 메모",
+      "description": "한 줄을 오늘 일지에 적는다. 성격에 따라 할 일 / 한 일 / 메모로 나눠 넣는다",
+      "prompt": "/{{ns}}:capture {{text}}",
+      "cwd": "workspace",
+      "featured": true,
+      "params": [
+        { "key": "text", "type": "text", "label": "적을 내용", "required": true }
+      ]
+    },
+    {
+      "id": "review",
+      "label": "주간 회고",
+      "description": "이번 주 일지를 모아 회고 문서를 쓰고 다음 주 할 일을 남긴다",
+      "prompt": "/{{ns}}:weekly-review {{week}}",
+      "cwd": "workspace",
+      "featured": true,
+      "params": [
+        { "key": "week", "type": "text", "label": "기준 날짜 (선택, 비우면 이번 주)" }
+      ]
+    },
+    {
+      "id": "morning",
+      "label": "아침 브리핑",
+      "description": "오늘 일지 준비 + 어제 할 일 이월 + 어제 요약 + 볼트 빠른 정리",
+      "prompt": "/{{ns}}:morning",
+      "cwd": "workspace",
+      "schedule": { "kind": "weekdays", "time": "09:00" }
+    },
+    {
+      "id": "lunch",
+      "label": "오전 결산",
+      "description": "오늘 할 일 대 오전 세션 대조 + 볼트 진단 (읽기 전용)",
+      "prompt": "/{{ns}}:lunch",
+      "cwd": "workspace",
+      "schedule": { "kind": "weekdays", "time": "12:30" }
+    },
+    {
+      "id": "evening",
+      "label": "퇴근 정산",
+      "description": "체크 확정 → 업무기록 작성 → 보고서 출력 → 내일 할 일 정리 → 볼트 정리",
+      "prompt": "/{{ns}}:evening",
+      "cwd": "workspace",
+      "schedule": { "kind": "weekdays", "time": "18:00" }
+    },
+    {
+      "id": "daily-log",
+      "label": "업무일지 갱신",
+      "description": "오늘 세션을 분석해 일지의 업무기록 자동 영역만 다시 쓴다",
+      "prompt": "/{{ns}}:daily-log {{note}}",
+      "cwd": "workspace",
+      "params": [
+        { "key": "note", "type": "text", "label": "덧붙일 구두 업무 (선택)" }
+      ]
+    },
+    {
+      "id": "daily-report",
+      "label": "업무 보고 만들기",
+      "description": "그날 작업을 보고 형식 코드블록으로 출력 (복붙용)",
+      "prompt": "/{{ns}}:daily-report {{note}}",
+      "cwd": "workspace",
+      "params": [
+        { "key": "note", "type": "text", "label": "덧붙일 구두 업무 (선택)" }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "id": "logs",
+      "label": "일지",
+      "icon": "calendar-days",
+      "group": "vault",
+      "type": "notes",
+      "query": {
+        "folders": ["일지", "기록"],
+        "exclude": ["*.base"],
+        "sort": { "field": "", "source": "title", "desc": true },
+        "limit": 120
+      },
+      "columns": [
+        { "field": "", "source": "title", "label": "날짜", "width": 120 },
+        { "field": "mood", "label": "컨디션", "type": "badge", "width": 90 },
+        { "field": "tags", "label": "태그", "type": "list" },
+        { "field": "", "source": "mtime", "label": "수정", "type": "date", "width": 110 }
+      ],
+      "actions": ["today", "capture", "review", "daily-log", "daily-report"],
+      "empty": "아직 일지가 없습니다. '오늘 일지 준비'를 실행하면 첫 장이 생깁니다."
+    }
+  ]
+}

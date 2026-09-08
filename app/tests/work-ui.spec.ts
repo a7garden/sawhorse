@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("search carries across views, prunes hidden selections, and opens work with the keyboard", async ({ page }) => {
-  await expect(cards(page)).toHaveCount(6);
+  await expect(cards(page)).toHaveCount(5);
   const search = page.getByRole("textbox", { name: "작업 검색", exact: true });
   await search.fill("WORK-INTENT");
   await expect(cards(page)).toHaveCount(1);
@@ -31,7 +31,7 @@ test("search carries across views, prunes hidden selections, and opens work with
   await search.fill("no-matching-work");
   await expect(page.getByText("조건에 맞는 작업이 없습니다", { exact: true })).toBeVisible();
   await page.locator(".wb-empty").getByRole("button", { name: "필터 초기화", exact: true }).click();
-  await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(6);
+  await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(5);
   await page.locator(".wb-work-title-link").filter({ hasText: "마크다운 라이브 편집기" }).focus();
   await page.keyboard.press("Enter");
   await expect(page.locator(".wb-detail-dialog")).toBeVisible();
@@ -39,15 +39,15 @@ test("search carries across views, prunes hidden selections, and opens work with
 
 test("advanced filters remain active when collapsed and reset together", async ({ page }) => {
   await filterToggle(page).click();
-  await choose(page, "단계 필터", "기본 SDD 1.1.0 · 구현");
-  await expect(cards(page)).toHaveCount(1);
-  await expect(cards(page)).toContainText("Herdr 실행과 기록 연결");
+  await choose(page, "단계 필터", "구현");
+  await expect(cards(page)).toHaveCount(3);
+  await expect(page.locator('[data-stage="build"]')).toContainText("Herdr 실행과 기록 연결");
   await filterToggle(page).click();
   await expect(page.getByRole("combobox", { name: "단계 필터", exact: true })).toHaveCount(0);
   await expect(filterToggle(page)).toContainText("1");
-  await expect(results(page)).toHaveText("1개 작업");
+  await expect(results(page)).toHaveText("3개 작업");
   await page.getByRole("button", { name: "필터 초기화", exact: true }).click();
-  await expect(cards(page)).toHaveCount(6);
+  await expect(cards(page)).toHaveCount(5);
   await filterToggle(page).click();
   await choose(page, "처리 유형 필터", "문서");
   await expect(cards(page)).toHaveCount(1);
@@ -63,18 +63,16 @@ test("milestones expand above the board and stay in sync with the filter", async
   await expect(page.getByRole("combobox", { name: "마일스톤 필터", exact: true })).toContainText("작업대 마일스톤");
   await choose(page, "마일스톤 필터", "소속 없음");
   await expect(page.locator(".wb-milestone-row").filter({ hasText: "소속 없음" })).toHaveAttribute("aria-pressed", "true");
-  await expect(cards(page)).toHaveCount(6);
+  await expect(cards(page)).toHaveCount(5);
   await page.getByRole("button", { name: "마일스톤 추가", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
-test("state tabs and saved display preference work with project scope", async ({ page }) => {
-  const states = page.getByRole("group", { name: "열림 상태", exact: true });
-  await states.getByRole("button", { name: /^닫힌 작업/ }).click();
-  await expect(cards(page)).toHaveCount(1);
-  await expect(page.locator('[data-stage="__closed"]')).toContainText("완료");
+test("done remains in the flow, list preference persists, and project scope applies", async ({ page }) => {
+  await expect(page.locator('[data-stage="done"]')).toContainText("첫 작업대 배포 기록");
+  await expect(page.getByRole("group", {name:"열림 상태"})).toHaveCount(0);
   await page.getByRole("button", { name: "목록", exact: true }).click();
-  await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(5);
   await page.reload();
   await workNav(page).click();
   await expect(page.getByRole("button", { name: "목록", exact: true })).toHaveAttribute("aria-pressed", "true");

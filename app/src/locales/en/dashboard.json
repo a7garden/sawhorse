@@ -288,6 +288,19 @@
     "name": "Name",
     "nameAria": "Workflow name",
     "entryStep": "Entry step",
+    "requirements": "Workflow requirements",
+    "addRequirement": "Requirement",
+    "requirementsHint": "Declare extensions and programs used only by this workflow. Required entries are checked before execution and do not become core app dependencies.",
+    "requirementKind": "Kind",
+    "requirementKinds": { "extension": "Extension", "program": "Program" },
+    "requirementLevel": "Level",
+    "commands": "Executable candidates (comma separated)",
+    "versionArgs": "Version arguments (comma separated)",
+    "minimumMajor": "Minimum major version (0 for any)",
+    "versionRange": "Extension version range",
+    "requirementReason": "Why it is needed",
+    "installUrl": "Install URL (optional)",
+    "installHint": "Install guidance (optional)",
     "documents": "Documents to write",
     "addDocument": "Document",
     "noDocuments": "Add documents each step writes or refers to.",
@@ -438,6 +451,13 @@
     "approvalHint": "These steps are configured for a human decision.",
     "noApproval": "There are no human review steps. Ask your agent to add one if needed.",
     "deliverables": "What you get",
+    "requirements": "What this workflow needs",
+    "requirementsHint": "These requirements travel with this workflow version.",
+    "requirementLevels": {
+      "required": "Required",
+      "recommended": "Recommended",
+      "optional": "Optional"
+    },
     "publishHint": "Publishing makes this available to projects. Existing work keeps its current version.",
     "examples": {
       "development": {

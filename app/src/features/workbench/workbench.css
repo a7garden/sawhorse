@@ -2685,3 +2685,8 @@ bind every visible surface to the workbench palette. */
   padding: 0;
   grid-template-columns: repeat(auto-fit, minmax(84px, 1fr));
 }
+
+.wb-run-attention { margin: 0 0 20px; padding: 16px; border: 1px solid var(--color-destructive, #c66a38); border-radius: 12px; }
+.wb-run-attention h2 { font-size: 15px; font-weight: 600; }
+.wb-run-attention > p { margin: 6px 0 12px; font-size: 13px; opacity: .75; }
+.wb-run-attention small, .wb-run-error { display: block; overflow-wrap: anywhere; color: var(--color-destructive, #c66a38); }

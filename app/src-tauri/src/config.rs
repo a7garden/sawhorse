@@ -69,8 +69,7 @@ impl Default for Schedules {
     }
 }
 
-/// Where dashboard jobs actually run. `auto` prefers herdr and silently falls
-/// back to the headless `claude -p` runner when herdr is unusable.
+/// Auto runs in the background. Herdr execution requires an explicit setting.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HerdrCfg {
@@ -82,7 +81,7 @@ pub struct HerdrCfg {
     pub workspace_label: String,
     /// "closeOnSuccess" | "keep" | "closeAlways"
     pub cleanup: String,
-    /// concurrent jobs in herdr mode (headless is always 1)
+    /// Concurrent harness runs; legacy shared-vault jobs remain serial in headless mode.
     pub max_parallel: u32,
     pub start_timeout_sec: u32,
     /// 0 = wait forever
@@ -159,8 +158,8 @@ pub struct DashboardCfg {
     pub permission_mode: String,
     pub launch_at_login: bool,
     pub herdr: HerdrCfg,
-    /// 마법사에서 고른 기본 에이전트. 스킬 설치 대상과 안내의 기준이 된다.
-    /// 잡 실행기는 아직 Claude Code 에 묶여 있어 이 값이 실행기를 바꾸지는 않는다.
+    /// 마법사에서 고른 기본 에이전트. 비어 있거나 현재 PC에서 찾을 수 없으면
+    /// 감지된 Herdr 호환 에이전트를 자동으로 고른다.
     pub default_agent: String,
     pub custom_agents: Vec<CustomAgent>,
     /// 승인 정책·통합 방식(설계 255-264줄). 새 세션의 초기값 계산에만 쓰고,
@@ -177,7 +176,7 @@ impl Default for DashboardCfg {
             permission_mode: "bypassPermissions".into(),
             launch_at_login: false,
             herdr: HerdrCfg::default(),
-            default_agent: "claude".into(),
+            default_agent: String::new(),
             custom_agents: Vec::new(),
             collaboration: Default::default(),
         }
@@ -235,6 +234,11 @@ impl ConfigView {
         self.packs
             .settings
             .get(pack_id)
+            .or_else(|| {
+                (pack_id == "journal")
+                    .then(|| self.packs.settings.get("starter"))
+                    .flatten()
+            })
             .and_then(Value::as_object)
             .cloned()
             .unwrap_or_default()
@@ -743,7 +747,6 @@ pub async fn herdr_diagnostics(cfg: &HerdrCfg) -> HerdrDiag {
     let effective = match cfg.mode.as_str() {
         "headless" => "headless",
         "herdr" => "herdr",
-        _ if server_ok => "herdr",
         _ => "headless",
     };
     // 폴백은 조용히 일어나지 않는다 — 다음 잡이 headless로 돌 거면 이유를 함께 알린다.
@@ -754,7 +757,7 @@ pub async fn herdr_diagnostics(cfg: &HerdrCfg) -> HerdrDiag {
             "headless" => "설정에서 headless 모드를 쓴다".to_string(),
             "herdr" if version.is_none() => "herdr 실행 파일을 찾지 못했다".to_string(),
             "herdr" => "herdr 서버에 연결하지 못했다".to_string(),
-            _ => "herdr에 연결할 수 없어 headless로 실행한다".to_string(),
+            _ => "자동 모드는 백그라운드에서 실행한다".to_string(),
         })
     };
     HerdrDiag {
@@ -951,7 +954,7 @@ mod tests {
         let path = temp_path("packs");
         let initial: Value = serde_json::from_str(
             r#"{"vaultPath": "/v", "packs": {"enabled": ["si"],
-                 "settings": {"si": {"excelOutputDir": "/out"}, "other": {"keep": true}}}}"#,
+                 "settings": {"si": {"excelOutputDir": "/out"}, "starter": {"reviewDay": "토"}, "other": {"keep": true}}}}"#,
         )
         .unwrap();
         write_atomic(
@@ -971,6 +974,11 @@ mod tests {
             vec!["si".to_string(), "starter".to_string()]
         );
         assert_eq!(v.pack_setting_str("si", "excelOutputDir"), "/new");
+        assert_eq!(
+            v.pack_setting_str("journal", "reviewDay"),
+            "토",
+            "기존 starter 설정은 일지 확장에서 이어 읽는다"
+        );
         assert!(
             v.packs.settings.get("other").is_some(),
             "패치에 없는 팩 설정은 남아야 한다"

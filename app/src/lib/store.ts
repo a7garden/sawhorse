@@ -36,6 +36,7 @@ export const CORE_PAGES = [
   "issues",
   "docs",
   "todos",
+  "vault",
   "task-library",
   "home",
   "overview",
@@ -61,7 +62,7 @@ export type CorePage = (typeof CORE_PAGES)[number];
 export type PageId = CorePage | `view:${string}:${string}`;
 
 /** 팩 이전 코드가 부르던 화면 이름 → 그 화면을 가진 네이티브 뷰. */
-const LEGACY_PAGE_ALIASES = ["improve", "issues", "vault"] as const;
+const LEGACY_PAGE_ALIASES = ["improve", "issues"] as const;
 
 function isCore(id: string): id is CorePage {
   return (CORE_PAGES as readonly string[]).includes(id);
@@ -154,6 +155,10 @@ export const useApp = create<AppState>((set, get) => ({
    */
   setPage: (p) => {
     if (["board", "issues", "improve"].includes(p)) return set({ page: "work" });
+    if (p === "todos") {
+      const hit = get().nav.find((n) => n.component === "todos");
+      return set({ page: hit ? viewPageId(hit.packId, hit.viewId) : "overview" });
+    }
     if (isCore(p)) return set({ page: p });
     if (parseViewPage(p)) {
       const { packId, viewId } = parseViewPage(p)!;
@@ -181,7 +186,7 @@ export const useApp = create<AppState>((set, get) => ({
   nav: [],
   packs: null,
   agents: [],
-  defaultAgent: "claude",
+  defaultAgent: "",
   requirements: [],
   schedules: [],
   collabSessions: [],
@@ -276,9 +281,9 @@ export const useApp = create<AppState>((set, get) => ({
       get().refreshAudit(),
       get().refreshAttention(),
       get().refreshDiagnostics(),
+      get().refreshAgents(),
+      get().refreshRequirements(),
     ]);
-    void get().refreshAgents();
-    void get().refreshRequirements();
     const cfg = get().config;
     if (cfg && (!cfg.exists || cfg.vaultPath.length === 0)) {
       set({ wizardOpen: true });

@@ -18,11 +18,14 @@ async function design(page: Page) {
   await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key)!);
     const work = state.snapshot.work.find((w: {workflowId:string}) => w.workflowId === "intent-flow");
+    work.workflowVersion = "1.0.0"; work.stage = "design"; work.status = "running";
     for (const role of ["spec","plan"]) state.documents[`${work.id}/${role}`] = {workId:work.id,artifact:role,path:`work/${work.id}/${role}.md`,revision:role,
       markdown:role === "spec" ? "# 설계\n\n원본을 보존합니다." : "# 작업 단위\n\nUNIT-1 입력과 저장 검증"};
     localStorage.setItem(key,JSON.stringify(state));
   },KEY);
-  await page.getByRole("button",{name:"문서 새로고침",exact:true}).click();
+  await page.reload();
+  await page.locator("aside nav").getByRole("button", {name:"작업",exact:true}).click();
+  await page.getByRole("button", {name:"설계 검토",exact:true}).click();
   await expect(page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true})).toBeEnabled();
 }
 test("note and image survive saving, editing and reopening", async ({page}) => {
@@ -37,7 +40,7 @@ test("note and image survive saving, editing and reopening", async ({page}) => {
   await page.locator('input[type="file"]').setInputFiles({name:"capture.png",mimeType:"image/png",buffer:png});
   await page.getByRole("button",{name:"메모만 저장",exact:true}).click();
   await expect(page.locator(".wb-intent-review-document img")).toHaveJSProperty("naturalWidth",1);
-  await expect(page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true})).toBeDisabled();
+  await expect(page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true})).toHaveCount(0);
   await page.locator(".wb-intent-flow").getByRole("button",{name:"편집",exact:true}).click();
   await expect(page.locator(".wb-intent-review-document .cm-atomic-image img")).toHaveJSProperty("naturalWidth",1);
   await page.locator(".wb-intent-review-document [contenteditable=true]").press("ControlOrMeta+End");
@@ -47,6 +50,7 @@ test("note and image survive saving, editing and reopening", async ({page}) => {
   await page.getByRole("dialog").getByRole("button",{name:"닫기",exact:true}).click();
   await page.reload();
   await page.locator("aside nav").getByRole("button",{name:"작업",exact:true}).click();
+  await page.getByRole("group", {name:"작업 공간"}).getByRole("button",{name:/^의도 인박스/}).click();
   await page.getByRole("button",{name:/거친 메모/}).first().click();
   await expect(page.locator(".wb-intent-review-document")).toContainText("추가 메모.");
   await expect(page.locator(".wb-intent-review-document img")).toHaveJSProperty("naturalWidth",1);
@@ -66,9 +70,9 @@ test("image-only intent supports removal and saving",async ({page}) => {
 test("failed design launch preserves the note and does not duplicate it",async ({page}) => {
   await open(page); await project(page);
   await page.getByRole("dialog").getByRole("textbox").fill("실행 실패 복구");
-  await page.getByRole("button",{name:"설계 요청",exact:true}).click();
+  await page.getByRole("button",{name:"구체화 시작",exact:true}).click();
   await expect(page.getByRole("alert")).toContainText("의도는 저장됐지만");
-  await page.getByRole("button",{name:"설계 실행 다시 시도",exact:true}).click();
+  await page.getByRole("button",{name:"구체화 실행 다시 시도",exact:true}).click();
   await expect(page.getByRole("alert")).toContainText("의도는 저장됐지만");
   await expect(page.getByRole("alert")).toContainText("Herdr 연결이 필요합니다");
   await page.getByRole("button",{name:"저장된 의도 열기",exact:true}).click();
@@ -134,21 +138,21 @@ test("deleting an embedded image does not append it again when saving", async ({
   await expect(page.locator(".wb-atomic-editor .cm-atomic-image img")).toBeVisible();
   await editor.press("ControlOrMeta+z");
   await page.getByRole("button",{name:"메모만 저장",exact:true}).click();
-  await expect(page.locator(".wb-intent-review-document")).toHaveText("keep this note");
+  await expect(page.locator(".wb-intent-review-document p")).toHaveText("keep this note");
   await expect(page.locator(".wb-intent-review-document img")).toHaveCount(0);
 });
 
-test("a rejected launch keeps the captured intent in intake", async ({page}) => {
+test("a rejected clarification launch preserves intent without claiming a run", async ({page}) => {
   await open(page); await project(page);
   await page.getByRole("dialog").getByRole("textbox").fill("실행 접수 실패 상태");
-  await page.getByRole("button",{name:"설계 요청",exact:true}).click();
+  await page.getByRole("button",{name:"구체화 시작",exact:true}).click();
   await expect(page.getByRole("alert")).toContainText("의도는 저장됐지만");
   await page.getByRole("button",{name:"저장된 의도 열기",exact:true}).click();
-  await expect(page.locator(".wb-detail-title")).toContainText("접수");
-  await expect(page.getByText("설계를 요청하면 AI가 설계와 작업 단위를 작성합니다.", {exact:false})).toBeVisible();
+  await expect(page.locator(".wb-lifecycle")).toBeVisible();
+  await expect(page.getByRole("button",{name:"방향 확인 · 설계 시작",exact:true})).toBeDisabled();
   const item = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).snapshot.work.find((w:{title:string}) => w.title === "실행 접수 실패 상태"), KEY);
-  expect(item.status).toBe("backlog");
-  expect(item.decisions).toEqual([]);
+  expect(item.status).toBe("ready");
+  expect(item.stage).toBe("clarify");
 });
 
 test("review checkpoints survive later edits and cannot be used to approve", async ({page}) => {
@@ -180,6 +184,7 @@ test("unsent feedback blocks approval and completion until resolved", async ({pa
   await expect(page.getByText(/아직 전달하지 않은 메모가 있습니다/)).toBeVisible();
   await page.getByLabel("에이전트에게 남길 메모",{exact:true}).fill("");
   await page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true}).click();
+  await expect(page.getByRole("alert")).toContainText("설계 승인은 기록됐지만");
   await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key)!);
     const work = state.snapshot.work.find((w:{workflowId:string}) => w.workflowId === "intent-flow");

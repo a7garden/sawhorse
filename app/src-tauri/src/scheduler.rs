@@ -596,8 +596,8 @@ mod tests {
     #[test]
     fn pack_entries_produce_action_jobs() {
         let entry = ScheduledEntry {
-            key: "si.morning".into(),
-            pack_id: "si".into(),
+            key: "journal.morning".into(),
+            pack_id: "journal".into(),
             action_id: "morning".into(),
             label: "아침".into(),
             kind: "daily".into(),
@@ -607,7 +607,7 @@ mod tests {
         };
         let req = request_for(&entry);
         assert_eq!(req.kind, "action");
-        assert_eq!(req.pack_id.as_deref(), Some("si"));
+        assert_eq!(req.pack_id.as_deref(), Some("journal"));
         assert_eq!(req.action_id.as_deref(), Some("morning"));
     }
 
@@ -628,7 +628,7 @@ mod tests {
     /// 목록에 새어 나가면 사용자는 반응 없는 스위치를 만난다.
     #[test]
     fn settings_list_hides_builtin_tasks() {
-        assert!(editable_in_settings(&entry("si", "si.morning")));
+        assert!(editable_in_settings(&entry("journal", "journal.morning")));
         assert!(editable_in_settings(&entry("", "morning")));
         assert!(!editable_in_settings(&entry(TASKS_PACK_ID, "t-abc123")));
     }
