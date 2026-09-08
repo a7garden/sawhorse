@@ -158,7 +158,7 @@ pub fn list_skills(root: &Path) -> Vec<SkillInfo> {
     out
 }
 
-/// plugin.json 의 `skills` 선언을 루트 기준 경로로 푼 것. 선언은 `./packs/si/skills`
+/// plugin.json 의 `skills` 선언을 루트 기준 경로로 푼 것. 선언은 `./packs/journal/skills`
 /// 처럼 `./` 를 붙일 수 있다.
 fn skill_dirs(root: &Path) -> Vec<PathBuf> {
     let declared: Option<Vec<String>> = std::fs::read_to_string(root.join(MARKER))

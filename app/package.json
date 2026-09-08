@@ -4,12 +4,12 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "prebuild": "node ../plugin/extension-packages/validate.mjs",
-    "build": "tsc --noEmit && vite build",
-    "preview": "vite preview",
+    "dev": "bun --bun vite",
+    "prebuild": "bun ../plugin/extension-packages/validate.mjs",
+    "build": "bun --bun tsc --noEmit && bun --bun vite build",
+    "preview": "bun --bun vite preview",
     "tauri": "tauri",
-    "test:e2e": "npm run build && playwright test"
+    "test:e2e": "bun run build && bunx playwright test"
   },
   "dependencies": {
     "@atomic-editor/editor": "^0.6.2",

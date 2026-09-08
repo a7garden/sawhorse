@@ -147,7 +147,7 @@ export default function DiagnosticsSection({
         </div>
       </SettingsGroup>
 
-      {/* 마법사의 「프로그램」 단계와 같은 목록. 첫 설치 뒤에 도구를 깔았을 때 마법사를
+      {/* 마법사의 「기본 환경」 단계와 같은 공통 연동 목록. 첫 설치 뒤에 도구를 깔았을 때 마법사를
           다시 열지 않고 여기서 확인·설치할 수 있어야 한다. */}
       <SettingsGroup title={t("diag.requirementsTitle")}
       desc={t("diag.requirementsDesc")}>
@@ -180,8 +180,8 @@ export default function DiagnosticsSection({
       <SettingsGroup title={t("diag.agentsTitle")}
       desc={t("diag.agentsDesc")}>
         <div className="space-y-1.5">
-          {/* 마법사 「에이전트」 단계와 같은 선택. 스킬 설치 대상과 안내의 기준이
-              되는 값이지만 잡 실행기는 현재 Claude Code 하나다. */}
+          {/* 마법사 「에이전트」 단계와 같은 선택. 감지된 Herdr 호환 에이전트만
+              실행 기본값으로 고를 수 있다. */}
           <SettingRow
             label={t("diag.defaultAgent")}
             htmlFor="default-agent"
@@ -193,7 +193,7 @@ export default function DiagnosticsSection({
                 value={defaultAgent}
                 onChange={onSetDefaultAgent}
                 options={agents
-                  .filter((a) => a.detected)
+                  .filter((a) => a.detected && a.runsJobs)
                   .map((a) => ({ value: a.id, label: a.name }))}
               />
             }

@@ -1,0 +1,24 @@
+{
+  "id": "todos",
+  "name": "할 일",
+  "version": "1.0.0",
+  "author": "sawhorse",
+  "icon": "square-check-big",
+  "description": "오늘과 내일의 체크리스트를 일지 문서에서 관리하는 기능 확장.",
+  "skills": [],
+  "workspace": {
+    "folders": [],
+    "files": []
+  },
+  "actions": [],
+  "views": [
+    {
+      "id": "todos",
+      "label": "할 일",
+      "icon": "square-check-big",
+      "group": "vault",
+      "type": "native",
+      "component": "todos"
+    }
+  ]
+}

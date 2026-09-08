@@ -1,0 +1,74 @@
+{
+  "id": "project-docs",
+  "name": "프로젝트 문서화",
+  "version": "1.0.0",
+  "author": "sawhorse",
+  "icon": "folder-kanban",
+  "description": "제안서와 코드베이스에서 프로젝트 지식·기능 분석·회의 문서를 만드는 기능 확장.",
+  "skills": [
+    "project-doc",
+    "codebase-docs"
+  ],
+  "workspace": {
+    "folders": [
+      "템플릿",
+      "프로젝트",
+      "첨부/스크린샷",
+      "첨부/다이어그램"
+    ],
+    "files": [
+      {
+        "src": "templates/프로젝트.md",
+        "dest": "템플릿/프로젝트.md"
+      },
+      {
+        "src": "templates/기능분석.md",
+        "dest": "템플릿/기능분석.md"
+      },
+      {
+        "src": "templates/회의.md",
+        "dest": "템플릿/회의.md"
+      },
+      {
+        "src": "assets/bases/프로젝트.base",
+        "dest": "프로젝트/프로젝트.base"
+      }
+    ]
+  },
+  "actions": [
+    {
+      "id": "project-doc",
+      "label": "프로젝트 문서 만들기",
+      "description": "제안서와 코드베이스에서 프로젝트 지식 문서를 만듭니다.",
+      "prompt": "/{{ns}}:project-doc {{source}}",
+      "cwd": "workspace",
+      "params": [
+        {
+          "key": "source",
+          "type": "text",
+          "label": "제안서 경로 / 코드베이스 경로"
+        }
+      ]
+    },
+    {
+      "id": "codebase-docs",
+      "label": "코드베이스 문서화",
+      "description": "기능별 분석 문서를 mermaid 다이어그램과 함께 만든다",
+      "prompt": "/{{ns}}:codebase-docs {{target}}",
+      "cwd": "project",
+      "params": [
+        {
+          "key": "target",
+          "type": "text",
+          "label": "문서화할 범위 (선택)"
+        },
+        {
+          "key": "project",
+          "type": "project",
+          "label": "프로젝트"
+        }
+      ]
+    }
+  ],
+  "views": []
+}

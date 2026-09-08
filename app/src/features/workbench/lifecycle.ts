@@ -1,3 +1,4 @@
+import { isLifecycleV2 } from "./lifecycle-v2";
 import { isClosedStatus, type WorkItem, type WorkflowDefinition } from "./types";
 
 export const currentNode = (work: WorkItem) => work.activeNodes?.[0]?.nodeId ?? work.stage;
@@ -13,6 +14,7 @@ export function isFinalWorkNode(work: WorkItem, workflow?: WorkflowDefinition) {
 
 /** These actions change the work lifecycle; agent run signals never do. */
 export function workActions(work: WorkItem, workflow?: WorkflowDefinition): string[] {
+  if (isLifecycleV2(work)) return [];
   if (isClosedStatus(work.status)) return [];
   if (work.status === "blocked") return ["resume", "cancel"];
   if (work.status === "backlog") return ["accept", "start", "reject"];

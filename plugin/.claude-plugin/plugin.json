@@ -4,8 +4,10 @@
   "version": "1.0.0",
   "skills": [
     "./skills",
-    "./packs/si/skills",
-    "./packs/starter/skills"
+    "./packs/concepts/skills",
+    "./packs/journal/skills",
+    "./packs/project-docs/skills",
+    "./packs/todos/skills"
   ],
   "author": {
     "name": "won"

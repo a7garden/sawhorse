@@ -135,6 +135,7 @@ pub fn sdd() -> WorkflowDefinition {
         description: "의도에서 설계, 구현, 검증, 배포까지 이어지는 기본 흐름".into(),
         version: DEFAULT_WORKFLOW_VERSION.into(),
         entry: "intent".into(),
+        requirements: vec![],
         artifacts: sdd_artifacts(),
         nodes: vec![intent, design, build, test, deploy],
         edges: vec![
@@ -250,6 +251,7 @@ pub fn tdd() -> WorkflowDefinition {
         description: "의도한 Red, 최소 Green, 리팩터링과 회귀 재검증을 증거로 남기는 반복".into(),
         version: "1.0.0".into(),
         entry: "test-intent".into(),
+        requirements: vec![],
         artifacts,
         nodes: vec![intent, red, green, refactor, verify, done],
         edges: vec![
@@ -363,6 +365,7 @@ pub fn issue() -> WorkflowDefinition {
         description: "요청에서 설계, 사람 승인, 수행과 증거까지 이어지는 경량 흐름".into(),
         version: ISSUE_WORKFLOW_VERSION.into(),
         entry: "request".into(),
+        requirements: vec![],
         artifacts: vec![
             artifact("intent", "요청", ISSUE_REQUEST),
             artifact("spec", "설계", ISSUE_DESIGN),
@@ -430,6 +433,7 @@ fn issue_v1() -> WorkflowDefinition {
         // 동결된 판이므로 상수를 따라가면 안 된다. 리터럴로 고정한다.
         version: "1.0.0".into(),
         entry: "request".into(),
+        requirements: vec![],
         artifacts: vec![
             artifact("intent", "요청", ISSUE_REQUEST),
             artifact("spec", "설계", ISSUE_DESIGN_V1),
@@ -480,6 +484,7 @@ pub fn intent_flow() -> WorkflowDefinition {
         label: "메모에서 구현까지".into(),
         description: "자유로운 의도와 이미지 → 작업 분해·설계 → 사람의 승인 → 구현·검증".into(),
         entry: "design".into(),
+        requirements: vec![],
         artifacts: vec![
             artifact("intent", "원본 의도", ""),
             artifact("spec", "설계", SPEC),
@@ -499,15 +504,144 @@ pub fn intent_flow() -> WorkflowDefinition {
     }
 }
 
+/// New captures use a separate immutable contract; existing v1 work keeps its digest.
+pub fn intent_flow_v2() -> WorkflowDefinition {
+    let mut definition = intent_flow();
+    definition.version = "2.0.0".into();
+    definition.label = "SDD · 의도에서 완료까지".into();
+    definition.description =
+        "의도 인박스 → 인터뷰·구체화 → 설계 → 승인 대기 → 구현 대기 → 병렬 구현·커밋 → 결과 확인"
+            .into();
+    definition.entry = "inbox".into();
+    definition.artifacts.push(artifact("brief", "구체화 방향", "# 구체화 방향\n\n## 문제와 목표\n\n## 범위와 제외 범위\n\n## 수용 기준\n\n## 결정과 열린 질문\n"));
+    definition.artifacts.push(artifact(
+        "rollback",
+        "폐기 기록",
+        "# 폐기 기록\n\n## 대상 커밋\n\n## 영향과 의존성\n\n## 되돌리기 검증\n",
+    ));
+    definition.nodes = vec![
+        node("inbox", "의도", NodeKind::Human, &[], &[], &[]),
+        node(
+            "clarify",
+            "구체화",
+            NodeKind::Agent,
+            &["intent"],
+            &["brief"],
+            &["planner", "research"],
+        ),
+        node(
+            "design",
+            "설계",
+            NodeKind::Agent,
+            &["intent", "brief"],
+            &["spec", "plan"],
+            &["planner", "research"],
+        ),
+        node(
+            "approval",
+            "승인 대기",
+            NodeKind::Human,
+            &["brief", "spec", "plan"],
+            &[],
+            &[],
+        ),
+        node(
+            "queued",
+            "구현 대기",
+            NodeKind::Human,
+            &["spec", "plan"],
+            &[],
+            &[],
+        ),
+        node(
+            "build",
+            "구현",
+            NodeKind::Agent,
+            &["intent", "brief", "spec", "plan"],
+            &["verification"],
+            &["implementer", "verifier"],
+        ),
+        node(
+            "unconfirmed",
+            "완료·미확인",
+            NodeKind::Human,
+            &["verification"],
+            &[],
+            &[],
+        ),
+        node("done", "완료", NodeKind::End, &[], &[], &[]),
+        node(
+            "discarding",
+            "폐기 중",
+            NodeKind::Agent,
+            &["verification"],
+            &["rollback"],
+            &["implementer", "verifier"],
+        ),
+        node("discarded", "폐기", NodeKind::End, &[], &[], &[]),
+        node("cancelled", "취소", NodeKind::End, &[], &[], &[]),
+    ];
+    for node in &mut definition.nodes {
+        if node.kind == NodeKind::Human {
+            node.decision = Some("approval".into());
+        }
+        if node.kind == NodeKind::Agent {
+            node.action_ref = Some(format!("sdd-{}", node.id));
+        }
+        node.instructions = match node.id.as_str() {
+            "clarify" => "Preserve the original intent. Write brief.md with the problem, desired outcome, scope, exclusions and acceptance criteria. Ask user decisions through the harness interview protocol. Do not design or implement yet.",
+            "design" => "Read the accepted brief and project DESIGN.md. Write spec.md and plan.md. Inspect ALL work records for dependencies; submit dependsOn (IDs) and scope (repository-relative file paths) with the completion request. Ask technical/product decisions through interviews. Do not edit source code.",
+            "build" => "Implement the approved spec and plan in the assigned worktree. Coordinate with peers through A2A. Run relevant checks, commit every task change without another approval, include Sawhorse-Work: <workId> in each commit message, and submit full commit hashes in chronological order. Record actual results in verification.md. Do not push or deploy.",
+            "discarding" => "Review the exact recorded implementation commits and dependency impact. Revert those commits newest first in the assigned worktree, preserving unrelated changes. Resolve conflicts, validate the result, commit with Sawhorse-Work: <workId>, record rollback.md and submit the new revert hashes. Never reset shared history.",
+            _ => "Human decision; the host owns this transition.",
+        }.into();
+    }
+    definition.edges = vec![
+        edge("inbox", "clarify", "clarify"),
+        edge("clarify", "design", "design"),
+        edge("design", "approval", "completed"),
+        edge("approval", "queued", "approved"),
+        edge("queued", "build", "start"),
+        edge("build", "unconfirmed", "completed"),
+        edge("unconfirmed", "done", "confirmed"),
+        edge("unconfirmed", "discarding", "discard"),
+        edge("discarding", "discarded", "completed"),
+        edge("inbox", "cancelled", "cancel"),
+        edge("clarify", "cancelled", "cancel"),
+        edge("design", "cancelled", "cancel"),
+        edge("approval", "cancelled", "cancel"),
+        edge("queued", "cancelled", "cancel"),
+    ];
+    definition.loops.clear();
+    definition
+}
+
 pub fn all() -> Vec<WorkflowDefinition> {
     vec![
+        goal(),
         sdd(),
         tdd(),
         sdd_with_tdd(),
         issue(),
         issue_v1(),
         intent_flow(),
+        intent_flow_v2(),
     ]
+}
+
+pub fn goal() -> WorkflowDefinition {
+    let mut run = node("pursue", "목표 달성", NodeKind::Agent, &[], &["evidence"], &["planner", "implementer", "verifier"]);
+    run.action_ref = Some("goal-pursuit".into());
+    run.instructions = "목표가 달성될 때까지 작업 생성, 설계, 구현, 검증을 자율적으로 반복합니다.".into();
+    WorkflowDefinition {
+        id: "goal-main".into(), label: "골 모드".into(), version: "1.0.0".into(),
+        description: "사람의 단계 승인 없이 목표 달성까지 반복. 사용량 한도 소진 시 1시간마다 자동 재시도.".into(),
+        entry: "pursue".into(),
+        artifacts: vec![artifact("evidence", "진행 및 검증 근거", "# 진행 및 검증 근거\n")],
+        nodes: vec![run, node("done", "목표 달성", NodeKind::End, &[], &[], &[])],
+        edges: vec![edge("pursue", "done", "verified")],
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]

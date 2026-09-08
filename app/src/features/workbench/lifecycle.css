@@ -1,0 +1,31 @@
+.wb-lifecycle { min-width: 0; padding: 22px 28px; }
+.wb-lifecycle-progress { display: flex; overflow-x: auto; gap: 14px; margin: 0 0 24px; padding: 0 0 12px; list-style: none; }
+.wb-lifecycle-progress li { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 11px; color: var(--muted-foreground); }
+.wb-lifecycle-progress li > span { border: 1px solid var(--border); border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; }
+.wb-lifecycle-progress li[aria-current] { color: var(--foreground); font-weight: 650; }
+.wb-lifecycle-progress li[aria-current] > span { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.wb-lifecycle-progress .is-complete { color: var(--primary); }
+.wb-lifecycle-actions, .wb-interview-options { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.wb-interview { padding: 20px; margin: 20px 0; border: 1px solid var(--primary); border-radius: 12px; background: color-mix(in srgb, var(--primary) 4%, var(--card)); }
+.wb-interview h3 { font-weight: 650; margin-bottom: 6px; }
+.wb-interview p, .wb-lifecycle-notice { color: var(--muted-foreground); font-size: 13px; line-height: 1.6; }
+.wb-interview form { margin-top: 20px; }
+.wb-interview label { display: block; font-weight: 550; margin-bottom: 8px; }
+.wb-interview-options button { padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.wb-interview-options button[aria-pressed=true] { border-color: var(--primary); background: var(--muted); }
+.wb-interview textarea, .wb-lifecycle-document textarea, .wb-resources textarea { display: block; width: 100%; min-height: 88px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); padding: 12px; margin-bottom: 10px; resize: vertical; font-size: 13px; }
+.wb-lifecycle-document { padding: 18px 0; min-height: 220px; }
+.wb-lifecycle-document textarea { min-height: 360px; font-family: monospace; }
+.wb-commit { display: block; padding: 5px 0; overflow-wrap: anywhere; font-size: 12px; }
+.wb-resources { margin: 28px 0; border-top: 1px solid var(--border); padding-top: 24px; }
+.wb-resource-layout { display: grid; grid-template-columns: 250px minmax(0,1fr); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-top: 16px; }
+.wb-resource-list { padding: 12px; background: var(--muted); }
+.wb-resource-list button { width: 100%; padding: 12px; text-align: left; border-radius: 8px; margin-bottom: 4px; }
+.wb-resource-list button[aria-pressed=true] { background: var(--card); }
+.wb-resource-list small { display: block; color: var(--muted-foreground); }
+.wb-resource-editor { padding: 22px; min-width: 0; }
+.wb-resource-editor label { display: block; font-size: 12px; margin: 12px 0 6px; }
+.wb-resource-editor input { width: 100%; border: 1px solid var(--border); padding: 8px 10px; border-radius: 8px; margin-bottom: 12px; }
+.wb-resource-editor textarea { min-height: 220px; }
+.wb-resource-editor .wb-resource-source { min-height: 110px; }
+@media(max-width: 760px) { .wb-resource-layout { grid-template-columns: 1fr; } .wb-lifecycle { padding: 16px; } }

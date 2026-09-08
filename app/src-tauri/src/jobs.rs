@@ -20,7 +20,7 @@ use serde_json::{json, Map, Value};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 use crate::config::{self, ConfigView, HerdrCfg};
-use crate::herdr::{self, Herdr};
+use crate::herdr::Herdr;
 use crate::state::AppState;
 use crate::transcript;
 
@@ -516,7 +516,7 @@ fn build_job(
                 ..base
             })
         }
-        // 팩이 선언한 액션. 앞의 arm 들은 SI 팩이 팩 구조 이전에 갖고 있던 잡들이고,
+        // 팩이 선언한 액션. 앞의 arm 들은 팩 구조 이전의 레거시 잡이고,
         // 히스토리(jobs.jsonl)가 그 kind 로 남아 있어 그대로 둔다.
         "action" => {
             let pack_id = req.pack_id.clone().ok_or("팩이 지정되지 않았습니다")?;
@@ -678,35 +678,12 @@ impl JobManager {
         mgr
     }
 
-    /// Pick the runner for one job, honouring `mode` and falling back to headless
-    /// when `auto` cannot reach a herdr server or cannot launch claude inside one.
-    /// The reason lands in the job log so a surprising fallback is explainable
-    /// after the fact.
+    /// Background by default. Only an explicit herdr setting creates agent panes.
     async fn decide_runner(&self, job: &mut Job) -> JobRunner {
-        match job.herdr_cfg.mode.as_str() {
-            "headless" => JobRunner::Headless,
-            "herdr" => {
-                // The setting forbids the fallback, so all we can do is say why
-                // the herdr run is about to fail.
-                if let Some(why) = herdr::windows_launch_block(CLAUDE_AGENT) {
-                    self.log_line(job, &format!("herdr 실행 경고: {why}"));
-                }
-                JobRunner::Herdr
-            }
-            _ => {
-                if !Herdr::new(&job.herdr_cfg).reachable().await {
-                    self.log_line(
-                        job,
-                        "herdr 서버에 연결하지 못해 헤드리스로 실행합니다 (mode: auto)",
-                    );
-                    JobRunner::Headless
-                } else if let Some(why) = herdr::windows_launch_block(CLAUDE_AGENT) {
-                    self.log_line(job, &format!("{why} 헤드리스로 실행합니다 (mode: auto)"));
-                    JobRunner::Headless
-                } else {
-                    JobRunner::Herdr
-                }
-            }
+        if job.herdr_cfg.mode == "herdr" {
+            JobRunner::Herdr
+        } else {
+            JobRunner::Headless
         }
     }
 
@@ -1953,7 +1930,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         assert_eq!(generic.cwd, "/v");
     }
 
-    /// 팩 액션 잡: 동봉한 SI 팩의 선언이 그대로 프롬프트·cwd·라벨이 된다.
+    /// 팩 액션 잡: 동봉한 기능 확장의 선언이 그대로 프롬프트·cwd·라벨이 된다.
     ///
     /// 레지스트리는 `plugin::resolve_root()` 로 찾는다 — 테스트에서는 tauri-build 가
     /// `bundle.resources` 를 target 디렉터리에 복사해 둔 것을 쓰게 되고, 번들 앱에서
@@ -1962,7 +1939,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
     fn pack_action_job_renders_from_the_manifest() {
         let reg = crate::packs::load_registry(&[]);
         assert!(
-            reg.get("si").is_some() && reg.get("starter").is_some(),
+            reg.get("journal").is_some() && reg.get("project-docs").is_some(),
             "동봉 팩을 찾지 못했다 (플러그인 루트: {:?})",
             crate::plugin::resolve_root()
         );
@@ -1978,7 +1955,7 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         let j = build_job(
             JobRequest {
                 kind: "action".into(),
-                pack_id: Some("si".into()),
+                pack_id: Some("journal".into()),
                 action_id: Some("morning".into()),
                 ..Default::default()
             },
@@ -1991,13 +1968,16 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
         assert_eq!(j.cwd, "/v");
         assert!(j.label.contains("아침 브리핑"), "{}", j.label);
 
-        // cwd: project + ids 파라미터
+        // cwd: project 액션
         let d = build_job(
             JobRequest {
                 kind: "action".into(),
-                pack_id: Some("si".into()),
-                action_id: Some("design".into()),
-                ids: Some(vec!["FDR-001".into()]),
+                pack_id: Some("project-docs".into()),
+                action_id: Some("codebase-docs".into()),
+                params: serde_json::from_value(
+                    serde_json::json!({"project": "FDR", "target": "인증"}),
+                )
+                .unwrap(),
                 ..Default::default()
             },
             &opts,
@@ -2005,11 +1985,11 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             &state,
         )
         .unwrap();
-        assert_eq!(d.prompt, "/sawhorse:issues 설계 FDR-001");
+        assert_eq!(d.prompt, "/sawhorse:codebase-docs 인증");
         assert_eq!(d.cwd, "/w");
 
         // 없는 액션 / 없는 팩은 오류
-        for (pack, action) in [("si", "없는액션"), ("없는팩", "morning")] {
+        for (pack, action) in [("journal", "없는액션"), ("없는팩", "morning")] {
             let err = build_job(
                 JobRequest {
                     kind: "action".into(),
@@ -2025,11 +2005,11 @@ echo '{"type":"result","is_error":false,"result":"## 결과 보고"}'
             assert!(err.contains("액션을 찾지 못했습니다"), "{err}");
         }
 
-        // required 파라미터가 비면 실행 전에 막는다 (starter 의 capture)
+        // required 파라미터가 비면 실행 전에 막는다 (journal 의 capture)
         let err = build_job(
             JobRequest {
                 kind: "action".into(),
-                pack_id: Some("starter".into()),
+                pack_id: Some("journal".into()),
                 action_id: Some("capture".into()),
                 ..Default::default()
             },
@@ -2256,7 +2236,7 @@ esac
     }
 
     #[tokio::test]
-    async fn auto_mode_falls_back_to_headless_without_herdr() {
+    async fn auto_mode_runs_headless_without_contacting_herdr() {
         let rig = rig("herdr-fallback");
         let claude = write_script(
             &rig.dir,
@@ -2276,11 +2256,7 @@ echo '{"type":"result","is_error":false,"result":"ok"}'
             .expect("job did not finish");
         assert_eq!(done.status, JobStatus::Success, "error: {:?}", done.error);
         assert_eq!(done.runner, JobRunner::Headless);
-        let log = std::fs::read_to_string(rig.state.log_path(&job.id)).unwrap();
-        assert!(
-            log.contains("헤드리스로 실행합니다"),
-            "fallback reason missing: {log}"
-        );
+        assert!(done.herdr_tab_id.is_none());
     }
 
     #[tokio::test]

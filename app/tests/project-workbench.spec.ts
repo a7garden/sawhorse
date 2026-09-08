@@ -118,37 +118,42 @@ test("an empty project displays its configured process and stale project selecti
   await expect(page.getByRole("heading", { name: "작업대", exact: true })).toBeVisible();
 });
 
-test("sidebar groups project views under a shared selector and keeps vault and tools global", async ({ page }) => {
+test("sidebar groups runs by source and preserves project scope between tabs", async ({ page }) => {
   const sidebar = page.locator("aside nav");
   const projectViews = sidebar.getByRole("region", { name: "프로젝트별 화면", exact: true });
   const workspace = sidebar.getByRole("region", { name: "전체 작업공간", exact: true });
-  const vault = sidebar.getByRole("region", { name: "볼트", exact: true });
-  for (const name of ["작업대", "작업", "캘린더", "개발 실행", "실행 기록", "작업 문서 검색"]) {
+  const picker = page.getByRole("combobox", { name: "사이드바 프로젝트 선택", exact: true });
+  const location = page.getByLabel("현재 위치", { exact: true });
+  for (const name of ["작업대", "작업", "캘린더", "실행", "작업 문서 검색"]) {
     await expect(projectViews.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  for (const name of ["개발 실행", "실행 기록"]) {
+    await expect(projectViews.getByRole("button", { name, exact: true })).toHaveCount(0);
   }
   for (const name of ["자동화", "프로젝트", "워크플로", "에이전트"]) {
     await expect(workspace.getByRole("button", { name, exact: true })).toHaveCount(1);
   }
-  await expect(vault.getByText("공통", { exact: true })).toBeVisible();
-  await page.getByLabel("사이드바 프로젝트 선택").selectOption("herdr");
-  await expect(scope(page)).toHaveValue("herdr");
-  await expect(page.getByRole("heading", { name: "Herdr 작업대", exact: true })).toBeVisible();
-  await scope(page).selectOption("sawhorse");
-  await expect(page.getByLabel("사이드바 프로젝트 선택")).toHaveValue("sawhorse");
-
-  await nav(page, "모든 문서");
-  await expect(vault.getByRole("button", { name: "모든 문서", exact: true })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByText("볼트 문서", { exact: true })).toBeVisible();
-  await page.getByLabel("사이드바 프로젝트 선택").selectOption("herdr");
-  await expect(page.getByText("볼트 문서", { exact: true })).toBeVisible();
-  await nav(page, "작업대");
-  await expect(page.getByRole("heading", { name: "Herdr 작업대", exact: true })).toBeVisible();
-  await nav(page, "개발 실행");
-  await expect(scope(page)).toHaveValue("herdr");
-  await expect(projectViews.getByRole("button", { name: "개발 실행", exact: true })).toHaveAttribute("aria-current", "page");
+  await picker.click();
+  await page.getByRole("option", { name: "Herdr", exact: true }).click();
+  await nav(page, "실행");
+  await expect(location).toContainText("Herdr");
+  await expect(projectViews.getByRole("button", { name: "실행", exact: true })).toHaveAttribute("aria-current", "page");
+  const runTabs = page.getByLabel("화면 선택", { exact: true });
+  await expect(runTabs.getByRole("button", { name: "작업 실행", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("작업의 설계·구현·검증을 수행한 에이전트 실행입니다.", { exact: false })).toBeVisible();
+  await runTabs.getByRole("button", { name: "자동화·도구 실행", exact: true }).click();
+  await expect(runTabs.getByRole("button", { name: "자동화·도구 실행", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByText("자동화 작업·예약과 개별 도구에서 시작한 실행입니다.", { exact: false })).toBeVisible();
+  await expect(projectViews.getByRole("button", { name: "실행", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(location).toContainText("Herdr");
+  await expect(scope(page)).toContainText("Herdr");
+  await scope(page).click();
+  await page.getByRole("option", { name: "Sawhorse", exact: true }).click();
+  await expect(picker).toContainText("Sawhorse");
+  await runTabs.getByRole("button", { name: "작업 실행", exact: true }).click();
+  await expect(location).toContainText("Sawhorse");
   await nav(page, "에이전트");
   await expect(workspace.getByRole("button", { name: "에이전트", exact: true })).toHaveAttribute("aria-current", "page");
-  const tabs = page.getByLabel("화면 선택", { exact: true });
-  await expect(tabs.getByRole("button", { name: "개발 실행", exact: true })).toHaveCount(0);
-  await expect(tabs.getByRole("button", { name: "협업 세션", exact: true })).toBeVisible();
+  await expect(runTabs.getByRole("button", { name: "작업 실행", exact: true })).toHaveCount(0);
+  await expect(runTabs.getByRole("button", { name: "협업 세션", exact: true })).toBeVisible();
 });

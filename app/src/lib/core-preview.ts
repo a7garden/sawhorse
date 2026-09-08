@@ -40,8 +40,8 @@ const PREVIEW_VAULT_VIEWS: Array<{
   view: PackView;
 }> = [
   {
-    packId: "starter",
-    packName: "기본 작업",
+    packId: "journal",
+    packName: "일지",
     view: {
       id: "logs",
       label: "일지",
@@ -59,8 +59,8 @@ const PREVIEW_VAULT_VIEWS: Array<{
     },
   },
   {
-    packId: "si",
-    packName: "SI",
+    packId: "concepts",
+    packName: "개념",
     view: {
       id: "concepts",
       label: "개념",
@@ -84,14 +84,14 @@ const PREVIEW_VAULT_VIEWS: Array<{
     },
   },
   {
-    packId: "si",
-    packName: "SI",
+    packId: "todos",
+    packName: "할 일",
     view: {
-      id: "vault",
-      label: "점검",
-      icon: "folder-search",
+      id: "todos",
+      label: "할 일",
+      icon: "square-check-big",
       type: "native",
-      component: "vault",
+      component: "todos",
       columns: [],
       groupBy: "",
       selection: "none",
@@ -126,19 +126,27 @@ const previewPack = (
 
 const previewPacks: PackInfo[] = [
   previewPack(
-    "starter",
-    "기본 작업",
-    PREVIEW_VAULT_VIEWS.filter((item) => item.packId === "starter").map(
+    "journal",
+    "일지",
+    PREVIEW_VAULT_VIEWS.filter((item) => item.packId === "journal").map(
       (item) => item.view,
     ),
   ),
   previewPack(
-    "si",
-    "SI",
-    PREVIEW_VAULT_VIEWS.filter((item) => item.packId === "si").map(
+    "concepts",
+    "개념",
+    PREVIEW_VAULT_VIEWS.filter((item) => item.packId === "concepts").map(
       (item) => item.view,
     ),
   ),
+  previewPack(
+    "todos",
+    "할 일",
+    PREVIEW_VAULT_VIEWS.filter((item) => item.packId === "todos").map(
+      (item) => item.view,
+    ),
+  ),
+  previewPack("project-docs", "프로젝트 문서화", []),
 ];
 
 const previewNav: NavEntry[] = PREVIEW_VAULT_VIEWS.map(
@@ -153,6 +161,16 @@ const previewNav: NavEntry[] = PREVIEW_VAULT_VIEWS.map(
     group: "vault",
   }),
 );
+const PREVIEW_DISABLED_PACKS_KEY = "sawhorse.preview-disabled-packs";
+function previewDisabledPacks(): Set<string> {
+  return new Set(
+    JSON.parse(localStorage.getItem(PREVIEW_DISABLED_PACKS_KEY) ?? "[]") as string[],
+  );
+}
+function enabledPreviewPacks(): PackInfo[] {
+  const disabled = previewDisabledPacks();
+  return previewPacks.map((pack) => ({ ...pack, enabled: !disabled.has(pack.id) }));
+}
 // 설정 화면 미리보기 — 브라우저에서 설정 다섯 탭이 실제로 그려지게 하는 최소 데이터.
 // 데스크톱 명령을 흉내만 내며 어떤 파일도 만지지 않는다.
 const CONFIG_KEY = "sawhorse.preview-config";
@@ -238,17 +256,16 @@ const previewDiagnostics: Diagnostics = {
 };
 const previewRequirements: RequirementStatus[] = [
   {
-    id: "claude",
-    name: "claude CLI",
-    need: "required",
-    why: "에이전트 잡을 직접 돌리는 실행 기반",
+    id: "obsidian",
+    name: "Obsidian",
+    need: "recommended",
+    why: "작업공간 노트를 사람이 읽고 고치는 앱입니다. 없어도 앱 안에서 문서를 편집할 수 있습니다.",
     detected: true,
-    version: "2.1.7",
-    path: "/opt/homebrew/bin/claude",
+    path: "/Applications/Obsidian.app",
     outdated: false,
-    minMajor: 1,
-    installUrl: "https://docs.anthropic.com/en/docs/claude-code",
-    installHint: "npm install -g @anthropic-ai/claude-code",
+    minMajor: 0,
+    installUrl: "https://obsidian.md/download",
+    installHint: "",
   },
   {
     id: "herdr",
@@ -261,19 +278,6 @@ const previewRequirements: RequirementStatus[] = [
     minMajor: 0,
     installUrl: "https://github.com/a7garden/herdr",
     installHint: "cargo install herdr",
-  },
-  {
-    id: "git",
-    name: "git",
-    need: "required",
-    why: "프로젝트 동기화와 통합",
-    detected: true,
-    version: "2.51.0",
-    path: "/usr/bin/git",
-    outdated: false,
-    minMajor: 2,
-    installUrl: "",
-    installHint: "",
   },
 ];
 // 동봉 확장 패키지. 체험 화면이 실제 앱과 같은 설치 목록을 보게 한다.
@@ -739,15 +743,27 @@ export async function corePreview(
     case "remote_operations_list":
       return { operations: [] };
     case "list_packs":
-      return { packs: previewPacks, broken: [] };
+      return { packs: enabledPreviewPacks(), broken: [] };
     case "list_nav":
-      return i18n.language.startsWith("en")
-        ? previewNav.map((entry) => ({
+      {
+        const disabled = previewDisabledPacks();
+        const nav = previewNav.filter((entry) => !disabled.has(entry.packId));
+        return i18n.language.startsWith("en")
+        ? nav.map((entry) => ({
             ...entry,
-            packName: entry.packId === "starter" ? "Starter" : entry.packName,
-            label: ({ logs: "Journal", concepts: "Concepts", vault: "Audit" } as Record<string, string>)[entry.viewId] ?? entry.label,
+            packName: ({ journal: "Journal", concepts: "Concepts", todos: "Todos" } as Record<string, string>)[entry.packId] ?? entry.packName,
+            label: ({ logs: "Journal", concepts: "Concepts", todos: "Todos" } as Record<string, string>)[entry.viewId] ?? entry.label,
           }))
-        : previewNav;
+        : nav;
+      }
+    case "set_pack_enabled": {
+      const disabled = previewDisabledPacks();
+      const id = String(args.id ?? "");
+      if (args.on) disabled.delete(id);
+      else disabled.add(id);
+      localStorage.setItem(PREVIEW_DISABLED_PACKS_KEY, JSON.stringify([...disabled]));
+      return readConfig();
+    }
     // 작업대 위젯이 쓰는 읽기·쓰기. 브라우저 체험에서도 실행 타임라인과
     // 체크리스트가 실제로 움직여야 위젯의 값어치를 확인할 수 있다.
     case "list_jobs":

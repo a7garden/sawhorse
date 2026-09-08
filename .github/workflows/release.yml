@@ -33,11 +33,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: app/package-lock.json
+      - uses: oven-sh/setup-bun@v2
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
@@ -49,11 +45,11 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: app/src-tauri
-      - run: npm ci
+      - run: bun install --frozen-lockfile
         working-directory: app
       - name: Build assets shared by the desktop library
         working-directory: app
-        run: npm run build
+        run: bun run build
       - name: Verify console CLI on the native host
         working-directory: app/src-tauri
         env:

@@ -1,5 +1,13 @@
+import { TaskBoard, IntentInbox } from "./TaskBoard";
+import { workArea, isTaskRecord, taskStage, taskStages, type WorkArea } from "./task-board";
+import { MockupLibrary } from "@/features/mockups/MockupLibrary";
+import { LifecyclePanel } from "./LifecyclePanel";
+import { ResourceLibrary } from "./ResourceLibrary";
+import { isLifecycleV2 } from "./lifecycle-v2";
 import { JournalWidget } from "@/features/journal/JournalPage";
 import { MockupReview } from "@/features/mockups/MockupReview";
+import { GoalPanel } from "./GoalPanel";
+import { GOAL_WORKFLOW, type GoalBatchItem } from "./goals";
 import { IntentComposer } from "./IntentComposer";
 import { IntentFlowPanel } from "./IntentFlowPanel";
 import { WorkCopilot } from "./WorkCopilot";
@@ -70,7 +78,7 @@ import { useApp } from "@/lib/store";
 import { api as vaultApi } from "@/lib/api";
 import { sddApi, workflowApi } from "./api";
 import { workActions } from "./lifecycle";
-import { groupProcesses, jobsForProject, processStageKey, useProjectScope } from "./project-scope";
+import { groupProcesses, jobsForProject, useProjectScope } from "./project-scope";
 import { latestWorkflowVersions } from "./workflow-version";
 import {
   acceptWorkspaceSnapshot,
@@ -136,7 +144,18 @@ type AgendaEntry =
       workId: string;
     };
 /** 아직 끝나지 않은 harness 실행 상태. 중복 실행 판정과 상태 갱신이 같은 목록을 본다. */
-const ACTIVE_RUN_STATUS = ["starting", "running", "blocked"];
+const ACTIVE_RUN_STATUS = ["starting", "running", "blocked", "unknown"];
+const ATTENTION_RUN_STATUS = ["failed", "stopped", "blocked", "unknown"];
+function attentionRuns(runs: HarnessRun[], work: WorkItem[]) {
+  const latest = new Map<string, HarnessRun>();
+  for (const run of [...runs].sort((a, b) => b.createdAt.localeCompare(a.createdAt))) {
+    const key = `${run.workId}:${run.role}`;
+    if (!latest.has(key)) latest.set(key, run);
+  }
+  return [...latest.values()].filter((run) => ATTENTION_RUN_STATUS.includes(run.status)
+    && !work.some((item) => item.id === run.workId && isClosedStatus(item.status)));
+}
+
 
 const AGENT_ROLES: AgentRole[] = [
   "research",
@@ -301,8 +320,8 @@ function blankProject(defaultAgent: string): Project {
     verifyCommands: [],
     defaultAgent,
     defaultModel: "",
-    workflowId: "sdd-main",
-    workflowVersion: "1.1.0",
+    workflowId: "intent-flow",
+    workflowVersion: "2.0.0",
     workflowDigest: "",
   };
 }
@@ -363,6 +382,7 @@ function stageLabel(
   workflowId?: string,
   workflowVersion?: string,
 ) {
+  if (workflowId === "intent-flow" && workflowVersion === "2.0.0") return i18n.t(`workbench:lifecycle.stages.${stage}`);
   const selected = workflows.find(
     (definition) =>
       (!workflowId || definition.id === workflowId) &&
@@ -1212,6 +1232,20 @@ function OverviewView({
           <Button onClick={onNewWork}><Plus />{t("board.newWork")}</Button>
         </div>
       </header>
+      {runsError && <div className="wb-inline-error" role="alert">{runsError}</div>}
+      {attentionRuns(runs, work).length > 0 && (
+        <section className="wb-run-attention" aria-label={t("harness.attention")}>
+          <h2>{t("harness.attention")} · {attentionRuns(runs, work).length}</h2>
+          <p>{t("harness.attentionHint")}</p>
+          {attentionRuns(runs, work).map((run) => (
+            <button className="wb-project-summary" key={run.id} onClick={() => useApp.getState().openRun(run.id, run.projectId)}>
+              <strong>{work.find((item) => item.id === run.workId)?.title ?? run.workId}</strong>
+              <span>{roleText(run.role)} · {t(`runStatus.${run.status}`)}</span>
+              <small>{run.error || t(`runStatus.${run.status}`)}</small>
+            </button>
+          ))}
+        </section>
+      )}
       <div className="wb-overview-tools">
         <span>{t("overview.workspaceSummary")}</span>
         <Button
@@ -1424,65 +1458,6 @@ function WorkRow({
       </div>
     </div>
   );
-}
-/** The board groups the same filtered work by pinned workflow and current process node. */
-function BoardView({ work, projects, workflows, onSelectWork }: {
-  work: WorkItem[];
-  projects: Project[];
-  workflows: WorkflowDefinition[];
-  onSelectWork: (id: string) => void;
-}) {
-  const { t } = useTranslation("workbench");
-  const groups = groupProcesses(work, workflows);
-  const latestVersion = latestWorkflowVersions(workflows);
-  return <div className="wb-process-boards">
-    {groups.length > 1 && <p className="wb-muted wb-work-process-hint">{t("scope.processHint")}</p>}
-    {groups.map(({ key, workflow, items }) => {
-      const nodes = workflow?.nodes.filter((node) => node.kind !== "end") ?? [];
-      const columns = nodes.map((node) => ({ id: node.id, label: node.label }));
-      for (const item of items.filter((item) => !isClosedStatus(item.status))) {
-        const id = activeNodeForWork(item);
-        if (!columns.some((column) => column.id === id)) columns.push({ id, label: stageText(id) });
-      }
-      if (items.some((item) => isClosedStatus(item.status))) columns.push({ id: "__closed", label: t("work.closed") });
-      const versionLabel = workflow && latestVersion.get(workflow.id) !== workflow.version
-        ? t("work.legacyVersion", { version: workflow.version })
-        : workflow?.version;
-      return <section key={key} className="wb-process-group">
-        <h2><span>{workflow?.label ?? key}</span><small>{versionLabel}</small><span className="wb-work-process-count">{t("issues.nCount", { count: items.length })}</span></h2>
-        <div className="wb-board" aria-label={workflow?.label ?? key}>
-          {columns.map((column) => {
-            const members = items.filter((item) => isClosedStatus(item.status)
-              ? column.id === "__closed" : activeNodeForWork(item) === column.id);
-            return <div className="wb-board-column" key={column.id} data-stage={column.id}>
-              <div className="wb-column-head"><strong>{column.label}</strong><small>{members.length}</small></div>
-              <div className="wb-card-stack">
-                {members.map((item) => <article className="wb-board-card" key={item.id}>
-                  <button onClick={() => onSelectWork(item.id)} aria-label={item.title}>
-                    <div className="wb-card-top">
-                      <span className="wb-work-card-id">{item.id}</span>
-                      <span className={`wb-priority is-${item.priority}`}>{priorityText(item.priority)}</span>
-                    </div>
-                    <strong>{item.title}</strong>
-                    <p>{item.description || t("board.descriptionPlaceholder")}</p>
-                    <div className="wb-work-card-meta">
-                      <span className={statusClass(item.status)}>{statusText(item.status)}</span>
-                      <span>{executionTypeText(item.executionType)}</span>
-                    </div>
-                    <footer>
-                      <span>{projects.find((project) => project.id === item.projectId)?.name ?? t("board.uncategorized")}</span>
-                      {item.dueDate && <time dateTime={item.dueDate}><CalendarDays size={11} />{formatDate(item.dueDate)}</time>}
-                    </footer>
-                  </button>
-                </article>)}
-                {!members.length && <div className="wb-drop-hint">{t("work.emptyStage")}</div>}
-              </div>
-            </div>;
-          })}
-        </div>
-      </section>;
-    })}
-  </div>;
 }
 function CalendarView({
   work,
@@ -2030,6 +2005,7 @@ function ProjectsView({
           }
         />
       )}
+      <ResourceLibrary projects={projects} />
     </>
   );
 }
@@ -2116,13 +2092,15 @@ function WorkView({
   onNewMilestone: () => void;
 }) {
   const { t } = useTranslation("workbench");
+  const appDefaultAgent = useApp((state) => state.defaultAgent);
+  const knownAgents = useApp((state) => state.agents);
   const [display, setDisplay] = useState<"board" | "list">(() => {
-    try { return localStorage.getItem("sawhorse.work-view") === "list" ? "list" : "board"; }
+    try { return localStorage.getItem("sawhorse.work-view.v2") === "list" ? "list" : "board"; }
     catch { return "board"; }
   });
   const chooseDisplay = (next: "board" | "list") => {
     setDisplay(next);
-    try { localStorage.setItem("sawhorse.work-view", next); } catch { /* Optional preference. */ }
+    try { localStorage.setItem("sawhorse.work-view.v2", next); } catch { /* Optional preference. */ }
   };
   // 정렬은 보기와 함께 기억한다. 목록과 공정 보드가 같은 기준으로 줄을 선다.
   const [sort, setSort] = useState<WorkSort>(readWorkSort);
@@ -2137,22 +2115,21 @@ function WorkView({
   const milestonesId = useId();
   const [stageFilter, setStageFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
-  const stageOptions = groupProcesses(work, workflows).flatMap(({ key, workflow }) =>
-    (workflow?.nodes ?? []).filter((node) => node.kind !== "end").map((node) =>
-      [`${key}:${node.id}`, `${workflow?.label} ${workflow?.version} · ${node.label}`]));
+  const stageOptions = [...taskStages, "discarding", "other"].map((stage) => [stage, t(`taskBoard.stages.${stage}`)]);
+  const [area, setArea] = useState<WorkArea>("flow");
+  const changeArea = (next: WorkArea) => { setArea(next); setStageFilter("all"); setSelectedIds([]); };
+  const taskWork = work.filter(isTaskRecord);
+  const areaWork = work.filter((item) => workArea(item) === area);
   const projectId = useProjectScope((state) => state.projectId);
   const setProjectId = useProjectScope((state) => state.selectProject);
   const projectFilter = projectId || "all";
   const setProjectFilter = (id: string) => setProjectId(id === "all" ? "" : id);
-  const [stateFilter, setStateFilter] = useState<"open" | "closed" | "all">(
-    "open",
-  );
-  // 의도 흐름만 모아 보는 축. 상태 탭과 다른 축이라 열림·닫힘 선택을 지우지 않는다.
-  const [intentOnly, setIntentOnly] = useState(false);
   const [executionFilter, setExecutionFilter] = useState("all");
   const [milestoneFilter, setMilestoneFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [goalBatch, setGoalBatch] = useState<GoalBatchItem[] | null>(null);
+  const goalSubmitting = useRef(false);
   const [launchTargets, setLaunchTargets] = useState<WorkItem[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [legacy, setLegacy] = useState<IssueMigrationItem[] | null>(null);
@@ -2179,13 +2156,11 @@ function WorkView({
     ...new Set([...(item.labels ?? []), ...(item.tags ?? [])]),
   ];
   // 태그 후보는 태그를 뺀 나머지 조건까지 걸린 범위에서 뽑는다 — 고른 태그로 목록이 비지 않게.
-  const tagPool = work.filter(
+  const tagPool = areaWork.filter(
     (item) =>
-      (!intentOnly || item.workflowId === INTENT_WORKFLOW) &&
-      (stageFilter === "all" || processStageKey(item) === stageFilter) &&
+      (stageFilter === "all" || taskStage(item, workflows) === stageFilter) &&
       (priorityFilter === "all" || item.priority === priorityFilter) &&
       (projectFilter === "all" || item.projectId === projectFilter) &&
-      (stateFilter === "all" || (item.state || "open") === stateFilter) &&
       (executionFilter === "all" || item.executionType === executionFilter) &&
       (milestoneFilter === "all" ||
         (milestoneFilter === "none"
@@ -2233,18 +2208,36 @@ function WorkView({
     return roleForStageNode(stageOf(item), node?.allowedRoles ?? []);
   };
   const agentOf = (item: WorkItem) =>
-    projects.find((project) => project.id === item.projectId)?.defaultAgent ===
-    "claude"
-      ? "claude"
-      : "codex";
+    projects.find((project) => project.id === item.projectId)?.defaultAgent ||
+    appDefaultAgent;
+  const agentName = (id: string) =>
+    knownAgents.find((candidate) => candidate.id === id)?.name ?? id;
   // 끝난 항목에는 더 밟을 단계가 없다.
-  const runnable = (item: WorkItem) => !isClosedStatus(item.status) && !["blocked", "review"].includes(item.status);
+  const runnable = (item: WorkItem) => item.workflowId !== GOAL_WORKFLOW && workArea(item) === "flow" && (!isLifecycleV2(item) || item.stage === "queued") && !isClosedStatus(item.status) && !["blocked", "review"].includes(item.status);
+  const toggleSelection = (id: string, checked: boolean) => setSelectedIds((prev) => checked ? [...new Set([...prev, id])] : prev.filter((item) => item !== id));
+  const startGoals = async () => {
+    if (goalSubmitting.current || !selectedRows.length) return;
+    goalSubmitting.current = true; setBusy("goals"); setGoalBatch(null);
+    try {
+      const results = await sddApi.startSelectedGoals(selectedRows.map((w) => w.id));
+      setGoalBatch(results);
+      const accepted = new Set(results.filter((r) => r.outcome !== "skipped").map((r) => r.workId));
+      setSelectedIds((prev) => prev.filter((id) => !accepted.has(id)));
+      await reload();
+    } catch (error) { setNotice({ tone: "error", text: errorText(error) }); }
+    finally { goalSubmitting.current = false; setBusy(null); }
+  };
 
   const launch = async (items: WorkItem[]) => {
     setBusy("launch");
     const failed: string[] = [];
     let done = 0;
-    for (const item of items) {
+    const queued = items.filter(isLifecycleV2);
+    if (queued.length) {
+      try { await sddApi.queueImplementation(queued.map((w) => w.id)); done += queued.length; }
+      catch (e) { failed.push(errorText(e)); }
+    }
+    for (const item of items.filter((w) => !isLifecycleV2(w))) {
       const project =
         projects.find((candidate) => candidate.id === item.projectId) ?? null;
       try {
@@ -2262,6 +2255,7 @@ function WorkView({
         failed.push(`${item.id} ${errorText(e)}`);
       }
     }
+    await reload();
     setLaunchTargets(null);
     setBusy(null);
     setNotice(
@@ -2321,55 +2315,43 @@ function WorkView({
     .filter((value) => value !== "all").length;
   const resetFilters = () => {
     setQuery("");
-    setIntentOnly(false);
     setStageFilter("all");
     setPriorityFilter("all");
     setExecutionFilter("all");
     setMilestoneFilter("all");
     setTagFilter("all");
   };
-  // 좁혀 보는 중인지. 결과가 비었을 때 빠져나갈 길을 열어 줄지 이 값으로 정한다.
-  const narrowed = activeFilters > 0 || Boolean(search) || intentOnly;
-  const stateCounts = {
-    open: work.filter((item) => (item.state || "open") === "open").length,
-    closed: work.filter((item) => item.state === "closed").length,
-    all: work.length,
-  };
-  // 의도 탭은 지금 고른 상태 범위 안에서 센다. 눌렀을 때 나올 수와 같아야 한다.
-  const intents = work.filter((item) => item.workflowId === INTENT_WORKFLOW);
-  const intentCount = intents.filter((item) =>
-    stateFilter === "all" || (item.state || "open") === stateFilter).length;
+  const areaCounts = Object.fromEntries((["flow", "inbox", "archive", "mockups"] as WorkArea[]).map((entry) => [entry, work.filter((w) => workArea(w) === entry).length]));
+  const attention = (stage: "approval" | "unconfirmed") => work.filter((w) => workArea(w) === "flow" && taskStage(w, workflows) === stage).length;
+  const showAttention = (stage: "approval" | "unconfirmed") => { resetFilters(); setArea("flow"); setStageFilter(stage); };
+  const queueable = rows.filter((w) => isLifecycleV2(w) && w.stage === "queued");
 
   return (
     <>
       <header className="wb-work-header">
         <div>
-          <div className="wb-work-heading"><h1>{t("work.title")}</h1><span>{work.length}</span></div>
-          <p>{t("work.description")}</p>
+          <div className="wb-work-heading"><h1>{t("work.title")}</h1><span>{taskWork.length}</span></div>
+          <p>{t("taskBoard.description")}</p>
         </div>
-        <Button onClick={() => onNewWork()}><Plus /> {t("board.newWork")}</Button>
+        <div className="wb-lifecycle-actions">
+          {area === "flow" && queueable.length > 0 && <Button variant="outline" disabled={!!busy} onClick={() => void launch(queueable)}><Play />{t("lifecycle.batch", { count: queueable.length })}</Button>}
+          <Button onClick={() => onNewWork()}><Plus /> {t("board.newWork")}</Button>
+        </div>
       </header>
 
+      <section className="wb-task-overview" aria-label={t("taskBoard.attention")}>
+        <button aria-pressed={area === "inbox"} onClick={() => { resetFilters(); changeArea("inbox"); }}><span><strong>{t("taskBoard.inbox")}</strong><small>{t("taskBoard.notYetTask")}</small></span><b>{areaCounts.inbox}</b></button>
+        <button aria-pressed={area === "flow" && stageFilter === "approval"} onClick={() => showAttention("approval")}><span><strong>{t("taskBoard.reviewDesign")}</strong><small>{t("taskBoard.reviewDesignHint")}</small></span><b>{attention("approval")}</b></button>
+        <button aria-pressed={area === "flow" && stageFilter === "unconfirmed"} onClick={() => showAttention("unconfirmed")}><span><strong>{t("taskBoard.reviewResult")}</strong><small>{t("taskBoard.reviewResultHint")}</small></span><b>{attention("unconfirmed")}</b></button>
+      </section>
       <div className="wb-work-navigation">
-        <div className="wb-work-tabs">
-          <div className="wb-work-state-tabs" role="group" aria-label={t("issues.stateAria")}>
-            {(["open", "closed", "all"] as const).map((state) => (
-              <button key={state} type="button" aria-pressed={stateFilter === state}
-                onClick={() => setStateFilter(state)}>
-                {t(state === "open" ? "issues.openIssues" : state === "closed" ? "issues.closedIssues" : "issues.all")}
-                <span>{stateCounts[state]}</span>
-              </button>
-            ))}
-          </div>
-          {intents.length > 0 && <button type="button" className="wb-work-intent-tab"
-            aria-pressed={intentOnly} onClick={() => setIntentOnly((value) => !value)}>
-            {t("work.intentOnly")}<span>{intentCount}</span>
-          </button>}
+        <div className="wb-work-area-tabs" role="group" aria-label={t("taskBoard.areas")}>
+          {(["flow", "inbox", "archive", "mockups"] as WorkArea[]).map((entry) => <button key={entry} aria-pressed={area === entry} onClick={() => changeArea(entry)}>{t(`taskBoard.${entry}`)}<span>{areaCounts[entry]}</span></button>)}
         </div>
-        <div className="wb-view-switch" role="group" aria-label={t("work.view")}>
-          <Button variant="ghost" aria-pressed={display === "board"} onClick={() => chooseDisplay("board")}><Columns3 />{t("work.board")}</Button>
+        {area === "flow" && <div className="wb-view-switch" role="group" aria-label={t("work.view")}>
+          <Button variant="ghost" aria-pressed={display === "board"} onClick={() => chooseDisplay("board")}><Columns3 />{t("taskBoard.board")}</Button>
           <Button variant="ghost" aria-pressed={display === "list"} onClick={() => chooseDisplay("list")}><List />{t("work.list")}</Button>
-        </div>
+        </div>}
       </div>
 
       <div className="wb-work-toolbar">
@@ -2394,8 +2376,8 @@ function WorkView({
       </div>
 
       {showFilters && <section id={filtersId} className="wb-work-filters" aria-label={t("work.filters")}>
-        <label><span>{t("issues.colStageRun")}</span><Select size="sm" aria-label={t("board.filterStage")} value={stageFilter} onChange={setStageFilter}
-          options={[{ value: "all", label: t("board.filterAllStages") }, ...stageOptions.map(([id, label]) => ({ value: id, label }))]} /></label>
+        {area === "flow" && <label><span>{t("issues.colStageRun")}</span><Select size="sm" aria-label={t("board.filterStage")} value={stageFilter} onChange={setStageFilter}
+          options={[{ value: "all", label: t("board.filterAllStages") }, ...stageOptions.map(([id, label]) => ({ value: id, label }))]} /></label>}
         <label><span>{t("issues.colPriority")}</span><Select size="sm" aria-label={t("board.filterWork")} value={priorityFilter} onChange={setPriorityFilter}
           options={[{ value: "all", label: t("board.filterAll") }, ...(["urgent", "high", "normal", "low"] as Priority[]).map((priority) => ({ value: priority, label: priorityText(priority) }))]} /></label>
         <label><span>{t("issues.executionAria")}</span><Select size="sm" aria-label={t("issues.executionAria")} value={executionFilter} onChange={setExecutionFilter}
@@ -2425,7 +2407,7 @@ function WorkView({
             onClick={() => setMilestoneFilter("all")}
           >
             <strong>{t("issues.allIssuesHeading")}</strong>
-            <small>{t("issues.nCount", { count: work.length })}</small>
+            <small>{t("issues.nCount", { count: taskWork.length })}</small>
           </button>
           <button
             type="button"
@@ -2439,12 +2421,12 @@ function WorkView({
             <strong>{t("issues.noMilestone")}</strong>
             <small>
               {t("issues.nCount", {
-                count: work.filter((item) => !item.milestone).length,
+                count: taskWork.filter((item) => !item.milestone).length,
               })}
             </small>
           </button>
           {milestones.map((event) => {
-            const members = work.filter((item) => item.milestone === event.id);
+            const members = taskWork.filter((item) => item.milestone === event.id);
             const closed = members.filter(
               (item) => (item.state || "open") === "closed",
             ).length;
@@ -2485,10 +2467,11 @@ function WorkView({
       </div>}
 
       <div className="wb-work-results">
-        <p role="status">{t("work.results", { count: rows.length })}
+        {area === "flow" && display === "board" && rows.length > 0 && <label className="wb-task-card-select"><input type="checkbox" aria-label={t("issues.selectAll")} checked={allChecked} disabled={busy !== null} ref={(el) => { if (el) el.indeterminate = !allChecked && selectedRows.length > 0; }} onChange={(e) => setSelectedIds(e.target.checked ? rows.map((w) => w.id) : [])} />{t("issues.selectAll")}</label>}
+        <p role="status">{t(area === "inbox" ? "taskBoard.intentResults" : area === "mockups" ? "taskBoard.mockupResults" : "work.results", { count: rows.length })}
           {milestoneFilter !== "all" && <span> · {milestoneFilter === "none" ? t("issues.noMilestone") : milestoneName(milestoneFilter)}</span>}
         </p>
-        {narrowed && <Button size="sm" variant="ghost" onClick={resetFilters}><X />{t("work.resetFilters")}</Button>}
+        {(activeFilters > 0 || search) && <Button size="sm" variant="ghost" onClick={resetFilters}><X />{t("work.resetFilters")}</Button>}
         <div className="wb-work-sort">
           <Select size="sm" value={sort.key} aria-label={t("work.sortAria")}
             onChange={(key) => chooseSort({ key, direction: WORK_SORTS[key] ?? "asc" })}
@@ -2504,9 +2487,10 @@ function WorkView({
       </div>
       <div className="wb-issue-layout">
         <div className="wb-issue-main">
-          {display === "list" && selectedRows.length > 0 && (
+          {area === "flow" && selectedRows.length > 0 && (
             <div className="wb-bulk-bar">
               <strong>{t("issues.nSelected", { count: selectedRows.length })}</strong>
+              <Button size="sm" disabled={busy !== null || !selectedRows.some((w) => !isClosedStatus(w.status))} onClick={() => void startGoals()}><Play size={14} />{t(busy === "goals" ? "goal.batchStarting" : "goal.batchStart")}</Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -2518,15 +2502,23 @@ function WorkView({
               <Button
                 size="sm"
                 variant="ghost"
+                disabled={busy !== null}
                 onClick={() => setSelectedIds([])}
               >
                 {t("issues.clearSelection")}
               </Button>
             </div>
           )}
-          {rows.length ? (display === "board" ? (
-            <BoardView work={rows} projects={projects} workflows={workflows} onSelectWork={onSelectWork} />
-          ) : (
+          {area === "flow" && selectedRows.length > 0 && <p className="wb-goal-batch-hint">{t("goal.batchHint")}</p>}
+          {area === "flow" && goalBatch && <div className="wb-goal-batch-results" role="status">
+            <p>{t("goal.batchResult", { queued: goalBatch.filter((r) => r.outcome === "queued").length, existing: goalBatch.filter((r) => r.outcome === "already-queued").length, skipped: goalBatch.filter((r) => r.outcome === "skipped").length })}</p>
+            {goalBatch.some((r) => r.outcome === "skipped") && <ul>{goalBatch.filter((r) => r.outcome === "skipped").map((r) => <li key={r.workId}>{work.find((w) => w.id === r.workId)?.title ?? r.workId}: {r.reason}</li>)}</ul>}
+          </div>}
+          {area === "archive" && <p className="wb-task-archive-hint">{t("taskBoard.archiveHint")}</p>}
+          {area === "inbox" ? <IntentInbox work={rows} projects={projects} onSelectWork={onSelectWork} onNewWork={() => onNewWork()} /> : area === "mockups" ? <MockupLibrary work={rows} projects={projects} onSelectWork={onSelectWork} /> : area === "flow" && display === "board" ? <>
+            {(activeFilters > 0 || search) && !rows.length && <EmptyState title={t("issues.emptyTitle")} description={t("work.emptyFiltered")} action={<Button variant="outline" onClick={resetFilters}>{t("work.resetFilters")}</Button>} />}
+            <TaskBoard work={rows} projects={projects} workflows={workflows} onSelectWork={onSelectWork} selectedIds={selectedSet} onToggle={toggleSelection} selectionDisabled={busy !== null} />
+          </> : rows.length ? (
             <table className="wb-issue-table">
               <thead>
                 <tr>
@@ -2534,6 +2526,7 @@ function WorkView({
                     <input
                       type="checkbox"
                       checked={allChecked}
+                      disabled={busy !== null}
                       ref={(element) => {
                         if (element)
                           element.indeterminate =
@@ -2567,6 +2560,7 @@ function WorkView({
                       <input
                         type="checkbox"
                         checked={selectedSet.has(item.id)}
+                        disabled={busy !== null}
                         onChange={(event) =>
                           setSelectedIds((prev) =>
                             event.target.checked
@@ -2615,7 +2609,7 @@ function WorkView({
                           <Play size={14} /> {stageNameOf(item)}
                         </Button>
                       ) : (
-                        <span className="wb-muted">-</span>
+                        <span className="wb-muted">{area === "archive" ? stageNameOf(item) : t(`taskBoard.stages.${taskStage(item, workflows)}`)}</span>
                       )}
                     </td>
                     <td>{item.owner || item.assignees.join(", ") || "-"}</td>
@@ -2624,11 +2618,11 @@ function WorkView({
                 ))}
               </tbody>
             </table>
-          )) : (
+          ) : (
             <EmptyState
               title={t("issues.emptyTitle")}
-              description={t(narrowed ? "work.emptyFiltered" : "issues.emptyDescription")}
-              action={narrowed ? (
+              description={t(activeFilters > 0 || search ? "work.emptyFiltered" : "issues.emptyDescription")}
+              action={activeFilters > 0 || search ? (
                 <Button variant="outline" onClick={resetFilters}>{t("work.resetFilters")}</Button>
               ) : (
                 <Button onClick={() => onNewWork()}><Plus /> {t("issues.register")}</Button>
@@ -2711,7 +2705,7 @@ function WorkView({
                 </strong>
                 <small>
                   {stageNameOf(item)} · {roleText(roleOf(item))} ·{" "}
-                  {agentOf(item) === "claude" ? "Claude" : "Codex"}
+                  {agentName(agentOf(item))}
                   {projects.find((candidate) => candidate.id === item.projectId)
                     ?.defaultModel
                     ? ` · ${
@@ -3208,6 +3202,9 @@ function ProjectFormDialog({
   onSaved: () => void;
 }) {
   const { t } = useTranslation("workbench");
+  const installedAgents = useApp((state) => state.agents).filter(
+    (agent) => agent.detected && agent.runsJobs,
+  );
   const [draft, setDraft] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -3332,8 +3329,10 @@ function ProjectFormDialog({
             value={draft.defaultAgent}
             onChange={(value) => set("defaultAgent", value)}
             options={[
-              { value: "codex", label: "Codex" },
-              { value: "claude", label: "Claude" },
+              ...installedAgents.map((agent) => ({ value: agent.id, label: agent.name })),
+              ...(draft.defaultAgent && !installedAgents.some((agent) => agent.id === draft.defaultAgent)
+                ? [{ value: draft.defaultAgent, label: draft.defaultAgent }]
+                : []),
             ]}
           />
         </label>
@@ -3678,6 +3677,7 @@ function WorkDetailDialog({
   const activeNodeId = work ? activeNodeForWork(work) : null;
   useEffect(() => setReviewNote(""), [work?.id, activeNodeId]);
   if (!work) return null;
+  const goalMode = work.workflowId === GOAL_WORKFLOW;
   const intentFlow = work.workflowId === INTENT_WORKFLOW;
   const closed = isClosedStatus(work.status);
   const canTransition = !closed && work.status !== "blocked";
@@ -3823,194 +3823,194 @@ function WorkDetailDialog({
             >
               <Bot /> {t("copilot.title")}
             </Button>
-            <Button size="sm" variant="outline" onClick={onEdit}>
+            {!goalMode && <Button size="sm" variant="outline" onClick={onEdit}>
               <FilePenLine /> {t("detail.edit")}
-            </Button>
+            </Button>}
           </div>
         </div>
         <div className="wb-detail-body">
-          <div className="wb-detail-main">
-            {!intentFlow && <div className="wb-stepper">
-              {nodes.map((node, stageIndex) => (
-                <button
-                  key={node.id}
-                  className={cx(
-                    node.id === currentNodeId && "is-current",
-                    stageIndex < index && "is-complete",
-                  )}
-                  onClick={() =>
-                    node.id !== currentNodeId &&
-                    outgoing?.some((edge) => edge.to === node.id) &&
-                    void transition(node.id)
-                  }
-                  disabled={
-                    transitioning || !canTransition ||
-                    node.id === currentNodeId ||
-                    (workflow
-                      ? !outgoing?.some((edge) => edge.to === node.id)
-                      : Math.abs(stageIndex - index) > 1)
-                  }
-                  title={
-                    workflow && !outgoing?.some((edge) => edge.to === node.id)
-                      ? t("detail.noTransition")
-                      : undefined
-                  }
-                >
-                  <i>{stageIndex < index ? <Check size={11} /> : stageIndex + 1}</i>
-                  <span>{node.label}</span>
-                </button>
+        <div className="wb-detail-main">
+        {!intentFlow && !goalMode && <div className="wb-stepper">
+          {nodes.map((node, stageIndex) => (
+            <button
+              key={node.id}
+              className={cx(
+                node.id === currentNodeId && "is-current",
+                stageIndex < index && "is-complete",
+              )}
+              onClick={() =>
+                node.id !== currentNodeId &&
+                outgoing?.some((edge) => edge.to === node.id) &&
+                void transition(node.id)
+              }
+              disabled={
+                transitioning || !canTransition ||
+                node.id === currentNodeId ||
+                (workflow
+                  ? !outgoing?.some((edge) => edge.to === node.id)
+                  : Math.abs(stageIndex - index) > 1)
+              }
+              title={
+                workflow && !outgoing?.some((edge) => edge.to === node.id)
+                  ? t("detail.noTransition")
+                  : undefined
+              }
+            >
+              <i>{stageIndex < index ? <Check size={11} /> : stageIndex + 1}</i>
+              <span>{node.label}</span>
+            </button>
+          ))}
+        </div>
+        }
+        {!intentFlow && <div className="wb-detail-meta">
+          <span>
+            {t("detail.project")}{" "}
+            <strong>
+              {projects.find((project) => project.id === work.projectId)
+                ?.name ?? t("detail.none")}
+            </strong>
+          </span>
+          <span>
+            {t("detail.due")} <strong>{formatDate(work.dueDate)}</strong>
+          </span>
+          <span>
+            {t("detail.owner")}{" "}
+            <strong>{work.owner || t("detail.unassigned")}</strong>
+          </span>
+          {work.dependsOn.length > 0 && (
+            <span>
+              {t("detail.predecessorsLabel")}{" "}
+              <strong>
+                {t("common.nCount", { count: work.dependsOn.length })}
+              </strong>
+            </span>
+          )}
+        </div>
+        }
+        {goalMode ? <GoalPanel key={work.id} work={work} onReload={onReload} /> : isLifecycleV2(work) ? <LifecyclePanel key={work.id} onDirtyChange={setEditorDirty} work={work} project={projects.find((project) => project.id === work.projectId)} onReload={onReload} /> : intentFlow ? <IntentFlowPanel key={work.id} onDirtyChange={setEditorDirty} work={work} project={projects.find((project) => project.id === work.projectId)} onReload={onReload} /> : <div className="wb-detail-split">
+          <ArtifactEditor
+            work={work}
+            workflow={workflow}
+            selected={selectedArtifact}
+            revealText={revealText}
+            onSelect={onArtifact}
+            onNotice={onNotice}
+            onDirtyChange={setEditorDirty}
+          />
+          {!closed && !["blocked", "review"].includes(work.status) && (
+          <RunLauncher
+            work={work}
+            workflow={workflow}
+            project={
+              projects.find((project) => project.id === work.projectId) ?? null
+            }
+            onNotice={onNotice}
+          />
+          )}
+        </div>
+        }
+        {work.decisions.length > 0 && (
+          <div className="wb-ledger">
+            <h3>{t("detail.decisions")}</h3>
+            {work.decisions
+              .slice()
+              .reverse()
+              .map((decision, itemIndex) => (
+                <div key={`${decision.at}-${itemIndex}`}>
+                  <span>
+                    {stageLabel(workflow ? [workflow] : [], decision.stage)}
+                  </span>
+                  <p>{decision.note}</p>
+                  <time>{dateTimeText().format(new Date(decision.at))}</time>
+                </div>
               ))}
-            </div>
-            }
-            {!intentFlow && <div className="wb-detail-meta">
-              <span>
-                {t("detail.project")}{" "}
-                <strong>
-                  {projects.find((project) => project.id === work.projectId)
-                    ?.name ?? t("detail.none")}
-                </strong>
-              </span>
-              <span>
-                {t("detail.due")} <strong>{formatDate(work.dueDate)}</strong>
-              </span>
-              <span>
-                {t("detail.owner")}{" "}
-                <strong>{work.owner || t("detail.unassigned")}</strong>
-              </span>
-              {work.dependsOn.length > 0 && (
-                <span>
-                  {t("detail.predecessorsLabel")}{" "}
-                  <strong>
-                    {t("common.nCount", { count: work.dependsOn.length })}
-                  </strong>
-                </span>
-              )}
-            </div>
-            }
-            {intentFlow ? <IntentFlowPanel key={work.id} onDirtyChange={setEditorDirty} work={work} project={projects.find((project) => project.id === work.projectId)} onReload={onReload} /> : <div className="wb-detail-split">
-              <ArtifactEditor
-                work={work}
-                workflow={workflow}
-                selected={selectedArtifact}
-                revealText={revealText}
-                onSelect={onArtifact}
-                onNotice={onNotice}
-                onDirtyChange={setEditorDirty}
-              />
-              {!closed && !["blocked", "review"].includes(work.status) && (
-              <RunLauncher
-                work={work}
-                workflow={workflow}
-                project={
-                  projects.find((project) => project.id === work.projectId) ?? null
-                }
-                onNotice={onNotice}
-              />
-              )}
-            </div>
-            }
-            {work.decisions.length > 0 && (
-              <div className="wb-ledger">
-                <h3>{t("detail.decisions")}</h3>
-                {work.decisions
-                  .slice()
-                  .reverse()
-                  .map((decision, itemIndex) => (
-                    <div key={`${decision.at}-${itemIndex}`}>
-                      <span>
-                        {stageLabel(workflow ? [workflow] : [], decision.stage)}
-                      </span>
-                      <p>{decision.note}</p>
-                      <time>{dateTimeText().format(new Date(decision.at))}</time>
-                    </div>
-                  ))}
-              </div>
-            )}
-            {work.workflowInstanceId && (
-              <RuntimeLedger instanceId={work.workflowInstanceId} revision={work.updatedAt} />
-            )}
-            {!closed && !intentFlow && <>
-            <label className="wb-review-note">
-              {t("detail.reviewNote")}
-              <textarea
-                aria-label={t("detail.reviewNote")}
-                value={reviewNote}
-                onChange={(event) => setReviewNote(event.target.value)}
-                placeholder={t("detail.reviewNotePlaceholder")}
-              />
-            </label>
-            <div className="wb-step-actions">
-              {actions.map((action) => <Button key={action} size="sm"
-                variant={["accept", "start", "submit", "complete", "resume"].includes(action) ? "default" : "outline"}
-                disabled={transitioning} onClick={() => void decide(action)}>
-                {t(`work.actions.${action}`)}
-              </Button>)}
-              {!workflow && previous && (
+          </div>
+        )}
+        {work.workflowInstanceId && (
+          <RuntimeLedger instanceId={work.workflowInstanceId} revision={work.updatedAt} />
+        )}
+        {!closed && !intentFlow && !goalMode && <>
+        <label className="wb-review-note">
+          {t("detail.reviewNote")}
+          <textarea
+            aria-label={t("detail.reviewNote")}
+            value={reviewNote}
+            onChange={(event) => setReviewNote(event.target.value)}
+            placeholder={t("detail.reviewNotePlaceholder")}
+          />
+        </label>
+        <div className="wb-step-actions">
+          {actions.map((action) => <Button key={action} size="sm"
+            variant={["accept", "start", "submit", "complete", "resume"].includes(action) ? "default" : "outline"}
+            disabled={transitioning} onClick={() => void decide(action)}>
+            {t(`work.actions.${action}`)}
+          </Button>)}
+          {!workflow && previous && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={transitioning}
+              onClick={() => void transition(previous)}
+            >
+              <ArrowLeft /> {t("detail.reReview")}{" "}
+              {stageLabel(workflow ? [workflow] : [], previous)}
+            </Button>
+          )}
+          <span />
+          {workflow &&
+            outgoing?.map((edge) => {
+              const targetLabel = stageLabel(
+                [workflow],
+                edge.to,
+                workflow.id,
+                workflow.version,
+              );
+              return (
                 <Button
-                  variant="outline"
+                  key={`${edge.on}:${edge.to}`}
+                  variant={edge.on === "approved" ? "default" : "outline"}
                   size="sm"
                   disabled={transitioning}
-                  onClick={() => void transition(previous)}
-                >
-                  <ArrowLeft /> {t("detail.reReview")}{" "}
-                  {stageLabel(workflow ? [workflow] : [], previous)}
-                </Button>
-              )}
-              <span />
-              {workflow &&
-                outgoing?.map((edge) => {
-                  const targetLabel = stageLabel(
-                    [workflow],
-                    edge.to,
-                    workflow.id,
-                    workflow.version,
-                  );
-                  return (
-                    <Button
-                      key={`${edge.on}:${edge.to}`}
-                      variant={edge.on === "approved" ? "default" : "outline"}
-                      size="sm"
-                      disabled={transitioning}
-                      onClick={() => void transition(edge.to)}
-                    >
-                      {transitioning ? (
-                        <Loader2 className="wb-spin" />
-                      ) : edge.on === "approved" ? (
-                        <CircleCheck />
-                      ) : (
-                        <ArrowLeft />
-                      )}
-                      {transitionActionLabel(edge.on, targetLabel)}
-                    </Button>
-                  );
-                })}
-              {!workflow && next && (
-                <Button
-                  size="sm"
-                  disabled={transitioning}
-                  onClick={() => void transition(next)}
+                  onClick={() => void transition(edge.to)}
                 >
                   {transitioning ? (
                     <Loader2 className="wb-spin" />
+                  ) : edge.on === "approved" ? (
+                    <CircleCheck />
                   ) : (
-                    <>
-                      {t("workflow.reviewThenNext", {
-                        target: stageLabel(workflow ? [workflow] : [], next),
-                      })}{" "}
-                      <ArrowRight />
-                    </>
+                    <ArrowLeft />
                   )}
+                  {transitionActionLabel(edge.on, targetLabel)}
                 </Button>
+              );
+            })}
+          {!workflow && next && (
+            <Button
+              size="sm"
+              disabled={transitioning}
+              onClick={() => void transition(next)}
+            >
+              {transitioning ? (
+                <Loader2 className="wb-spin" />
+              ) : (
+                <>
+                  {t("workflow.reviewThenNext", {
+                    target: stageLabel(workflow ? [workflow] : [], next),
+                  })}{" "}
+                  <ArrowRight />
+                </>
               )}
-            </div>
-            </>}
-          </div>
-          {copilotOpen && (
-            <WorkCopilot
-              work={work}
-              project={projects.find((project) => project.id === work.projectId)}
-            />
+            </Button>
           )}
+        </div>
+        </>}
+        </div>
+        {copilotOpen && (
+          <WorkCopilot
+            work={work}
+            project={projects.find((project) => project.id === work.projectId)}
+          />
+        )}
         </div>
       </div>
     </Dialog>
@@ -4351,6 +4351,10 @@ function RunLauncher({
   onNotice: (notice: Notice) => void;
 }) {
   const { t } = useTranslation("workbench");
+  const installedAgents = useApp((state) => state.agents).filter(
+    (candidate) => candidate.detected && candidate.runsJobs,
+  );
+  const fallbackAgent = useApp((state) => state.defaultAgent);
   const currentNodeId = activeNodeForWork(work);
   const node = workflow?.nodes.find(
     (candidate) => candidate.id === currentNodeId,
@@ -4360,18 +4364,16 @@ function RunLauncher({
     : AGENT_ROLES;
   const roleForNode = () => roleForStageNode(currentNodeId, availableRoles);
   const [role, setRole] = useState<AgentRole>(roleForNode);
-  const [agent, setAgent] = useState<"codex" | "claude">(
-    project?.defaultAgent === "claude" ? "claude" : "codex",
-  );
+  const [agent, setAgent] = useState(project?.defaultAgent || fallbackAgent);
   const [model, setModel] = useState(project?.defaultModel ?? "");
   const [instructions, setInstructions] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     setRole(roleForNode());
-    setAgent(project?.defaultAgent === "claude" ? "claude" : "codex");
+    setAgent(project?.defaultAgent || fallbackAgent);
     setModel(project?.defaultModel ?? "");
-  }, [project?.id, currentNodeId, workflow?.id, workflow?.version]);
-  // 같은 항목·같은 역할로 이미 돌고 있는 실행. 호스트도 중복 실행을 거절하지만,
+  }, [project?.id, project?.defaultAgent, project?.defaultModel, fallbackAgent, currentNodeId, workflow?.id, workflow?.version]);
+  // 역할에 관계없이 같은 작업을 점유한 실행. 호스트도 중복 실행을 거절하지만,
   // 버튼이 먼저 알려 줘야 사람이 두 번 누르지 않는다.
   const [active, setActive] = useState<HarnessRun | null>(null);
   const syncActive = useCallback(async () => {
@@ -4381,8 +4383,6 @@ function RunLauncher({
         rows.find(
           (run) =>
             run.workId === work.id &&
-            run.role === role &&
-            !run.parentRunId &&
             ACTIVE_RUN_STATUS.includes(run.status),
         ) ?? null,
       );
@@ -4453,10 +4453,12 @@ function RunLauncher({
         <Select
           aria-label={t("launcher.agentAria")}
           value={agent}
-          onChange={(value) => setAgent(value as "codex" | "claude")}
+          onChange={setAgent}
           options={[
-            { value: "codex", label: "Codex" },
-            { value: "claude", label: "Claude" },
+            ...installedAgents.map((candidate) => ({ value: candidate.id, label: candidate.name })),
+            ...(agent && !installedAgents.some((candidate) => candidate.id === agent)
+              ? [{ value: agent, label: agent }]
+              : []),
           ]}
         />
       </label>
@@ -4521,8 +4523,10 @@ function HarnessView({
   const requestedRun = useApp((state) => state.openRunRequest);
   const [runs, setRuns] = useState<HarnessRun[]>([]);
   const [loading, setLoading] = useState(true);
+  const [attentionOnly, setAttentionOnly] = useState(false);
   const [selected, setSelected] = useState<HarnessRun | null>(null);
   const [output, setOutput] = useState("");
+  const [pollError, setPollError] = useState<string | null>(null);
   const [followUp, setFollowUp] = useState("");
   const [busy, setBusy] = useState(false);
   const load = async () => {
@@ -4548,29 +4552,26 @@ function HarnessView({
     void load();
   }, [projectId, requestedRun?.id]);
   useEffect(() => {
-    if (!runs.some((run) => ACTIVE_RUN_STATUS.includes(run.status))) return;
-    const timer = window.setInterval(() => {
-      void Promise.all(
-        runs
-          .filter((run) => ACTIVE_RUN_STATUS.includes(run.status))
-          .map((run) => sddApi.refreshRun(run.id)),
-      )
-        .then((fresh) => {
-          setRuns((previous) =>
-            previous.map(
-              (run) => fresh.find((next) => next.id === run.id) ?? run,
-            ),
-          );
-          setSelected((current) =>
-            current
-              ? (fresh.find((next) => next.id === current.id) ?? current)
-              : current,
-          );
-        })
-        .catch(() => undefined);
-    }, 8000);
-    return () => window.clearInterval(timer);
-  }, [runs]);
+    let alive = true;
+    let polling = false;
+    const timer = window.setInterval(async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        const rows = (await sddApi.runs()).filter((run) => !projectId || run.projectId === projectId);
+        const results = await Promise.allSettled(rows.map((run) =>
+          [...ACTIVE_RUN_STATUS, "unknown"].includes(run.status) ? sddApi.refreshRun(run.id) : Promise.resolve(run)));
+        if (!alive) return;
+        const fresh = results.map((result, index) => result.status === "fulfilled" ? result.value : rows[index]);
+        const failure = results.find((result) => result.status === "rejected");
+        setPollError(failure?.status === "rejected" ? errorText(failure.reason) : null);
+        setRuns(fresh);
+        setSelected((current) => current ? fresh.find((run) => run.id === current.id) ?? null : fresh[0] ?? null);
+      } catch (error) { if (alive) setPollError(errorText(error)); }
+      finally { polling = false; }
+    }, 5000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, [projectId]);
   useEffect(() => {
     if (!selected) {
       setOutput("");
@@ -4654,6 +4655,19 @@ function HarnessView({
       setBusy(false);
     }
   };
+  const retry = async () => {
+    if (!selected) return;
+    setBusy(true);
+    try {
+      const next = await sddApi.launch({ workId: selected.workId, projectId: selected.projectId,
+        role: selected.role, agent: selected.agent, model: selected.model,
+        instructions: selected.instructions ?? "", parentRunId: selected.parentRunId });
+      setRuns((previous) => [next, ...previous]);
+      setSelected(next);
+      setAttentionOnly(false);
+    } catch (e) { onNotice({ tone: "error", text: errorText(e) }); }
+    finally { setBusy(false); }
+  };
   const sendKey = async (key: string) => {
     if (!selected) return;
     setBusy(true);
@@ -4679,7 +4693,7 @@ function HarnessView({
         workId: item.id,
         projectId: item.projectId,
         role: "research",
-        agent: selected.agent === "claude" ? "claude" : "codex",
+        agent: selected.agent,
         model: "",
         instructions: "상위 실행을 위한 조사 결과와 근거를 정리해 주세요.",
         parentRunId: selected.id,
@@ -4695,6 +4709,9 @@ function HarnessView({
   return (
     <>
       <PageHeader title={t("harness.title")}>
+        <Button variant="outline" aria-pressed={attentionOnly} onClick={() => setAttentionOnly(!attentionOnly)}>
+          {t("harness.attention")} · {attentionRuns(runs, work).length}
+        </Button>
         <Button
           variant="outline"
           onClick={() => void load()}
@@ -4703,6 +4720,8 @@ function HarnessView({
           <RefreshCw /> {t("common.refresh")}
         </Button>
       </PageHeader>
+      <p className="text-sm leading-relaxed text-muted-foreground">{t("harness.description")}</p>
+      {pollError && <div className="wb-inline-error" role="alert">{pollError}</div>}
       {loading ? (
         <LoadingState />
       ) : !runs.length ? (
@@ -4714,7 +4733,8 @@ function HarnessView({
       ) : (
         <div className="wb-harness">
           <aside className="wb-run-list">
-            {runs.map((run) => (
+            {attentionOnly && !attentionRuns(runs, work).length && <p>{t("harness.noAttention")}</p>}
+            {(attentionOnly ? attentionRuns(runs, work) : runs).map((run) => (
               <button
                 key={run.id}
                 className={cx(selected?.id === run.id && "active")}
@@ -4727,10 +4747,11 @@ function HarnessView({
                       run.workId}
                   </strong>
                   <small>
-                    {roleText(run.role)} · {run.agentName || run.agent}
+                    {t(`runStatus.${run.status}`)} · {roleText(run.role)} · {run.agentName || run.agent}
                     {run.model && ` · ${run.model}`}
                     {run.modelSelection?.source === "auto" && ` · ${t("harness.modelAuto")}`}
                   </small>
+                  {run.error && <small className="wb-run-error">{run.error}</small>}
                 </div>
                 {run.parentRunId && <span className="wb-child-mark">↳</span>}
               </button>
@@ -4740,7 +4761,7 @@ function HarnessView({
             <section className="wb-run-detail">
               <header>
                 <div>
-                  <p className="wb-eyebrow">{selected.status.toUpperCase()}</p>
+                  <p className="wb-eyebrow">{t(`runStatus.${selected.status}`)} · {t(selected.runner === "headless" ? "harness.background" : "harness.terminal")}</p>
                   <h2>
                     {work.find((item) => item.id === selected.workId)?.title ??
                       selected.workId}
@@ -4784,17 +4805,22 @@ function HarnessView({
                   >
                     <RefreshCw />
                   </Button>
-                  {selected.tabClosedAt && selected.resumable && (
+                  {(selected.runner === "headless" || selected.paneId || (selected.tabClosedAt && selected.resumable)) && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => void resume()}
                       disabled={busy}
                     >
-                      <SquareTerminal /> {t("harness.resume")}
+                      <SquareTerminal /> {t("harness.viewHerdr")}
                     </Button>
                   )}
-                  {["starting", "running", "blocked"].includes(
+                  {["failed", "stopped"].includes(selected.status) && (
+                    <Button variant="outline" size="sm" onClick={() => void retry()} disabled={busy}>
+                      <RefreshCw /> {t("harness.retry")}
+                    </Button>
+                  )}
+                  {["starting", "running", "blocked", "unknown"].includes(
                     selected.status,
                   ) && (
                     <Button
@@ -4808,6 +4834,7 @@ function HarnessView({
                   )}
                 </div>
               </header>
+              {selected.runner === "headless" && <p className="text-sm text-muted-foreground">{t("harness.backgroundHint")}</p>}
               {selected.error && (
                 <div className="wb-inline-error">{selected.error}</div>
               )}
@@ -4895,7 +4922,7 @@ function HarnessView({
                   )}
                 </div>
               )}
-              {selected.status === "blocked" && (
+              {selected.status === "blocked" && selected.runner !== "headless" && (
                 <div className="wb-terminal-controls">
                   <strong>{t("harness.terminalKeysTitle")}</strong>
                   <span>

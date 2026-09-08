@@ -23,6 +23,11 @@ pub struct WorkflowDefinition {
     pub description: String,
     pub version: String,
     pub entry: String,
+    /// Runtime and extension dependencies belong to the workflow that needs them,
+    /// not to Sawhorse core. Empty requirements are omitted so existing immutable
+    /// workflow JSON and digests remain stable.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub requirements: Vec<WorkflowRequirement>,
     pub artifacts: Vec<ArtifactDefinition>,
     pub nodes: Vec<WorkflowNode>,
     pub edges: Vec<WorkflowEdge>,
@@ -38,12 +43,62 @@ impl Default for WorkflowDefinition {
             description: String::new(),
             version: String::new(),
             entry: String::new(),
+            requirements: Vec::new(),
             artifacts: Vec::new(),
             nodes: Vec::new(),
             edges: Vec::new(),
             loops: Vec::new(),
         }
     }
+}
+
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkflowRequirementKind {
+    /// An external executable or desktop application used by this workflow.
+    Program,
+    /// A Sawhorse extension package activated for the workflow's project.
+    Extension,
+}
+
+impl Default for WorkflowRequirementKind {
+    fn default() -> Self {
+        Self::Program
+    }
+}
+
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum WorkflowRequirementLevel {
+    Required,
+    Recommended,
+    Optional,
+}
+
+impl Default for WorkflowRequirementLevel {
+    fn default() -> Self {
+        Self::Required
+    }
+}
+
+/// A portable dependency declaration owned by one workflow revision.
+///
+/// Program requirements resolve when any command candidate is present. Extension
+/// requirements use `version` as a semver range against the project's lock.
+#[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
+#[serde(default, deny_unknown_fields, rename_all = "camelCase")]
+pub struct WorkflowRequirement {
+    pub kind: WorkflowRequirementKind,
+    pub id: String,
+    pub label: String,
+    pub level: WorkflowRequirementLevel,
+    pub reason: String,
+    pub commands: Vec<String>,
+    pub version_args: Vec<String>,
+    pub minimum_major: u32,
+    pub version: String,
+    pub install_url: String,
+    pub install_hint: String,
 }
 
 #[derive(schemars::JsonSchema, Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]

@@ -32,10 +32,8 @@
 .wb-work-header p { margin: 6px 0 0; font-size: 12px; color: var(--wb-muted); }
 .wb-work-header > button { height: 36px; }
 .wb-work-navigation { justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--wb-line); }
-.wb-work-tabs,
 .wb-work-state-tabs { display: flex; align-self: stretch; gap: 20px; }
-.wb-work-state-tabs > button,
-.wb-work-intent-tab {
+.wb-work-state-tabs > button {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -47,13 +45,8 @@
   white-space: nowrap;
   cursor: pointer;
 }
-.wb-work-state-tabs > button[aria-pressed="true"],
-.wb-work-intent-tab[aria-pressed="true"] { color: var(--wb-ink); border-color: var(--wb-teal); font-weight: 600; }
-.wb-work-state-tabs > button > span,
-.wb-work-intent-tab > span { padding: 0 5px; border-radius: 4px; background: var(--wb-warm); font-size: 10px; font-variant-numeric: tabular-nums; }
-/* 의도는 상태와 다른 축이다. 세로 선으로 갈라 두 축을 함께 고르는 것임을 보인다. */
-.wb-work-intent-tab { padding-left: 20px; border-left: 1px solid var(--wb-line); }
-.wb-work-intent-tab[aria-pressed="true"] > span { background: var(--wb-teal-soft); color: var(--wb-teal); }
+.wb-work-state-tabs > button[aria-pressed="true"] { color: var(--wb-ink); border-color: var(--wb-teal); font-weight: 600; }
+.wb-work-state-tabs > button > span { padding: 0 5px; border-radius: 4px; background: var(--wb-warm); font-size: 10px; font-variant-numeric: tabular-nums; }
 .wb-work-page .wb-view-switch { gap: 2px; padding: 3px; border: 1px solid var(--wb-line); border-radius: 8px; margin-bottom: 7px; }
 .wb-work-page .wb-view-switch > button { height: 27px; font-size: 11px; color: var(--wb-muted); padding: 0 9px; }
 .wb-work-page .wb-view-switch > button[aria-pressed="true"] { color: var(--wb-ink); background: var(--wb-warm); box-shadow: 0 1px 3px #0000000d; }
@@ -136,7 +129,6 @@
 .wb-work-tag { background: var(--wb-warm); border: 1px solid var(--wb-line); padding: 0 4px; border-radius: 4px; }
 .wb-work-page .wb-issue-table tr[data-selected] { background: var(--wb-teal-soft); }
 .wb-work-page .wb-work-state-tabs button:focus-visible,
-.wb-work-page .wb-work-intent-tab:focus-visible,
 .wb-work-page .wb-board-card > button:focus-visible,
 .wb-work-title-link:focus-visible,
 .wb-work-page .wb-milestone-row:focus-visible { outline: 2px solid var(--wb-teal); outline-offset: -2px; border-radius: 5px; }
@@ -149,9 +141,7 @@
   .wb-work-header p { max-width: 230px; line-height: 1.6; }
   .wb-work-heading h1 { font-size: 21px; }
   .wb-work-navigation { flex-wrap: wrap; gap: 8px; }
-  .wb-work-tabs,
   .wb-work-state-tabs { gap: 16px; }
-  .wb-work-intent-tab { padding-left: 16px; }
   .wb-work-search { flex-basis: 100%; max-width: none; }
   .wb-work-project-filter { flex: 1; min-width: 130px; }
   .wb-work-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }

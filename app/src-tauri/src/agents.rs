@@ -484,15 +484,16 @@ pub struct AgentSpec {
     /// 모르는 곳을 아는 척 가리키느니 아무것도 가리키지 않는 편이 낫다.
     pub install_url: &'static str,
     pub install_hint: &'static str,
-    /// 앱이 이 에이전트로 잡을 **직접** 돌릴 수 있는가. 지금은 Claude Code 하나뿐이다 —
-    /// 진행 스트림 파싱이 그 CLI 의 `stream-json` 형식에 묶여 있다. 나머지는 감지와
-    /// 스킬 설치까지가 범위이고, 화면도 그렇게 말해야 한다.
+    /// 앱이 이 에이전트로 잡을 **직접** 돌릴 수 있는가. SDD 실행은 Herdr의
+    /// 공통 agent protocol을 쓰므로 Herdr가 지원하는 kind라면 true다.
     pub runs_jobs: bool,
     pub note: &'static str,
 }
 
-/// 감지만 하는 에이전트에 공통으로 붙는 한 줄.
-const DETECT_ONLY: &str = "감지까지만 합니다 — 이 에이전트용 스킬 설치 형식이 아직 없습니다.";
+/// Herdr로 실행할 수 있지만 Sawhorse 스킬을 직접 설치하지는 못하는 에이전트 안내.
+const HERDR_ONLY: &str =
+    "Herdr에서 작업을 실행할 수 있습니다. 전용 스킬 설치 형식은 아직 없습니다.";
+const DETECT_ONLY: &str = "감지까지만 합니다 — Herdr가 지원하는 에이전트 종류가 아닙니다.";
 
 const VERSION_ARGS: &[&str] = &["--version"];
 
@@ -512,7 +513,7 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
         bins: &["codex"],
         install_url: "https://github.com/openai/codex",
         install_hint: "npm install -g @openai/codex",
-        runs_jobs: false,
+        runs_jobs: true,
         note: "스킬은 ~/.codex/prompts 의 슬래시 프롬프트로 변환되어 설치됩니다.",
     },
     AgentSpec {
@@ -521,8 +522,8 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
         bins: &["opencode"],
         install_url: "https://opencode.ai",
         install_hint: "npm install -g opencode-ai",
-        runs_jobs: false,
-        note: DETECT_ONLY,
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
     AgentSpec {
         id: "gemini",
@@ -530,8 +531,8 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
         bins: &["gemini"],
         install_url: "https://github.com/google-gemini/gemini-cli",
         install_hint: "npm install -g @google/gemini-cli",
-        runs_jobs: false,
-        note: DETECT_ONLY,
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
     AgentSpec {
         id: "amp",
@@ -539,8 +540,8 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
         bins: &["amp"],
         install_url: "https://ampcode.com",
         install_hint: "npm install -g @sourcegraph/amp",
-        runs_jobs: false,
-        note: DETECT_ONLY,
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
     AgentSpec {
         id: "copilot",
@@ -548,17 +549,17 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
         bins: &["copilot"],
         install_url: "https://github.com/github/copilot-cli",
         install_hint: "npm install -g @github/copilot",
-        runs_jobs: false,
-        note: DETECT_ONLY,
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
     AgentSpec {
-        id: "cursor-agent",
+        id: "cursor",
         name: "Cursor CLI",
         bins: &["cursor-agent"],
         install_url: "https://cursor.com/cli",
         install_hint: "",
-        runs_jobs: false,
-        note: DETECT_ONLY,
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
     AgentSpec {
         id: "aider",
@@ -593,8 +594,8 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
         bins: &["qwen"],
         install_url: "https://github.com/QwenLM/qwen-code",
         install_hint: "npm install -g @qwen-code/qwen-code",
-        runs_jobs: false,
-        note: DETECT_ONLY,
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
     AgentSpec {
         id: "droid",
@@ -602,19 +603,17 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
         bins: &["droid"],
         install_url: "https://docs.factory.ai/cli/getting-started/quickstart",
         install_hint: "",
-        runs_jobs: false,
-        note: DETECT_ONLY,
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
-    // 아래 둘은 이 PC 에 있으면 잡아 주기만 한다. 공개된 설치 위치를 우리가 모르므로
-    // install_url 을 비워 둔다 — 설정의 customAgents 에서 링크를 덧붙일 수 있다.
     AgentSpec {
         id: "omp",
-        name: "omp",
+        name: "Oh My Pi",
         bins: &["omp"],
         install_url: "",
         install_hint: "",
-        runs_jobs: false,
-        note: "감지까지만 합니다 — 설치 위치가 등록되어 있지 않습니다.",
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
     AgentSpec {
         id: "pi",
@@ -622,8 +621,116 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
         bins: &["pi", "oxipi", "pi-new"],
         install_url: "",
         install_hint: "",
-        runs_jobs: false,
-        note: "감지까지만 합니다 — 설치 위치가 등록되어 있지 않습니다.",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "devin",
+        name: "Devin CLI",
+        bins: &["devin"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "agy",
+        name: "Agy",
+        bins: &["agy"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "cline",
+        name: "Cline CLI",
+        bins: &["cline"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "mastracode",
+        name: "Mastra Code",
+        bins: &["mastracode"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "kimi",
+        name: "Kimi CLI",
+        bins: &["kimi"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "kiro",
+        name: "Kiro CLI",
+        bins: &["kiro"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "grok",
+        name: "Grok CLI",
+        bins: &["grok"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "hermes",
+        name: "Hermes",
+        bins: &["hermes"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "kilo",
+        name: "Kilo Code",
+        bins: &["kilo"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "qodercli",
+        name: "Qoder CLI",
+        bins: &["qodercli"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "maki",
+        name: "Maki",
+        bins: &["maki"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
+    },
+    AgentSpec {
+        id: "muse",
+        name: "Muse",
+        bins: &["muse"],
+        install_url: "",
+        install_hint: "",
+        runs_jobs: true,
+        note: HERDR_ONLY,
     },
 ];
 
@@ -683,8 +790,21 @@ pub const MODEL_CATALOGS: &[(&str, &[ModelSpec])] = &[
     ),
 ];
 
+pub fn normalize_id(id: &str) -> &str {
+    match id.trim() {
+        // 0.1 계열 설정에서 쓴 id를 Herdr의 canonical kind로 읽는다.
+        "cursor-agent" => "cursor",
+        other => other,
+    }
+}
+
 pub fn spec(id: &str) -> Option<&'static AgentSpec> {
+    let id = normalize_id(id);
     AGENT_CATALOG.iter().find(|s| s.id == id)
+}
+
+pub fn can_run_jobs(id: &str) -> bool {
+    spec(id).is_some_and(|agent| agent.runs_jobs)
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -746,7 +866,7 @@ fn candidates(dash: &crate::config::DashboardCfg) -> Vec<Candidate> {
         .collect();
 
     for c in &dash.custom_agents {
-        let id = c.id.trim();
+        let id = normalize_id(&c.id);
         if id.is_empty() {
             continue;
         }
@@ -833,14 +953,35 @@ pub async fn detect_agents(dash: &crate::config::DashboardCfg) -> Vec<AgentPrese
     out
 }
 
-/// 설정의 기본 에이전트를 실제로 쓸 수 있는 값으로 바꾼다. 저장된 id 가 카탈로그에도
-/// 사용자 목록에도 없으면 Claude Code 로 떨어진다 — 설정 파일은 손으로도 고쳐지므로
-/// 읽는 쪽이 항상 정상값을 받게 한다.
-pub fn effective_default(dash: &crate::config::DashboardCfg) -> String {
-    let want = dash.default_agent.trim();
-    if !want.is_empty()
-        && (spec(want).is_some() || dash.custom_agents.iter().any(|c| c.id.trim() == want))
+/// 설정의 기본 에이전트를 실제로 쓸 수 있는 값으로 바꾼다. 저장값이 현재 PC에 없으면
+/// 감지된 로컬 실행기를 고르고, 아무것도 감지되지 않았을 때만 안전한 레거시 값으로
+/// 떨어진다. 설정 파일은 손으로도 고쳐지므로 읽는 쪽이 항상 정상값을 받게 한다.
+pub fn effective_default(dash: &crate::config::DashboardCfg, detected: &[AgentPresence]) -> String {
+    let want = normalize_id(&dash.default_agent);
+    if let Some(saved) = detected
+        .iter()
+        .find(|agent| agent.id == want && agent.detected && agent.runs_jobs)
     {
+        return saved.id.clone();
+    }
+
+    // 앱 번들 안의 보조 CLI보다 사용자가 PATH에 설치한 에이전트를 먼저 쓴다.
+    // 예: ChatGPT.app이 제공하는 codex와 ~/.bun/bin/omp가 함께 있을 때는 omp.
+    let runnable = detected
+        .iter()
+        .filter(|agent| agent.detected && agent.runs_jobs);
+    if let Some(local) = runnable
+        .clone()
+        .find(|agent| !agent.path.contains(".app/Contents/Resources/"))
+    {
+        return local.id.clone();
+    }
+    if let Some(first) = runnable.into_iter().next() {
+        return first.id.clone();
+    }
+
+    // 오프라인/초기 감지 실패 때도 저장값을 잃지는 않는다.
+    if can_run_jobs(want) {
         return want.to_string();
     }
     CLAUDE.to_string()
@@ -1054,7 +1195,7 @@ mod tests {
     }
 
     #[test]
-    fn catalog_is_well_formed_and_only_claude_runs_jobs() {
+    fn catalog_is_well_formed_and_covers_herdr_agents() {
         let mut seen = std::collections::BTreeSet::new();
         for spec in AGENT_CATALOG {
             assert!(seen.insert(spec.id), "id 가 겹친다: {}", spec.id);
@@ -1068,25 +1209,45 @@ mod tests {
                 "{} 의 설치 링크는 https 여야 한다 (open_external 이 https 만 연다)",
                 spec.id
             );
-            // 스킬 설치 대상이 아닌 항목은 그 사실을 화면에 말해 줘야 한다
+            // 스킬 설치 대상이 아닌 항목은 실행 또는 감지 범위를 화면에 말해 줘야 한다.
             if !is_install_target(spec.id) {
                 assert!(
-                    spec.note.contains("감지"),
+                    spec.note.contains("Herdr"),
                     "{} 의 안내 문구가 범위를 밝히지 않는다",
                     spec.id
                 );
             }
         }
-        let runners: Vec<&str> = AGENT_CATALOG
-            .iter()
-            .filter(|s| s.runs_jobs)
-            .map(|s| s.id)
-            .collect();
-        assert_eq!(
-            runners,
-            vec![CLAUDE],
-            "잡 실행기는 아직 Claude Code 하나뿐이다"
-        );
+        for kind in [
+            "pi",
+            "claude",
+            "codex",
+            "gemini",
+            "cursor",
+            "devin",
+            "agy",
+            "cline",
+            "omp",
+            "mastracode",
+            "opencode",
+            "copilot",
+            "kimi",
+            "kiro",
+            "droid",
+            "amp",
+            "grok",
+            "hermes",
+            "kilo",
+            "qodercli",
+            "qwen",
+            "maki",
+            "muse",
+        ] {
+            assert!(
+                can_run_jobs(kind),
+                "Herdr kind가 카탈로그에서 빠졌다: {kind}"
+            );
+        }
     }
 
     fn dash(
@@ -1158,15 +1319,33 @@ mod tests {
     }
 
     #[test]
-    fn effective_default_falls_back_when_the_saved_id_is_unknown() {
-        assert_eq!(effective_default(&dash("codex", vec![])), CODEX);
-        assert_eq!(effective_default(&dash("nope", vec![])), CLAUDE);
-        assert_eq!(effective_default(&dash("", vec![])), CLAUDE);
-        // 설정에 등록한 에이전트도 기본이 될 수 있다
+    fn effective_default_prefers_an_installed_runner() {
+        let presence = |id: &str, path: &str| AgentPresence {
+            id: id.into(),
+            name: id.into(),
+            detected: true,
+            version: None,
+            path: path.into(),
+            home: String::new(),
+            installable: is_install_target(id),
+            runs_jobs: can_run_jobs(id),
+            install_url: String::new(),
+            install_hint: String::new(),
+            custom: false,
+            note: String::new(),
+        };
+        let installed = vec![
+            presence(CODEX, "/Applications/ChatGPT.app/Contents/Resources/codex"),
+            presence("omp", "/Users/me/.bun/bin/omp"),
+        ];
+        assert_eq!(effective_default(&dash("codex", vec![]), &installed), CODEX);
         assert_eq!(
-            effective_default(&dash("mine", vec![custom("mine", "m")])),
-            "mine"
+            effective_default(&dash("claude", vec![]), &installed),
+            "omp"
         );
+        assert_eq!(effective_default(&dash("", vec![]), &installed), "omp");
+        assert_eq!(effective_default(&dash("nope", vec![]), &[]), CLAUDE);
+        assert_eq!(normalize_id("cursor-agent"), "cursor");
     }
 
     #[tokio::test]

@@ -363,7 +363,7 @@
     "focusPaneTitle": "Bring this pane forward in herdr"
   },
   "jobs": {
-    "title": "Run history",
+    "title": "Automation & tool runs",
     "activeTitle": "Queue / running",
     "focusFailed": "Could not open the herdr session: {{error}}",
     "emptyActive": "Nothing queued or running.",

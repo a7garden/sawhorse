@@ -1,6 +1,7 @@
 {
   "language": "Language",
   "nav": {
+    "runs": "Runs",
     "section": {
       "work": "Workspace",
       "vault": "Vault",
@@ -17,6 +18,7 @@
     "terminal": "Agents",
     "docs": "All docs",
     "todos": "Todos",
+    "vault": "Audit",
     "reading": "Reading",
     "github": "GitHub",
     "packs": "Extensions",
@@ -25,9 +27,9 @@
       "taskLibrary": "Automation jobs",
       "tasks": "Schedules & repeats",
       "terminal": "Agent terminal",
-      "harness": "Dev runs",
+      "harness": "Work runs",
       "sessions": "Collab sessions",
-      "jobs": "Run history",
+      "jobs": "Automation & tool runs",
       "review": "Review"
     },
     "other": "Other",

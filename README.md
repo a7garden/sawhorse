@@ -1,19 +1,27 @@
 # Sawhorse
 
-![Sawhorse — a local development workbench connecting intent, agent execution, and verification](docs/images/sawhorse-overview.png)
+![Sawhorse — a deterministic, portable workflow platform](docs/images/sawhorse-overview.png)
 
-**의도에서 실행, 검증, 기록까지 이어지는 로컬 개발 작업대.**
+**팀의 일하는 방식을 결정론적으로 이식하는 로컬 워크플로우 플랫폼.**
 
-인간이 `intent.md`에 의도를 남기면 AI가 설계와 작업 계획을 만들고, 인간의 승인 뒤 구현·검증하고 결과를 보고한다.
-칸반·캘린더·마크다운 편집기·실행 하네스는 같은 작업과 프로젝트를 바라본다.
-데이터는 로컬 Markdown에 남으며 Obsidian 없이도 앱만으로 편집하고 관리할 수 있다.
+Sawhorse의 코어는 특정 개발 방법론이나 산출물 형식을 강제하지 않는다. 워크플로우가 단계, 산출물,
+사람의 승인, 자동 실행, 필요한 확장과 외부 프로그램을 한 버전으로 정의한다. 같은 정의와 고정된
+확장 버전을 옮기면 다른 환경에서도 같은 순서와 게이트로 실행된다.
+
+- 산출물 중심 팀은 요구사항·설계·목업을 차례로 만들고 Task Master로 분해한 뒤 자동 수행하는 워터폴 흐름을 정의할 수 있다.
+- 애자일 팀은 `intent.md`에서 의도를 구체화하고 설계 승인 뒤 구현하는 짧은 흐름을 정의할 수 있다.
+- XLSX 보고나 DOCX 입력이 필요한 흐름만 해당 확장과 Node.js·Pandoc 같은 실행 도구를 선언한다.
+
+칸반·캘린더·마크다운 편집기·실행 하네스는 선택한 워크플로우의 같은 작업과 프로젝트를 바라본다.
+데이터는 로컬 Markdown에 남으며 Obsidian 없이도 앱만으로 편집하고 관리할 수 있다. 앱 전체의
+공통 권장 연동은 Obsidian과 Herdr뿐이며, 나머지는 워크플로우에 귀속되는 선택 확장이다.
 
 ## 시작
 
 ```bash
 cd app
-npm ci
-npm run tauri dev
+bun install
+bun run tauri dev
 ```
 
 기존 설치를 업데이트하면 첫 실행에서 이전 볼트와 Sawhorse 플러그인을 백업·검증 후 자동 갱신한다. [자동 업그레이드와 복구](docs/architecture/automatic-upgrades.md)를 참고한다.
@@ -21,23 +29,24 @@ npm run tauri dev
 처음 실행하면 설정 마법사에서 기록을 저장할 작업공간 경로를 정한다.
 작업대에서 **작업공간 초기화**를 누른 뒤 **프로젝트**에 폴더를 등록한다. 이름은 폴더에서 따오고,
 설명과 검증 명령은 저장 후 에이전트가 분석해 채운다. 기본 모델 목록은 에이전트 CLI에서 가져온다.
-**새 의도**에서 메모와 이미지를 남기고 **설계 요청**을 누르면 개발 흐름을 시작할 수 있다. **메모만 저장**으로 기록부터 남길 수도 있다.
+**워크플로**에서 팀의 흐름을 만들거나 가져와 프로젝트에 적용한다. 번들된 `intent-flow`를 쓰는 경우
+**새 의도**에서 메모와 이미지를 남기고 구체화를 요청한다. 방향을 검토해 설계로 넘기고, 설계 승인 후 구현 대기 항목을 일괄 실행한다.
 
 ```bash
 # UI만 체험: http://127.0.0.1:1420/?preview=1
-npm run dev
+bun run dev
 
 # 검증
-npm run build
-npm run test:e2e
+bun run build
+bun run test:e2e
 (cd src-tauri && cargo test --lib)
 
 # 데스크톱 배포 번들
-npm run tauri build
+bun run tauri build
 ```
 
 브라우저 체험은 예제 데이터를 브라우저에 저장한다. 실제 파일 접근과 에이전트 실행은
-Tauri 데스크톱에서만 동작한다. 처음 UI 테스트를 실행할 때 `npx playwright install chromium`이 필요하다.
+Tauri 데스크톱에서만 동작한다. 처음 UI 테스트를 실행할 때 `bunx playwright install chromium`이 필요하다.
 
 ## 기본 화면
 
@@ -69,20 +78,22 @@ Tauri 데스크톱에서만 동작한다. 처음 UI 테스트를 실행할 때 `
 
 기존 루틴·잡·협업 세션·검토·소스·RSS·터미널과 확장 화면도 유지한다.
 
-## 의도에서 결과까지
+## 기본 SDD 흐름: 의도에서 결과 확인까지
 
 ```text
-인간의 의도 → AI 설계·작업 분해 → 인간 승인 → AI 구현·검증·보고 → 인간 결과 확인
-intent.md     spec.md + plan.md    결정 기록   verification.md       완료 결정
+의도 → 구체화·인터뷰 → 설계·인터뷰 → 승인 대기 → 구현 대기 → 구현 → 완료·미확인 → 완료
+원본    brief.md       spec/plan      검토 결정    일괄 접수    검증·커밋       사용자 확인
 ```
 
 작업 상세에서 현재 단계와 다음 행동, 연결된 실행과 단계별 문서 기록을 확인한다.
 원본 의도와 수정 전 문서, 설계 검토·실행 입력·결과 인수 시점의 문서는 `work/<id>/history/`에 별도 보존한다.
 승인 뒤 의도나 설계·계획이 바뀌면 다시 검토해야 구현 실행과 결과 인수를 진행할 수 있다.
 기록은 이 기능 적용 이후부터 쌓이며, 기존에 덮어쓴 과거 내용은 복원하지 않는다.
-[의도 흐름과 기록 계약](docs/architecture/intent-flow.md)을 참고한다.
+새 흐름의 인터뷰·A2A·커밋 통합·의존성 기반 폐기는 [SDD v2 생명주기](docs/architecture/sdd-lifecycle-v2.md)를 참고한다. 기존 v1 작업은 [이전 의도 흐름](docs/architecture/intent-flow.md)을 유지한다.
 
-## 기존 SDD 흐름
+프로젝트 화면에서 DESIGN.md와 산출물 템플릿을 등록·추출·적용·내보낸다. 작업 화면의 목업 보기에서는 최신 버전과 이전 버전을 함께 관리한다. Sawhorse 자체 디자인 기준은 [DESIGN.md](DESIGN.md)에 모은다.
+
+## 번들된 워터폴 예시: SDD 흐름
 
 ```text
 의도          설계       구현       검증               배포·결과 인수
@@ -136,9 +147,10 @@ YAML frontmatter는 관계와 상태, 본문은 사람이 읽는 기록이다. �
 Windows와 macOS용 독립 실행 파일을 제공하며 앱을 켜지 않아도 동작한다.
 [설치와 명령 안내](docs/cli.md)를 참고한다.
 
-[Herdr](https://herdr.dev)의 지속 터미널을 실행 기반으로 사용한다. 하네스는 Claude Code와
-Codex를 지원하며 조사·계획·구현·검증·검토 역할을 선택할 수 있다. 프로젝트별 기본
-모델을 정하거나 실행마다 바꿀 수 있다. 해당 CLI의 설치와 유효한 로그인이 필요하다.
+[Herdr](https://herdr.dev)의 지속 터미널을 실행 기반으로 사용한다. 하네스는 Herdr가
+지원하는 로컬 에이전트를 감지해 실행하며 조사·계획·구현·검증·검토 역할을 선택할 수 있다.
+이 PC에 설치한 실행 가능 에이전트가 기본값이 되고, 프로젝트별 기본 모델을 정하거나 실행마다
+바꿀 수 있다. 해당 CLI의 설치와 유효한 로그인이 필요하다.
 
 실행 시작 전에 Markdown 장부를 만들고, 실제 Herdr 세션·워크스페이스·탭·pane·에이전트
 이름을 기록한다. 앱을 다시 열어도 같은 실행을 추적하며, 다른 pane의 프로세스를
@@ -160,11 +172,13 @@ Codex·사용자 정의 모델은 같은 에이전트의 부모 모델을 상속
 SDD 작업대는 앱의 기본 기능이며 별도 팩 설치가 필요하지 않다.
 `plugin/skills/sdd`와 `plugin/skills/tdd`는 에이전트가 선택한 워크플로우의 산출물·증거 규약을 따르도록 돕는다.
 
-- `si`: 업무 루틴, 일지·보고, 개념·프로젝트 지식 문서와 공통 작업 바로가기.
-- `starter`: 빠른 기록과 주간 회고.
+- `journal`: 하루 기록, 빠른 메모, 업무 보고와 주간 회고.
+- `concepts`: 개념 노트 생성·분류·연결.
+- `todos`: 일지 체크리스트를 보여 주는 할 일 화면.
+- `project-docs`: 제안서와 코드베이스의 프로젝트 문서화.
 - 사용자 팩: `~/.claude/sawhorse/packs/<id>/pack.json`에서 추가한다.
 
-기존 팩은 폴더·템플릿·설정·액션·추가 화면을 선언한다. 끄더라도 원본 노트는 남는다.
+팩의 단위는 업종이나 업무방식이 아니라 독립 기능이다. 팩은 폴더·템플릿·설정·액션·추가 화면을 선언하며, 끄더라도 원본 노트는 남는다. 볼트 점검은 항상 필요한 앱 네이티브 기능이라 팩 설치 여부와 무관하게 제공한다.
 앱과 플러그인은 `~/.claude/sawhorse/config.json`을 공유한다.
 
 통합 확장 package v2는 로컬 폴더/파일, exact Git commit, HTTPS에서 설치할 수 있다.
@@ -177,6 +191,8 @@ Git으로 배포할 수 있다. `xlsx-export`는 설치·활성화한 프로젝�
 `/plugin install sawhorse@sawhorse`로 설치한다.
 
 ## 개발 및 설계 문서
+
+- [골 모드: 목표 달성까지 자율 반복, 매시간 토큰 복구 재시도, 공통 작업 점유](docs/architecture/goal-mode.md)
 
 - [SDD 제품·저장·하네스 설계](docs/architecture/sdd-workbench.md)
 - [SDD API 및 구현 계약](docs/architecture/sdd-contract.md)

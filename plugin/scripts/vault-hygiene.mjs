@@ -205,7 +205,7 @@ if (mode === "quick" || mode === "fix") {
   if (missingAssets.length > 0) {
     say(`[자산] 없음: ${missingAssets.join(", ")} — /sawhorse:init-vault 필요`);
   } else {
-    say("[자산] SI 문서 인덱스 모두 있음");
+    say("[자산] 문서 인덱스 모두 있음");
   }
 
   // 5) .base 가 템플릿 폴더를 제외하는지 (템플릿 노트도 진짜 type 값을 갖고 있다)

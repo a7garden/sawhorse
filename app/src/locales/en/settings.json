@@ -372,13 +372,13 @@
     "nextJob": "Next job: {{runner}}",
     "runnerHerdr": "herdr session",
     "runnerFallback": "Running headless — {{reason}}",
-    "requirementsTitle": "Required programs",
-    "requirementsDesc": "Programs that job execution depends on",
+    "requirementsTitle": "Core setup",
+    "requirementsDesc": "Shared Obsidian and herdr integrations. Feature-specific tools are declared by each workflow.",
     "agentsDesc": "Detected agents and what they can do",
     "agentsTitle": "Agents",
     "noAgents": "No agents detected.",
     "defaultAgent": "Default agent",
-    "defaultAgentHint": "The target for skill installs and the baseline for guidance. The job runner is currently Claude Code.",
+    "defaultAgentHint": "A Herdr-compatible agent detected on this computer is used by default for work runs.",
     "defaultAgentFailed": "Failed to change default agent: {{error}}",
     "badgeDefault": "Default",
     "badgeSkillInstallable": "Skill install available",
@@ -388,7 +388,7 @@
     "runOptions": "Run options",
     "runOptionsDesc": "Agent command and approval policy",
     "herdrTitle": "herdr session",
-    "herdrDesc": "Run jobs in terminal sessions you can see",
+    "herdrDesc": "Background by default · open herdr when needed",
     "mode": "Run mode",
     "perm": {
       "default": "Default",
@@ -396,7 +396,7 @@
       "bypass": "Bypass permissions (unattended)"
     },
     "herdrMode": {
-      "auto": "Auto (herdr when available, else background)",
+      "auto": "Auto (run in background)",
       "herdr": "herdr only",
       "headless": "Background only"
     },

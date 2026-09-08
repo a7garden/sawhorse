@@ -1,3 +1,5 @@
+import type { LifecycleState, ResourceDocument, ResourceAssignment } from "./lifecycle-v2";
+import type { GoalState, GoalBatchItem } from "./goals";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import i18n from "@/i18n";
 import type { Mockup } from "@/features/mockups/types";
@@ -42,6 +44,22 @@ async function call<T>(
   return invoke<T>(command, args);
 }
 export const sddApi = {
+  startSelectedGoals: (workIds: string[]): Promise<GoalBatchItem[]> => call("goal_start_selected", { workIds }),
+  createGoal: (input: { id: string; projectId: string; objective: string; maxParallel: number; start: boolean }): Promise<WorkItem> => call("goal_create", { input }),
+  goalState: (workId: string): Promise<GoalState[]> => call("goal_state", { workId }),
+  goalControl: (workId: string, action: "pause" | "resume" | "cancel"): Promise<void> => call("goal_control", { workId, action }),
+  lifecycle: (workId: string): Promise<LifecycleState> => call("sdd_lifecycle", { workId }),
+  lifecycleAction: (input: { workId: string; action: string; expectedStage: string; revision: number; note: string; inputDigest: string }): Promise<WorkItem> => call("sdd_lifecycle_action", { input }),
+  queueImplementation: (workIds: string[]): Promise<void> => call("sdd_queue_implementation", { workIds }),
+  discardImpact: (workId: string): Promise<WorkItem[]> => call("sdd_discard_impact", { workId }),
+  answerInterview: (workId: string, questionId: string, answer: string, revision: number): Promise<LifecycleState> => call("sdd_answer_interview", { workId, questionId, answer, revision }),
+  resources: (): Promise<ResourceDocument[]> => call("sdd_resources"),
+  saveResource: (input: ResourceDocument): Promise<ResourceDocument> => call("sdd_save_resource", { input }),
+  projectResources: (projectId: string): Promise<ResourceAssignment> => call("sdd_project_resources", { projectId }),
+  assignResource: (projectId: string, resourceId: string, role: string): Promise<ResourceAssignment> => call("sdd_assign_resource", { projectId, resourceId, role }),
+  exportResource: (resourceId: string, path: string): Promise<void> => call("sdd_export_resource", { resourceId, path }),
+  designSource: (projectId: string): Promise<string> => call("sdd_design_source", { projectId }),
+  generateResource: (kind: string, source: string, agent: string): Promise<string> => call("sdd_generate_resource", { kind, source, agent }),
   readMockup: (workId: string): Promise<Mockup> => call("sdd_read_mockup", { workId }),
   readMockupHtml: (workId: string, screenId: string): Promise<string> => call("sdd_read_mockup_html", { workId, screenId }),
   captureImage: (path: string): Promise<string> => call("sdd_capture_image", { path }),

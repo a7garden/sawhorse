@@ -1,0 +1,63 @@
+.wb-work-page .wb-work-header { margin-bottom: 18px; }
+.wb-task-overview { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; margin: 0 0 24px; }
+.wb-task-overview > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; text-align: left; background: var(--card); }
+.wb-task-overview > button:hover, .wb-task-overview > button[aria-pressed=true] { border-color: var(--primary); background: color-mix(in srgb,var(--primary) 4%,var(--card)); }
+.wb-task-overview strong { display: block; font-size: 12px; font-weight: 550; }
+.wb-task-overview small { display: block; margin-top: 5px; color: var(--muted-foreground); font-size: 11px; }
+.wb-task-overview b { font-size: 25px; font-weight: 550; font-variant-numeric: tabular-nums; color: var(--primary); }
+.wb-work-area-tabs { display: flex; gap: 22px; min-width: 0; overflow-x: auto; }
+.wb-work-area-tabs button { display: flex; align-items: center; gap: 7px; white-space: nowrap; padding: 12px 0; border-bottom: 2px solid transparent; color: var(--muted-foreground); }
+.wb-work-area-tabs button[aria-pressed=true] { color: var(--foreground); border-color: var(--primary); }
+.wb-work-area-tabs span { font-size: 10px; background: var(--muted); padding: 1px 5px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+.wb-task-board { min-width: 0; }
+.wb-task-card-select { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; font-size: 11px; color: var(--muted-foreground); }
+.wb-work-page .wb-task-card > .wb-task-card-select { padding: 10px 12px 0; margin-bottom: 0; }
+.wb-task-card[data-selected=true] { outline: 2px solid var(--primary); outline-offset: -1px; }
+.wb-goal-batch-results { margin: 12px 0; padding: 12px; border: 1px solid var(--border); border-radius: 8px; line-height: 1.6; }
+.wb-goal-batch-results li { overflow-wrap: anywhere; }
+.wb-goal-batch-hint { color: var(--muted-foreground); font-size: 12px; margin: 8px 0 12px; }
+.wb-task-lanes { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(215px,1fr); gap: 12px; overflow-x: auto; padding: 0 0 16px; align-items: stretch; }
+.wb-task-lane { min-width: 0; background: color-mix(in srgb,var(--muted) 55%,var(--background)); border-radius: 10px; min-height: 360px; border: 1px solid var(--border); }
+.wb-task-lane-head { padding: 15px 12px 13px; border-bottom: 1px solid var(--border); }
+.wb-task-lane-head > div { display: flex; align-items: center; gap: 7px; }
+.wb-task-lane-head h2 { font-size: 12px; font-weight: 650; margin: 0; }
+.wb-task-step { display: grid; place-items: center; width: 19px; height: 19px; border-radius: 50%; font-size: 10px; border: 1px solid var(--border); color: var(--muted-foreground); }
+.wb-task-lane[data-stage=approval] .wb-task-step, .wb-task-lane[data-stage=unconfirmed] .wb-task-step { color: var(--primary-foreground); background: var(--primary); border-color: var(--primary); }
+.wb-task-lane[data-stage=done] .wb-task-step { color: var(--success); }
+.wb-task-lane-count { margin-left: auto; color: var(--muted-foreground); font-size: 11px; }
+.wb-task-lane-head p { color: var(--muted-foreground); font-size: 10px; margin: 8px 0 0; }
+.wb-task-card-stack { padding: 10px; display: grid; align-content: start; gap: 10px; }
+.wb-task-card.wb-board-card { border-color: var(--border); background: var(--card); padding: 12px; }
+.wb-task-card .wb-work-card-id { font-size: 9px; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-task-card-flags { display: flex; flex-wrap: wrap; gap: 5px; margin: 12px 0; color: var(--muted-foreground); font-size: 10px; }
+.wb-task-card-flags > span { display: inline-flex; align-items: center; gap: 4px; }
+.wb-task-card-flags .is-blocked { color: var(--warning-foreground); }
+.wb-task-card footer { justify-content: space-between; font-size: 10px; }
+.wb-task-card footer > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wb-task-card-next { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; color: var(--primary); }
+.wb-task-lane-empty { color: var(--muted-foreground); font-size: 11px; text-align: center; margin: 34px 0; }
+.wb-intent-inbox { max-width: 1120px; padding: 10px 0 20px; }
+.wb-intent-inbox > header { display: flex; gap: 14px; align-items: center; margin-bottom: 24px; }
+.wb-inbox-symbol { padding: 13px; border-radius: 12px; background: var(--muted); color: var(--primary); }
+.wb-intent-inbox h2 { font-size: 18px; font-weight: 600; margin: 0 0 5px; }
+.wb-intent-inbox header p { color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.wb-inbox-notes { display: grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap: 14px; }
+.wb-inbox-notes article { border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.wb-inbox-notes article:hover { border-color: var(--primary); }
+.wb-inbox-notes article > button { width: 100%; text-align: left; padding: 20px; }
+.wb-inbox-notes small, .wb-inbox-notes p { color: var(--muted-foreground); font-size: 12px; }
+.wb-inbox-notes h3 { margin: 10px 0; font-size: 15px; font-weight: 550; }
+.wb-inbox-notes p { min-height: 42px; line-height: 1.7; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.wb-inbox-notes footer { display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid var(--border); padding-top: 14px; margin-top: 20px; font-size: 11px; color: var(--muted-foreground); }
+.wb-inbox-notes footer > span:last-child, .wb-inbox-empty button { color: var(--primary); display: inline-flex; align-items: center; gap: 6px; }
+.wb-inbox-empty { border: 1px dashed var(--border); border-radius: 12px; text-align: center; padding: 50px 20px; color: var(--muted-foreground); }
+.wb-inbox-empty button { margin-top: 16px; }
+.wb-task-archive-hint { font-size: 12px; color: var(--muted-foreground); margin-bottom: 16px; }
+@media(max-width:760px) {
+  .wb-task-overview { gap: 6px; margin-bottom: 16px; }
+  .wb-task-overview > button { padding: 11px; gap: 6px; align-items: flex-start; }
+  .wb-task-overview b { font-size: 20px; }
+  .wb-task-overview small { display: none; }
+  .wb-work-area-tabs { gap: 16px; max-width: 100%; }
+  .wb-inbox-notes { grid-template-columns: minmax(0,1fr); }
+}

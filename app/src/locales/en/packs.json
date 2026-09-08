@@ -162,7 +162,7 @@
   "select": { "project": "Select project" },
   "steps": {
     "intro": "Start",
-    "programs": "Programs",
+    "programs": "Core setup",
     "agents": "Agents",
     "vault": "Workspace",
     "packs": "Extensions",
@@ -173,12 +173,12 @@
   "wizard": {
     "title": "Get started with the sawhorse workbench",
     "intro": {
-      "lead": "This app is in charge.",
-      "rest": "It finds terminal agents and required programs on this PC, and tells you where to get them if missing. No need to install plugins separately.",
-      "programs": "Checks that the external tools the product actually calls are present. Nothing is changed.",
+      "lead": "Your workflow defines how work gets done.",
+      "rest": "Sawhorse deterministically ports stages, deliverables, approvals, and extensions. A particular delivery format or development method belongs to the selected workflow, not the core app.",
+      "programs": "Checks only the shared recommended integrations, Obsidian and herdr. Tools such as Node.js and Pandoc are declared by workflows that need them.",
       "agents": "Scans this PC's terminal agents and picks one to use as the default.",
       "vault": "One folder where documents live. An existing Obsidian vault works as is.",
-      "packs": "A bundle of ways of working. Turning one on brings views, schedules, and skills along.",
+      "packs": "Optional feature bundles. Their views, schedules, and skills are used only by workflows that need them.",
       "skills": "Installs the skills of enabled extensions into the agents.",
       "outro": "Set things in order and you're done. You can change everything later in Settings and the Extensions tab."
     },
@@ -214,7 +214,7 @@
       "workspace": "Workspace · {{path}}",
       "agent": "Default agent · {{agent}}",
       "extensions": "{{n}} extensions enabled",
-      "programs": "Programs · {{summary}}",
+      "programs": "Core setup · {{summary}}",
       "created": "Created {{n}} items in the workspace.",
       "alreadyReady": "The workspace was already in place.",
       "outro": "The agent can run these two checks for you — now or later.",
@@ -239,7 +239,7 @@
       "missing": "{{n}} missing",
       "outdated": "{{n}} outdated"
     },
-    "introA": "Only what was found on this PC is shown. For a missing item, press",
+    "introA": "Only shared recommended integrations appear here; workflows declare feature-specific tools. For a missing item, press",
     "installLabel": "Install",
     "introB": " to open its download page in your browser. After installing,",
     "recheckLabel": "re-check",

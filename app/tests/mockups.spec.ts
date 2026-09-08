@@ -15,6 +15,7 @@ async function open(page: Page) {
     .locator(".app-navigation")
     .getByRole("button", { name: "작업", exact: true })
     .click();
+  await page.getByRole("group", {name:/작업 공간|Work spaces/}).getByRole("button",{name:/^목업|^Mockups/}).click();
   await page
     .getByRole("button", { name: "작업 검토 경험 개선", exact: true })
     .click();
@@ -283,6 +284,7 @@ test("compact review stays within the dialog and English labels are available", 
     .locator(".app-navigation")
     .getByRole("button", { name: "Work", exact: true })
     .click();
+  await page.getByRole("group", {name:/작업 공간|Work spaces/}).getByRole("button",{name:/^목업|^Mockups/}).click();
   await page
     .getByRole("button", { name: "작업 검토 경험 개선", exact: true })
     .click();

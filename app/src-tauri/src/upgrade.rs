@@ -448,12 +448,23 @@ fn install_agents(
             }
         }
     }
-    // Built-in pack overrides from the old bundle must not shadow the new one.
+    // 1.0의 업무방식 묶음은 기능 확장으로 분해됐다. 옛 override가 사용자 팩으로
+    // 다시 나타나 경계를 되돌리지 않도록 백업 가능한 retired 표식으로 치환한다.
     for id in ["si", "starter"] {
         let target = home.join(".claude/sawhorse/packs").join(id);
         if target.exists() {
             replace_tree(report, journal, &target, |stage| {
-                copy_tree(&bundle.join("packs").join(id), stage)
+                fs::create_dir_all(stage).map_err(err)?;
+                write_json(
+                    &stage.join("retired.json"),
+                    &serde_json::json!({
+                        "replacement": if id == "starter" {
+                            serde_json::json!(["journal"])
+                        } else {
+                            serde_json::json!(["journal", "concepts", "todos", "project-docs"])
+                        }
+                    }),
+                )
             })?;
         }
     }
@@ -871,13 +882,6 @@ pub fn run_at(home: &Path, bundle: &Path, vault: Option<&Path>) -> Result<Upgrad
                         fs::remove_file(path).map_err(err)?;
                     }
                 }
-                if reg.get("si").is_some_and(|pack| pack.enabled) {
-                    fs::copy(
-                        bundle.join("packs/si/assets/대시보드.md"),
-                        stage.join("대시보드.md"),
-                    )
-                    .map_err(err)?;
-                }
                 notices = upgrade_extension_locks(stage, bundle)?;
                 let seeded = crate::workspace::provision(stage, &packs)?;
                 if !seeded.failed.is_empty() {
@@ -1010,8 +1014,10 @@ mod tests {
     #[test]
     #[ignore = "requires SAWHORSE_UPGRADE_FIXTURE pointing to a disposable copy in the temp directory"]
     fn supplied_vault_copy_can_complete_upgrade() {
-        let source = PathBuf::from(std::env::var_os("SAWHORSE_UPGRADE_FIXTURE").expect("fixture path"))
-            .canonicalize().unwrap();
+        let source =
+            PathBuf::from(std::env::var_os("SAWHORSE_UPGRADE_FIXTURE").expect("fixture path"))
+                .canonicalize()
+                .unwrap();
         assert!(source.starts_with(std::env::temp_dir().canonicalize().unwrap()));
         let before = tree_hash(&source).unwrap();
         let f = Fixture::new();
@@ -1026,8 +1032,16 @@ mod tests {
         assert_eq!(tree_hash(&source).unwrap(), before);
         assert_eq!(report.status, "completed", "{:?}", report.error);
         let snapshot = crate::sdlc::snapshot(&f.vault).unwrap();
-        assert!(snapshot.diagnostics.is_empty(), "{:?}", snapshot.diagnostics);
-        println!("Validated {} work items and {} events", snapshot.work.len(), snapshot.events.len());
+        assert!(
+            snapshot.diagnostics.is_empty(),
+            "{:?}",
+            snapshot.diagnostics
+        );
+        println!(
+            "Validated {} work items and {} events",
+            snapshot.work.len(),
+            snapshot.events.len()
+        );
         if let Some(destination) = std::env::var_os("SAWHORSE_UPGRADE_FIXTURE_EXPORT") {
             let destination = PathBuf::from(destination);
             assert!(destination.is_absolute());
@@ -1365,22 +1379,58 @@ mod tests {
     #[test]
     fn wiki_links_and_forward_dependencies_survive_migration() {
         let f = Fixture::new();
-        f.write("vault/사업/A/이슈/A.md", "---\ntype: 이슈\nid: A\ndepends_on: [\"[[Z Last|Misleading alias]]\"]\n---\nFirst");
-        f.write("vault/사업/A/이슈/B.md", "---\ntype: 이슈\nid: B\ndepends_on: [Z]\n---\nSecond");
-        f.write("vault/사업/A/이슈/C.md", "---\ntype: 이슈\nid: C\ndepends_on: [\"[[사업/A/이슈/Z Last.md]]\"]\n---\nThird");
-        f.write("vault/사업/A/이슈/Z Last.md", "---\ntype: 이슈\nid: Z\n---\nLast");
+        f.write(
+            "vault/사업/A/이슈/A.md",
+            "---\ntype: 이슈\nid: A\ndepends_on: [\"[[Z Last|Misleading alias]]\"]\n---\nFirst",
+        );
+        f.write(
+            "vault/사업/A/이슈/B.md",
+            "---\ntype: 이슈\nid: B\ndepends_on: [Z]\n---\nSecond",
+        );
+        f.write(
+            "vault/사업/A/이슈/C.md",
+            "---\ntype: 이슈\nid: C\ndepends_on: [\"[[사업/A/이슈/Z Last.md]]\"]\n---\nThird",
+        );
+        f.write(
+            "vault/사업/A/이슈/Z Last.md",
+            "---\ntype: 이슈\nid: Z\n---\nLast",
+        );
         let report = f.run();
         assert_eq!(report.status, "completed", "{:?}", report.error);
         let snapshot = crate::sdlc::snapshot(&f.vault).unwrap();
-        assert!(snapshot.diagnostics.is_empty(), "{:?}", snapshot.diagnostics);
+        assert!(
+            snapshot.diagnostics.is_empty(),
+            "{:?}",
+            snapshot.diagnostics
+        );
         for id in ["A", "B", "C"] {
-            assert_eq!(snapshot.work.iter().find(|w| w.id == id).unwrap().depends_on, ["Z"]);
+            assert_eq!(
+                snapshot
+                    .work
+                    .iter()
+                    .find(|w| w.id == id)
+                    .unwrap()
+                    .depends_on,
+                ["Z"]
+            );
         }
         f.write("vault/사업/A/이슈/D.md", "---\ntype: 이슈\nid: D\ndepends_on: [\"[[Z Last|Already migrated target]]\"]\n---\nAdded later");
         crate::sdlc::upgrade_legacy_at(&f.vault, &serde_json::json!({})).unwrap();
         let snapshot = crate::sdlc::snapshot(&f.vault).unwrap();
-        assert!(snapshot.diagnostics.is_empty(), "{:?}", snapshot.diagnostics);
-        assert_eq!(snapshot.work.iter().find(|w| w.id == "D").unwrap().depends_on, ["Z"]);
+        assert!(
+            snapshot.diagnostics.is_empty(),
+            "{:?}",
+            snapshot.diagnostics
+        );
+        assert_eq!(
+            snapshot
+                .work
+                .iter()
+                .find(|w| w.id == "D")
+                .unwrap()
+                .depends_on,
+            ["Z"]
+        );
     }
     #[test]
     fn stale_migration_stamp_blocks_replacement() {

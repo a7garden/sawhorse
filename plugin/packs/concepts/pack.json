@@ -1,0 +1,100 @@
+{
+  "id": "concepts",
+  "name": "개념",
+  "version": "1.0.0",
+  "author": "sawhorse",
+  "icon": "book-marked",
+  "description": "개념 노트를 만들고 분류·출처·관련 문서로 연결하는 기능 확장.",
+  "skills": [
+    "wiki"
+  ],
+  "workspace": {
+    "folders": [
+      "템플릿",
+      "개념"
+    ],
+    "files": [
+      {
+        "src": "templates/개념.md",
+        "dest": "템플릿/개념.md"
+      },
+      {
+        "src": "assets/bases/개념.base",
+        "dest": "개념/개념.base"
+      }
+    ]
+  },
+  "actions": [
+    {
+      "id": "wiki",
+      "label": "개념 정리",
+      "description": "문서에 나온 개념을 위키링크로 연결하고 없는 개념 문서를 만든다",
+      "prompt": "/{{ns}}:wiki {{topic}}",
+      "cwd": "workspace",
+      "params": [
+        {
+          "key": "topic",
+          "type": "text",
+          "label": "정리할 개념/문서 (선택)"
+        }
+      ]
+    }
+  ],
+  "views": [
+    {
+      "id": "concepts",
+      "label": "개념",
+      "icon": "book-marked",
+      "group": "vault",
+      "type": "notes",
+      "query": {
+        "folders": [
+          "개념"
+        ],
+        "exclude": [
+          "*.base"
+        ],
+        "sort": {
+          "field": "",
+          "source": "title",
+          "desc": false
+        }
+      },
+      "columns": [
+        {
+          "field": "",
+          "source": "title",
+          "label": "개념"
+        },
+        {
+          "field": "domain",
+          "label": "분류",
+          "type": "badge",
+          "width": 110
+        },
+        {
+          "field": "aliases",
+          "label": "다른 이름",
+          "type": "list"
+        },
+        {
+          "field": "sources",
+          "label": "출처",
+          "type": "list"
+        },
+        {
+          "field": "",
+          "source": "mtime",
+          "label": "수정",
+          "type": "date",
+          "width": 110
+        }
+      ],
+      "groupBy": "domain",
+      "actions": [
+        "wiki"
+      ],
+      "empty": "개념 문서가 아직 없습니다. '개념 정리'를 실행하면 문서에 나온 용어부터 만듭니다."
+    }
+  ]
+}

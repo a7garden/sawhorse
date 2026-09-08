@@ -15,11 +15,13 @@ import { sddApi } from "./api";
 import { intentTitle, launchIntent, type IntentAttachment } from "./intent";
 import type { Project, WorkItem } from "./types";
 import "./intent.css";
+import { GoalComposer } from "./GoalPanel";
 
 export function IntentComposer({ initial, projects, onClose, onSaved }: {
   initial: WorkItem; projects: Project[]; onClose: () => void; onSaved: (work: WorkItem) => void;
 }) {
   const { t } = useTranslation("workbench");
+  const [mode, setMode] = useState<"sdd" | "goal">("sdd");
   const [markdown, setMarkdown] = useState(initial.description);
   const [projectId, setProjectId] = useState(initial.projectId || (projects.length === 1 ? projects[0].id : ""));
   const [images, setImages] = useState<IntentAttachment[]>([]);
@@ -119,13 +121,18 @@ export function IntentComposer({ initial, projects, onClose, onSaved }: {
       }
       if (start && project) await launchIntent(item, project);
       onSaved(item);
-    } catch (error) { setError(`${item ? t("intent.savedLaunchFailed") + " " : ""}${String(error)}`); }
+    } catch (error) {
+      if (item) { try { setSaved((await sddApi.snapshot()).work.find((w) => w.id === item!.id) ?? item); } catch { /* Keep the captured record available. */ } }
+      setError(`${item ? t("intent.savedLaunchFailed") + " " : ""}${String(error)}`);
+    }
     finally { submitting.current = false; setBusy(false); }
   }
+  if (mode === "goal") return <GoalComposer initial={{ ...initial, description: markdown }} projects={projects} onClose={onClose} onSaved={onSaved} onMode={() => setMode("sdd")} />;
   return <Dialog open wide title={t("intent.new")} onClose={close} className="wb-intent-dialog">
     <div className="wb-intent-composer">
+      <div className="wb-goal-actions"><Button variant="outline" aria-pressed>{t("goal.sddMode")}</Button><Button variant="ghost" disabled={busy || reading || !!saved || images.length > 0} onClick={() => setMode("goal")}>{t("goal.title")}</Button></div>
       <div className="wb-intent-heading"><h2>{t("intent.heading")}</h2><p>{t("intent.hint")}</p></div>
-      <div className="wb-intent-route"><span>{t("intent.note")}</span><span>→</span><span>{t("intent.design")}</span><span>→</span><span>{t("intent.approval")}</span><span>→</span><span>{t("intent.build")}</span></div>
+      <div className="wb-intent-route"><span>{t("intent.note")}</span><span>→</span><span>{t("lifecycle.stages.clarify")}</span><span>→</span><span>{t("intent.design")}</span><span>→</span><span>{t("intent.approval")}</span><span>→</span><span>{t("intent.build")}</span></div>
       <p className="wb-intent-help">{t("intent.flowHint")}</p>
       <div className="wb-intent-editor" onPasteCapture={(event) => {
         const incoming = Array.from(event.clipboardData.files);

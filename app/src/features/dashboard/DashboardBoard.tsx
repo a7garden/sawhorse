@@ -15,6 +15,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { useApp } from "@/lib/store";
 import { createDashboardLayout } from "./layout-store";
 import {
   DASHBOARD_BREAKPOINTS,
@@ -42,12 +43,18 @@ function widgetTextKeys(id: DashboardWidgetId) {
 }
 
 /** 카탈로그가 길어졌으므로 카테고리로 묶는다. 등록 순서를 그대로 쓴다. */
-function groupWidgets(query: string, t: TFunction, scope: string) {
+function groupWidgets(
+  query: string,
+  t: TFunction,
+  scope: string,
+  available: (id: DashboardWidgetId) => boolean,
+) {
   const needle = query.trim().toLowerCase();
   const groups: { categoryKey: string; widgets: typeof WIDGET_REGISTRY }[] =
     [];
   for (const widget of WIDGET_REGISTRY) {
     if (scope && !PROJECT_WIDGET_IDS.includes(widget.id)) continue;
+    if (!available(widget.id)) continue;
     const keys = widgetTextKeys(widget.id);
     const haystack = [
       widget.title,
@@ -168,8 +175,15 @@ export function DashboardBoard({
     (state) => state.setWidgetEnabled,
   );
   const reset = useDashboardLayout((state) => state.reset);
+  const packs = useApp((state) => state.packs?.packs);
+  const featureEnabled = (id: string) =>
+    packs == null || packs.some((pack) => pack.id === id && pack.enabled);
+  const available = (id: DashboardWidgetId) =>
+    (id !== "checklist" || featureEnabled("todos")) &&
+    (id !== "journal" || featureEnabled("journal"));
+  const visibleEnabled = enabled.filter(available);
   const [query, setQuery] = useState("");
-  const groups = useMemo(() => groupWidgets(query, t, scope), [query, t, scope]);
+  const groups = groupWidgets(query, t, scope, available);
   const { width, containerRef, mounted } = useContainerWidth({
     measureBeforeMount: true,
   });
@@ -202,7 +216,7 @@ export function DashboardBoard({
         ref={containerRef as RefObject<HTMLDivElement>}
         className={cn("dashboard-grid", editing && "dashboard-grid-editing")}
       >
-        {mounted && enabled.length > 0 && (
+        {mounted && visibleEnabled.length > 0 && (
           <Responsive
             width={width}
             layouts={layouts}
@@ -222,7 +236,7 @@ export function DashboardBoard({
             resizeConfig={{ enabled: editing, handles: ["se"] }}
             onLayoutChange={(_, nextLayouts) => setLayouts(nextLayouts)}
           >
-            {enabled.map((id) => (
+            {visibleEnabled.map((id) => (
               <div key={id} className="widget-grid-item" data-widget={id}>
                 {editing && (
                   <div className="widget-edit-bar">
@@ -287,7 +301,7 @@ export function DashboardBoard({
             ))}
           </Responsive>
         )}
-        {mounted && enabled.length === 0 && (
+        {mounted && visibleEnabled.length === 0 && (
           <div className="grid min-h-80 place-items-center rounded-xl border border-dashed bg-card/50 text-center">
             <div>
               <p className="text-sm font-semibold">{t("board.emptyTitle")}</p>

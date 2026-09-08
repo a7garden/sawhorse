@@ -363,7 +363,7 @@
     "focusPaneTitle": "이 페인을 herdr 에서 앞으로"
   },
   "jobs": {
-    "title": "실행 기록",
+    "title": "자동화·도구 실행",
     "activeTitle": "큐 / 실행중",
     "focusFailed": "herdr 세션을 열지 못했습니다: {{error}}",
     "emptyActive": "대기 중인 실행이 없습니다.",

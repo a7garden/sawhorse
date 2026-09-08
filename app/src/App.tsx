@@ -4,7 +4,6 @@ import { getVersion } from "@tauri-apps/api/app";
 import {
   CalendarDays,
   Bot,
-  History,
   Search,
   KanbanSquare,
   FolderGit2,
@@ -19,11 +18,11 @@ import {
   FileText,
   Github,
   Repeat,
-  SquareCheckBig,
   Workflow,
   PanelLeftClose,
   PanelLeftOpen,
   FlaskConical,
+  FolderSearch,
 } from "lucide-react";
 import { useApp, parseViewPage, viewPageId, type PageId } from "@/lib/store";
 import { icon as packIcon, type IconComponent } from "@/lib/icons";
@@ -79,8 +78,7 @@ const TOP_NAV: {
   { id: "work", labelKey: "nav.work", icon: KanbanSquare, group: "project-scope" },
   { id: "task-library", labelKey: "nav.taskLibrary", icon: Repeat, group: "work" },
   { id: "calendar", labelKey: "nav.calendar", icon: CalendarDays, group: "project-scope" },
-  { id: "harness", labelKey: "nav.tab.harness", icon: Bot, group: "project-scope" },
-  { id: "jobs", labelKey: "nav.tab.jobs", icon: History, group: "project-scope" },
+  { id: "harness", labelKey: "nav.runs", icon: Bot, group: "project-scope" },
   { id: "knowledge", labelKey: "nav.workDocuments", icon: Search, group: "project-scope" },
   { id: "projects", labelKey: "nav.projects", icon: FolderGit2, group: "work" },
   // 워크플로우는 확장의 부속이 아니라 제품의 주인 객체다. 작업 섹션의 1급 진입점.
@@ -89,12 +87,19 @@ const TOP_NAV: {
   // 같은 낱말을 쓴다.
   { id: "terminal", labelKey: "nav.terminal", icon: Terminal, group: "work" },
   { id: "docs", labelKey: "nav.docs", icon: FileText, group: "vault" },
-  { id: "todos", labelKey: "nav.todos", icon: SquareCheckBig, group: "vault" },
+  { id: "vault", labelKey: "nav.vault", icon: FolderSearch, group: "vault" },
   { id: "reading", labelKey: "nav.reading", icon: Newspaper, group: "reading" },
   { id: "github", labelKey: "nav.github", icon: Github, group: "reading" },
   { id: "packs", labelKey: "nav.packs", icon: Puzzle, group: "reading" },
 ];
 const PAGE_GROUPS = [
+  {
+    root: "harness",
+    tabs: [
+      { id: "harness", labelKey: "nav.tab.harness" },
+      { id: "jobs", labelKey: "nav.tab.jobs" },
+    ],
+  },
   {
     root: "task-library",
     tabs: [
@@ -116,12 +121,11 @@ const BOTTOM_NAV: { id: PageId; labelKey: string; icon: IconComponent }[] = [
   { id: "settings", labelKey: "nav.settings", icon: Settings },
 ];
 
-/** 선언형 뷰로 옮기지 않은 화면들. 팩이 `type: native` 로 이 이름을 가리킨다. */
+/** 기능 확장이 `type: native` 로 연결하는 호스트 내장 화면. */
 const NATIVE: Record<string, () => JSX.Element> = {
   issues: () => <WorkbenchPage view="work" />,
   todos: TodosPage,
   docs: DocsPage,
-  vault: VaultPage,
 };
 
 const THEME_KEY: Record<Theme, string> = {
@@ -157,11 +161,11 @@ export default function App() {
     return !current;
   });
   const navPage = page === "board" || page === "issues" ? "work" : page;
-  const pageLabelKey = TOP_NAV.find((item) => item.id === navPage)?.labelKey
-    ?? group?.tabs.find((tab) => tab.id === page)?.labelKey
+  const pageLabelKey = group?.tabs.find((tab) => tab.id === page)?.labelKey
+    ?? TOP_NAV.find((item) => item.id === navPage)?.labelKey
     ?? BOTTOM_NAV.find((item) => item.id === page)?.labelKey;
   const pageLabel = pageLabelKey ? t(pageLabelKey) : nav.find((item) => viewPageId(item.packId, item.viewId) === page)?.label;
-  const projectScoped = TOP_NAV.some((item) => item.id === navPage && item.group === "project-scope");
+  const projectScoped = TOP_NAV.some((item) => item.id === (group?.root ?? navPage) && item.group === "project-scope");
 
   useEffect(() => {
     void init();
@@ -194,6 +198,8 @@ export default function App() {
         return <DocsPage />;
       case "todos":
         return <TodosPage />;
+      case "vault":
+        return <VaultPage />;
       case "schemas":
         return <SchemaStudioPage />;
       case "workflows":
@@ -232,7 +238,7 @@ export default function App() {
       const Native = NATIVE[entry.component];
       return Native ? <Native /> : <WorkbenchPage view="overview" />;
     }
-    if (entry.packId === "starter" && entry.viewId === "logs") return <JournalPage />;
+    if (entry.packId === "journal" && entry.viewId === "logs") return <JournalPage />;
     return <PackViewPage packId={entry.packId} viewId={entry.viewId} />;
   })();
 
@@ -302,7 +308,7 @@ export default function App() {
             const packViews = nav.filter(
               (n) =>
                 id !== "project-scope" && n.group === id &&
-                !["issues", "todos", "docs"].includes(n.component),
+                !["issues", "docs"].includes(n.component),
             );
             if (id === "vault") {
               const order = (label: string) =>
@@ -366,7 +372,7 @@ export default function App() {
 
           {nav.some(
             (n) =>
-              !["issues", "todos", "docs"].includes(n.component) &&
+              !["issues", "docs"].includes(n.component) &&
               !SECTIONS.some((s) => s.id !== "project-scope" && s.id === n.group),
           ) && (
             <Fragment>
@@ -376,7 +382,7 @@ export default function App() {
               {nav
                 .filter(
                   (n) =>
-                    !["issues", "todos", "docs"].includes(n.component) &&
+                    !["issues", "docs"].includes(n.component) &&
                     !SECTIONS.some((s) => s.id !== "project-scope" && s.id === n.group),
                 )
                 .map((n) => (

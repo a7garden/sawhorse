@@ -18,6 +18,14 @@ fn valid_version(value: &str) -> bool {
     semver::Version::parse(value).is_ok()
 }
 
+fn valid_extension_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 38
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+}
+
 fn issue(
     issues: &mut Vec<ValidationIssue>,
     severity: IssueSeverity,
@@ -106,6 +114,138 @@ pub fn validate(definition: &WorkflowDefinition) -> ValidationReport {
             "version",
             "workflow version은 유효한 SemVer(x.y.z)여야 합니다",
         );
+    }
+
+    let mut requirement_ids = HashSet::new();
+    for (index, requirement) in definition.requirements.iter().enumerate() {
+        let path = format!("requirements[{index}]");
+        let kind = match requirement.kind {
+            WorkflowRequirementKind::Program => "program",
+            WorkflowRequirementKind::Extension => "extension",
+        };
+        if !valid_id(&requirement.id) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "invalid-requirement-id",
+                format!("{path}.id"),
+                "requirement id는 영문, 숫자, -, _, .만 사용할 수 있습니다",
+            );
+        } else if !requirement_ids.insert((kind, requirement.id.as_str())) {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "duplicate-requirement",
+                format!("{path}.id"),
+                format!("중복 workflow requirement입니다: {kind}:{}", requirement.id),
+            );
+        }
+        if requirement.label.trim().is_empty() || requirement.reason.trim().is_empty() {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "incomplete-requirement",
+                path.clone(),
+                "requirement에는 표시 이름과 필요한 이유가 있어야 합니다",
+            );
+        }
+        if !requirement.install_url.is_empty() && !requirement.install_url.starts_with("https://") {
+            issue(
+                &mut issues,
+                IssueSeverity::Error,
+                "invalid-install-url",
+                format!("{path}.installUrl"),
+                "설치 링크는 비워 두거나 https:// URL이어야 합니다",
+            );
+        }
+        match requirement.kind {
+            WorkflowRequirementKind::Program => {
+                let valid_command = |command: &str| {
+                    !command.is_empty()
+                        && command.len() <= 128
+                        && command.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric()
+                                || matches!(byte, b'-' | b'_' | b'.' | b'+')
+                        })
+                };
+                if requirement.commands.is_empty()
+                    || requirement
+                        .commands
+                        .iter()
+                        .any(|command| !valid_command(command))
+                {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "invalid-program-commands",
+                        format!("{path}.commands"),
+                        "program requirement에는 이식 가능한 실행 파일 이름이 하나 이상 필요합니다",
+                    );
+                }
+                if !requirement.version.is_empty() {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "program-version-not-supported",
+                        format!("{path}.version"),
+                        "program 버전 범위는 아직 지원하지 않습니다. version을 비워 주세요",
+                    );
+                }
+                if requirement.minimum_major > 0
+                    && (requirement.version_args.is_empty()
+                        || requirement
+                            .version_args
+                            .iter()
+                            .any(|argument| !matches!(argument.as_str(), "--version" | "-V")))
+                {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "invalid-version-probe",
+                        format!("{path}.versionArgs"),
+                        "최소 버전을 검사하려면 versionArgs에 --version 또는 -V만 사용할 수 있습니다",
+                    );
+                }
+            }
+            WorkflowRequirementKind::Extension => {
+                if !valid_extension_id(&requirement.id) {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "invalid-extension-requirement-id",
+                        format!("{path}.id"),
+                        "extension requirement ID는 패키지 ID와 같은 소문자·숫자·하이픈 형식이어야 합니다",
+                    );
+                }
+                if !requirement.commands.is_empty() {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "extension-has-commands",
+                        format!("{path}.commands"),
+                        "extension requirement에는 commands를 둘 수 없습니다",
+                    );
+                }
+                if semver::VersionReq::parse(&requirement.version).is_err() {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "invalid-extension-version",
+                        format!("{path}.version"),
+                        "extension requirement에는 유효한 SemVer 범위가 필요합니다",
+                    );
+                }
+                if requirement.minimum_major > 0 || !requirement.version_args.is_empty() {
+                    issue(
+                        &mut issues,
+                        IssueSeverity::Error,
+                        "extension-has-program-version",
+                        path,
+                        "extension requirement에는 minimumMajor/versionArgs를 둘 수 없습니다",
+                    );
+                }
+            }
+        }
     }
 
     let mut artifact_roles = HashSet::new();
@@ -703,6 +843,41 @@ mod tests {
             assert!(report.valid, "{}: {:?}", definition.id, report.issues);
         }
         assert!(validate_registry(&definitions).is_empty());
+    }
+
+    #[test]
+    fn workflow_requirements_validate_kind_specific_contracts() {
+        let mut definition = builtins::sdd();
+        definition.requirements = vec![WorkflowRequirement {
+            kind: WorkflowRequirementKind::Extension,
+            id: "xlsx-export".into(),
+            label: "XLSX Export".into(),
+            level: WorkflowRequirementLevel::Required,
+            reason: "the final deliverable is an XLSX workbook".into(),
+            version: "^1.1".into(),
+            ..Default::default()
+        }];
+        assert!(validate(&definition).valid);
+
+        definition.requirements[0].version = "latest".into();
+        assert!(validate(&definition)
+            .issues
+            .iter()
+            .any(|issue| issue.code == "invalid-extension-version"));
+
+        definition.requirements[0] = WorkflowRequirement {
+            kind: WorkflowRequirementKind::Program,
+            id: "pandoc".into(),
+            label: "Pandoc".into(),
+            level: WorkflowRequirementLevel::Recommended,
+            reason: "reads DOCX source material".into(),
+            commands: vec!["pandoc".into()],
+            version_args: vec!["--version".into()],
+            minimum_major: 3,
+            install_url: "https://pandoc.org/installing.html".into(),
+            ..Default::default()
+        };
+        assert!(validate(&definition).valid);
     }
 
     #[test]

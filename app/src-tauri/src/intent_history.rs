@@ -19,12 +19,31 @@ fn directory(root: &Path, work_id: &str) -> Result<PathBuf, String> {
 }
 
 pub fn capture(root: &Path, work: &WorkItem, event: &str, note: &str) -> Result<(), String> {
-    if work.workflow_id != "intent-flow" { return Ok(()); }
-    let documents = ["intent", "spec", "plan", "verification"].iter()
-        .map(|role| read_document(root, &work.id, role)).collect::<Result<Vec<_>, _>>()?;
+    if work.workflow_id != "intent-flow" {
+        return Ok(());
+    }
+    let roles = if lifecycle::supports(work) {
+        vec![
+            "intent",
+            "brief",
+            "spec",
+            "plan",
+            "verification",
+            "rollback",
+        ]
+    } else {
+        vec!["intent", "spec", "plan", "verification"]
+    };
+    let documents = roles
+        .iter()
+        .map(|role| read_document(root, &work.id, role))
+        .collect::<Result<Vec<_>, _>>()?;
     let checkpoint = IntentCheckpoint {
-        id: Uuid::new_v4().to_string(), event: event.into(), note: note.into(),
-        at: now(), stage: work.stage.clone(),
+        id: Uuid::new_v4().to_string(),
+        event: event.into(),
+        note: note.into(),
+        at: now(),
+        stage: work.stage.clone(),
     };
     let parent = directory(root, &work.id)?;
     fs::create_dir_all(&parent).map_err(|error| error.to_string())?;
@@ -32,31 +51,46 @@ pub fn capture(root: &Path, work: &WorkItem, event: &str, note: &str) -> Result<
     fs::create_dir(&pending).map_err(|error| error.to_string())?;
     let result = (|| {
         for document in documents {
-            write_atomic(root, &pending.join(format!("{}.md", document.artifact)), &document.markdown)?;
+            write_atomic(
+                root,
+                &pending.join(format!("{}.md", document.artifact)),
+                &document.markdown,
+            )?;
         }
-        write_atomic(root, &pending.join("record.json"),
-            &serde_json::to_string_pretty(&checkpoint).map_err(|error| error.to_string())?)?;
+        write_atomic(
+            root,
+            &pending.join("record.json"),
+            &serde_json::to_string_pretty(&checkpoint).map_err(|error| error.to_string())?,
+        )?;
         fs::rename(&pending, parent.join(&checkpoint.id)).map_err(|error| error.to_string())
     })();
-    if result.is_err() { let _ = fs::remove_dir_all(&pending); }
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&pending);
+    }
     result
 }
 
 pub fn list(root: &Path, work_id: &str) -> Result<Vec<IntentCheckpoint>, String> {
     let parent = directory(root, work_id)?;
-    if !parent.exists() { return Ok(Vec::new()); }
+    if !parent.exists() {
+        return Ok(Vec::new());
+    }
     let mut checkpoints = Vec::new();
     for entry in fs::read_dir(parent).map_err(|error| error.to_string())? {
         let entry = entry.map_err(|error| error.to_string())?;
         let id = entry.file_name().to_string_lossy().into_owned();
-        if id.starts_with('.') { continue; }
+        if id.starts_with('.') {
+            continue;
+        }
         validate_id(&id)?;
         let path = entry.path().join("record.json");
         safe_path(root, &path)?;
-        let checkpoint: IntentCheckpoint = serde_json::from_str(
-            &fs::read_to_string(path).map_err(|error| error.to_string())?
-        ).map_err(|error| error.to_string())?;
-        if checkpoint.id != id { return Err("기록 ID가 일치하지 않습니다".into()); }
+        let checkpoint: IntentCheckpoint =
+            serde_json::from_str(&fs::read_to_string(path).map_err(|error| error.to_string())?)
+                .map_err(|error| error.to_string())?;
+        if checkpoint.id != id {
+            return Err("기록 ID가 일치하지 않습니다".into());
+        }
         checkpoints.push(checkpoint);
     }
     checkpoints.sort_by(|a, b| b.at.cmp(&a.at));
@@ -66,12 +100,33 @@ pub fn list(root: &Path, work_id: &str) -> Result<Vec<IntentCheckpoint>, String>
 pub fn read(root: &Path, work_id: &str, id: &str) -> Result<Vec<Document>, String> {
     validate_id(id)?;
     let parent = directory(root, work_id)?.join(id);
-    ["intent", "spec", "plan", "verification"].iter().map(|role| {
-        let path = parent.join(format!("{role}.md"));
-        safe_path(root, &path)?;
-        let markdown = fs::read_to_string(path).map_err(|error| error.to_string())?;
-        // Attachment links are relative to the original document, whose assets persist.
-        let original = read_document(root, work_id, role)?;
-        Ok(Document { revision: revision(&markdown), markdown, ..original })
-    }).collect()
+    let work = work_by_id(root, work_id)?;
+    let roles = if lifecycle::supports(&work) {
+        vec![
+            "intent",
+            "brief",
+            "spec",
+            "plan",
+            "verification",
+            "rollback",
+        ]
+    } else {
+        vec!["intent", "spec", "plan", "verification"]
+    };
+    roles
+        .iter()
+        .filter(|role| parent.join(format!("{role}.md")).exists())
+        .map(|role| {
+            let path = parent.join(format!("{role}.md"));
+            safe_path(root, &path)?;
+            let markdown = fs::read_to_string(path).map_err(|error| error.to_string())?;
+            // Attachment links are relative to the original document, whose assets persist.
+            let original = read_document(root, work_id, role)?;
+            Ok(Document {
+                revision: revision(&markdown),
+                markdown,
+                ..original
+            })
+        })
+        .collect()
 }

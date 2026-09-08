@@ -10,8 +10,8 @@ mod extensions;
 mod herdr;
 mod ingestion;
 mod jobs;
-mod model_policy;
 mod mockups;
+mod model_policy;
 mod notes;
 mod packs;
 mod plugin;
@@ -312,6 +312,22 @@ pub fn run() {
             sdlc::sdd_save_project,
             sdlc::sdd_save_work,
             sdlc::sdd_capture_intent,
+            sdlc::goals::goal_create,
+            sdlc::goals::goal_state,
+            sdlc_harness::goals::goal_control,
+            sdlc_harness::goals::goal_start_selected,
+            sdlc::lifecycle::sdd_lifecycle,
+            sdlc::lifecycle::sdd_discard_impact,
+            sdlc::lifecycle::sdd_lifecycle_action,
+            sdlc::lifecycle::sdd_queue_implementation,
+            sdlc::lifecycle::sdd_answer_interview,
+            sdlc::resources::sdd_resources,
+            sdlc::resources::sdd_save_resource,
+            sdlc::resources::sdd_project_resources,
+            sdlc::resources::sdd_assign_resource,
+            sdlc::resources::sdd_export_resource,
+            sdlc::resources::sdd_design_source,
+            sdlc_harness::sdd_generate_resource,
             sdlc::sdd_capture_image,
             sdlc::sdd_intent_review,
             sdlc::sdd_intent_checkpoint,

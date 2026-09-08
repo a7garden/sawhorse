@@ -14,12 +14,13 @@
 
 ### 2026-09-06 구현 현황
 
-- `WorkflowDefinition` 검증·카탈로그·정확한 버전/내용 digest 고정·안전한 산출물 경로 해석과 실제 실행 엔진을 사용하는 시뮬레이터를 구현했다. 내장 정의는 `sdd-main@1.0.0`, `tdd-cycle@1.0.0`, `sdd-with-tdd@1.0.0`이며 SDD의 하위 TDD 진입·반복·복귀를 같은 엔진에서 실행한다.
+- `WorkflowDefinition` 검증·카탈로그·정확한 버전/내용 digest 고정·안전한 산출물 경로 해석과 실제 실행 엔진을 사용하는 시뮬레이터를 구현했다. 내장 정의는 `sdd-main`, `tdd-cycle`, `sdd-with-tdd`, `intent-flow`이며 모두 추가 워크플로와 같은 공개 계약을 사용한다.
 - 프로젝트가 워크플로우를 선택하고 새 작업이 그 정의와 digest를 고정한다. 작업대의 단계·산출물·역할·전환은 정의에서 읽고, 기존 `sdd_*` API도 runtime instance가 생긴 뒤에는 공통 장부를 우회하지 않는다. SQLite 장부의 instance, node run, event, stale attempt, 하네스 실행 참조를 작업 상세에서 확인할 수 있다.
-- Workflow Studio에서 노드 종류, 산출물 계약, 하위 워크플로우, 역할, 연결, 입력/출력, 템플릿을 편집하고 검증·가상 실행·초안 저장·불변 버전 발행·JSON 내보내기를 할 수 있다. TDD 에이전트 절차는 [`plugin/skills/tdd/SKILL.md`](../../plugin/skills/tdd/SKILL.md)로 분리했다.
+- Workflow Studio에서 노드 종류, 산출물 계약, 하위 워크플로우, 역할, 연결, 입력/출력, 템플릿과 워크플로 전용 확장·프로그램 요구사항을 편집하고 검증·가상 실행·초안 저장·불변 버전 발행·JSON 내보내기를 할 수 있다. TDD 에이전트 절차는 [`plugin/skills/tdd/SKILL.md`](../../plugin/skills/tdd/SKILL.md)로 분리했다.
 - `VaultSchema`의 문서 타입·필드·별칭·기본값·경로·템플릿을 Schema Studio에서 편집한다. 전체 Markdown/frontmatter scan 뒤 필드 rename/default, 경로 이동, wiki/Markdown 링크 수정을 하나의 `ChangeSet`으로 계획한다. 외부 편집, symlink, 경로 탈출, 대상 충돌을 차단하며 journal 복구와 안전한 rollback을 제공한다. 새 schema revision 발행과 활성 pointer 변경은 적용 후 재검증이 성공해야만 가능하다.
 - 확장 manifest v2는 실제 semver 의존성, 엔진 API 범위, 전체 payload digest, 기여, 프로젝트별 명시 권한을 검사한다. 로컬 폴더/portable 파일/정확한 Git commit/HTTPS 설치, 의존성 충돌 진단, 불변 저장소, 프로젝트 lock, 바이너리 보존 package 내보내기를 제공한다. 표·보드·폼·문서·타임라인·검토 목록·그래프·지표 선언형 view를 공통 renderer가 표시한다.
 - XLSX는 [`plugin/extension-packages/xlsx-export`](../../plugin/extension-packages/xlsx-export) 선택 확장으로 분리했다. 기본/SI 화면과 설정에는 XLSX 진입점이 없고, 기존 job 기록을 읽기 위한 호환 분기만 남겼다. 번들 package digest는 CI에서 검사한다.
+- 첫 실행과 설정의 공통 환경 점검에는 Obsidian과 Herdr만 둔다. Git·Node.js·Pandoc·Office와 프로젝트별 확장은 이를 쓰는 워크플로의 `requirements`가 선언하며, 필수 항목은 실행 직전 프로젝트 lock과 로컬 실행 파일을 검사한다.
 - 프로젝트 가져오기는 여러 로컬 입력을 exact digest snapshot으로 고정하고 `.sawhorse/runtime.sqlite`에 파일 단위 checkpoint를 기록한다. 일시정지·재개·취소·자동 적용, 내용 주소 기반 evidence, 범위/구조/추적 문서 초안, 동일 입력 중복 방지, 기존 사람 문서 충돌 보존, 이전 생성본 기반 갱신을 제공하며 적용은 공용 `ChangeSet`을 사용한다.
 
 이 완료 표시는 이 문서의 1~5단계에 정의한 **로컬·선언형 MVP**를 뜻한다. 병렬 fork/join, 신뢰하지 않는 제3자 native 코드와 임의 custom UI의 강제 격리, 원격 CI 승인 서비스, 분산 인증·실시간 공동 편집·중앙 감사 서버는 표의 `후속` 범위로 남는다. PDF/DOCX/OCR의 의미 추출도 설치형 analyzer 계약을 위한 자리만 제공하며 기본 설치가 내용을 해석한다고 주장하지 않는다.
@@ -62,8 +63,8 @@
 | 확장 설치 | [`extensions/manifest.rs`](../../app/src-tauri/src/extensions/manifest.rs)의 별도 bundle/connector 모델 | 팩과 커넥터의 설치·버전·정책을 하나의 패키지 모델로 통합 |
 | 선언형 화면 | [`PackViewPage.tsx`](../../app/src/pages/PackViewPage.tsx)의 notes 테이블 | 표·보드·폼·문서·실행 타임라인·검토 목록을 공통 렌더러로 제공 |
 | 볼트 초기화 | [`workspace.rs`](../../app/src-tauri/src/workspace.rs)는 없는 폴더·파일을 생성 | 기존 파일 이동·필드 변환·링크 수정·내용 보완을 계획하고 적용 |
-| 엑셀 | [`jobs.rs`](../../app/src-tauri/src/jobs.rs)의 `excel` 분기, `config.rs`, `state.rs`, `ImprovePage.tsx`, SI 팩 액션 | 설정·상태·실행·메뉴·스크립트를 독립 확장 소유로 이동 |
-| 기존 자료 분석 | SI의 `project-doc`, `codebase-docs` 스킬과 기능분석 템플릿 | 범용 입력·출처·청크·체크포인트·문서 병합 서비스와 연결 |
+| 엑셀 | [`jobs.rs`](../../app/src-tauri/src/jobs.rs)의 레거시 `excel` 분기와 선택 패키지 `xlsx-export` | 설정·상태·실행·메뉴·스크립트를 독립 확장 소유로 이동 |
+| 기존 자료 분석 | `project-docs` 확장의 `project-doc`, `codebase-docs` 스킬과 기능분석 템플릿 | 범용 입력·출처·청크·체크포인트·문서 병합 서비스와 연결 |
 | 실행 복구 | SDD 실행 장부, [`collab/store.rs`](../../app/src-tauri/src/collab/store.rs)의 SQLite·이벤트·file WAL | 의미가 다른 기존 실행기를 어댑터로 감싸고 공통 실행·변경 적용 계약 추출 |
 
 팩에는 “활성 목록이 비어 있으면 전부 활성”인 호환 규칙과 사용자 팩의 내장 팩 덮어쓰기가 있다. 커넥터 bundle에는 별도의 충돌·서명 정책이 있다. 새 설치 모델은 이 차이를 명시적으로 해소해야 한다. 새 사용자의 빈 활성 목록은 아무 추가 확장도 켜지 않은 상태로 해석한다. 기존 사용자는 최초 변환 시 실제 활성 목록을 고정한다.
@@ -209,6 +210,14 @@ GUI를 닫았을 때의 지속 실행은 런타임의 수명 정책으로 정한
   "id": "sdd-main",
   "version": "1.0.0",
   "entry": "intent",
+  "requirements": [
+    {
+      "kind": "extension", "id": "company-docs", "label": "Company Docs",
+      "level": "required", "reason": "승인 산출물을 회사 양식으로 생성",
+      "commands": [], "versionArgs": [], "minimumMajor": 0,
+      "version": "^2.0", "installUrl": "", "installHint": ""
+    }
+  ],
   "nodes": [
     { "id": "intent", "kind": "artifact", "artifactRole": "intent", "completion": "validated" },
     { "id": "spec", "kind": "agent", "actionRef": "spec-writer", "inputs": ["intent"], "outputs": ["spec"] },

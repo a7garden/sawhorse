@@ -393,3 +393,18 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.mockup-library > header { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin: 20px 0; }
+.mockup-library > header h2 { font-size: 18px; font-weight: 600; }
+.mockup-library > header p { font-size: 13px; color: var(--muted-foreground); margin-top: 6px; }
+.mockup-library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 18px; }
+.mockup-library-grid article { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
+.mockup-library-open { display: block; width: 100%; text-align: left; }
+.mockup-library-thumbnail { height: 180px; overflow: hidden; position: relative; background: var(--muted); pointer-events: none; }
+.mockup-library-thumbnail iframe { width: 1200px; height: 720px; transform: scale(.32); transform-origin: top left; border: 0; }
+.mockup-library-body { padding: 18px; }
+.mockup-library-body h3 { margin: 8px 0; font-weight: 650; }
+.mockup-library-body small, .mockup-library-body p { color: var(--muted-foreground); font-size: 12px; }
+.mockup-library-screens { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 14px; }
+.mockup-library-screens span { font-size: 11px; border: 1px solid var(--border); border-radius: 5px; padding: 3px 6px; }
+.mockup-library-grid footer { border-top: 1px solid var(--border); display: flex; justify-content: space-between; padding: 10px 18px; align-items: center; font-size: 12px; }
