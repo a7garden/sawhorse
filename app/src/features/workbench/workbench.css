@@ -2840,3 +2840,5 @@ bind every visible surface to the workbench palette. */
 .wb-run-attention h2 { font-size: 15px; font-weight: 600; }
 .wb-run-attention > p { margin: 6px 0 12px; font-size: 13px; opacity: .75; }
 .wb-run-attention small, .wb-run-error { display: block; overflow-wrap: anywhere; color: var(--color-destructive, #c66a38); }
+/* 항목 옆에 닫기 버튼을 두려면 항목 전체가 버튼일 수 없다. 본문 이동만 안쪽 버튼이 맡는다. */
+.wb-run-attention-open { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; text-align: left; }

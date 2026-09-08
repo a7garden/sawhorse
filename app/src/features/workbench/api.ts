@@ -100,6 +100,9 @@ export const sddApi = {
   /** 닫힌 실행의 에이전트 세션을 herdr 에서 같은 대화로 다시 연다. */
   resumeRun: (id: string): Promise<HarnessRun> =>
     call("sdd_resume_run", { id }),
+  /** 다시 실행하지 않고 주의 목록에서만 내린다. 기록은 남고 되돌릴 수 있다. */
+  dismissRun: (id: string, dismissed: boolean): Promise<HarnessRun> =>
+    call("sdd_dismiss_run", { id, dismissed }),
   continueRun: (id: string, instructions: string): Promise<HarnessRun> =>
     call("sdd_continue_run", { id, instructions }),
   runKey: (id: string, key: string): Promise<HarnessRun> =>

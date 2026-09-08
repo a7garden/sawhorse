@@ -876,6 +876,15 @@ export async function previewInvoke(
       if (!run) throw new Error("실행 기록을 찾을 수 없습니다");
       return structuredClone(run);
     }
+    case "sdd_dismiss_run": {
+      // 기록을 지우지 않는 표시 변경이라 체험 모드에서도 그대로 해 볼 수 있다.
+      const run = state.runs?.find((run) => run.id === id);
+      if (!run) throw new Error("실행 기록을 찾을 수 없습니다");
+      if (["starting", "running"].includes(run.status)) throw new Error("진행 중인 실행은 닫을 수 없습니다");
+      run.dismissedAt = args.dismissed ? now() : null;
+      save();
+      return structuredClone(run);
+    }
     case "sdd_work_copilot": {
       // 체험 모드에는 부를 에이전트가 없다. 질문이 어떻게 흘러가는지만 보여 준다.
       const input = (args.input ?? {}) as { workId?: string; question?: string };

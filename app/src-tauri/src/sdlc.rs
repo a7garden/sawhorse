@@ -248,6 +248,9 @@ pub struct HarnessRun {
     pub tab_closed_at: Option<String>,
     /// The agent's closing output, captured before the pane was closed.
     pub final_report: Option<String>,
+    /// Set once the human dismissed this run from the attention list. The record
+    /// itself survives, so the dismissal can be undone.
+    pub dismissed_at: Option<String>,
     /// Whether "reopen in herdr" can work: a recorded session on an agent whose
     /// CLI can resume it.
     pub resumable: bool,

@@ -110,6 +110,10 @@ struct RunRecord {
     /// Last time the recorded session was reopened in herdr from the dashboard.
     #[serde(default)]
     resumed_at: Option<String>,
+    /// 사람이 "그만 신경 쓰겠다"고 고른 시각. 기록은 그대로 두고 주의 목록에서만
+    /// 내리므로, 다시 표시를 누르거나 실행이 다시 움직이면 저절로 풀린다.
+    #[serde(default)]
+    dismissed_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -230,6 +234,7 @@ impl RunRecord {
             agent_session: self.agent_session.clone(),
             tab_closed_at: self.tab_closed_at.clone(),
             final_report: self.final_report.clone(),
+            dismissed_at: self.dismissed_at.clone(),
             resumable: self.resumable(),
         }
     }
@@ -1076,6 +1081,7 @@ fn record_launch_with_config(
         tab_closed_at: None,
         final_report: None,
         resumed_at: None,
+        dismissed_at: None,
     };
     save_record(root, &record)?;
     if let (Some(instance_id), Some(node_run_id)) = (
@@ -1932,6 +1938,8 @@ pub async fn sdd_continue_run(id: String, instructions: String) -> Result<Harnes
     if record.status != "review" {
         return Err("review 상태의 실행에만 후속 지시를 보낼 수 있습니다".into());
     }
+    // 후속 지시를 보냈다는 것은 다시 신경 쓰기로 했다는 뜻이다. 아래 두 경로 모두 저장한다.
+    record.dismissed_at = None;
     if record.runner == "headless" {
         let _launch_guard = launch_mutex().lock().map_err(|_| "harness launch lock이 손상되었습니다".to_string())?;
         if !capacity_available(
@@ -1975,6 +1983,7 @@ pub async fn sdd_resume_run(id: String) -> Result<HarnessRun, String> {
     let root = sdlc::vault_root()?;
     let _run_guard = run_lock(&id).lock().await;
     let mut record = load_record(&root, &id)?;
+    clear_dismissed(&root, &mut record)?;
     if record.runner == "headless" {
         headless::open_viewer(&root, &mut record).await?;
         return Ok(record.public());
@@ -2003,10 +2012,11 @@ pub async fn sdd_run_key(id: String, key: String) -> Result<HarnessRun, String> 
     }
     let root = sdlc::vault_root()?;
     let _run_guard = run_lock(&id).lock().await;
-    let record = load_record(&root, &id)?;
+    let mut record = load_record(&root, &id)?;
     if record.status != "blocked" {
         return Err("blocked 상태의 실행에만 사용자 키를 보낼 수 있습니다".into());
     }
+    clear_dismissed(&root, &mut record)?;
     let h = herdr_for(&record);
     let info = owned_agent(&h, &record).await?;
     if !info.blocked() {
@@ -2019,6 +2029,36 @@ pub async fn sdd_run_key(id: String, key: String) -> Result<HarnessRun, String> 
     // Retain `blocked` until a later observation sees an actual lifecycle
     // transition; a clicked key is never evidence of approval or completion.
     Ok(record.public())
+}
+
+/// 실패·중단된 실행을 다시 실행하지 않고 주의 목록에서만 내린다. 기록과 출력은
+/// 그대로 남으므로 `dismissed = false` 로 언제든 되돌릴 수 있다.
+fn dismiss_record(root: &Path, id: &str, dismissed: bool) -> Result<RunRecord, String> {
+    let mut record = load_record(root, id)?;
+    // 진행 중인 실행은 아직 결과가 없다. 지금 닫으면 사람이 놓칠 뿐이다.
+    if matches!(record.status.as_str(), "starting" | "running") {
+        return Err("진행 중인 실행은 닫을 수 없습니다".into());
+    }
+    record.dismissed_at = dismissed.then(now);
+    save_record(root, &record)?;
+    Ok(record)
+}
+
+#[tauri::command]
+pub async fn sdd_dismiss_run(id: String, dismissed: bool) -> Result<HarnessRun, String> {
+    let root = sdlc::vault_root()?;
+    let _run_guard = run_lock(&id).lock().await;
+    Ok(dismiss_record(&root, &id, dismissed)?.public())
+}
+
+/// 사람이 다시 개입해 실행을 움직이면 "그만 신경 쓰겠다"는 판단도 함께 풀린다.
+/// 상태만 다시 읽는 refresh 계열은 이 표시를 건드리지 않는다.
+fn clear_dismissed(root: &Path, record: &mut RunRecord) -> Result<(), String> {
+    if record.dismissed_at.is_none() {
+        return Ok(());
+    }
+    record.dismissed_at = None;
+    save_record(root, record)
 }
 
 #[tauri::command]
@@ -3116,6 +3156,52 @@ mod tests {
             tab_closed_at: None,
             final_report: None,
             resumed_at: None,
+            dismissed_at: None,
+        }
+    }
+
+    #[test]
+    fn dismiss_hides_a_settled_run_without_losing_it() {
+        let root = tempdir("dismiss");
+        sdlc::initialize(&root).unwrap();
+        let failed = record(Uuid::new_v4().to_string(), None, "failed");
+        save_record(&root, &failed).unwrap();
+
+        let dismissed = dismiss_record(&root, &failed.id, true).unwrap();
+        assert!(dismissed.dismissed_at.is_some());
+        // 기록은 사라지지 않고, 화면도 닫힌 실행임을 알 수 있어야 한다.
+        let saved = load_record(&root, &failed.id).unwrap();
+        assert_eq!(saved.dismissed_at, dismissed.dismissed_at);
+        assert_eq!(saved.status, "failed");
+        assert_eq!(saved.public().dismissed_at, dismissed.dismissed_at);
+
+        // 되돌리면 다시 주의 목록으로 올라온다.
+        assert!(dismiss_record(&root, &failed.id, false)
+            .unwrap()
+            .dismissed_at
+            .is_none());
+        assert!(load_record(&root, &failed.id).unwrap().dismissed_at.is_none());
+    }
+
+    #[test]
+    fn dismiss_rejects_a_run_that_is_still_going() {
+        let root = tempdir("dismiss-running");
+        sdlc::initialize(&root).unwrap();
+        let running = record(Uuid::new_v4().to_string(), None, "running");
+        save_record(&root, &running).unwrap();
+
+        assert!(dismiss_record(&root, &running.id, true)
+            .unwrap_err()
+            .contains("진행 중인 실행"));
+        assert!(load_record(&root, &running.id).unwrap().dismissed_at.is_none());
+        // 사람이 그만 신경 쓰겠다고 고를 수 있는 대상은 멈춰 선 실행들이다.
+        for status in ["blocked", "unknown", "stopped"] {
+            let settled = record(Uuid::new_v4().to_string(), None, status);
+            save_record(&root, &settled).unwrap();
+            assert!(dismiss_record(&root, &settled.id, true)
+                .unwrap()
+                .dismissed_at
+                .is_some());
         }
     }
 
