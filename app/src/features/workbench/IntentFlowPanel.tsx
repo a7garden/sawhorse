@@ -41,15 +41,32 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
   const activeRun = runs.find(occupied);
   const active = !!activeRun;
   const currentRun = activeRun ?? runs.filter((run) => run.stage === work.stage).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  const refresh = useCallback(async () => {
+  // 폴링이 같은 문서를 다시 넣으면 마크다운 뷰가 새로 그려져 화면이 튄다.
+  // 직전 응답을 문자열로 기억해 두고 달라졌을 때만 바꾸며, 입력 중이면 그때까지 미룬다.
+  const seen = useRef({ review: "", runs: "" });
+  const holdingInput = editing || !!feedback.trim();
+  const holding = useRef(holdingInput); holding.current = holdingInput;
+  const deferredReview = useRef<Awaited<ReturnType<typeof sddApi.intentReview>> | null>(null);
+  const applyReview = useCallback((next: Awaited<ReturnType<typeof sddApi.intentReview>>, force = false) => {
+    const key = JSON.stringify(next);
+    if (key === seen.current.review) return;
+    if (!force && holding.current) { deferredReview.current = next; return; }
+    deferredReview.current = null; seen.current.review = key; setReview(next);
+  }, []);
+  useEffect(() => {
+    if (holdingInput || !deferredReview.current) return;
+    const next = deferredReview.current; deferredReview.current = null;
+    seen.current.review = JSON.stringify(next); setReview(next);
+  }, [holdingInput]);
+  const refresh = useCallback(async (force = false) => {
     const next = await sddApi.intentReview(work.id);
-    setReview(next);
+    applyReview(next, force);
     if (!initialTab.current) {
       initialTab.current = true;
       if (work.stage === "design" && next.documents.some((doc) => doc.artifact === "spec" && meaningful(doc.markdown))) setTab("spec");
     }
     return next;
-  }, [work.id, work.stage]);
+  }, [work.id, work.stage, applyReview]);
   useEffect(() => { void refresh().catch((error) => setError(String(error))); }, [refresh]);
   useEffect(() => {
     let alive = true;
@@ -60,7 +77,9 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
         const saved = (await sddApi.runs()).filter((run) => run.workId === work.id && !run.parentRunId);
         const next = await Promise.all(saved.map((run) => occupied(run) ? sddApi.refreshRun(run.id) : run));
         if (!alive) return;
-        setRuns(next); setLoadedRuns(true);
+        const runKey = JSON.stringify(next);
+        if (runKey !== seen.current.runs) { seen.current.runs = runKey; setRuns(next); }
+        setLoadedRuns(true);
         const signature = next.map((run) => `${run.id}:${run.status}:${run.updatedAt}`).join("|");
         if (previous && previous !== signature) { await refresh(); await onReload(); }
         previous = signature;
@@ -127,7 +146,12 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
       }
     } catch (error) { setError(`${transitioned ? t("intent.approvedLaunchFailed") + " " : ""}${String(error)}`); }
     finally {
-      try { setRuns((await sddApi.runs()).filter((run) => run.workId === work.id && !run.parentRunId)); await refresh(); await onReload(); }
+      try {
+        const saved = (await sddApi.runs()).filter((run) => run.workId === work.id && !run.parentRunId);
+        const runKey = JSON.stringify(saved);
+        if (runKey !== seen.current.runs) { seen.current.runs = runKey; setRuns(saved); }
+        await refresh(true); await onReload();
+      }
       catch (error) { setError(String(error)); }
       finally { actionLock.current = false; setBusy(false); }
     }
@@ -147,7 +171,7 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
     </ol>
     <div className="wb-intent-flow-head"><div><h3>{t(closed ? "intent.finished" : building ? "intent.build" : "intent.design")}</h3>
       <p>{t(closed ? "intent.completedHint" : `intent.${nextStep}`)}</p></div>
-      <Button size="sm" variant="outline" disabled={busy || editing} onClick={() => { void refresh().then(() => setError("")).catch((error) => setError(String(error))); }}><RefreshCw />{t("intent.refresh")}</Button>
+      <Button size="sm" variant="outline" disabled={busy || editing} onClick={() => { void refresh(true).then(() => setError("")).catch((error) => setError(String(error))); }}><RefreshCw />{t("intent.refresh")}</Button>
     </div>
     {currentRun && <div className="wb-intent-run" role="status">
       <span>{active && currentRun.status !== "blocked" && <Loader2 className="wb-spin" size={14} />}{t(`intent.runStatus.${currentRun.status}`)}{currentRun.error && <small>{currentRun.error}</small>}</span>
@@ -180,7 +204,7 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
         <Button size="sm" disabled={busy} onClick={() => {
           setBusy(true); setError("");
           void sddApi.writeDocument(work.id, "intent", draft, editRevision)
-            .then(async () => { setEditing(false); await refresh(); })
+            .then(async () => { setEditing(false); await refresh(true); })
             .catch((error) => setError(String(error))).finally(() => setBusy(false));
         }}>{t("common.save")}</Button>
       </>}

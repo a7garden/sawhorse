@@ -835,6 +835,26 @@
     "intentResults": "{{count}} intents · excluded from task counts",
     "mockupResults": "{{count}} mockups",
     "archiveHint": "Cancelled, rejected, and discarded records. Confirmed work remains in the Done column of the task flow.",
+    "decide": {
+      "approve": "Approve",
+      "approveHint": "Approve the design and move it to the implementation queue. Nothing starts until you queue it.",
+      "approveAria": "Approve the design of {{title}}",
+      "revise": "Request changes",
+      "reviseHint": "Send it back to design for another pass. Everything recorded so far is kept.",
+      "reviseAria": "Request design changes for {{title}}",
+      "confirm": "Confirm result",
+      "confirmAria": "Confirm the implementation result of {{title}}",
+      "queue": "Queue implementation",
+      "queueHint": "Add this approved task to the implementation queue and start it now.",
+      "queueAria": "Queue implementation for {{title}}",
+      "toast": {
+        "approve": "Design approved and moved to the implementation queue. Nothing starts until you queue it.",
+        "revise": "Changes requested. The task went back to design.",
+        "confirm": "Result confirmed. The task is done.",
+        "queue": "Added to the implementation queue."
+      },
+      "failed": "Could not apply the decision. Reloaded the latest state · {{error}}"
+    },
     "stages": {
       "clarify": "Clarification",
       "design": "Design",

@@ -1,12 +1,43 @@
-import { ArrowRight, Check, Inbox, MessageSquare, GitBranch } from "lucide-react";
+import { ArrowRight, Check, Inbox, Loader2, MessageSquare, GitBranch, Play, Undo2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { isLifecycleV2 } from "./lifecycle-v2";
-import { taskStage, taskStages } from "./task-board";
+import { taskStage, taskStages, type TaskStage } from "./task-board";
 import type { WorkItem, Project, WorkflowDefinition } from "./types";
 import "./task-board.css";
 
-type Props = { work: WorkItem[]; projects: Project[]; workflows: WorkflowDefinition[]; onSelectWork: (id: string) => void; selectedIds?: Set<string>; onToggle?: (id: string, checked: boolean) => void; selectionDisabled?: boolean };
-export function TaskBoard({ work, projects, workflows, onSelectWork, selectedIds, onToggle, selectionDisabled }: Props) {
+export type QuickAction = "approve" | "revise" | "confirm" | "queue";
+/**
+ * 상세를 열지 않고 목록에서 바로 내리는 결정. 승인은 구현 대기로만 옮기고 실행은 시작하지 않으므로,
+ * 승인만 해 두고 구현은 나중에 큐에 넣을 수 있다.
+ */
+export function QuickDecision({ item, stage, busy, disabled, onDecide }: {
+  item: WorkItem; stage: TaskStage; busy: boolean; disabled: boolean;
+  onDecide: (item: WorkItem, action: QuickAction) => void;
+}) {
+  const { t } = useTranslation("workbench");
+  // 승인 흐름이 이 세 단계로 고정된 v2 작업에서만 즉시 결정을 제공한다.
+  if (!isLifecycleV2(item) || !["approval", "unconfirmed", "queued"].includes(stage)) return null;
+  const spin = busy ? <Loader2 className="wb-spin" size={12} /> : null;
+  return <div className="wb-quick-decision" onClick={(event) => event.stopPropagation()}>
+    {stage === "approval" && <>
+      <button type="button" className="wb-quick-primary" disabled={disabled}
+        title={t("taskBoard.decide.approveHint")} aria-label={t("taskBoard.decide.approveAria", { title: item.title })}
+        onClick={() => onDecide(item, "approve")}>{spin ?? <Check size={12} />}{t("taskBoard.decide.approve")}</button>
+      <button type="button" disabled={disabled}
+        title={t("taskBoard.decide.reviseHint")} aria-label={t("taskBoard.decide.reviseAria", { title: item.title })}
+        onClick={() => onDecide(item, "revise")}><Undo2 size={12} />{t("taskBoard.decide.revise")}</button>
+    </>}
+    {stage === "unconfirmed" && <button type="button" className="wb-quick-primary" disabled={disabled}
+      aria-label={t("taskBoard.decide.confirmAria", { title: item.title })}
+      onClick={() => onDecide(item, "confirm")}>{spin ?? <Check size={12} />}{t("taskBoard.decide.confirm")}</button>}
+    {stage === "queued" && <button type="button" disabled={disabled}
+      title={t("taskBoard.decide.queueHint")} aria-label={t("taskBoard.decide.queueAria", { title: item.title })}
+      onClick={() => onDecide(item, "queue")}>{spin ?? <Play size={12} />}{t("taskBoard.decide.queue")}</button>}
+  </div>;
+}
+
+type Props = { work: WorkItem[]; projects: Project[]; workflows: WorkflowDefinition[]; onSelectWork: (id: string) => void; selectedIds?: Set<string>; onToggle?: (id: string, checked: boolean) => void; selectionDisabled?: boolean; onDecide?: (item: WorkItem, action: QuickAction) => void; decidingId?: string | null; decisionsDisabled?: boolean };
+export function TaskBoard({ work, projects, workflows, onSelectWork, selectedIds, onToggle, selectionDisabled, onDecide, decidingId, decisionsDisabled }: Props) {
   const { t } = useTranslation("workbench");
   const extra = (["discarding", "other"] as const).filter((stage) => work.some((w) => taskStage(w, workflows) === stage));
   return <section className="wb-task-board" aria-label={t("taskBoard.flow")}>
@@ -31,6 +62,7 @@ export function TaskBoard({ work, projects, workflows, onSelectWork, selectedIds
                   </div>
                   <footer><span>{projects.find((p) => p.id === item.projectId)?.name ?? t("board.uncategorized")}</span><span className="wb-task-card-next">{t(`taskBoard.next.${stage}`)}<ArrowRight size={12} /></span></footer>
                 </button>
+                {onDecide && <QuickDecision item={item} stage={stage} busy={decidingId === item.id} disabled={!!decisionsDisabled || !!decidingId} onDecide={onDecide} />}
               </article>;
             })}
             {!members.length && <p className="wb-task-lane-empty">{t("taskBoard.emptyLane")}</p>}

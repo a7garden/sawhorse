@@ -76,6 +76,23 @@ test("attention filters select designs and unconfirmed results while archive kee
   expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).snapshot.work, KEY)).toEqual(before);
 });
 
+test("designs are approved and results confirmed from the list without opening the detail", async ({ page }) => {
+  await open(page, true);
+  const overview = page.locator(".wb-task-overview");
+  await overview.getByRole("button", { name: /검토할 설계/ }).click();
+  await page.getByRole("button", { name: "승인 대기 설계 승인", exact: true }).click();
+  await expect(page.locator(".toast-item")).toContainText("구현 큐에 넣기 전까지는 시작하지 않습니다");
+  await expect(page.locator(".wb-lifecycle")).toHaveCount(0);
+  await expect(overview.getByRole("button", { name: /검토할 설계/ }).locator("b")).toHaveText("0");
+  await area(page, /^작업 흐름/).click();
+  // 승인만으로는 실행이 시작되지 않는다 — 구현 대기 레인에서 큐에 넣기를 따로 누른다.
+  await expect(page.locator('[data-stage="queued"]')).toContainText("승인 대기");
+  await expect(page.getByRole("button", { name: "승인 대기 구현 큐에 넣기", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "완료·미확인 구현 결과 확인 완료", exact: true }).click();
+  await expect(page.locator(".toast-item").last()).toContainText("작업을 완료로 옮겼습니다");
+  await expect(page.locator('[data-stage="done"]')).toContainText("완료·미확인");
+});
+
 test("legacy projection never invents approval or overwrites workflow data", () => {
   const work = { workflowId: "intent-flow", workflowVersion: "1.0.0", stage: "design", status: "running", artifacts: [], activeNodes: [], dependsOn: [] } as unknown as WorkItem;
   const before = JSON.stringify(work);

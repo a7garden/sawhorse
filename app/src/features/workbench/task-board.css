@@ -53,6 +53,14 @@
 .wb-inbox-empty { border: 1px dashed var(--border); border-radius: 12px; text-align: center; padding: 50px 20px; color: var(--muted-foreground); }
 .wb-inbox-empty button { margin-top: 16px; }
 .wb-task-archive-hint { font-size: 12px; color: var(--muted-foreground); margin-bottom: 16px; }
+/* 상세를 열지 않고 목록·칸반에서 바로 누르는 승인·수정 요청 버튼. */
+.wb-quick-decision { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.wb-quick-decision button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); font-size: 11px; white-space: nowrap; }
+.wb-quick-decision button:hover:not(:disabled) { border-color: var(--primary); color: var(--primary); }
+.wb-quick-decision button:disabled { opacity: .5; cursor: default; }
+.wb-quick-decision .wb-quick-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+.wb-quick-decision .wb-quick-primary:hover:not(:disabled) { color: var(--primary-foreground); opacity: .9; }
+.wb-issue-table .wb-quick-decision { margin-top: 8px; }
 @media(max-width:760px) {
   .wb-task-overview { gap: 6px; margin-bottom: 16px; }
   .wb-task-overview > button { padding: 11px; gap: 6px; align-items: flex-start; }

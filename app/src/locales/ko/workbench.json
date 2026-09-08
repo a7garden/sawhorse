@@ -835,6 +835,26 @@
     "intentResults": "의도 {{count}}개 · 작업 수에 포함되지 않음",
     "mockupResults": "목업 {{count}}개",
     "archiveHint": "취소·반려·폐기한 기록입니다. 정상 완료된 작업은 작업 흐름의 완료 칸에 남습니다.",
+    "decide": {
+      "approve": "승인",
+      "approveHint": "설계를 승인해 구현 대기로 옮깁니다. 구현 큐에 넣기 전까지는 시작하지 않습니다.",
+      "approveAria": "{{title}} 설계 승인",
+      "revise": "수정 요청",
+      "reviseHint": "설계 단계로 되돌려 다시 다듬게 합니다. 지금까지의 기록은 그대로 남습니다.",
+      "reviseAria": "{{title}} 설계 수정 요청",
+      "confirm": "확인 완료",
+      "confirmAria": "{{title}} 구현 결과 확인 완료",
+      "queue": "구현 큐에 넣기",
+      "queueHint": "승인해 둔 작업을 지금 구현 대기열에 넣어 실행을 시작합니다.",
+      "queueAria": "{{title}} 구현 큐에 넣기",
+      "toast": {
+        "approve": "설계를 승인해 구현 대기로 옮겼습니다. 구현 큐에 넣기 전까지는 시작하지 않습니다.",
+        "revise": "수정을 요청했습니다. 설계 단계로 되돌렸습니다.",
+        "confirm": "결과를 확인했습니다. 작업을 완료로 옮겼습니다.",
+        "queue": "구현 큐에 넣었습니다."
+      },
+      "failed": "처리하지 못했습니다. 최신 상태를 다시 읽었습니다 · {{error}}"
+    },
     "stages": {
       "clarify": "구체화",
       "design": "설계",
