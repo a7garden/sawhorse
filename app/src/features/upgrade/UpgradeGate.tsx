@@ -24,13 +24,13 @@ export function UpgradeGate({ children }: { children: ReactNode }) {
       {!!report?.backups.length && <details className="rounded-md border p-4"><summary className="cursor-pointer">이전 데이터 백업 위치 ({report.backups.length})</summary><div className="mt-3 max-h-64 space-y-2 overflow-auto">{report.backups.map((path) => <p className="break-all text-sm" key={path}>{path}</p>)}</div></details>}
       {completed && <Button onClick={() => setDismissed(true)}>작업공간 열기</Button>}
       {(report?.status === "failed" || error) && <>
-        <p className="text-sm text-muted-foreground">원인을 해결한 뒤 재시도하면 기록된 단계부터 복구합니다. 완료되면 앱을 다시 시작합니다.</p>
+        <p className="text-sm text-muted-foreground">Sawhorse가 복구 가능한 문제를 자동으로 정리하고 기록된 단계부터 업그레이드를 이어갑니다. 원본과 백업은 보존합니다.</p>
         <Button disabled={busy} onClick={async () => {
           setBusy(true); setError("");
           try { setReport(await invoke<Report>("upgrade_retry")); }
           catch (e) { setError(String(e)); }
           finally { setBusy(false); }
-        }}>{busy ? "업그레이드 중…" : "다시 시도"}</Button>
+        }}>{busy ? "자동 복구 중…" : "자동 복구하고 계속"}</Button>
       </>}
     </main>
   );

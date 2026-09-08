@@ -2874,7 +2874,128 @@ fn migrate_one(
 
 /// Called only against the upgrader's isolated copy. Unknown fields and bodies
 /// remain in the original note and a work-local source document.
-pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Result<usize, String> {
+#[derive(Default)]
+pub(crate) struct LegacyUpgradeReport {
+    pub migrated: usize,
+    pub repaired_frontmatter: Vec<String>,
+    pub recreated_missing_targets: Vec<String>,
+    pub normalized_core_records: Vec<String>,
+}
+
+/// Older issue notes were sometimes written with an inline YAML sequence followed by
+/// additional block items. The intended value is unambiguous, but strict YAML parsers
+/// reject it. Normalize only that narrow shape; the untouched source is still copied to
+/// `legacy-source.md` and remains in the workspace backup.
+fn repair_mixed_sequence_frontmatter(yaml: &str) -> Option<String> {
+    let mut lines: Vec<String> = yaml.lines().map(str::to_string).collect();
+    let mut changed = false;
+    let mut index = 0;
+    while index + 1 < lines.len() {
+        let line = &lines[index];
+        let indent_len = line.len() - line.trim_start_matches(' ').len();
+        let indent = &line[..indent_len];
+        let content = &line[indent_len..];
+        let Some((key, raw_value)) = content.split_once(':') else {
+            index += 1;
+            continue;
+        };
+        let key = key.trim();
+        let raw_value = raw_value.trim();
+        let next = &lines[index + 1];
+        let next_indent_len = next.len() - next.trim_start_matches(' ').len();
+        if key.is_empty()
+            || !key
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-'))
+            || next_indent_len <= indent_len
+            || !next.trim_start_matches(' ').starts_with("- ")
+            || !(raw_value.starts_with('[') && raw_value.ends_with(']'))
+        {
+            index += 1;
+            continue;
+        }
+        let Ok(serde_yaml::Value::Sequence(sequence)) =
+            serde_yaml::from_str::<serde_yaml::Value>(raw_value)
+        else {
+            index += 1;
+            continue;
+        };
+        let serialized = serde_yaml::to_string(&sequence).ok()?;
+        let replacement = std::iter::once(format!("{indent}{key}:"))
+            .chain(
+                serialized
+                    .lines()
+                    .filter(|line| !line.trim().is_empty() && *line != "---")
+                    .map(|line| format!("{indent}  {line}")),
+            )
+            .collect::<Vec<_>>();
+        let inserted = replacement.len();
+        lines.splice(index..=index, replacement);
+        changed = true;
+        index += inserted;
+    }
+    changed.then(|| format!("{}\n", lines.join("\n")))
+}
+
+fn parse_legacy_frontmatter(
+    relative: &str,
+    yaml: &str,
+) -> Result<(serde_yaml::Mapping, Option<String>), String> {
+    match serde_yaml::from_str::<serde_yaml::Mapping>(yaml) {
+        Ok(mapping) => Ok((mapping, None)),
+        Err(original_error) => {
+            let Some(repaired) = repair_mixed_sequence_frontmatter(yaml) else {
+                return Err(format!("{relative}: {original_error}"));
+            };
+            serde_yaml::from_str::<serde_yaml::Mapping>(&repaired)
+                .map(|mapping| (mapping, Some(repaired)))
+                .map_err(|_| format!("{relative}: {original_error}"))
+        }
+    }
+}
+
+fn normalize_legacy_core_records(root: &Path) -> Result<Vec<String>, String> {
+    let mut normalized = Vec::new();
+    for id in ids_from_dir(root, "work", "work.md")? {
+        let path = work_path(root, &id);
+        let (mut header, body) = read_markdown::<serde_yaml::Mapping>(root, &path)?;
+        let mut changed = false;
+        let title_key = serde_yaml::Value::String("title".into());
+        if header
+            .get(&title_key)
+            .and_then(serde_yaml::Value::as_str)
+            .is_none_or(|title| title.trim().is_empty())
+        {
+            header.insert(
+                title_key,
+                serde_yaml::Value::String(first_title(&body, &id)),
+            );
+            changed = true;
+        }
+        let key = serde_yaml::Value::String("issueType".into());
+        let replacement = match header.get(&key).and_then(serde_yaml::Value::as_str) {
+            // `결함` was used by an intermediate issue schema. It is the direct
+            // Korean synonym of the canonical GitHub-compatible `버그` type.
+            Some("결함") => Some("버그"),
+            _ => None,
+        };
+        if let Some(replacement) = replacement {
+            header.insert(key, serde_yaml::Value::String(replacement.into()));
+            changed = true;
+        }
+        if !changed {
+            continue;
+        }
+        write_atomic(root, &path, &markdown(&header, &body)?)?;
+        normalized.push(format!("work/{id}/work.md"));
+    }
+    Ok(normalized)
+}
+
+pub(crate) fn upgrade_legacy_at(
+    root: &Path,
+    config: &serde_json::Value,
+) -> Result<LegacyUpgradeReport, String> {
     let view = crate::config::view(config, true);
     for legacy in &view.projects {
         let id = ensure_project_for(root, &legacy.name)?;
@@ -2899,6 +3020,8 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
     let mut milestones = HashMap::new();
     let mut reference_sources = Vec::new();
     let mut migrated_ids = HashMap::new();
+    let mut repaired_frontmatter = Vec::new();
+    let mut recreated_missing_targets = Vec::new();
     let mut reserved_work: HashSet<String> = list_work(root, &mut Vec::new())
         .iter()
         .map(|work| work.id.clone())
@@ -2933,8 +3056,13 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
         let Some(split) = crate::vault::split_frontmatter(&raw) else {
             continue;
         };
-        let map = serde_yaml::from_str::<serde_yaml::Mapping>(&split.yaml)
-            .map_err(|e| format!("{rel}: {e}"))?;
+        let (map, repaired_yaml) = parse_legacy_frontmatter(&rel, &split.yaml)?;
+        if let Some(repaired_yaml) = repaired_yaml {
+            let repaired = format!("---\n{repaired_yaml}---\n{}", split.after_close);
+            crate::config::write_atomic(&path, repaired.as_bytes())
+                .map_err(|error| format!("{rel}: frontmatter 자동 복구 실패: {error}"))?;
+            repaired_frontmatter.push(rel.clone());
+        }
         let value = |key: &str| {
             map.get(serde_yaml::Value::String(key.into()))
                 .and_then(serde_yaml::Value::as_str)
@@ -2956,19 +3084,20 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
             } else {
                 work_path(root, &migrated).is_file()
             };
-            if !target_exists {
-                return Err(format!(
-                    "{rel}: 이미 이관했다는 대상 {migrated}을 찾지 못했습니다"
-                ));
-            }
-            if !value("id").is_empty() {
-                if kind == "마일스톤" {
-                    milestones.insert((parts[1].to_string(), value("id")), migrated);
-                } else {
-                    migrated_ids.insert((parts[1].to_string(), value("id")), migrated);
+            if target_exists {
+                if !value("id").is_empty() {
+                    if kind == "마일스톤" {
+                        milestones.insert((parts[1].to_string(), value("id")), migrated);
+                    } else {
+                        migrated_ids.insert((parts[1].to_string(), value("id")), migrated);
+                    }
                 }
+                continue;
             }
-            continue;
+            // The marker is only a cache of a completed migration. If its target is
+            // gone, rebuilding from the still-present source is safer than blocking
+            // the whole workspace or asking the user to edit internal metadata.
+            recreated_missing_targets.push(rel.clone());
         }
         if kind == "마일스톤" {
             let old_id = value("id");
@@ -3104,7 +3233,13 @@ pub(crate) fn upgrade_legacy_at(root: &Path, config: &serde_json::Value) -> Resu
         let body = work.description.clone();
         write_atomic(root, &work_path(root, &id), &markdown(&work, &body)?)?;
     }
-    Ok(notes.len())
+    let normalized_core_records = normalize_legacy_core_records(root)?;
+    Ok(LegacyUpgradeReport {
+        migrated: notes.len(),
+        repaired_frontmatter,
+        recreated_missing_targets,
+        normalized_core_records,
+    })
 }
 
 /// 선택한 노트만 옮긴다. 하나가 실패해도 나머지는 계속하고 사유를 함께 돌려준다.

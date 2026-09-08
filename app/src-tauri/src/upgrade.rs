@@ -38,12 +38,25 @@ struct Swap {
     before: Option<String>,
     after: String,
     done: bool,
+    #[serde(default)]
+    in_place: bool,
 }
 fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
 fn hash(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
+}
+fn volatile_upgrade_path(relative: &Path) -> bool {
+    let normalized = relative.to_string_lossy().replace('\\', "/");
+    normalized == ".git"
+        || normalized.starts_with(".git/")
+        || matches!(
+            normalized.as_str(),
+            ".obsidian/workspace.json" | ".obsidian/workspace-mobile.json"
+        )
+        || normalized == ".sawhorse/runtime.sqlite"
+        || normalized.starts_with(".sawhorse/runtime.sqlite-")
 }
 fn write_json(path: &Path, value: &impl Serialize) -> Result<(), String> {
     fs::create_dir_all(path.parent().ok_or("저장 경로가 없습니다")?).map_err(err)?;
@@ -88,13 +101,11 @@ pub(crate) fn files(root: &Path) -> Result<Vec<PathBuf>, String> {
 fn tree_hash(root: &Path) -> Result<String, String> {
     let mut digest = Sha256::new();
     for path in files(root)? {
-        digest.update(
-            path.strip_prefix(root)
-                .map_err(err)?
-                .to_string_lossy()
-                .replace('\\', "/")
-                .as_bytes(),
-        );
+        let relative = path.strip_prefix(root).map_err(err)?;
+        if volatile_upgrade_path(relative) {
+            continue;
+        }
+        digest.update(relative.to_string_lossy().replace('\\', "/").as_bytes());
         digest.update([0]);
         digest.update(hash(&fs::read(path).map_err(err)?).as_bytes());
     }
@@ -119,6 +130,84 @@ fn copy_tree(source: &Path, destination: &Path) -> Result<(), String> {
         Ok(())
     }
     copy(source, destination)
+}
+
+/// Back up all durable workspace content without trying to snapshot files that
+/// are owned and continuously rewritten by a running editor or Git process.
+/// `tree_hash` uses the same exclusion set, so the durable backup is still
+/// verified before any active file is replaced.
+fn copy_durable_tree(source: &Path, destination: &Path) -> Result<(), String> {
+    fs::create_dir_all(destination).map_err(err)?;
+    let source_files = files(source)?;
+    let expected: std::collections::HashSet<PathBuf> = source_files
+        .iter()
+        .map(|path| path.strip_prefix(source).map(PathBuf::from).map_err(err))
+        .collect::<Result<_, _>>()?;
+    for path in files(destination)? {
+        let relative = path.strip_prefix(destination).map_err(err)?;
+        if !volatile_upgrade_path(relative) && !expected.contains(relative) {
+            fs::remove_file(path).map_err(err)?;
+        }
+    }
+    for path in source_files {
+        let relative = path.strip_prefix(source).map_err(err)?;
+        if volatile_upgrade_path(relative) {
+            continue;
+        }
+        let target = destination.join(relative);
+        fs::create_dir_all(target.parent().ok_or("백업 상위 경로 없음")?).map_err(err)?;
+        fs::copy(path, target).map_err(err)?;
+    }
+    Ok(())
+}
+
+fn sync_tree_in_place(source: &Path, target: &Path) -> Result<(), String> {
+    let source_files = files(source)?;
+    let target_files = files(target)?;
+    let expected: std::collections::HashSet<PathBuf> = source_files
+        .iter()
+        .map(|path| path.strip_prefix(source).map(PathBuf::from).map_err(err))
+        .collect::<Result<_, _>>()?;
+    for path in target_files {
+        let relative = path.strip_prefix(target).map_err(err)?;
+        if !volatile_upgrade_path(relative) && !expected.contains(relative) {
+            fs::remove_file(path).map_err(err)?;
+        }
+    }
+    for path in source_files {
+        let relative = path.strip_prefix(source).map_err(err)?;
+        if volatile_upgrade_path(relative) {
+            continue;
+        }
+        let destination = target.join(relative);
+        fs::create_dir_all(destination.parent().ok_or("대상 상위 경로 없음")?).map_err(err)?;
+        fs::copy(path, destination).map_err(err)?;
+    }
+    let mut directories = Vec::new();
+    fn collect_directories(path: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+        for entry in fs::read_dir(path).map_err(err)? {
+            let entry = entry.map_err(err)?;
+            if entry.file_type().map_err(err)?.is_dir() {
+                collect_directories(&entry.path(), out)?;
+                out.push(entry.path());
+            }
+        }
+        Ok(())
+    }
+    collect_directories(target, &mut directories)?;
+    for directory in directories {
+        if fs::read_dir(&directory).map_err(err)?.next().is_none() {
+            fs::remove_dir(directory).map_err(err)?;
+        }
+    }
+    if tree_hash(target)? != tree_hash(source)? {
+        return Err("파일별 교체 중 작업공간이 변경되었습니다".into());
+    }
+    Ok(())
+}
+
+fn sharing_violation(error: &std::io::Error) -> bool {
+    matches!(error.raw_os_error(), Some(32 | 33))
 }
 fn save(report: &UpgradeReport, journal: &Path) -> Result<(), String> {
     write_json(journal, report)
@@ -151,6 +240,17 @@ fn finish_swap(swap: &mut Swap) -> Result<(), String> {
     if swap.done {
         return Ok(());
     }
+    // A validated no-op never needs a directory swap. This also lets a newer
+    // upgrader finish journals written with an older tree-hash policy without
+    // touching a workspace that was already in the intended state.
+    if swap.before.as_ref() == Some(&swap.after)
+        && swap.target.is_dir()
+        && !swap.staging.exists()
+        && swap.backup.is_dir()
+    {
+        swap.done = true;
+        return Ok(());
+    }
     validate_path(&swap.target)?;
     validate_path(&swap.staging)?;
     validate_path(&swap.backup)?;
@@ -169,6 +269,29 @@ fn finish_swap(swap: &mut Swap) -> Result<(), String> {
     }
     if swap.target.exists() {
         if swap.backup.exists() {
+            // A previous process may have stopped after creating only part of the
+            // in-place backup, before the updated flag could be journaled. When
+            // the live durable tree is still the recorded original, safely adopt
+            // that partial backup and continue filling it.
+            if !swap.in_place
+                && Some(tree_hash(&swap.target)?) == swap.before
+                && swap.staging.is_dir()
+                && tree_hash(&swap.staging)? == swap.after
+            {
+                swap.in_place = true;
+            }
+            if swap.in_place {
+                if Some(tree_hash(&swap.backup)?) != swap.before {
+                    if Some(tree_hash(&swap.target)?) != swap.before {
+                        return Err("파일별 교체 백업과 작업공간이 모두 변경되었습니다".into());
+                    }
+                    copy_durable_tree(&swap.target, &swap.backup)?;
+                }
+                sync_tree_in_place(&swap.staging, &swap.target)?;
+                fs::remove_dir_all(&swap.staging).map_err(err)?;
+                swap.done = true;
+                return Ok(());
+            }
             return Err(
                 "교체 중 대상 폴더가 다시 생성되었습니다. 백업을 보존하고 중단합니다".into(),
             );
@@ -179,7 +302,27 @@ fn finish_swap(swap: &mut Swap) -> Result<(), String> {
             );
         }
         fs::create_dir_all(swap.backup.parent().ok_or("백업 상위 경로 없음")?).map_err(err)?;
-        fs::rename(&swap.target, &swap.backup).map_err(err)?;
+        match fs::rename(&swap.target, &swap.backup) {
+            Ok(()) => {}
+            Err(error) if sharing_violation(&error) => {
+                // Obsidian keeps a directory handle open on Windows. Preserve the
+                // complete original first, then apply the verified tree file by file.
+                // A failed attempt remains retryable because staging and backup stay.
+                swap.in_place = true;
+                copy_durable_tree(&swap.target, &swap.backup)?;
+                if Some(tree_hash(&swap.backup)?) != swap.before {
+                    return Err("파일별 교체 백업이 원본과 다릅니다".into());
+                }
+                if Some(tree_hash(&swap.target)?) != swap.before {
+                    return Err("백업 중 작업공간이 변경되었습니다".into());
+                }
+                sync_tree_in_place(&swap.staging, &swap.target)?;
+                fs::remove_dir_all(&swap.staging).map_err(err)?;
+                swap.done = true;
+                return Ok(());
+            }
+            Err(error) => return Err(err(error)),
+        }
     } else if swap.before.is_some() && !swap.backup.is_dir() {
         return Err("교체할 원본과 백업을 찾지 못했습니다".into());
     }
@@ -249,6 +392,7 @@ fn replace_tree(
         before,
         after,
         done: false,
+        in_place: false,
     });
     save(report, journal)?;
     finish_swap(report.swaps.last_mut().unwrap())?;
@@ -862,7 +1006,26 @@ pub fn run_at(home: &Path, bundle: &Path, vault: Option<&Path>) -> Result<Upgrad
                 }
                 copy_tree(vault, stage)?;
                 crate::sdlc::initialize(stage)?;
-                count = crate::sdlc::upgrade_legacy_at(stage, &read_config(home)?)?;
+                let legacy = crate::sdlc::upgrade_legacy_at(stage, &read_config(home)?)?;
+                count = legacy.migrated;
+                if !legacy.repaired_frontmatter.is_empty() {
+                    notices.push(format!(
+                        "문법이 깨진 이전 문서의 frontmatter {}개를 자동 복구했습니다. 원문은 백업과 legacy-source에 보존했습니다.",
+                        legacy.repaired_frontmatter.len()
+                    ));
+                }
+                if !legacy.recreated_missing_targets.is_empty() {
+                    notices.push(format!(
+                        "이관 표시와 실제 작업이 어긋난 이전 문서 {}개를 원문에서 자동 재생성했습니다.",
+                        legacy.recreated_missing_targets.len()
+                    ));
+                }
+                if !legacy.normalized_core_records.is_empty() {
+                    notices.push(format!(
+                        "이전 스키마의 작업 필드 {}개를 현재 표준값으로 자동 변환했습니다.",
+                        legacy.normalized_core_records.len()
+                    ));
+                }
                 let reg = crate::packs::load_registry_from(
                     Some(bundle),
                     &bundle.join(".no-user-packs"),
@@ -882,7 +1045,7 @@ pub fn run_at(home: &Path, bundle: &Path, vault: Option<&Path>) -> Result<Upgrad
                         fs::remove_file(path).map_err(err)?;
                     }
                 }
-                notices = upgrade_extension_locks(stage, bundle)?;
+                notices.extend(upgrade_extension_locks(stage, bundle)?);
                 let seeded = crate::workspace::provision(stage, &packs)?;
                 if !seeded.failed.is_empty() {
                     return Err(format!("문서 자산 준비 실패: {:?}", seeded.failed));
@@ -896,6 +1059,13 @@ pub fn run_at(home: &Path, bundle: &Path, vault: Option<&Path>) -> Result<Upgrad
                 }
                 Ok(())
             })?;
+            if report
+                .swaps
+                .iter()
+                .any(|swap| swap.target == vault && swap.in_place)
+            {
+                notices.push("열려 있는 작업공간을 유지하기 위해 전체 백업 후 검증된 파일만 동기화했습니다.".into());
+            }
             report.migrated = count;
             report.notices.extend(notices);
             report
@@ -927,6 +1097,33 @@ fn read_config(home: &Path) -> Result<Value, String> {
         Ok(serde_json::json!({}))
     }
 }
+
+fn transient_upgrade_error(report: &UpgradeReport) -> bool {
+    report.status == "failed"
+        && report.error.as_ref().is_some_and(|error| {
+            error.contains("os error 32")
+                || error.contains("os error 33")
+                || error.contains("다른 프로세스가 파일을 사용 중")
+                || error.contains("복사 이후 변경")
+        })
+}
+
+fn run_with_recovery(
+    home: &Path,
+    bundle: &Path,
+    vault: Option<&Path>,
+) -> Result<UpgradeReport, String> {
+    let mut report = run_at(home, bundle, vault)?;
+    for delay in [200, 500, 1_000] {
+        if !transient_upgrade_error(&report) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(delay));
+        report = run_at(home, bundle, vault)?;
+    }
+    Ok(report)
+}
+
 pub fn startup() {
     let _guard = LOCK.lock();
     READY.store(false, Ordering::Release);
@@ -941,7 +1138,7 @@ pub fn startup() {
         if vault.as_ref().is_some_and(|path| !path.is_absolute()) {
             return Err("볼트는 절대경로여야 합니다".into());
         }
-        run_at(&home, &bundle, vault.as_deref())
+        run_with_recovery(&home, &bundle, vault.as_deref())
     })();
     let report = result.unwrap_or_else(|error| UpgradeReport {
         status: "failed".into(),
@@ -1137,6 +1334,62 @@ mod tests {
         assert_eq!(retry.status, "completed", "{:?}", retry.error);
         assert!(f.vault.join("calendar/M.md").is_file());
     }
+
+    #[test]
+    fn malformed_mixed_sequence_frontmatter_is_repaired_during_upgrade() {
+        let f = Fixture::new();
+        let source = "---\ntype: 이슈\nid: FDR-074\nstatus: 제안\ndepends_on:\n  - FDR-054\ndependents: [\"[[FDR-083 조회 인텐트]]\", \"[[FDR-084 허용목록 검증]]\"]\n  - FDR-041\n  - FDR-047\nrelated: []\n---\n\n## 배경 및 요청\n\n중계 엔드포인트가 없다.\n";
+        f.write(
+            "vault/사업/산림인접건축/이슈/FDR-074 중계 엔드포인트가 없다.md",
+            source,
+        );
+        for id in ["FDR-054", "FDR-041", "FDR-047"] {
+            f.write(
+                &format!("vault/사업/산림인접건축/이슈/{id}.md"),
+                &format!("---\ntype: 이슈\nid: {id}\nstatus: 제안\n---\n\n## 배경 및 요청\n\n의존 작업\n"),
+            );
+        }
+
+        let report = f.run();
+
+        assert_eq!(report.status, "completed", "{:?}", report.error);
+        assert!(report
+            .notices
+            .iter()
+            .any(|notice| notice.contains("frontmatter 1개를 자동 복구")));
+        let active = fs::read_to_string(
+            f.vault
+                .join("사업/산림인접건축/이슈/FDR-074 중계 엔드포인트가 없다.md"),
+        )
+        .unwrap();
+        let split = crate::vault::split_frontmatter(&active).unwrap();
+        let mapping: serde_yaml::Mapping = serde_yaml::from_str(&split.yaml).unwrap();
+        assert_eq!(
+            mapping[serde_yaml::Value::String("dependents".into())]
+                .as_sequence()
+                .unwrap()
+                .len(),
+            4
+        );
+        assert_eq!(
+            fs::read_to_string(f.vault.join("work/FDR-074/legacy-source.md")).unwrap(),
+            source
+        );
+        let vault_swap = report
+            .swaps
+            .iter()
+            .find(|swap| swap.target == f.vault)
+            .unwrap();
+        assert_eq!(
+            fs::read_to_string(
+                vault_swap
+                    .backup
+                    .join("사업/산림인접건축/이슈/FDR-074 중계 엔드포인트가 없다.md")
+            )
+            .unwrap(),
+            source
+        );
+    }
     #[test]
     fn recovery_completes_a_swap_interrupted_between_renames() {
         let f = Fixture::new();
@@ -1152,6 +1405,7 @@ mod tests {
             staging: stage,
             backup: backup.clone(),
             done: false,
+            in_place: false,
         };
         fs::rename(&f.vault, &backup).unwrap();
         finish_swap(&mut swap).unwrap();
@@ -1173,6 +1427,7 @@ mod tests {
             staging: stage,
             backup: f.root.join("backup"),
             done: false,
+            in_place: false,
         };
         f.write("vault/old.md", "new user content");
         assert!(finish_swap(&mut swap).is_err());
@@ -1433,16 +1688,151 @@ mod tests {
         );
     }
     #[test]
-    fn stale_migration_stamp_blocks_replacement() {
+    fn stale_migration_stamp_recreates_the_missing_target() {
         let f = Fixture::new();
+        let source = "---\ntype: 이슈\nid: ONE\nmigrated_to: MISSING\n---\noriginal";
         f.write(
             "vault/프로젝트/A/이슈/1.md",
-            "---\ntype: 이슈\nid: ONE\nmigrated_to: MISSING\n---\noriginal",
+            source,
         );
-        let before = tree_hash(&f.vault).unwrap();
         let report = f.run();
-        assert_eq!(report.status, "failed");
-        assert_eq!(tree_hash(&f.vault).unwrap(), before);
+        assert_eq!(report.status, "completed", "{:?}", report.error);
+        assert!(f.vault.join("work/ONE/work.md").is_file());
+        assert_eq!(
+            fs::read_to_string(f.vault.join("work/ONE/legacy-source.md")).unwrap(),
+            source
+        );
+        assert!(report
+            .notices
+            .iter()
+            .any(|notice| notice.contains("실제 작업이 어긋난 이전 문서 1개")));
+    }
+    #[test]
+    fn verified_tree_can_be_applied_file_by_file_when_directory_is_open() {
+        let f = Fixture::new();
+        f.write("vault/keep.md", "old");
+        f.write("vault/remove.md", "remove");
+        let stage = f.root.join("stage-in-place");
+        fs::create_dir_all(stage.join("nested")).unwrap();
+        fs::write(stage.join("keep.md"), "new").unwrap();
+        fs::write(stage.join("nested/new.md"), "added").unwrap();
+        f.write("vault/.git/index", "live-index");
+        fs::create_dir_all(stage.join(".git")).unwrap();
+        fs::write(stage.join(".git/index"), "stale-index").unwrap();
+
+        sync_tree_in_place(&stage, &f.vault).unwrap();
+
+        assert_eq!(fs::read_to_string(f.vault.join("keep.md")).unwrap(), "new");
+        assert!(!f.vault.join("remove.md").exists());
+        assert_eq!(
+            fs::read_to_string(f.vault.join("nested/new.md")).unwrap(),
+            "added"
+        );
+        assert_eq!(
+            fs::read_to_string(f.vault.join(".git/index")).unwrap(),
+            "live-index"
+        );
+        assert_eq!(tree_hash(&stage).unwrap(), tree_hash(&f.vault).unwrap());
+    }
+    #[test]
+    fn interrupted_in_place_backup_is_adopted_and_completed() {
+        let f = Fixture::new();
+        f.write("vault/keep.md", "old");
+        f.write("vault/.obsidian/workspace.json", "live-state");
+        let stage = f.root.join("stage-interrupted-in-place");
+        fs::create_dir_all(&stage).unwrap();
+        fs::write(stage.join("keep.md"), "new").unwrap();
+        fs::write(stage.join("added.md"), "added").unwrap();
+        let backup = f.root.join("partial-backup");
+        fs::create_dir_all(&backup).unwrap();
+        fs::write(backup.join("unrelated.partial"), "partial").unwrap();
+        let mut swap = Swap {
+            target: f.vault.clone(),
+            staging: stage.clone(),
+            backup: backup.clone(),
+            before: Some(tree_hash(&f.vault).unwrap()),
+            after: tree_hash(&stage).unwrap(),
+            done: false,
+            in_place: false,
+        };
+
+        finish_swap(&mut swap).unwrap();
+
+        assert!(swap.done);
+        assert!(swap.in_place);
+        assert!(!stage.exists());
+        assert_eq!(fs::read_to_string(f.vault.join("keep.md")).unwrap(), "new");
+        assert_eq!(
+            fs::read_to_string(f.vault.join("added.md")).unwrap(),
+            "added"
+        );
+        assert_eq!(tree_hash(&backup).unwrap(), swap.before.unwrap());
+        assert_eq!(tree_hash(&f.vault).unwrap(), swap.after);
+    }
+    #[test]
+    fn validated_no_op_finishes_without_reopening_an_old_stage() {
+        let f = Fixture::new();
+        f.write("vault/live.md", "current");
+        let backup = f.root.join("partial-old-backup");
+        fs::create_dir_all(&backup).unwrap();
+        let mut swap = Swap {
+            target: f.vault.clone(),
+            staging: f.root.join("missing-old-stage"),
+            backup,
+            before: Some("legacy-hash".into()),
+            after: "legacy-hash".into(),
+            done: false,
+            in_place: false,
+        };
+
+        finish_swap(&mut swap).unwrap();
+
+        assert!(swap.done);
+        assert_eq!(fs::read_to_string(f.vault.join("live.md")).unwrap(), "current");
+    }
+    #[test]
+    fn legacy_core_issue_type_is_normalized() {
+        let f = Fixture::new();
+        crate::sdlc::initialize(&f.vault).unwrap();
+        let path = f.vault.join("work/OLD/work.md");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            &path,
+            "---\nid: OLD\nstage: request\nstatus: backlog\npriority: normal\nissueType: 결함\nexecutionType: 코드\nworkflowId: issue-main\nworkflowVersion: 1.1.0\n---\n\n# 과거 작업 제목\n\n본문\n",
+        )
+        .unwrap();
+
+        let report = f.run();
+
+        assert_eq!(report.status, "completed", "{:?}", report.error);
+        let work = crate::sdlc::snapshot(&f.vault)
+            .unwrap()
+            .work
+            .into_iter()
+            .find(|work| work.id == "OLD")
+            .unwrap();
+        assert_eq!(work.issue_type, "버그");
+        assert_eq!(work.title, "과거 작업 제목");
+        assert!(report
+            .notices
+            .iter()
+            .any(|notice| notice.contains("작업 필드 1개")));
+    }
+    #[test]
+    fn windows_file_sharing_errors_are_retried_automatically() {
+        let report = UpgradeReport {
+            status: "failed".into(),
+            error: Some(
+                "다른 프로세스가 파일을 사용 중이기 때문에 프로세스가 액세스 할 수 없습니다. (os error 32)"
+                    .into(),
+            ),
+            ..Default::default()
+        };
+        assert!(transient_upgrade_error(&report));
+        assert!(!transient_upgrade_error(&UpgradeReport {
+            error: Some("frontmatter 파싱 실패".into()),
+            ..report
+        }));
     }
     #[cfg(unix)]
     #[test]

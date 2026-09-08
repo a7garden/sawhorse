@@ -27,7 +27,8 @@ test("upgrade failure gates app commands and keeps retry errors visible", async 
   await nativeUpgrade(page, "failed");
   await expect(page.getByText("마일스톤 날짜가 유효하지 않습니다")).toBeVisible();
   await expect(page.locator("aside nav")).toHaveCount(0);
-  await page.getByRole("button", { name: "다시 시도" }).click();
+  await expect(page.getByText("복구 가능한 문제를 자동으로 정리", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "자동 복구하고 계속" }).click();
   await expect(page.getByText("원본 문서의 날짜를 확인하세요", { exact: false })).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { upgradeCommands: string[] }).upgradeCommands))
     .toEqual(expect.arrayContaining(["upgrade_status", "upgrade_retry"]));
