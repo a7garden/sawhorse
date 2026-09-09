@@ -114,7 +114,13 @@ test("images are embedded at the caret, with undo/redo and portable saved order"
   await expect(page.locator(".wb-atomic-editor .cm-atomic-image")).toHaveCount(0);
   await expect(editor).toContainText("before");
   await expect(editor).toContainText("after");
+  await page.evaluate(() => {
+    document.querySelector(".wb-atomic-editor .cm-content")!.addEventListener("keydown", (e) => {
+      console.log("KEYDOWN", JSON.stringify({ key: e.key, code: e.code, ctrl: e.ctrlKey, meta: e.metaKey, shift: e.shiftKey, prevented: e.defaultPrevented }));
+    }, { capture: true });
+  });
   await editor.press("ControlOrMeta+Shift+z");
+  console.log("AFTER_REDO text =", JSON.stringify(await editor.textContent()), "images =", await page.locator(".wb-atomic-editor .cm-atomic-image").count());
   await expect(page.locator(".wb-atomic-editor .cm-atomic-image img")).toHaveJSProperty("naturalWidth",1);
   await page.getByRole("button",{name:"미리보기",exact:true}).click();
   await expect(page.locator(".wb-intent-preview img")).toHaveJSProperty("naturalWidth",1);
