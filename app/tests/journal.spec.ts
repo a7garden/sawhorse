@@ -38,14 +38,24 @@ test('journal reader switches back to the list in a narrow window', async ({ pag
 
 test('checklist completion persists and journal widget opens the reading page', async ({ page }) => {
   await page.locator('aside nav').getByRole('button', { name: '작업대', exact: true }).click();
+  // 할 일과 일지 위젯은 카탈로그에서 켠다. 켜진 위젯과 체크 상태는 모두 남는다.
+  const openCatalog = async () => {
+    await page.getByRole('button', { name: '위젯 추가', exact: true }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+  };
+  await openCatalog();
+  await page.getByRole('textbox', { name: '위젯 검색' }).fill('할 일');
+  await page.getByRole('dialog').getByRole('switch', { name: /^할 일/ }).click();
+  await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
   const checklist = page.locator('.journal-checklist');
+  await expect(checklist).toBeVisible();
   await checklist.getByRole('checkbox', { name: '작업대 위젯 훑어보기' }).click();
   await expect(checklist.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
   await page.reload();
-  await expect(page.locator('.journal-checklist').getByRole('checkbox', { name: '작업대 위젯 훑어보기' })).toBeChecked();
-  await page.getByRole('button', { name: '위젯 추가', exact: true }).click();
-  await page.getByLabel('위젯 검색').fill('일지');
-  await page.getByRole('dialog').getByRole('switch', { name: /^일지 볼트/ }).check();
+  await expect(checklist.getByRole('checkbox', { name: '작업대 위젯 훑어보기' })).toBeChecked();
+  await openCatalog();
+  await page.getByRole('textbox', { name: '위젯 검색' }).fill('일지');
+  await page.getByRole('dialog').getByRole('switch', { name: /^일지/ }).click();
   await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
   await expect(page.locator('.widget-grid-item .journal-widget')).toBeVisible();
   await page.locator('.widget-grid-item .journal-widget-latest').click();

@@ -37,7 +37,9 @@ test("checklist widgets can be added, completed and restored with their progress
   await catalog.getByRole("switch", { name: /^할 일 볼트/ }).check();
   await catalog.getByRole("button", { name: "닫기", exact: true }).click();
   const checklist = page.locator('[data-widget="checklist"]');
-  await checklist.getByRole("checkbox", { name: "작업대 위젯 훑어보기", exact: true }).check();
+  // 완료 항목이 목록 맨 아래로 재배치되므로 check() 의 같은-요소 검증 대신 한 번 누른다.
+  await checklist.getByRole("checkbox", { name: "작업대 위젯 훑어보기", exact: true }).click();
+  await expect(checklist.getByRole("checkbox", { name: "작업대 위젯 훑어보기", exact: true })).toBeChecked();
   await expect(checklist.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
   await page.reload();
   await expect(checklist.getByRole("checkbox", { name: "작업대 위젯 훑어보기", exact: true })).toBeChecked();

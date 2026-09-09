@@ -11,6 +11,7 @@ test("child model policy persists and explains a single-slot limit", async ({ pa
   await page.locator("#herdr-parallel").fill("1");
   await expect(page.getByText("동시 실행 한도가 1이면 부모가 직접 처리합니다.", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByText("설정을 저장했습니다.", { exact: true })).toBeVisible();
   await page.reload();
   await page.locator("aside nav").getByRole("button", { name: "설정", exact: true }).click();
   await page.getByRole("navigation", { name: "설정", exact: true }).getByRole("button", { name: "실행", exact: true }).click();

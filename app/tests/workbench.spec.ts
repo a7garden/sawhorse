@@ -1,6 +1,17 @@
 import { test, expect, type Page } from "@playwright/test";
 const nav = (page: Page, name: string) =>
   page.locator("aside nav").getByRole("button", { name, exact: true }).click();
+
+/**
+ * ?lifecycle=1 프리뷰 시더는 저장소가 비어 있을 때만 의도 흐름 v2 단계 표본을 심는다.
+ * beforeEach 가 먼저 기본 시더로 채우므로, v2 단계 표본이 필요한 테스트는 저장소를
+ * 비운 뒤 시더 URL 로 다시 연다.
+ */
+const loadLifecyclePreview = async (page: Page) => {
+  await page.evaluate(() => localStorage.clear());
+  await page.goto("/?preview=1&lifecycle=1");
+  await expect(page.locator(".wb-header")).toBeVisible();
+};
 test.beforeEach(async ({ page }) => {
   await page.goto("/?preview=1");
   await expect(page.locator(".wb-header")).toBeVisible();
@@ -21,8 +32,7 @@ test("workbench tabs reuse the shared snapshot without returning to a loading sc
   });
 
   await nav(page, "작업");
-  await page.getByRole("button", { name: "공정 보드", exact: true }).click();
-  await expect(page.locator(".wb-board")).toBeVisible();
+  await expect(page.locator(".wb-task-board")).toBeVisible();
   await nav(page, "캘린더");
   await expect(page.locator(".wb-calendar")).toBeVisible();
 
@@ -38,6 +48,7 @@ test("workbench tabs reuse the shared snapshot without returning to a loading sc
 test("project and work creation persist and decisions advance the process board", async ({
   page,
 }) => {
+  await loadLifecyclePreview(page);
   await nav(page, "프로젝트");
   await page
     .getByRole("button", { name: "프로젝트 추가", exact: true })
@@ -60,35 +71,61 @@ test("project and work creation persist and decisions advance the process board"
     page.locator(".wb-project-card").filter({ hasText: "검증 프로젝트" }),
   ).toBeVisible();
   await nav(page, "작업");
-  await page.getByRole("button", { name: "공정 보드", exact: true }).click();
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
   await page
-    .getByLabel("작업 이름", { exact: true })
-    .fill("브라우저 흐름 검증");
-  await page
-    .getByLabel("프로젝트", { exact: true })
-    .selectOption({ label: "검증 프로젝트" });
-  await page.getByLabel("기한", { exact: true }).fill("2026-09-15");
-  await page
-    .getByRole("button", { name: "작업 만들기", exact: true })
+    .locator(".wb-work-header")
+    .getByRole("button", { name: "새 의도", exact: true })
+    .click();
+  const composer = page.locator(".wb-intent-dialog");
+  await composer
+    .locator(".cm-content")
+    .fill("브라우저 흐름 검증\n\n요청의 범위와 성공 기준을 확인했습니다.");
+  await composer
+    .getByRole("combobox", { name: "프로젝트", exact: true })
+    .click();
+  await page.getByRole("option", { name: "검증 프로젝트" }).click();
+  await composer
+    .getByRole("button", { name: "구체화 시작", exact: true })
+    .click();
+  // 브라우저 체험에서는 실행이 막히지만 의도 저장 자체는 성공한다.
+  await expect(
+    composer.getByText(/의도는 저장됐지만 설계 실행을 시작하지 못했습니다/),
+  ).toBeVisible();
+  await composer
+    .getByRole("button", { name: "저장된 의도 열기", exact: true })
     .click();
   await expect(page.locator(".wb-detail h2")).toHaveText("브라우저 흐름 검증");
   await page
     .locator(".wb-detail-dialog")
     .getByRole("button", { name: "닫기", exact: true })
     .click();
-  const card = page
+  await expect(
+    page
+      .locator('.wb-task-lane[data-stage="clarify"]')
+      .locator(".wb-board-card")
+      .filter({ hasText: "브라우저 흐름 검증" }),
+  ).toBeVisible();
+  // 승인 대기 표본에 내린 즉시 결정이 보드를 진행시킨다: 승인 → 구현 대기
+  const approvalCard = page
+    .locator('.wb-task-lane[data-stage="approval"]')
+    .locator(".wb-board-card");
+  await expect(approvalCard.filter({ hasText: "승인 대기" })).toBeVisible();
+  await approvalCard
+    .getByRole("button", { name: "승인 대기 설계 승인", exact: true })
+    .click();
+  const queuedCard = page
+    .locator('.wb-task-lane[data-stage="queued"]')
     .locator(".wb-board-card")
-    .filter({ hasText: "브라우저 흐름 검증" });
-  await expect(card).not.toHaveAttribute("draggable", "true");
-  await card.getByRole("button").click();
-  await page.getByLabel("검토 결정", { exact: true }).fill("요청의 범위와 성공 기준을 확인했습니다.");
-  await page.getByRole("button", { name: "검토 후 다음: 설계", exact: true }).click();
-  await page.locator(".wb-detail-dialog").getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(page.locator('.wb-board-column[data-stage="design"]').getByText("브라우저 흐름 검증", { exact: true })).toBeVisible();
+    .filter({ hasText: "승인 대기" });
+  await expect(queuedCard).toBeVisible();
   await page.reload();
   await nav(page, "작업");
-  await expect(page.locator('.wb-board-column[data-stage="design"]').getByText("브라우저 흐름 검증", { exact: true })).toBeVisible();
+  await expect(
+    page
+      .locator('.wb-task-lane[data-stage="clarify"]')
+      .locator(".wb-board-card")
+      .filter({ hasText: "브라우저 흐름 검증" }),
+  ).toBeVisible();
+  await expect(queuedCard).toBeVisible();
 
 });
 
@@ -295,13 +332,15 @@ test("project and stage filters combine and search opens an artifact", async ({
   page,
 }) => {
   await nav(page, "작업");
-  await page.getByRole("button", { name: "공정 보드", exact: true }).click();
-  await page.getByLabel("프로젝트 필터").selectOption("herdr");
-  await page.getByLabel("단계 필터").selectOption("sdd-main@1.1.0:build");
-  await expect(page.locator(".wb-board-card")).toHaveCount(1);
-  await expect(page.locator(".wb-board-card")).toContainText(
-    "Herdr 실행과 기록 연결",
-  );
+  await page.getByLabel("프로젝트 필터").click();
+  await page.getByRole("option", { name: "Herdr", exact: true }).click();
+  await page.getByRole("button", { name: "필터", exact: true }).click();
+  await page.getByLabel("단계 필터").click();
+  await page.getByRole("option", { name: "구현", exact: true }).click();
+  await expect(page.locator(".wb-board-card")).toHaveCount(2);
+  await expect(
+    page.locator(".wb-board-card").filter({ hasText: "Herdr 실행과 기록 연결" }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /전체 검색/ }).click();
   await page
     .getByPlaceholder("문서와 작업을 검색하세요")
@@ -318,34 +357,36 @@ test("a project switches to TDD without changing existing SDD work", async ({
   page,
 }) => {
   await nav(page, "프로젝트");
-  await page
+  const sawhorse = page
     .locator(".wb-project-card")
-    .filter({ hasText: "Sawhorse" })
-    .getByRole("button", { name: "프로젝트 편집" })
-    .click();
-  await page.getByLabel("프로젝트 워크플로우").selectOption("tdd-cycle@1.0.0");
-  await page
-    .locator("form")
-    .getByRole("button", { name: "저장", exact: true })
-    .click();
-  await expect(
-    page.locator(".wb-project-card").filter({ hasText: "Sawhorse" }),
-  ).toContainText("TDD 사이클");
+    .filter({ hasText: "Sawhorse" });
+  await sawhorse.getByRole("button", { name: "프로젝트 편집" }).click();
+  const projectDialog = page.getByRole("dialog", { name: "프로젝트 편집" });
+  await projectDialog.getByRole("combobox", { name: "프로젝트 워크플로우" }).click();
+  await page.getByRole("option", { name: "TDD 사이클 · v1.0.0" }).click();
+  await projectDialog.getByRole("button", { name: "저장", exact: true }).click();
+  await expect(sawhorse).toContainText("TDD 사이클");
 
-  await nav(page, "작업");
-  await page.getByRole("button", { name: "공정 보드", exact: true }).click();
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
-  await page.getByLabel("작업 이름").fill("TDD로 만든 새 항목");
-  await page.getByLabel("프로젝트", { exact: true }).selectOption("sawhorse");
-  await page.getByRole("button", { name: "작업 만들기" }).click();
-  await expect(page.locator(".wb-stepper .is-current")).toContainText(
-    "테스트 의도",
-  );
-  await expect(page.locator(".wb-artifact-nav")).toContainText("Red 근거");
+  // 선택이 저장됐는지 다시 열어 확인한다.
+  await sawhorse.getByRole("button", { name: "프로젝트 편집" }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "프로젝트 편집" })
+      .getByRole("combobox", { name: "프로젝트 워크플로우" }),
+  ).toContainText("TDD 사이클");
   await page
-    .locator(".wb-detail-dialog")
+    .getByRole("dialog", { name: "프로젝트 편집" })
     .getByRole("button", { name: "닫기", exact: true })
     .click();
+
+  // 기존 항목은 시작 당시 워크플로우를 유지한다.
+  await nav(page, "작업");
+  await expect(
+    page
+      .locator('.wb-task-lane[data-stage="design"]')
+      .locator(".wb-board-card")
+      .filter({ hasText: "의도에서 시작하는 개발 흐름" }),
+  ).toBeVisible();
   await nav(page, "작업대");
   await expect(
     page.getByRole("button", {
@@ -385,7 +426,10 @@ test("workflow studio and resumable project ingestion are reachable", async ({
   await expect(
     page.getByRole("heading", { name: "워크플로", exact: true }),
   ).toBeVisible();
-  await expect(page.getByText("작성할 문서")).toBeVisible();
+  await expect(
+    page.getByRole("textbox", { name: "에이전트에게 맡기고 싶은 일" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "직접 구성하고 싶다면" }).click();
   await expect(page.getByRole("button", { name: "가상 실행" })).toBeVisible();
 
   await nav(page, "프로젝트");
@@ -396,39 +440,44 @@ test("workflow studio and resumable project ingestion are reachable", async ({
   await expect(
     page.getByRole("heading", { name: /문서 만들기/ }),
   ).toBeVisible();
-  await expect(page.getByLabel("입력 경로")).toBeVisible();
+  await expect(page.getByLabel("자료 던지기 영역")).toBeVisible();
 });
 
 
 test("final acceptance closes the work in both views and freezes further execution", async ({ page }) => {
+  await loadLifecyclePreview(page);
   await nav(page, "작업");
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
-  await page.getByLabel("작업 이름", { exact: true }).fill("결과 인수 검증");
-  await page.getByRole("button", { name: "작업 만들기", exact: true }).click();
   const detail = page.locator(".wb-detail-dialog");
-  await expect(detail.getByRole("button", { name: "결과 인수·완료", exact: true })).toHaveCount(0);
-  for (const stage of ["설계", "구현", "검증", "배포"]) {
-    await page.getByLabel("검토 결정", { exact: true }).fill(`${stage} 진입 근거를 확인했습니다.`);
-    await detail.getByRole("button", { name: `검토 후 다음: ${stage}`, exact: true }).click();
-    await expect(detail.locator(".wb-stepper .is-current")).toContainText(stage);
-    await expect(detail.locator(".wb-detail-title")).toContainText("진행");
-  }
-  await page.getByLabel("검토 결정", { exact: true }).fill("배포 결과와 완료 기준을 대조했습니다.");
-  await detail.getByRole("button", { name: "결과 검토 요청", exact: true }).click();
-  await expect(detail.locator(".wb-detail-title")).toContainText("결과 검토");
+  const unconfirmed = page
+    .locator('.wb-task-lane[data-stage="unconfirmed"]')
+    .locator(".wb-board-card")
+    .filter({ hasText: "완료·미확인" });
+  await expect(unconfirmed).toHaveCount(1);
+  await unconfirmed.getByRole("button", { name: "완료·미확인", exact: true }).click();
+  await expect(detail.locator(".wb-intent-flow-head h3")).toHaveText("완료·미확인");
   await expect(detail.getByRole("button", { name: "실행 시작", exact: true })).toHaveCount(0);
-  await page.getByLabel("검토 결정", { exact: true }).fill("결과를 인수합니다.");
-  await detail.getByRole("button", { name: "결과 인수·완료", exact: true }).click();
-  await expect(detail.locator(".wb-detail-title")).toContainText("완료");
-  await expect(detail.getByLabel("검토 결정", { exact: true })).toHaveCount(0);
+  await detail.getByRole("button", { name: "확인 · 완료", exact: true }).click();
+  await expect(detail.locator(".wb-intent-flow-head h3")).toHaveText("완료");
+  await expect(detail.getByRole("button", { name: "확인 · 완료", exact: true })).toHaveCount(0);
   await expect(detail.getByRole("button", { name: "실행 시작", exact: true })).toHaveCount(0);
   await detail.getByRole("button", { name: "닫기", exact: true }).click();
-  await page.getByLabel("열림 상태").selectOption("closed");
-  await expect(page.locator('.wb-board-column[data-stage="__closed"]').getByText("결과 인수 검증", { exact: true })).toBeVisible();
+  const accepted = page
+    .locator('.wb-task-lane[data-stage="done"]')
+    .locator(".wb-board-card")
+    .filter({ hasText: "완료·미확인" });
+  await expect(accepted).toBeVisible();
+  await expect(accepted.getByRole("button", { name: "확인 완료" })).toHaveCount(0);
   await page.getByRole("button", { name: "목록", exact: true }).click();
-  await expect(page.locator(".wb-issue-table tbody tr").filter({hasText: "결과 인수 검증"})).toContainText("완료");
+  const row = page.locator(".wb-issue-table tbody tr").filter({ hasText: "완료·미확인" });
+  await expect(row).toHaveCount(1);
+  await expect(row.getByText("결과 검토", { exact: true })).toHaveCount(0);
+  await expect(row.getByText("완료", { exact: true }).first()).toBeVisible();
   await page.reload();
   await nav(page, "작업");
-  await page.getByLabel("열림 상태").selectOption("closed");
-  await expect(page.locator(".wb-issue-table tbody tr").filter({hasText: "결과 인수 검증"})).toContainText("완료");
+  await page.getByRole("button", { name: "목록", exact: true }).click();
+  const persisted = page
+    .locator(".wb-issue-table tbody tr")
+    .filter({ hasText: "완료·미확인" });
+  await expect(persisted).toHaveCount(1);
+  await expect(persisted.getByText("완료", { exact: true }).first()).toBeVisible();
 });

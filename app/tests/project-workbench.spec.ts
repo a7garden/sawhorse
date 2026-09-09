@@ -1,7 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const nav = (page: Page, name: string) => page.locator("aside nav").getByRole("button", { name, exact: true }).click();
-const scope = (page: Page) => page.getByLabel("프로젝트 범위", { exact: true });
+const scope = (page: Page) => page.getByRole("combobox", { name: "사이드바 프로젝트 선택", exact: true });
+const pickScope = async (page: Page, label: string) => {
+  await scope(page).click();
+  await page.getByRole("option", { name: label, exact: true }).click();
+};
 const widget = (page: Page, name: string) => page.locator(".widget-grid-item").filter({ has: page.getByRole("heading", { name, exact: true }) });
 
 test.beforeEach(async ({ page }) => {
@@ -10,7 +14,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("project scope follows navigation, new work, documents and reload without narrowing global search", async ({ page }) => {
-  await scope(page).selectOption("herdr");
+  await pickScope(page, "Herdr");
   await expect(page.getByRole("heading", { name: "Herdr 작업대", exact: true })).toBeVisible();
   await expect(widget(page, "다음 작업")).toContainText("Herdr 실행과 기록 연결");
   await expect(widget(page, "다음 작업")).not.toContainText("마크다운 라이브 편집기");
@@ -21,35 +25,35 @@ test("project scope follows navigation, new work, documents and reload without n
     page.getByRole("option").filter({ hasText: "마크다운 라이브 편집기" }).first(),
   ).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(scope(page)).toHaveValue("herdr");
+  await expect(scope(page)).toContainText("Herdr");
   await nav(page, "작업");
-  await expect(page.getByLabel("프로젝트 필터")).toHaveValue("herdr");
+  await expect(page.getByRole("combobox", { name: "프로젝트 필터" })).toContainText("Herdr");
   await expect(page.locator(".wb-board-card")).toHaveCount(2);
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
-  await expect(page.getByLabel("프로젝트", { exact: true })).toHaveValue("herdr");
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "새 의도", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "프로젝트", exact: true })).toContainText("Herdr");
+  await page.getByRole("button", { name: "닫기", exact: true }).click();
   await nav(page, "캘린더");
-  await expect(scope(page)).toHaveValue("herdr");
+  await expect(scope(page)).toContainText("Herdr");
   await expect(page.locator(".wb-calendar")).not.toContainText("SDD 명세 검토");
   await nav(page, "작업대");
   await page.reload();
-  await expect(scope(page)).toHaveValue("herdr");
+  await expect(scope(page)).toContainText("Herdr");
   await expect(page.getByRole("heading", { name: "Herdr 작업대", exact: true })).toBeVisible();
 });
 
 test("project layouts retain independent hidden widgets and leave the global layout intact", async ({ page }) => {
   const globalCount = await page.locator(".widget-grid-item").count();
-  await scope(page).selectOption("sawhorse");
+  await pickScope(page, "Sawhorse");
   await page.getByRole("button", { name: "배치 편집", exact: true }).click();
   await page.getByRole("button", { name: "작업 문서 위젯 숨기기", exact: true }).click();
   await expect(widget(page, "작업 문서")).toHaveCount(0);
-  await scope(page).selectOption("herdr");
+  await pickScope(page, "Herdr");
   await expect(widget(page, "작업 문서")).toBeVisible();
-  await scope(page).selectOption("sawhorse");
+  await pickScope(page, "Sawhorse");
   await expect(widget(page, "작업 문서")).toHaveCount(0);
   await page.reload();
   await expect(widget(page, "작업 문서")).toHaveCount(0);
-  await scope(page).selectOption("");
+  await pickScope(page, "전체 프로젝트");
   await expect(page.locator(".widget-grid-item")).toHaveCount(globalCount);
 });
 
@@ -90,16 +94,21 @@ test("workflow versions and nested processes keep separate counts, columns and s
   await expect(page.locator('[data-workflow="sdd-main@0.9.0"]')).toContainText("구버전 설계1");
   await expect(page.locator('[data-workflow="tdd-cycle@1.0.0"]')).toContainText("Red1");
   await nav(page, "작업");
-  await expect(page.locator(".wb-process-group")).toHaveCount(3);
-  await page.getByLabel("단계 필터").selectOption("sdd-main@0.9.0:design");
-  await expect(page.locator(".wb-board-card")).toHaveCount(1);
-  await expect(page.locator(".wb-board-card")).toContainText("이전 설계");
-  await page.getByLabel("단계 필터").selectOption("tdd-cycle@1.0.0:red");
+  await expect(page.locator(".wb-board-card")).toHaveCount(4);
+  // 단계 필터는 공정 키가 아니라 공통 생애주기 단계로 좁힌다.
+  await page.getByRole("button", { name: "필터", exact: true }).click();
+  await page.getByRole("combobox", { name: "단계 필터" }).click();
+  await page.getByRole("option", { name: "설계", exact: true }).click();
+  await expect(page.locator(".wb-board-card")).toHaveCount(2);
+  await expect(page.locator(".wb-board-card").filter({ hasText: "이전 설계" })).toBeVisible();
+  await page.getByRole("combobox", { name: "단계 필터" }).click();
+  await page.getByRole("option", { name: "구현", exact: true }).click();
   await expect(page.locator(".wb-board-card")).toContainText("구현 안의 테스트");
-  await page.getByLabel("프로젝트 필터").selectOption("all");
-  await expect(page.locator(".wb-process-group")).toHaveCount(3);
+  await page.getByRole("combobox", { name: "프로젝트 필터" }).click();
+  await page.getByRole("option", { name: "모든 프로젝트", exact: true }).click();
+  await expect(page.locator(".wb-board-card").filter({ hasText: "이전 설계" })).toBeVisible();
+  await expect(page.locator(".wb-board-card").filter({ hasText: "구현 안의 테스트" })).toBeVisible();
 });
-
 test("an empty project displays its configured process and stale project selection falls back to all", async ({ page }) => {
   await persistPreview(page);
   await page.evaluate(() => {
@@ -114,10 +123,9 @@ test("an empty project displays its configured process and stale project selecti
   await expect(page.locator(".wb-stage-tile strong")).toHaveText(["0", "0", "0", "0", "0"]);
   await page.evaluate(() => localStorage.setItem("sawhorse.project-scope", "deleted-project"));
   await page.reload();
-  await expect(scope(page)).toHaveValue("");
+  await expect(scope(page)).toContainText("전체 프로젝트");
   await expect(page.getByRole("heading", { name: "작업대", exact: true })).toBeVisible();
 });
-
 test("sidebar groups runs by source and preserves project scope between tabs", async ({ page }) => {
   const sidebar = page.locator("aside nav");
   const projectViews = sidebar.getByRole("region", { name: "프로젝트별 화면", exact: true });

@@ -82,30 +82,30 @@ test("done remains in the flow, list preference persists, and project scope appl
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "프로젝트", exact: true })).toContainText("Herdr");
 });
 
-test("the intent tab gathers intent work without dropping the state axis", async ({ page }) => {
-  const intentTab = page.locator(".wb-work-intent-tab");
-  // 의도가 하나도 없으면 탭도 없다. 첫 의도를 남기면 그때 상태 탭 옆에 붙는다.
-  await expect(intentTab).toHaveCount(0);
+test("the intent tab gathers intent work without dropping the filter axes", async ({ page }) => {
+  const inboxTab = page.getByRole("group", { name: "작업 공간", exact: true }).getByRole("button", { name: /^의도 인박스/ });
+  // 의도는 작업 흐름과는 별개 공간에 모인다. 처음에는 예시 메모 두 개.
+  await expect(inboxTab).toContainText("2");
+  await expect(cards(page)).toHaveCount(5);
   await page.getByRole("button", { name: "새 의도", exact: true }).click();
   await page.getByRole("dialog").getByRole("combobox", { name: "프로젝트", exact: true }).click();
   await page.getByRole("option", { name: "Sawhorse", exact: true }).click();
   await page.getByRole("dialog").getByRole("textbox").fill("# 의도 모아보기");
   await page.getByRole("button", { name: "메모만 저장", exact: true }).click();
+  // 저장 즉시 의도 상세가 열리고, 닫으면 인박스 개수가 늘어난다. 작업 흐름 개수는 그대로다.
   await expect(page.locator(".wb-intent-flow")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(cards(page)).toHaveCount(7);
-  await expect(intentTab).toContainText("1");
-  await intentTab.click();
-  await expect(results(page)).toHaveText("1개 작업");
-  await expect(cards(page)).toContainText("의도 모아보기");
-  // 상태는 여전히 제 축이다. 닫힌 작업으로 옮기면 두 축이 함께 걸린다.
-  const states = page.getByRole("group", { name: "열림 상태", exact: true });
-  await states.getByRole("button", { name: /^닫힌 작업/ }).click();
-  await expect(intentTab).toContainText("0");
-  await expect(page.getByText("조건에 맞는 작업이 없습니다", { exact: true })).toBeVisible();
-  await page.locator(".wb-empty").getByRole("button", { name: "필터 초기화", exact: true }).click();
-  await expect(intentTab).toHaveAttribute("aria-pressed", "false");
-  await expect(cards(page)).toHaveCount(1);
+  await expect(cards(page)).toHaveCount(5);
+  await expect(inboxTab).toContainText("3");
+  await inboxTab.click();
+  await expect(results(page)).toHaveText("의도 3개 · 작업 수에 포함되지 않음");
+  await expect(page.locator(".wb-inbox-notes")).toContainText("의도 모아보기");
+  // 축은 인박스에서도 그대로 산다. 우선순위 축을 걸면 인박스가 비고, 풀면 돌아온다.
+  await filterToggle(page).click();
+  await choose(page, "작업 필터", "높음");
+  await expect(page.locator(".wb-inbox-empty")).toBeVisible();
+  await page.getByRole("button", { name: "필터 초기화", exact: true }).click();
+  await expect(page.locator(".wb-inbox-notes article")).toHaveCount(3);
 });
 
 test("narrow windows keep page controls within the canvas and scroll work locally", async ({ page }) => {
@@ -124,23 +124,23 @@ test("narrow windows keep page controls within the canvas and scroll work locall
 });
 
 test("sort choice orders the list and the board alike, and survives a reload", async ({ page }) => {
-  const intake = page.locator('[data-stage="intent"] .wb-board-card');
+  const buildLane = page.locator('[data-stage="build"] .wb-board-card');
   await choose(page, "정렬 기준", "이슈 번호순");
-  await expect(intake.first()).toContainText("work-calendar");
+  await expect(buildLane.first()).toContainText("work-editor");
   await page.getByRole("button", { name: "정렬 방향: 오름차순", exact: true }).click();
-  await expect(intake.first()).toContainText("work-search");
+  await expect(buildLane.first()).toContainText("work-session");
   await page.getByRole("button", { name: "목록", exact: true }).click();
   const ids = page.locator(".wb-issue-table tbody tr .wb-issue-id");
   await expect(ids.first()).toHaveText("work-session");
-  await expect(ids.last()).toHaveText("work-calendar");
+  await expect(ids.last()).toHaveText("work-editor");
   await page.reload();
   await workNav(page).click();
   await expect(page.getByRole("combobox", { name: "정렬 기준", exact: true })).toContainText("이슈 번호순");
   await expect(ids.first()).toHaveText("work-session");
   // 축을 바꾸면 방향은 그 축의 기본값으로 돌아간다 — 기한은 임박한 쪽이 먼저다.
   await choose(page, "정렬 기준", "기한순");
-  await expect(ids.first()).toHaveText("work-session");
-  await expect(ids.last()).toHaveText("work-search");
+  await expect(ids.first()).toHaveText("work-release");
+  await expect(ids.last()).toHaveText("work-editor");
 });
 
 test("the copilot rail answers about the open work item and remembers being closed", async ({ page }) => {
@@ -162,9 +162,8 @@ test("the copilot rail answers about the open work item and remembers being clos
   await dialog.getByRole("button", { name: "코파일럿", exact: true }).click();
   await expect(copilot).toHaveCount(0);
   await page.keyboard.press("Escape");
-  await page.locator(".wb-board-card").filter({ hasText: "프로젝트를 넘나드는 지식 검색" }).click();
+  await page.locator(".wb-board-card").filter({ hasText: "Herdr 실행과 기록 연결" }).click();
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".wb-copilot")).toHaveCount(0);
   await dialog.getByRole("button", { name: "코파일럿", exact: true }).click();
   await expect(dialog.locator(".wb-copilot")).toBeVisible();
 });
