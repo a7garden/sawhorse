@@ -6,6 +6,16 @@ on:
   pull_request:
 
 jobs:
+  workflow-lint:
+    name: workflow lint (actionlint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download actionlint
+        run: |
+          curl -sSfL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar xz actionlint
+      - name: Lint workflows
+        run: ./actionlint -color
   plugin:
     name: plugin validate + hook tests
     runs-on: ubuntu-latest
@@ -58,6 +68,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+        with:
+          # Keep CI on the bun release that generated app/bun.lock.
+          bun-version: 1.4.2
       - name: Install Linux system deps (Tauri)
         if: runner.os == 'Linux'
         run: |
@@ -76,6 +89,14 @@ jobs:
       - name: Workbench browser flows
         if: runner.os == 'Linux'
         run: bunx playwright test
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-failures-${{ matrix.os }}
+          path: app/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
       - name: cargo test
         working-directory: app/src-tauri
         env:

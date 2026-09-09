@@ -12,6 +12,7 @@ export default defineConfig({
   webServer: {
     command: "bun run preview --host 127.0.0.1 --port 1425",
     url: "http://127.0.0.1:1425",
-    reuseExistingServer: true,
+    // Never silently reuse a stale local preview server; only reuse inside CI.
+    reuseExistingServer: !process.env.CI,
   },
 });
