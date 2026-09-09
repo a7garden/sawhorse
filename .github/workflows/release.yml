@@ -80,6 +80,15 @@ jobs:
             gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/$id" || rc=1
           done < <(printf '%s\n' "$assets" | grep -E "$ASSET_FILTER" | cut -f1)
           exit $rc
+      - name: Drop the local signing identity (CI has no certificate)
+        if: runner.os == 'macOS'
+        working-directory: app/src-tauri
+        run: |
+          # fb64adc pinned signingIdentity for local dev builds (stable keychain
+          # identity). CI cannot codesign, so strip it here and let tauri bundle
+          # unsigned — same as releases before that commit.
+          bun -e "const f = 'tauri.conf.json'; const j = JSON.parse(await Bun.file(f).text()); delete j.bundle?.macOS?.signingIdentity; if (j.bundle?.macOS && Object.keys(j.bundle.macOS).length === 0) delete j.bundle.macOS; await Bun.write(f, JSON.stringify(j, null, 2) + '\n');"
+          ! grep -q signingIdentity tauri.conf.json
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
