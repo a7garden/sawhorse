@@ -29,7 +29,10 @@ def main(binary: Path) -> None:
                 reader.extractall(extracted)
         else:
             with tarfile.open(archive) as reader:
-                reader.extractall(extracted, filter="data")
+                try:
+                    reader.extractall(extracted, filter="data")
+                except TypeError:  # extraction filters arrived in Python 3.12; older runtimes extract as-is
+                    reader.extractall(extracted)
         bundle = next(extracted.iterdir())
         destination = root / "설치 bin"
         if windows:

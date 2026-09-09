@@ -56,6 +56,7 @@ jobs:
       run:
         working-directory: app
     steps:
+      - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: Install Linux system deps (Tauri)
         if: runner.os == 'Linux'
@@ -78,7 +79,7 @@ jobs:
       - name: cargo test
         working-directory: app/src-tauri
         env:
-          # windows 러너엔 NASM이 없다 — aws-lc-sys의 사전 빌드 어셈블리를 쓴다.
+          # windows runners have no NASM — use aws-lc-sys's prebuilt assembly.
           AWS_LC_SYS_PREBUILT_NASM: 1
         run: cargo test
       - name: Standalone CLI packaging and installer smoke test

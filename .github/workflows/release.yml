@@ -17,19 +17,23 @@ jobs:
             args: --target aarch64-apple-darwin
             cliTarget: aarch64-apple-darwin
             cliBinary: sawhorse
+            assetFilter: aarch64
           - platform: macos-latest
             args: --target x86_64-apple-darwin
             cliTarget: x86_64-apple-darwin
             cliBinary: sawhorse
+            assetFilter: 'x64(\.dmg|\.app\.)'
           - platform: ubuntu-latest
             args: ""
             cliTarget: x86_64-unknown-linux-gnu
             cliBinary: sawhorse
+            assetFilter: 'amd64|x86_64'
           - platform: windows-latest
-            # WiX(msi)는 비 ASCII productName 을 못 묶는다 — nsis 는 유니코드 지원.
+            # WiX (msi) cannot bundle a non-ASCII productName — nsis supports unicode.
             args: "--bundles nsis"
             cliTarget: x86_64-pc-windows-msvc
             cliBinary: sawhorse.exe
+            assetFilter: 'x64-setup\.exe'
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +67,19 @@ jobs:
       - name: Package standalone CLI and authoring skill
         shell: bash
         run: python scripts/cli/package.py --binary app/src-tauri/target/${{ matrix.cliTarget }}/release/${{ matrix.cliBinary }} --target ${{ matrix.cliTarget }} --version "$GITHUB_REF_NAME" --output cli-release
+      - name: Clear stale assets left by earlier runs of this tag
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ASSET_FILTER: ${{ matrix.assetFilter }}
+        run: |
+          assets=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq '.assets[] | "\(.id)\t\(.name)"' 2>/dev/null || true)
+          rc=0
+          while IFS= read -r id; do
+            echo "deleting stale asset id $id"
+            gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/$id" || rc=1
+          done < <(printf '%s\n' "$assets" | grep -E "$ASSET_FILTER" | cut -f1)
+          exit $rc
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -71,7 +88,7 @@ jobs:
           projectPath: app
           tagName: ${{ github.ref_name }}
           releaseName: "sawhorse ${{ github.ref_name }}"
-          releaseBody: "배포 번들(dmg · deb · AppImage · nsis)과 함께 같은 내용의 Claude Code 플러그인이 plugin/ 에 실려 있다."
+          releaseBody: "Ships the distribution bundles (dmg · deb · AppImage · nsis) together with the identical Claude Code plugin under plugin/."
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
