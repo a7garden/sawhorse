@@ -1119,6 +1119,7 @@ mod tests {
         git(&repo, &["config", "user.email", "test@example.test"]).unwrap();
         git(&repo, &["config", "user.name", "Test"]).unwrap();
         git(&repo, &["config", "commit.gpgsign", "false"]).unwrap();
+        git(&repo, &["config", "core.autocrlf", "false"]).unwrap();
         fs::write(repo.join("feature.txt"), "before\n").unwrap();
         git(&repo, &["add", "feature.txt"]).unwrap();
         git(&repo, &["commit", "-qm", "initial"]).unwrap();

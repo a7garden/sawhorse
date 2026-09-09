@@ -1,13 +1,13 @@
-// builtin:github 이슈 connector — 1단계는 importOnly(설계 690-696줄).
+// builtin:github issue connector — phase 1 is importOnly (design 690-696).
 //
-// 1. 전용 poller가 ETag/cursor로 GitHub 변경을 읽는다(작업 스케줄러와 별개).
-// 2. remote payload를 바로 노트에 쓰지 않고 inbound change로 staging한다.
-// 3. 연결되지 않은 remote issue는 「가져오기」 후보로, 연결된 이슈 변경은 field diff로 보인다.
-// 4. 사람이 수락하면 코어가 Markdown을 갱신하고 sync base hash를 기록한다.
+// 1. A dedicated poller reads GitHub changes with ETag/cursor (separate from the task scheduler).
+// 2. Remote payloads are staged as inbound changes rather than written straight into notes.
+// 3. Unlinked remote issues appear as 「가져오기」 (Import) candidates; linked-issue changes appear as field diffs.
+// 4. On human acceptance the core updates the Markdown and records the sync base hash.
 //
-// provider가 issue와 PR을 같은 목록 표현으로 섞어 주면 entity type을 확인해 PR을
-// 이슈로 가져오지 않는다(설계 713-714줄). ExternalLink에는 provider, account,
-// immutable repository/issue ID를 저장해 rename·번호 변화에도 연결을 유지한다(683-687줄).
+// When the provider mixes issues and PRs into one list representation, check the entity type
+// and do not import PRs as issues (design 713-714). ExternalLink stores provider, account,
+// and immutable repository/issue IDs so links survive renames and number changes (683-687).
 
 use super::broker::ExtensionContext;
 use crate::collab::model::AuditEvent;
@@ -18,15 +18,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct GitHubSourceConfig {
-    /// GitHub account login(승인 대상 계정).
+    /// GitHub account login (the account being authorized).
     pub account: String,
-    /// owner/repo 표기. 진단 표시용이며 identity는 repository_id다.
+    /// owner/repo notation. For diagnostic display only; identity is repository_id.
     pub repository: String,
-    /// immutable repository node id(GraphQL) 또는 숫자 id.
+    /// Immutable repository node id (GraphQL) or numeric id.
     pub repository_id: String,
-    /// 읽어올 issue 상태. 기본 open.
+    /// Issue state to read. Default open.
     pub state: String,
-    /// 이 동기화가 묶인 프로젝트(sdlc id). 가져오기 대상 미리 고르기에 쓴다.
+    /// Project this sync is bound to (sdlc id). Used to pre-select import targets.
     pub project_id: String,
 }
 
@@ -40,7 +40,7 @@ pub struct PollReport {
     pub cursor: String,
 }
 
-/// REST 이슈 목록 응답의 최소 필드.
+/// Minimal fields of the REST issue list response.
 #[derive(Deserialize, Clone, Debug)]
 struct GhIssue {
     id: i64,
@@ -59,7 +59,7 @@ struct GhIssue {
     html_url: String,
 }
 
-/// importOnly poll. 변경을 inbound_change로 staging하고 커서를 전진시킨다.
+/// importOnly poll. Stages changes as inbound_change and advances the cursor.
 pub async fn poll_issues(
     store: &Store,
     ctx: &ExtensionContext,
@@ -100,7 +100,7 @@ pub async fn poll_issues(
     };
 
     for issue in &issues {
-        // PR은 이슈로 가져오지 않는다(설계 713-714줄).
+        // PRs are not imported as issues (design 713-714).
         if issue.pull_request.is_some() {
             report.skipped_pull_requests += 1;
             continue;
@@ -120,7 +120,7 @@ pub async fn poll_issues(
         });
         match link {
             Some((link_id, _project_id, note_path)) => {
-                // 연결된 이슈: field diff 후보로 staging한다.
+                // Linked issue: staged as a field-diff candidate.
                 store.insert_inbound_change(
                     &new_id("ic"),
                     &link_id,
@@ -132,7 +132,7 @@ pub async fn poll_issues(
                 report.staged_updates += 1;
             }
             None => {
-                // 연결되지 않은 이슈: 가져오기 후보.
+                // Unlinked issue: an import candidate.
                 store.insert_inbound_change(
                     &new_id("ic"),
                     "",
@@ -185,16 +185,16 @@ fn stored_cursor(store: &Store, instance_id: &str) -> (String, String) {
         .unwrap_or_default()
 }
 
-// ---------- 수락 적용 ----------
+// ---------- Acceptance application ----------
 
-/// 「가져오기」 후보 수락: 선택한 프로젝트에 새 작업 항목을 만들고 ExternalLink로
-/// 묶는다. 사람의 수락이 승인이며, work.md 기록은 코어의 file WAL 절차를 탄다
-/// (설계 696줄·566-571줄).
+/// Accepting an 「가져오기」 (Import) candidate: creates a new work item in the chosen project
+/// and links it via ExternalLink. The human's acceptance is the approval; the work.md write
+/// goes through the core's file WAL procedure (design 696, 566-571).
 pub fn accept_import(store: &Store, inbound_id: &str, project_id: &str) -> Result<String, String> {
     accept_import_at(store, &crate::sdlc::vault_root()?, inbound_id, project_id)
 }
 
-/// vault root를 주입받는 본체. 테스트가 임시 볼트로 돌릴 수 있게 분리했다.
+/// Body taking an injected vault root. Split out so tests can run against a temp vault.
 pub fn accept_import_at(
     store: &Store,
     root: &std::path::Path,
@@ -211,7 +211,7 @@ pub fn accept_import_at(
             .map_err(|e| format!("payload 해석 실패: {e}"))?;
     let external_id = inbound["externalId"].as_str().unwrap_or("").to_string();
     let repository_id = payload["repositoryId"].as_str().unwrap_or("").to_string();
-    // 같은 외부 이슈는 하나의 작업 항목만 가진다.
+    // One external issue maps to at most one work item.
     if store
         .find_external_link("github", &repository_id, &external_id)?
         .is_some()
@@ -235,7 +235,7 @@ pub fn accept_import_at(
         .to_string_lossy()
         .to_string();
 
-    // ExternalLink 기록 — rename·번호 변화에도 유지되는 immutable identity.
+    // ExternalLink record — immutable identity that survives renames and number changes.
     store.upsert_external_link(
         &new_id("el"),
         project_id,
@@ -249,12 +249,12 @@ pub fn accept_import_at(
     Ok(note_path)
 }
 
-/// 연결된 이슈의 field 갱신 수락(제목·상태). 원문 body는 덮어쓰지 않는다(설계 702-703줄).
+/// Accepts field updates of a linked issue (title, state). Does not overwrite the original body (design 702-703).
 pub fn accept_field_update(store: &Store, inbound_id: &str) -> Result<String, String> {
     accept_field_update_at(store, &crate::sdlc::vault_root()?, inbound_id)
 }
 
-/// vault root를 주입받는 본체. 테스트가 임시 볼트로 돌릴 수 있게 분리했다.
+/// Body taking an injected vault root. Split out so tests can run against a temp vault.
 pub fn accept_field_update_at(
     store: &Store,
     root: &std::path::Path,
@@ -277,8 +277,8 @@ pub fn accept_field_update_at(
     let expected = sha256_hex(&current);
     let mut updated = current.clone();
     if is_work_target(root, &target) {
-        // work.md 대상은 타입 모델로 갱신한다. 제목과 GitHub 미러 필드만 바꾸고
-        // 로컬 status는 사람 소유로 남긴다(설계 690-716줄).
+        // work.md targets are updated through the type model. Only the title and GitHub mirror
+        // fields change; local status remains human-owned (design 690-716).
         let work_id = target
             .parent()
             .and_then(|p| p.file_name())
@@ -323,13 +323,13 @@ pub fn accept_field_update_at(
     Ok(note_path)
 }
 
-/// 갱신 대상이 work/ 작업 항목이면 참. 레거시 볼트 노트는 기존 frontmatter
-/// 패치 경로를 그대로 유지한다.
+/// True when the update target is a work/ item. Legacy vault notes keep the existing
+/// frontmatter patch path unchanged.
 fn is_work_target(root: &std::path::Path, target: &std::path::Path) -> bool {
     target.starts_with(root.join("work"))
 }
 
-/// frontmatter의 단일 필드만 교체한다. 본문은 절대 건드리지 않는다(vault.rs 3키 갱신 패턴과 동일).
+/// Replaces a single frontmatter field. Never touches the body (same as vault.rs's 3-key update pattern).
 pub fn update_frontmatter_field(
     markdown: &str,
     field: &str,
@@ -377,7 +377,7 @@ pub fn update_frontmatter_field(
     Ok(out)
 }
 
-/// 설계 563-571줄의 file WAL 절차 그대로.
+/// The file WAL procedure from design lines 563-571, verbatim.
 fn apply_via_wal(
     store: &Store,
     target: &std::path::Path,
@@ -391,14 +391,14 @@ fn apply_via_wal(
         &expected_hash,
         &payload_hash,
     )?;
-    // 2. 현재 파일 hash가 expected와 같은지 재확인.
+    // 2. Re-verify the current file hash matches expected.
     let current = std::fs::read_to_string(target).unwrap_or_default();
     let current_hash = sha256_hex(&current);
     if !expected_hash.is_empty() && current_hash != expected_hash {
         store.file_wal_finish(&wal_id, false, &current_hash)?;
         return Err("로컬 파일이 예상 해시와 다르다 (외부 충돌)".into());
     }
-    // 3. 임시 파일 + 같은 filesystem atomic rename.
+    // 3. Temp file + atomic rename on the same filesystem.
     let tmp = target.with_extension(format!("tmp-{}", &wal_id[..8.min(wal_id.len())]));
     std::fs::write(&tmp, content).map_err(|e| {
         let _ = store.file_wal_finish(&wal_id, false, &current_hash);
@@ -408,7 +408,7 @@ fn apply_via_wal(
         let _ = store.file_wal_finish(&wal_id, false, &current_hash);
         format!("원자적 rename 실패: {e}")
     })?;
-    // 4. 실제 파일 hash 확인 후 applied.
+    // 4. Verify the actual file hash, then mark applied.
     let actual = std::fs::read_to_string(target).unwrap_or_default();
     let actual_hash = sha256_hex(&actual);
     store.file_wal_finish(&wal_id, actual_hash == payload_hash, &actual_hash)?;
@@ -524,6 +524,7 @@ mod tests {
             )
             .unwrap();
         let note_path = accept_import_at(&store, &root, "ic1", "p1").unwrap();
+        let note_path = note_path.replace('\\', "/");
         assert!(
             note_path.contains("/work/"),
             "work/ 아래여야 한다: {note_path}"
@@ -540,10 +541,10 @@ mod tests {
         assert_eq!(work.github_state, "open");
         assert_eq!(work.status, "backlog");
         assert!(work.description.contains("재현 절차"));
-        // 승인은 사람의 결정이므로 가져온 항목도 항상 꺼진 채 시작한다.
+        // Approval is a human decision, so imported items always start switched off.
         assert!(!work.approve);
 
-        // 같은 외부 이슈의 두 번째 수락은 거절된다.
+        // A second acceptance of the same external issue is rejected.
         store
             .insert_inbound_change(
                 "ic2",
@@ -557,6 +558,7 @@ mod tests {
         let error = accept_import_at(&store, &root, "ic2", "p1").unwrap_err();
         assert!(error.contains("이미 가져온"), "{error}");
         assert_eq!(crate::sdlc::snapshot(&root).unwrap().work.len(), 1);
+        drop(store);
         std::fs::remove_dir_all(&root).unwrap();
     }
 
@@ -597,9 +599,10 @@ mod tests {
         assert_eq!(work.title, "검색 오류 (수정)");
         assert_eq!(work.github_state, "closed");
         assert_eq!(work.github_updated, "2026-09-08T00:00:00Z");
-        // 로컬 status는 GitHub open/closed로 축소되지 않는다(설계 690-716줄).
+        // Local status is not collapsed into GitHub open/closed (design 690-716).
         assert_eq!(work.status, "backlog");
         assert!(work.description.contains("재현 절차"), "본문 보존");
+        drop(store);
         std::fs::remove_dir_all(&root).unwrap();
     }
 
