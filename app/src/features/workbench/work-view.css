@@ -31,6 +31,30 @@
 }
 .wb-work-header p { margin: 6px 0 0; font-size: 12px; color: var(--wb-muted); }
 .wb-work-header > button { height: 36px; }
+.wb-workflow-context { display: flex; align-items: center; gap: 24px; margin-bottom: 20px; padding: 16px 18px; border: 1px solid var(--wb-line); border-radius: 10px; background: var(--wb-paper); }
+.wb-workflow-context > div { flex: 0 1 300px; min-width: 200px; }
+.wb-workflow-context > div > span { display: block; margin-bottom: 7px; color: var(--wb-muted); font-size: 11px; }
+.wb-workflow-context > div > strong { font-size: 14px; overflow-wrap: anywhere; }
+.wb-workflow-context > button { margin-left: auto; flex-shrink: 0; }
+.wb-workflow-context > p { margin: 0; color: var(--wb-muted); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.wb-workflow-history { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: -8px 0 16px; font-size: 12px; color: var(--wb-muted); }
+.wb-project-work-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 290px), 1fr)); gap: 18px; }
+.wb-project-work-card { display: flex; flex-direction: column; gap: 18px; padding: 24px; border: 1px solid var(--wb-line); border-radius: 12px; background: var(--wb-paper); min-width: 0; }
+.wb-project-work-heading { display: flex; align-items: center; gap: 10px; }
+.wb-project-work-heading > svg { color: var(--wb-teal); flex-shrink: 0; }
+.wb-project-work-heading h2 { font-size: 18px; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.wb-project-work-card > p { margin: 0; font-size: 12px; color: var(--wb-muted); line-height: 1.7; }
+.wb-project-work-flow { display: flex; flex-direction: column; gap: 7px; margin-top: auto; }
+.wb-project-work-flow > span { font-size: 11px; color: var(--wb-muted); }
+.wb-project-work-flow strong { font-size: 13px; overflow-wrap: anywhere; }
+.wb-project-work-flow small { font-weight: 400; color: var(--wb-muted); }
+.wb-project-work-counts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 16px 0; margin: 0; border-block: 1px solid var(--wb-line); }
+.wb-project-work-counts dt { font-size: 11px; color: var(--wb-muted); }
+.wb-project-work-counts dd { font-size: 24px; font-weight: 600; margin: 5px 0 0; font-variant-numeric: tabular-nums; }
+.wb-project-work-card > button { justify-content: space-between; }
+.wb-unassigned-work { margin-top: 32px; }
+.wb-unassigned-work h2 { font-size: 15px; }
+.wb-unassigned-work > p { color: var(--wb-muted); font-size: 12px; margin: 10px 0; }
 .wb-work-navigation { justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--wb-line); }
 .wb-work-state-tabs { display: flex; align-self: stretch; gap: 20px; }
 .wb-work-state-tabs > button {
@@ -136,6 +160,8 @@
   .wb-work-filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
+  .wb-workflow-context { align-items: stretch; flex-direction: column; gap: 10px; }
+  .wb-workflow-context > div { flex-basis: auto; min-width: 0; }
   .wb-work-page { padding: 20px 16px 32px; }
   .wb-work-header { align-items: flex-start; gap: 10px; }
   .wb-work-header p { max-width: 230px; line-height: 1.6; }
@@ -148,3 +174,28 @@
   .wb-work-filters > label:first-child { grid-column: 1 / -1; }
   .wb-work-page .wb-process-group .wb-board { grid-auto-columns: 220px; }
 }
+
+.wb-work-header > div > h1 { font-size: 24px; font-weight: 650; letter-spacing: -.035em; margin: 0; }
+.wb-project-work-counts dt { min-height: 18px; }
+
+.wb-workflow-views {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  padding: 16px 0;
+}
+.wb-workflow-views > label { display: grid; gap: 6px; min-width: 0; width: min(100%, 460px); }
+.wb-workflow-views > label > span { font-size: 12px; color: var(--muted-foreground); }
+.wb-workflow-views > p { margin: 0; color: var(--muted-foreground); font-size: 12px; flex: 1 1 220px; }
+.wb-project-workflows { display: grid; gap: 8px; }
+.wb-project-workflows > label { display: flex; align-items: start; gap: 8px; }
+.wb-project-workflows > label > input { flex: none; margin-top: 3px; }
+.wb-workflow-cell strong, .wb-workflow-cell small { display: block; }
+.wb-workflow-cell strong { font-size: 12px; font-weight: 500; }
+.wb-workflow-cell small { color: var(--muted-foreground); font-size: 11px; }
+
+.wb-work-type { grid-column: 1 / -1; display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.wb-work-type p { margin: 0; font-size: 12px; line-height: 1.6; }
+.wb-work-type > button { justify-self: start; }
+.wb-work-type-badge { display: inline-block; color: var(--muted-foreground); font-size: 11px; margin-block: 4px; }

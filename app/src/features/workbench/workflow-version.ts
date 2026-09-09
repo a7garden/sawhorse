@@ -1,23 +1,74 @@
 import type { WorkflowDefinition } from "./types";
 
 /**
- * 게시된 workflow는 불변이고, 한 id의 옛 판은 이미 만들어진 항목을
- * digest로 여는 용도로만 남는다. 새 프로젝트·새 항목이 묶여야 하는 것은
- * id별 최신 판이다. 이 모듈은 카탈로그에서 그 최신 판을 가려 낸다.
+ * Published workflows are immutable; an old revision of an id remains only for opening items
+ * already created, by digest. New projects can choose the latest revision per id;
+ * new work inherits its project's exact revision until the project is updated.
  */
 
-/** x.y.z 비교. 백엔드 validation.rs가 3조각을 보장하지만, 방어적으로 숫자화한다. */
+/** SemVer precedence, including prereleases; build metadata has no precedence. */
 export function compareWorkflowVersions(a: string, b: string): number {
-  const left = a.split("-")[0].split(".").map((piece) => Number(piece) || 0);
-  const right = b.split("-")[0].split(".").map((piece) => Number(piece) || 0);
+  const [aCore, ...aSuffix] = a.split("+")[0].split("-");
+  const [bCore, ...bSuffix] = b.split("+")[0].split("-");
+  const left = aCore.split(".").map((piece) => Number(piece) || 0);
+  const right = bCore.split(".").map((piece) => Number(piece) || 0);
   for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
     const delta = (left[index] ?? 0) - (right[index] ?? 0);
     if (delta) return delta;
   }
+  if (!aSuffix.length || !bSuffix.length)
+    return Number(!aSuffix.length) - Number(!bSuffix.length);
+  const aPre = aSuffix.join("-").split(".");
+  const bPre = bSuffix.join("-").split(".");
+  for (let i = 0; i < Math.max(aPre.length, bPre.length); i++) {
+    if (aPre[i] === undefined) return -1;
+    if (bPre[i] === undefined) return 1;
+    if (aPre[i] === bPre[i]) continue;
+    const aNumeric = /^\d+$/.test(aPre[i]);
+    const bNumeric = /^\d+$/.test(bPre[i]);
+    if (aNumeric && bNumeric) {
+      if (aPre[i].length !== bPre[i].length)
+        return aPre[i].length - bPre[i].length;
+    } else if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+    return aPre[i] < bPre[i] ? -1 : 1;
+  }
   return 0;
 }
 
-/** workflow id별 최신 버전. 카탈로그(빌트인 + 발행 파일)에서 계산한다. */
+/** One entry per workflow, while retaining exact revisions for history/resume. */
+export function groupWorkflowVersions(
+  catalog: WorkflowDefinition[],
+): WorkflowDefinition[][] {
+  const groups = new Map<string, WorkflowDefinition[]>();
+  for (const definition of catalog) {
+    const versions = groups.get(definition.id) ?? [];
+    versions.push(definition);
+    groups.set(definition.id, versions);
+  }
+  return [...groups.values()].map((versions) =>
+    versions.sort((a, b) => compareWorkflowVersions(b.version, a.version)),
+  );
+}
+
+/** Retired purpose-specific bundles remain resolvable for existing runs only. */
+export function isSelectableWorkflow(id: string): boolean {
+  return !["bugfix-main", "refactor-main"].includes(id);
+}
+
+/** Keep an existing project's pin selectable without offering all historical revisions. */
+export function workflowChoices(
+  catalog: WorkflowDefinition[],
+  current?: { id: string; version: string },
+): WorkflowDefinition[] {
+  const latest = latestWorkflowVersions(catalog);
+  return catalog.filter(
+    (item) =>
+      isSelectableWorkflow(item.id) && (latest.get(item.id) === item.version ||
+      (item.id === current?.id && item.version === current.version)),
+  );
+}
+
+/** Latest version per workflow id. Computed from the catalog (built-ins + published files). */
 export function latestWorkflowVersions(
   catalog: WorkflowDefinition[],
 ): Map<string, string> {

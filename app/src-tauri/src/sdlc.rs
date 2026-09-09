@@ -37,18 +37,19 @@ const STATUSES: [&str; 8] = [
     "review",
     "blocked",
     "done",
-    // 반려와 취소는 다른 사건이다. 반려는 요청을 받아들이지 않은 것이고, 취소는
-    // 하기로 정한 뒤 그만둔 것이다. 볼트의 개선 노트가 이미 둘을 나눠 쓴다.
+    // Rejection and cancellation are different events: rejection means the request
+    // was not accepted, cancellation means work was planned and then abandoned.
+    // The vault's improvement notes already keep the two apart.
     "rejected",
     "cancelled",
 ];
 const PRIORITIES: [&str; 4] = ["urgent", "high", "normal", "low"];
 const EVENT_KINDS: [&str; 4] = ["milestone", "review", "release", "meeting"];
-/// 무엇으로 분류되는 요청인가. GitHub 의 issue type 과 대응한다.
-const ISSUE_TYPES: [&str; 4] = ["버그", "기능", "작업", "질문"];
-/// 무엇을 실행해서 끝내는가. 실행 대상·증거·기본 workflow 를 이 값이 정한다.
+/// Work purpose, independent of the process definition and execution medium.
+const ISSUE_TYPES: [&str; 5] = ["버그", "기능", "리팩토링", "작업", "질문"];
+/// What is executed to finish the work. This value picks the target, evidence, and default workflow.
 const EXECUTION_TYPES: [&str; 5] = ["코드", "문서", "조사", "협의", "결정"];
-/// `status` 가 닫힘을 뜻하는 값. `state` 와 `closed` 는 여기서 파생한다.
+/// Which `status` values mean closed. `state` and `closed` derive from this.
 const CLOSED_STATUSES: [&str; 3] = ["done", "rejected", "cancelled"];
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -58,11 +59,11 @@ pub struct Project {
     pub name: String,
     pub description: String,
     pub repo_path: String,
-    /// 메인 저장소 옆에 같이 열어 둘 추가 디렉터리. 에이전트 실행 때 `--add-dir` 로
-    /// 그대로 전달되고, 비어 있으면 직전 동작과 완전히 같다.
+    /// Extra directories to open alongside the main repository. Passed through as-is
+    /// via `--add-dir` on agent runs; when empty, behaves exactly as before.
     pub extra_paths: Vec<String>,
-    /// 프로젝트에 연결된 GitHub 저장소 목록(owner/repo 표기). 이슈 동기화 인스턴스와
-    /// 깃허브 확장 화면이 이 바인딩을 기준으로 프로젝트를 찾는다.
+    /// GitHub repositories bound to the project (owner/repo notation). The issue sync
+    /// instance and the GitHub extension screen find projects by this binding.
     pub github_repos: Vec<String>,
     pub depends_on: Vec<String>,
     pub verify_commands: Vec<String>,
@@ -72,6 +73,9 @@ pub struct Project {
     pub workflow_id: String,
     pub workflow_version: String,
     pub workflow_digest: String,
+    /// Additional exact definitions enabled for new work; the default is always enabled.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub additional_workflows: Vec<workflow::WorkflowRef>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq, Eq)]
@@ -110,25 +114,26 @@ pub struct WorkItem {
     /// The deepest active node; separate from the root compatibility `stage`.
     pub active_nodes: Vec<ActiveNode>,
 
-    // ---- 이슈 축 ----
-    // 이슈는 별개의 저장소가 아니라 같은 개발 항목을 요청·추적의 축으로 본 것이다.
-    // 단계와 산출물은 위의 workflow 가, 요청 분류와 승인·외부 연결은 아래가 소유한다.
-    /// 버그 / 기능 / 작업 / 질문.
+    // ---- Issue axis ----
+    // Issues are not a separate repository but the request/tracking axis of the same
+    // development item. Stages and artifacts are owned by the workflow above; request
+    // classification, approval, and external links are owned below.
+    /// Bug / feature / refactor / task / question.
     pub issue_type: String,
-    /// 코드 / 문서 / 조사 / 협의 / 결정. 실행 대상과 증거의 성격을 정한다.
+    /// Code / document / research / discussion / decision. Sets the nature of target and evidence.
     pub execution_type: String,
     pub labels: Vec<String>,
     pub assignees: Vec<String>,
-    /// 소속 마일스톤. `calendar/<id>.md` 의 `kind: milestone` 일정 ID 다.
+    /// Owning milestone. The `kind: milestone` calendar event ID from `calendar/<id>.md`.
     pub milestone: String,
-    /// 설계 승인 없이는 실행 단계로 넘어가지 못하게 할지. 새 항목은 항상 true 다.
+    /// Whether moving to the execution stage requires design approval. Always true for new items.
     pub approval_required: bool,
-    /// 사람만 켜는 실행 승인. 볼트에서 직접 켠 값도 같은 뜻으로 읽는다.
+    /// Execution approval set by humans only. A value toggled directly in the vault reads the same way.
     pub approve: bool,
     pub approved: String,
-    /// `status` 에서 파생한다. 직접 쓴 값은 저장 시 덮어쓴다.
+    /// Derived from `status`. A hand-written value is overwritten on save.
     pub state: String,
-    /// 닫힌 날짜. 열린 상태로 돌아가면 지워진다.
+    /// Closed date. Cleared when the item returns to an open state.
     pub closed: String,
     pub github_repo: String,
     pub github_number: String,
@@ -253,8 +258,8 @@ pub struct HarnessRun {
     pub workspace_id: Option<String>,
     pub session: String,
     pub prompt: String,
-    /// 프로젝트가 launch 때 신뢰한 추가 디렉터리. 재시작 뒤 같은 스코프로
-    /// 이어하기 위해 실행 기록과 함께 화면까지 실려 나간다.
+    /// Extra directories the project trusted at launch. Carried to the UI alongside the
+    /// run record so a restart can resume with the same scope.
     pub extra_paths: Vec<String>,
     pub created_at: String,
     pub updated_at: String,
@@ -283,7 +288,27 @@ fn now() -> String {
     Utc::now().to_rfc3339()
 }
 
+/// Applied alongside node instructions; never changes a workflow's gates.
+pub(crate) fn work_type_guidance(work: &WorkItem) -> String {
+    let guidance = match work.issue_type.as_str() {
+        "버그" => "재현 조건과 기대·실제 동작을 확인하고 근본 원인을 근거로 설명하세요. 최소 수정 후 원래 재현 절차와 회귀 테스트의 수정 전후 결과를 기록하세요.",
+        "리팩토링" => "기존 동작과 공개 인터페이스를 보존하세요. 변경 전 기준 테스트를 확보하고 작은 단계로 구조를 개선한 뒤 동작 보존을 검증하세요. 기능 변경은 별도 작업으로 분리하세요.",
+        "기능" => "필요한 사용자 동작과 범위를 명확히 하고 수용 기준에 따라 구현·검증하세요.",
+        "질문" => "질문의 답과 근거, 미확인 사항을 구분하세요. 요청하지 않은 구현을 시작하지 마세요.",
+        _ => "요청 범위와 완료 기준을 확인하고 수행 결과와 검증 근거를 기록하세요.",
+    };
+    format!("작업 유형: {}\n{}\n단계와 승인 절차는 고정된 워크플로우를 따릅니다.", work.issue_type, guidance)
+}
+
 fn normalize_project_workflow(project: &mut Project) {
+    // Read compatibility for the retired prototypes. Their underlying method was
+    // SDD; only the project default is repaired, never existing work/runtime pins.
+    if !workflow::builtins::is_selectable(&project.workflow_id) {
+        project.workflow_id = "sdd-main".into();
+        project.workflow_version = "1.1.1".into();
+        project.workflow_digest.clear();
+    }
+    project.additional_workflows.retain(|reference| workflow::builtins::is_selectable(&reference.id));
     if project.workflow_id.trim().is_empty() {
         project.workflow_id = workflow::DEFAULT_WORKFLOW_ID.into();
     }
@@ -293,6 +318,14 @@ fn normalize_project_workflow(project: &mut Project) {
 }
 
 fn normalize_work_workflow(work: &mut WorkItem) {
+    // Accept portable English classification values in imported Markdown.
+    // The existing UI vocabulary is normalized at the read boundary.
+    if let Some(value) = work.issue_type.is_ascii().then(|| canonical_issue_type(&work.issue_type)).flatten() {
+        work.issue_type = value.into();
+    }
+    if let Some(value) = work.execution_type.is_ascii().then(|| canonical_execution_type(&work.execution_type)).flatten() {
+        work.execution_type = value.into();
+    }
     // Legacy work was created under the fixed SDD contract. Pin it to that
     // exact definition instead of silently inheriting a later project change.
     if work.workflow_id.trim().is_empty() {
@@ -711,8 +744,8 @@ fn validate_project(project: &Project) -> Result<(), String> {
     Ok(())
 }
 
-/// GitHub 저장소 표기(owner/repo) 검증. 프로젝트 바인딩과 클론 대상 검증이 같은
-/// 규칙을 쓰도록 여기서 하나만 둔다.
+/// Validates GitHub repository notation (owner/repo). Lives here so project binding and
+/// clone-target validation share one rule.
 pub fn validate_repository_slug(value: &str) -> Result<(), String> {
     let parts: Vec<_> = value.split('/').collect();
     if parts.len() != 2
@@ -731,9 +764,9 @@ pub fn validate_repository_slug(value: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// `status` 하나가 열림·닫힘의 정본이다. 이슈 노트에서는 `state`·`closed` 를
-/// 사람이 따로 맞춰야 해서 늘 어긋났다. 저장할 때마다 다시 파생시켜 그 어긋남을
-/// 구조적으로 없앤다.
+/// `status` alone is the source of truth for open/closed. Issue notes made a human keep
+/// `state` and `closed` in sync by hand, and they always drifted. Re-deriving on every
+/// save removes that drift structurally.
 fn apply_closure(work: &mut WorkItem) {
     if CLOSED_STATUSES.contains(&work.status.as_str()) {
         work.state = "closed".into();
@@ -1448,18 +1481,28 @@ fn validate_work_graph(root: &Path, candidate: &WorkItem) -> Result<(), String> 
     )
 }
 
-/// harness 의 프로젝트 자동 분석도 description 교체 저장에 이 입구를 쓴다.
+/// The harness's project auto-analysis also uses this entry point to save a replaced description.
 pub fn save_project_at(root: &Path, mut input: Project) -> Result<Project, String> {
     let _guard = mutation_lock();
     ensure_initialized(root)?;
     if input.id.trim().is_empty() {
         input.id = format!("project-{}", Uuid::new_v4().simple());
     }
+    workflow::builtins::require_selectable(&input.workflow_id)?;
+    for reference in &input.additional_workflows {
+        workflow::builtins::require_selectable(&reference.id)?;
+    }
     normalize_project_workflow(&mut input);
     validate_project(&input)?;
     let _file_guard = crate::workspace_io::lock(root, &format!("project-{}", input.id))?;
     let definition = workflow::resolve(Some(root), &input.workflow_id, &input.workflow_version)?;
     input.workflow_digest = workflow::definition_digest(&definition)?;
+    let mut enabled = HashSet::new();
+    enabled.insert((input.workflow_id.clone(), input.workflow_version.clone()));
+    input.additional_workflows.retain(|reference| enabled.insert((reference.id.clone(), reference.version.clone())));
+    for reference in &input.additional_workflows {
+        workflow::resolve(Some(root), &reference.id, &reference.version)?;
+    }
     validate_project_graph(root, &input)?;
     let body = input.description.clone();
     input.description.clear();
@@ -1506,10 +1549,23 @@ pub fn activate_project_workflow_checked_at(
             return Err("revision-conflict: project changed; read it again before applying".into());
         }
     }
+    workflow::builtins::require_selectable(workflow_id)?;
     let definition = workflow::resolve(Some(root), workflow_id, workflow_version)?;
     let path = project_path(root, project_id);
     // Change only the workflow selection. Preserve user-defined metadata and body.
     let (mut header, body) = read_markdown::<serde_yaml::Mapping>(root, &path)?;
+    let mut previous: Project = serde_yaml::from_value(serde_yaml::Value::Mapping(header.clone()))
+        .map_err(|error| error.to_string())?;
+    normalize_project_workflow(&mut previous);
+    let old_default = workflow::WorkflowRef { id: previous.workflow_id, version: previous.workflow_version };
+    if (old_default.id != workflow_id || old_default.version != workflow_version)
+        && !previous.additional_workflows.contains(&old_default)
+    {
+        previous.additional_workflows.push(old_default);
+    }
+    previous.additional_workflows.retain(|reference| reference.id != workflow_id || reference.version != workflow_version);
+    header.insert(serde_yaml::Value::String("additionalWorkflows".into()),
+        serde_yaml::to_value(&previous.additional_workflows).map_err(|error| error.to_string())?);
     for (key, value) in [
         ("workflowId", workflow_id.to_string()),
         ("workflowVersion", workflow_version.to_string()),
@@ -1531,6 +1587,38 @@ pub fn activate_project_workflow_checked_at(
 
 fn save_work_at(root: &Path, input: WorkItem) -> Result<WorkItem, String> {
     let _guard = mutation_lock();
+    save_work_locked(root, input)
+}
+
+/// A new item selects an enabled exact revision, or inherits the project default.
+/// Existing items and internal child workflows retain their immutable pins.
+fn bind_project_workflow(root: &Path, input: &mut WorkItem) -> Result<(), String> {
+    if input.project_id.trim().is_empty() {
+        return Err("작업을 만들 프로젝트를 선택하세요".into());
+    }
+    let project = project_by_id(root, &input.project_id)?;
+    if input.workflow_id.is_empty() {
+        input.workflow_id = project.workflow_id.clone();
+    }
+    if input.workflow_version.is_empty() && input.workflow_id == project.workflow_id {
+        input.workflow_version = project.workflow_version.clone();
+    }
+    if !(input.workflow_id == project.workflow_id && input.workflow_version == project.workflow_version)
+        && !project.additional_workflows.iter().any(|reference|
+            reference.id == input.workflow_id && reference.version == input.workflow_version)
+    {
+        return Err("선택한 워크플로우가 프로젝트에서 제거되었거나 사용할 수 없습니다. 작성 내용을 보관한 뒤 프로젝트 설정을 확인하세요".into());
+    }
+    workflow::builtins::require_selectable(&input.workflow_id)?;
+    workflow::resolve(Some(root), &input.workflow_id, &input.workflow_version)?;
+    Ok(())
+}
+
+fn save_project_work_at(root: &Path, mut input: WorkItem) -> Result<WorkItem, String> {
+    let _guard = mutation_lock();
+    if input.id.is_empty() || !work_path(root, &input.id).exists() {
+        bind_project_workflow(root, &mut input)?;
+    }
     save_work_locked(root, input)
 }
 
@@ -1572,8 +1660,8 @@ fn save_work_locked(root: &Path, mut input: WorkItem) -> Result<WorkItem, String
         input.approved = old.approved.clone();
         input.approval_required = old.approval_required;
     } else {
-        // 호출자가 명시한 workflow 를 프로젝트 기본값보다 우선한다. 문서·조사
-        // 이슈는 6종 산출물이 필요 없어 더 가벼운 정의를 골라야 한다.
+        // A workflow given by the caller wins over the project default. Document and
+        // research issues need no six-artifact set and must pick a lighter definition.
         if !input.workflow_id.trim().is_empty() {
             normalize_work_workflow(&mut input);
         } else if input.project_id.trim().is_empty() {
@@ -1657,7 +1745,7 @@ fn save_work_locked(root: &Path, mut input: WorkItem) -> Result<WorkItem, String
     Ok(input)
 }
 
-/// 외부(GitHub) 이슈를 작업 항목으로 가져올 때의 원문 필드.
+/// Raw fields of an external (GitHub) issue when imported as a work item.
 pub struct ExternalIssue {
     pub title: String,
     pub body: String,
@@ -1668,9 +1756,10 @@ pub struct ExternalIssue {
     pub updated_at: String,
 }
 
-/// 가져온 외부 이슈의 정착지는 work/ 다. 이슈는 별개 저장소가 아니라 같은
-/// 개발 항목의 요청 축이므로, 임의 폴더에 레거시 노트를 찍지 않고 프로젝트의
-/// 기본 워크플로로 backlog 작업을 만든다. 상태·승인은 사람 소유 그대로 둔다.
+/// An imported external issue lands in work/. Issues are the request axis of the same
+/// development item, not a separate repository, so this creates a backlog work item on
+/// the project's default workflow instead of stamping a legacy note into an arbitrary
+/// folder. Status and approval stay human-owned.
 pub fn import_issue_work_at(
     root: &Path,
     project_id: &str,
@@ -1701,9 +1790,9 @@ pub fn import_issue_work_at(
     save_work_locked(root, work)
 }
 
-/// work.md 의 GitHub 미러 필드만 갱신해 갱신본 markdown을 돌려준다. 로컬
-/// status는 GitHub의 open/closed로 축소하지 않는다(설계 690-716줄). 제목이
-/// 빈 payload면 건드리지 않는다.
+/// Updates only the GitHub mirror fields in work.md and returns the updated markdown.
+/// Local status is not collapsed to GitHub's open/closed (design lines 690-716). An
+/// empty title payload leaves the title untouched.
 pub fn apply_external_field_update(
     root: &Path,
     work_id: &str,
@@ -1726,8 +1815,9 @@ pub fn apply_external_field_update(
     markdown(&work, &body)
 }
 
-/// 마일스톤은 `calendar/` 일정이 정본이다. 이슈가 개발 항목으로 합쳐지면서
-/// 참조하는 쪽이 `work/` 로 옮겨졌으므로 존재 확인도 여기서 한 번만 한다.
+/// For milestones, the `calendar/` event is the source of truth. As issues merged into
+/// development items, the referencing side moved to `work/`, so existence is checked
+/// here once.
 fn milestone_by_id(root: &Path, id: &str) -> Result<CalendarEvent, String> {
     validate_id(id).map_err(|_| format!("유효하지 않은 마일스톤 ID: {id}"))?;
     let path = event_path(root, id);
@@ -1741,8 +1831,8 @@ fn milestone_by_id(root: &Path, id: &str) -> Result<CalendarEvent, String> {
     Ok(CalendarEvent { notes, ..event })
 }
 
-/// 마일스톤을 지우거나 일반 일정으로 바꿔도 되는지 판단한다. 개발 항목과 아직
-/// 이관하지 않은 레거시 이슈 노트를 모두 본다.
+/// Decides whether a milestone may be deleted or turned into a plain event. Looks at
+/// both development items and legacy issue notes not yet migrated.
 fn milestone_has_issues(root: &Path, id: &str) -> bool {
     let mut diagnostics = Vec::new();
     if list_work(root, &mut diagnostics)
@@ -2550,14 +2640,15 @@ fn search_at(root: &Path, query: &str) -> Result<Vec<SearchHit>, String> {
     Ok(ranked.into_iter().map(|(_, hit)| hit).collect())
 }
 
-// ---------- 레거시 이슈 노트 이관 ----------
+// ---------- Legacy issue note migration ----------
 //
-// 이슈와 개발 항목이 하나의 저장소가 된 뒤에도, 이름을 바꾸기 전 볼트에 쌓인
-// `<프로젝트>/<이름>/이슈/*.md` 는 그대로 남는다. 이 절은 그 노트를 개발 항목으로
-// 옮기되, 원본을 지우거나 옮기지 않고 `migrated_to` 표시만 남긴다. 되돌릴 수
-// 있어야 사용자가 실제 볼트에서 이관을 시도할 수 있다.
+// Even after issues and development items became one repository, notes accumulated in
+// the vault before the rename remain as `<프로젝트>/<이름>/이슈/*.md`
+// (`<project>/<name>/issues/*.md`). This section moves those notes into development
+// items, deleting or moving nothing — only a `migrated_to` marker is left behind. It
+// must stay reversible so the user can attempt migration on a real vault.
 
-/// 이관 계획 한 줄. `blocked` 가 비어 있을 때만 실제로 옮길 수 있다.
+/// One row of a migration plan. Actually movable only while `blocked` is empty.
 #[derive(Serialize, Clone, Debug, Default, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct IssueMigrationItem {
@@ -2582,8 +2673,8 @@ pub struct IssueMigrationReport {
     pub skipped: Vec<IssueMigrationItem>,
 }
 
-/// 이슈 노트의 상태 어휘를 개발 항목의 상태 하나로 접는다. 두 어휘를 나란히
-/// 두는 것이 이슈·개발이 갈라져 보이던 가장 큰 이유였다.
+/// Folds the issue-note status vocabulary into a single work-item status. Keeping the
+/// two vocabularies side by side was the biggest reason issues and development looked split.
 fn work_status_from_note(status: &str) -> &'static str {
     match status {
         "제안" | "접수" | "" => "backlog",
@@ -2615,7 +2706,7 @@ fn one_of<'a>(value: &'a str, allowed: &[&str], fallback: &'a str) -> String {
     }
 }
 
-/// `## 제목` 절을 본문째 잘라낸다. 다음 같은 수준 이상의 헤더 직전까지가 범위다.
+/// Cuts out a `## Title` section together with its body. The range runs up to the next header of the same or higher level.
 fn section_of(markdown: &str, heading: &str) -> String {
     let mut out = String::new();
     let mut collecting = false;
@@ -2637,9 +2728,9 @@ fn section_of(markdown: &str, heading: &str) -> String {
     out.trim().to_string()
 }
 
-/// 볼트 폴더 이름을 코어 프로젝트 ID 로 바꾼다. 이미 같은 이름의 프로젝트가
-/// 있으면 그것을 쓰고, 없으면 만든다 — 이관 결과가 프로젝트 화면에서도 같은
-/// 프로젝트로 보여야 한다.
+/// Maps a vault folder name onto a core project ID. Reuses an existing project of the
+/// same name, or creates one — the migration result must appear as the same project on
+/// the project screen too.
 fn ensure_project_for(root: &Path, folder: &str) -> Result<String, String> {
     let mut diagnostics = Vec::new();
     let existing = list_projects(root, &mut diagnostics);
@@ -2707,7 +2798,7 @@ pub(crate) fn legacy_issue_notes(root: &Path) -> Vec<crate::vault::ImprovementNo
     crate::vault::scan_issues(root, None, &names)
 }
 
-/// 무엇이 옮겨지고 무엇이 막혀 있는지 먼저 보여준다. 이 함수는 아무것도 쓰지 않는다.
+/// Shows first what would move and what is blocked. This function writes nothing.
 pub fn plan_issue_migration(root: &Path) -> Result<Vec<IssueMigrationItem>, String> {
     ensure_initialized(root)?;
     let mut items: Vec<IssueMigrationItem> = legacy_issue_notes(root)
@@ -2833,8 +2924,9 @@ fn migrate_one(
             github_url: note.github_url.clone(),
             github_state: note.github_state.clone(),
             github_updated: note.github_updated.clone(),
-            // 원본 노트가 가진 절은 요청·설계·결과 셋뿐이다. 실행 유형과 무관하게
-            // 같은 모양의 경량 흐름에 얹는 편이 없는 산출물을 지어내지 않는다.
+            // The original note has only request/design/result sections. Regardless of
+            // execution type, riding the same lightweight flow avoids inventing
+            // artifacts that do not exist.
             workflow_id: workflow::ISSUE_WORKFLOW_ID.into(),
             workflow_version: workflow::DEFAULT_WORKFLOW_VERSION.into(),
             ..Default::default()
@@ -2882,7 +2974,7 @@ fn migrate_one(
     work.description.clear();
     write_atomic(root, &work_path(root, &work.id), &markdown(&work, &body)?)?;
 
-    // 원본은 지우지 않는다. 표시만 남겨 두 곳에 같은 이슈가 살아 있는 상태를 막는다.
+    // The original is not deleted. Only a marker is left, preventing the same issue from living in two places.
     let stamped = crate::extensions::github::update_frontmatter_field(
         &source_markdown,
         "migrated_to",
@@ -2978,11 +3070,15 @@ fn parse_legacy_frontmatter(
 /// Known-safe canonical value for something another tool wrote into `issueType`.
 fn canonical_issue_type(value: &str) -> Option<&'static str> {
     match value {
-        // `결함` was used by an intermediate issue schema; `개선` and `제안`
+        // `결함` (defect) was used by an intermediate issue schema; `개선` and `제안`
         // come from the SI-domain taxonomy (the original survives in the
-        // 유형/… tag). All map onto the canonical GitHub-compatible types
+        // 유형 (type)/… tag). All map onto the canonical GitHub-compatible types
         // instead of being rejected.
-        "결함" => Some("버그"),
+        "bug" | "결함" => Some("버그"),
+        "feature" => Some("기능"),
+        "refactor" | "refactoring" => Some("리팩토링"),
+        "task" => Some("작업"),
+        "question" => Some("질문"),
         "개선" | "제안" => Some("기능"),
         _ => None,
     }
@@ -2992,10 +3088,14 @@ fn canonical_issue_type(value: &str) -> Option<&'static str> {
 /// `executionType`.
 fn canonical_execution_type(value: &str) -> Option<&'static str> {
     match value {
-        // `운영` labels ops actions on a live system; among the canonical
-        // execution types the system-changing one is `코드` (the 실행/운영 tag
-        // keeps the original nuance).
-        "운영" => Some("코드"),
+        // `운영` (operations) labels ops actions on a live system; among the canonical
+        // execution types the system-changing one is `코드` (code) (the 실행/운영
+        // (execution/operations) tag keeps the original nuance).
+        "code" | "운영" => Some("코드"),
+        "document" => Some("문서"),
+        "research" => Some("조사"),
+        "discussion" => Some("협의"),
+        "decision" => Some("결정"),
         _ => None,
     }
 }
@@ -3364,11 +3464,11 @@ pub(crate) fn upgrade_legacy_at(
     })
 }
 
-/// 선택한 노트만 옮긴다. 하나가 실패해도 나머지는 계속하고 사유를 함께 돌려준다.
+/// Moves only the selected notes. One failure does not stop the rest; reasons are returned with the report.
 pub fn migrate_issues(root: &Path, paths: &[String]) -> Result<IssueMigrationReport, String> {
     ensure_initialized(root)?;
-    // 경로는 문자열이 아니라 실제 파일로 비교한다. 구분자와 대소문자가 호출자마다
-    // 다르게 들어오는 것이 이 경로에서 조용히 아무것도 안 하는 원인이 된다.
+    // Compare paths as real files, not strings. Separators and case differ per caller,
+    // and that mismatch is what makes this path silently do nothing.
     let resolve = |value: &str| fs::canonicalize(value).unwrap_or_else(|_| PathBuf::from(value));
     let wanted: HashSet<PathBuf> = paths.iter().map(|p| resolve(p)).collect();
     let mut report = IssueMigrationReport::default();
@@ -3399,7 +3499,7 @@ pub fn sdd_snapshot() -> Result<WorkspaceSnapshot, String> {
     let root = vault_root()?;
     snapshot(&root)
 }
-/// 알려진 안전한 규칙으로 문서 형식 문제를 고치고 남은 진단을 돌려준다.
+/// Fixes document format problems with known-safe rules and returns the remaining diagnostics.
 #[tauri::command]
 pub fn sdd_repair_documents() -> Result<RepairReport, String> {
     let root = vault_root()?;
@@ -3466,7 +3566,12 @@ pub struct CaptureIntentInput {
     pub attachments: Vec<IntentAttachment>,
 }
 
-fn capture_intent_at(root: &Path, mut input: CaptureIntentInput) -> Result<WorkItem, String> {
+#[cfg(test)]
+fn capture_intent_at(root: &Path, input: CaptureIntentInput) -> Result<WorkItem, String> {
+    capture_intent_with_scope_at(root, input, false)
+}
+
+fn capture_intent_with_scope_at(root: &Path, mut input: CaptureIntentInput, project_scoped: bool) -> Result<WorkItem, String> {
     use base64::Engine;
     let _guard = mutation_lock();
     ensure_initialized(root)?;
@@ -3542,8 +3647,13 @@ fn capture_intent_at(root: &Path, mut input: CaptureIntentInput) -> Result<WorkI
         }
         images.push((filename, bytes));
     }
+    if input.work.workflow_id != "intent-flow" || input.work.workflow_version.is_empty() {
+        input.work.workflow_version = "2.0.0".into();
+    }
     input.work.workflow_id = "intent-flow".into();
-    input.work.workflow_version = "2.0.0".into();
+    if !lifecycle::supports(&input.work) {
+        return Err("의도 캡처를 지원하지 않는 워크플로우 버전입니다".into());
+    }
     input.work.description = input
         .markdown
         .lines()
@@ -3567,6 +3677,9 @@ fn capture_intent_at(root: &Path, mut input: CaptureIntentInput) -> Result<WorkI
             return Ok(existing);
         }
         return Err("같은 ID의 의도가 이미 있습니다. 저장된 의도를 확인하세요".into());
+    }
+    if project_scoped {
+        bind_project_workflow(root, &mut input.work)?;
     }
     let result = (|| {
         let work = save_work_locked(root, input.work)?;
@@ -3628,7 +3741,7 @@ pub fn sdd_capture_image(path: String) -> Result<String, String> {
 
 #[tauri::command]
 pub fn sdd_capture_intent(input: CaptureIntentInput) -> Result<WorkItem, String> {
-    capture_intent_at(&vault_root()?, input)
+    capture_intent_with_scope_at(&vault_root()?, input, true)
 }
 
 fn intent_design_revisions(root: &Path, work_id: &str) -> Result<Vec<String>, String> {
@@ -3764,7 +3877,7 @@ pub fn record_intent_launch(
 #[tauri::command]
 pub fn sdd_save_work(input: WorkItem) -> Result<WorkItem, String> {
     let root = vault_root()?;
-    save_work_at(&root, input)
+    save_project_work_at(&root, input)
 }
 #[tauri::command]
 pub fn sdd_transition(id: String, stage: String, note: Option<String>) -> Result<WorkItem, String> {
@@ -3838,6 +3951,194 @@ mod tests {
             priority: "normal".into(),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn work_purpose_is_independent_of_process_and_legacy_pins_survive() {
+        let root = tempdir("work-purpose");
+        initialize(&root).unwrap();
+        save_project_at(&root, project("p")).unwrap();
+        for purpose in ["버그", "리팩토링"] {
+            for (id, version) in [("sdd-main", "1.1.1"), ("tdd-cycle", "1.0.1")] {
+                activate_project_workflow_at(&root, "p", id, version).unwrap();
+                let mut input = work(&format!("type-{}", Uuid::new_v4().simple()), "p");
+                input.issue_type = purpose.into();
+                let item = save_project_work_at(&root, input).unwrap();
+                assert_eq!(item.workflow_id, id);
+                assert_eq!(item.workflow_version, version);
+                assert_eq!(item.issue_type, purpose);
+                assert!(work_type_guidance(&item).contains(purpose));
+                let mut edit = item.clone();
+                edit.issue_type = "기능".into();
+                let edited = save_project_work_at(&root, edit).unwrap();
+                assert_eq!(edited.workflow_digest, item.workflow_digest);
+                assert_eq!(edited.stage, item.stage);
+            }
+        }
+        for id in ["bugfix-main", "refactor-main"] {
+            assert!(activate_project_workflow_at(&root, "p", id, "1.0.0").is_err());
+            let mut p = project_by_id(&root, "p").unwrap();
+            p.workflow_id = id.into(); p.workflow_version = "1.0.0".into();
+            assert!(save_project_at(&root, p.clone()).is_err());
+            // Simulate an old persisted project and work without rewriting either pin.
+            let mut old = work(&format!("old-{id}"), "p");
+            old.workflow_id = id.into(); old.workflow_version = "1.0.0".into();
+            let old = save_work_at(&root, old).unwrap();
+            fs::write(project_path(&root, "p"), markdown(&p, "Existing project").unwrap()).unwrap();
+            let repaired = project_by_id(&root, "p").unwrap();
+            assert_eq!(repaired.workflow_id, "sdd-main");
+            assert_eq!(repaired.workflow_version, "1.1.1");
+            let next = save_project_work_at(&root, work(&format!("next-{id}"), "p")).unwrap();
+            assert_eq!(next.workflow_id, "sdd-main");
+            let mut forbidden = work(&format!("forbidden-{id}"), "p");
+            forbidden.workflow_id = id.into(); forbidden.workflow_version = "1.0.0".into();
+            assert!(save_project_work_at(&root, forbidden).is_err());
+            assert_eq!(save_project_work_at(&root, old.clone()).unwrap().workflow_digest, old.workflow_digest);
+            assert_eq!(workflow::resolve(Some(&root), &old.workflow_id, &old.workflow_version).unwrap().id, id);
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn renamed_intent_and_goal_bundles_keep_the_project_pin_when_creating_work() {
+        let root = tempdir("renamed-bundle-creation");
+        initialize(&root).unwrap();
+        let mut p = project("p");
+        p.repo_path = root.to_string_lossy().into_owned();
+        p.default_agent = "codex".into();
+        save_project_at(&root, p).unwrap();
+        for version in ["2.0.0", "2.0.1"] {
+            activate_project_workflow_at(&root, "p", "intent-flow", version).unwrap();
+            let mut item = work(&format!("intent-{}", version.replace('.', "-")), "p");
+            item.workflow_id = "intent-flow".into();
+            item.workflow_version = version.into();
+            let saved = capture_intent_with_scope_at(&root, CaptureIntentInput {
+                work: item, markdown: "A clear outcome".into(), attachments: vec![],
+            }, true).unwrap();
+            assert_eq!(saved.workflow_version, version);
+            assert!(lifecycle::supports(&saved));
+        }
+        for version in ["1.0.0", "1.0.1"] {
+            activate_project_workflow_at(&root, "p", "goal-main", version).unwrap();
+            let saved = goals::create_at(&root, goals::CreateGoal {
+                id: format!("goal-{}", version.replace('.', "-")), project_id: "p".into(),
+                objective: "A clear outcome".into(), max_parallel: 1, start: false, workflow_version: String::new(), issue_type: "작업".into(),
+            }).unwrap();
+            assert_eq!(saved.workflow_version, version);
+            assert_eq!(goals::read(&root, &saved.id).unwrap().status, "paused");
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn project_creation_inherits_exact_pin_and_preserves_existing_work_after_settings_change() {
+        let root = tempdir("project-creation-pin");
+        initialize(&root).unwrap();
+        let mut p = project("p");
+        p.workflow_id = "intent-flow".into();
+        p.workflow_version = "1.0.0".into();
+        save_project_at(&root, p).unwrap();
+        let original = save_project_work_at(&root, work("original", "p")).unwrap();
+        assert_eq!(original.workflow_version, "1.0.0");
+        assert_eq!(original.stage, "design");
+        let mut stale = work("stale", "p");
+        stale.workflow_id = "intent-flow".into();
+        stale.workflow_version = "2.0.0".into();
+        assert!(save_project_work_at(&root, stale).is_err());
+        assert!(!work_path(&root, "stale").exists());
+        assert!(save_project_work_at(&root, work("unassigned", "")).is_err());
+        assert!(save_project_work_at(&root, work("missing", "missing")).is_err());
+        activate_project_workflow_at(&root, "p", "tdd-cycle", "1.0.0").unwrap();
+        let mut edit = original.clone();
+        edit.title = "Edited after project settings changed".into();
+        edit.workflow_id = "tdd-cycle".into();
+        let edited = save_project_work_at(&root, edit).unwrap();
+        assert_eq!(edited.workflow_id, original.workflow_id);
+        assert_eq!(edited.workflow_version, original.workflow_version);
+        assert_eq!(edited.workflow_digest, original.workflow_digest);
+        let next = save_project_work_at(&root, work("next", "p")).unwrap();
+        assert_eq!(next.workflow_id, "tdd-cycle");
+        assert_eq!(next.stage, "test-intent");
+        assert!(read_document(&root, "next", "test-intent").is_ok());
+        let mut wrong = work("wrong-flow", "p");
+        wrong.workflow_id = "intent-flow".into();
+        wrong.workflow_version = "1.0.0".into();
+        // Changing the default retains the previous flow as an enabled option.
+        assert_eq!(save_project_work_at(&root, wrong).unwrap().workflow_id, "intent-flow");
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn project_supports_multiple_exact_flows_and_removal_preserves_existing_work() {
+        let root = tempdir("multiple-workflows");
+        initialize(&root).unwrap();
+        let mut p = project("p");
+        p.default_agent = "codex".into();
+        p.repo_path = root.to_string_lossy().into_owned();
+        p.additional_workflows = vec![
+            workflow::WorkflowRef { id: "tdd-cycle".into(), version: "1.0.0".into() },
+            workflow::WorkflowRef { id: "sdd-with-tdd".into(), version: "1.1.1".into() },
+            workflow::WorkflowRef { id: "intent-flow".into(), version: "2.0.1".into() },
+            workflow::WorkflowRef { id: "goal-main".into(), version: "1.0.1".into() },
+        ];
+        let saved_project = save_project_at(&root, p).unwrap();
+        assert_eq!(project_by_id(&root, "p").unwrap().additional_workflows, saved_project.additional_workflows);
+        let mut input = work("fix", "p");
+        input.workflow_id = "tdd-cycle".into();
+        input.workflow_version = "1.0.0".into();
+        let saved = save_project_work_at(&root, input.clone()).unwrap();
+        assert_eq!(saved.workflow_id, "tdd-cycle");
+        assert_eq!(saved.stage, "test-intent");
+        assert!(read_document(&root, "fix", "regression").is_ok());
+        let mut intent = work("note", "p");
+        intent.issue_type = "버그".into();
+        intent.workflow_id = "intent-flow".into();
+        intent.workflow_version = "2.0.1".into();
+        let captured = capture_intent_with_scope_at(&root, CaptureIntentInput {
+            work: intent, markdown: "An idea in a mixed project".into(), attachments: vec![],
+        }, true).unwrap();
+        assert!(lifecycle::supports(&captured));
+        assert_eq!(captured.issue_type, "버그");
+        let goal = goals::create_at(&root, goals::CreateGoal {
+            id: "objective".into(), project_id: "p".into(), objective: "Complete the work".into(),
+            max_parallel: 1, start: false, workflow_version: "1.0.1".into(), issue_type: "리팩토링".into(),
+        }).unwrap();
+        assert_eq!(goal.workflow_version, "1.0.1");
+        assert_eq!(goal.issue_type, "리팩토링");
+        let mut p = project_by_id(&root, "p").unwrap();
+        p.additional_workflows.clear();
+        save_project_at(&root, p).unwrap();
+        input.id = "removed-flow".into();
+        assert!(save_project_work_at(&root, input).is_err());
+        assert!(!work_path(&root, "removed-flow").exists());
+        let mut edit = saved.clone();
+        edit.title = "Still editable after removal".into();
+        edit.workflow_id = "sdd-with-tdd".into();
+        let edited = save_project_work_at(&root, edit).unwrap();
+        assert_eq!(edited.workflow_digest, saved.workflow_digest);
+        assert_eq!(edited.workflow_id, saved.workflow_id);
+        let mut p = project_by_id(&root, "p").unwrap();
+        p.additional_workflows.push(workflow::WorkflowRef { id: "tdd-cycle".into(), version: "9.0.0".into() });
+        assert!(save_project_at(&root, p).is_err());
+        assert!(project_by_id(&root, "p").unwrap().additional_workflows.is_empty());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn project_intent_creation_rejects_changed_settings_without_writes_and_allows_saved_retries() {
+        let root = tempdir("project-intent-creation");
+        initialize(&root).unwrap();
+        save_project_at(&root, project("p")).unwrap();
+        let input = || CaptureIntentInput { work: work("capture", "p"), markdown: "Keep this draft".into(), attachments: vec![] };
+        assert!(capture_intent_with_scope_at(&root, input(), true).is_err());
+        assert!(!root.join("work/capture").exists());
+        activate_project_workflow_at(&root, "p", "intent-flow", "2.0.0").unwrap();
+        let saved = capture_intent_with_scope_at(&root, input(), true).unwrap();
+        activate_project_workflow_at(&root, "p", "tdd-cycle", "1.0.0").unwrap();
+        let retry = capture_intent_with_scope_at(&root, input(), true).unwrap();
+        assert_eq!(saved.workflow_digest, retry.workflow_digest);
+        assert_eq!(read_document(&root, "capture", "intent").unwrap().markdown, "Keep this draft");
+        fs::remove_dir_all(root).unwrap();
     }
     fn capture_legacy_intent(root: &Path, input: CaptureIntentInput) -> Result<WorkItem, String> {
         let mut work = capture_intent_at(root, input)?;
@@ -4112,8 +4413,8 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    /// extraPaths 는 frontmatter 에 실려 저장·복원되고, 필드가 아예 없는 기존
-    /// project.md 도 그대로 읽혀야 한다(serde default).
+    /// extraPaths round-trips through the frontmatter, and legacy project.md files
+    /// without the field at all must still be read (serde default).
     #[test]
     fn project_extra_paths_round_trip_and_default() {
         let root = tempdir("extra-paths");
@@ -4128,7 +4429,7 @@ mod tests {
             vec!["/lib".to_string(), "/docs".to_string()]
         );
 
-        // extraPaths 줄이 없던 시절의 project.md 시뮬레이션.
+        // Simulates a project.md from before the extraPaths line existed.
         let path = project_path(&root, "p");
         let legacy: String = fs::read_to_string(&path)
             .unwrap()
@@ -4376,9 +4677,8 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    /// 다른 도구가 남긴 동의어 issueType 과 뒤바뀐 날짜는 앱이 직접 고칠 수
-    /// 있어야 한다. 수리는 알 수 없는 키를 보존하고 두 번째 실행에서는 아무
-    /// 것도 바꾸지 않는다.
+    /// Synonym issueTypes left by other tools and swapped dates must be fixable by the
+    /// app itself. Repair preserves unknown keys and changes nothing on a second run.
     #[test]
     fn repair_documents_fixes_issue_type_synonyms_and_swapped_dates() {
         let root = tempdir("repair-documents");
@@ -4421,8 +4721,8 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    /// 레거시 이슈 노트는 개발 항목이 되고 원본은 표시만 남는다. 되돌릴 수 없는
-    /// 이동이었다면 실제 볼트에서 이관을 시도할 수 없다.
+    /// A legacy issue note becomes a work item and the original keeps only a marker.
+    /// An irreversible move could never be attempted on a real vault.
     #[test]
     fn legacy_issue_note_becomes_a_work_item_without_losing_the_original() {
         let root = tempdir("issue-migration");
@@ -4454,7 +4754,7 @@ mod tests {
         assert!(item.approve);
         assert_eq!(item.workflow_id, workflow::ISSUE_WORKFLOW_ID);
         assert_eq!(item.labels, vec!["검색"]);
-        // 폴더 이름이 코어 프로젝트로 승격되어 프로젝트 화면과 같은 것을 가리킨다.
+        // The folder name is promoted to a core project, pointing at the same thing the project screen shows.
         assert_eq!(item.project_id, "FDR");
 
         let intent = read_document(&root, "FDR-001", "intent").unwrap();
@@ -4469,7 +4769,7 @@ mod tests {
         );
         assert!(original.contains("migrated_to: \"FDR-001\""));
 
-        // 두 번째 계획은 이미 옮긴 것으로 막혀 중복 생성이 없다.
+        // The second plan is blocked as already migrated, so nothing is created twice.
         let again = plan_issue_migration(&root).unwrap();
         assert!(again[0].migrated);
         assert!(again[0].blocked.contains("이미"));
@@ -4922,7 +5222,7 @@ mod tests {
         activate_project_workflow_at(&root, "p", "sdd-with-tdd", "1.1.0").unwrap();
         assert_eq!(work_by_id(&root, "legacy").unwrap().workflow_id, "sdd-main");
         assert_eq!(work_by_id(&root, "tdd").unwrap().workflow_id, "tdd-cycle");
-        // sdd-main, tdd-cycle, sdd-with-tdd, issue-main@1.1.0, 동결된 issue-main@1.0.0
+        // sdd-main, tdd-cycle, sdd-with-tdd, issue-main@1.1.0, frozen issue-main@1.0.0
         assert_eq!(
             snapshot(&root).unwrap().workflows.len(),
             workflow::builtins::all().len()

@@ -66,6 +66,7 @@ pub(super) fn prompt(
         r#"You are pursuing a user-authorized autonomous goal in Sawhorse.
 Goal: {objective}
 This work: {work_objective}
+{work_type}
 The excerpts above may be shortened. Read the complete goal, acceptance criteria and task history from {goal_state}, and this work's full state from {work_state} before acting. Each task's full objective and evidence remain in its work directory; inspect those files as needed. Keep prompts bounded by reading durable history instead of copying it all into new reports.
 Phase: {phase}. Run ID: {run_id}.
 The user has authorized planning, task creation, design, implementation and verification without human stage approvals. Resolve ordinary choices yourself. Keep working toward the goal; do not stop at a plan or ask for stage approval. Respect the requested scope. Do not change host-managed work, goal, or run records.
@@ -89,6 +90,7 @@ Root goal: {is_root}. No fixed iteration limit. Return a concise final report af
             .chars()
             .take(4000)
             .collect::<String>(),
+        work_type = sdlc::work_type_guidance(work),
         work_objective = state.objective.chars().take(4000).collect::<String>(),
         goal_state = sdlc::work_path(root, state.parent_id.as_deref().unwrap_or(&work.id))
             .with_file_name("goal.json")
@@ -704,6 +706,8 @@ mod tests {
             sdlc::Project {
                 id: "game".into(),
                 name: "Game".into(),
+                workflow_id: "goal-main".into(),
+                workflow_version: "1.0.0".into(),
                 repo_path: root.path().display().to_string(),
                 default_agent: "codex".into(),
                 ..Default::default()
@@ -718,6 +722,7 @@ mod tests {
                 objective: "Build and test a playable game".into(),
                 max_parallel: 2,
                 start: true,
+                workflow_version: String::new(), issue_type: "작업".into(),
             },
         )
         .unwrap();

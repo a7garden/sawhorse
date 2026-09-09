@@ -90,10 +90,11 @@
     "learning": "Learnings"
   },
   "issueType": {
-    "bug": "Bug",
+    "bug": "Bug fix",
     "feature": "Feature",
-    "task": "Task",
-    "question": "Question"
+    "task": "General task",
+    "question": "Question",
+    "refactor": "Refactoring"
   },
   "executionType": {
     "code": "Code",
@@ -129,7 +130,9 @@
     "layoutEdit": "Arrange",
     "description": "Your work in progress, and what needs your attention next.",
     "workspaceSummary": "At a glance",
-    "manageProjects": "Manage"
+    "manageProjects": "Manage",
+    "scopeHint": "Activity stays visible across projects as you switch.",
+    "runsHint": "All projects · work runs and automation"
   },
   "widgets": {
     "today": "Today",
@@ -203,7 +206,26 @@
     "categoryJob": "Run history",
     "emptyTitle": "No matching documents",
     "emptyDescription": "Try different keywords.",
-    "document": "Document"
+    "document": "Document",
+    "pageTitle": "Work document search",
+    "description": "Find the intent, designs, plans, and verification records behind your work.",
+    "allProjects": "All projects",
+    "inputLabel": "Document search query",
+    "documentPlaceholder": "Search for words or phrases in documents",
+    "clear": "Clear search query",
+    "scopeHint": "Searches document content in the vault. Use Search everything above for work items, projects, and runs.",
+    "projectHint": "Searches work document content in the selected project.",
+    "startTitle": "Find the record you need",
+    "startDescription": "Search for a word or phrase you remember to see matching content. Select a result to open the document.",
+    "recentWork": "Recently updated work",
+    "recentHint": "Select work to open its documents",
+    "retry": "Try again",
+    "results": "Search results",
+    "searching": "Searching documents…",
+    "resultCount": "“{{query}}” · {{count}} documents",
+    "filterLabel": "Document type",
+    "allDocuments": "All",
+    "startOver": "Start a new search"
   },
   "projects": {
     "title": "Projects",
@@ -216,7 +238,12 @@
     "createDocs": "Create docs from sources",
     "settings": "Project settings",
     "emptyTitle": "Register your first project",
-    "emptyDescription": "Manage work items together with repositories and verification commands."
+    "emptyDescription": "Manage work items together with repositories and verification commands.",
+    "addSamples": "Add sample projects",
+    "addingSamples": "Adding samples…",
+    "samplesAdded_one": "Added {{count}} sample project.",
+    "samplesAdded_other": "Added {{count}} sample projects.",
+    "samplesExist": "The sample projects already exist. Your edits have been preserved."
   },
   "picker": {
     "title": "Issues to include",
@@ -342,7 +369,7 @@
     "verifyHint": "Leave empty and the analysis fills it in after saving.",
     "workflow": "Workflow for new work items",
     "workflowAria": "Project workflow",
-    "workflowHint": "Existing items keep the version they started with.",
+    "workflowHint": "The default for new work. Enable more workflows below; existing work keeps its workflow and version.",
     "verifyCommands": "Verify commands",
     "prerequisiteProjects": "Prerequisite projects",
     "noPrerequisites": "No other projects to link.",
@@ -355,7 +382,10 @@
     "kindAria": "Event kind",
     "eventProjectAria": "Event project",
     "linkWork": "Linked work item",
-    "notes": "Notes"
+    "notes": "Notes",
+    "additionalWorkflows": "Workflows available in this project",
+    "additionalWorkflowsHint": "Enable processes that work items can use. Choose purposes such as bug fix or refactoring as a work type when creating an item.",
+    "defaultWorkflowBadge": "Default"
   },
   "work": {
     "description": "Keep work moving, from the first request to completion.",
@@ -401,7 +431,8 @@
     },
     "invalidAction": "This decision is not available for this work.",
     "closedError": "Closed or paused work cannot advance.",
-    "evidenceRequired": "Acceptance requires substantive evidence in {{role}}."
+    "evidenceRequired": "Acceptance requires substantive evidence in {{role}}.",
+    "itemTitle": "Work"
   },
   "workflow": {
     "approveAndFinish": "Approve and finish",
@@ -571,14 +602,39 @@
     "label": "Project scope",
     "all": "All projects",
     "defaultWorkflow": "Default workflow: {{workflow}}",
-    "projectTitle": "{{project}} workbench",
+    "projectTitle": "{{project}} dashboard",
     "projectsTitle": "Projects",
     "projectCounts": "Running {{running}} · Review {{review}} · Blocked {{blocked}}",
     "documentsTitle": "Work documents",
     "searchDocuments": "Search documents",
     "processHint": "Workflows with different stages and transition rules are shown as separate processes.",
     "openWorkbench": "Open workbench",
-    "stageDocuments": "Stage artifacts: {{documents}}"
+    "stageDocuments": "Stage artifacts: {{documents}}",
+    "workOverview": "All projects overview",
+    "workOverviewHint": "Check progress by project, then open its workbench.",
+    "projectWorkHint": "Work follows the workflow configured for this project.",
+    "enterWorkbench": "Open workbench",
+    "workbenchTitle": "{{project}} workbench",
+    "projectWorkflow": "Default workflow",
+    "inheritWorkflow": "All work suggests the default. A workflow view starts new work in that flow.",
+    "previousWork": "{{count}} items started with another workflow or an earlier version.",
+    "viewPreviousWork": "Include earlier work",
+    "unassignedWork": "Work without a project",
+    "unassignedHint": "These existing records can be linked to a project in their details.",
+    "counts": {
+      "open": "Open work",
+      "running": "Running",
+      "review": "Awaiting review",
+      "blocked": "Needs input"
+    },
+    "viewingWorkflow": "Viewing: {{workflow}}",
+    "viewCurrentWork": "View current project workflow",
+    "workflowViews": "Workbench view",
+    "allWork": "All work",
+    "historyOnly": "Existing work only",
+    "historyOnlyHint": "This workflow is no longer enabled for new work. Existing work can continue. Enable this version in project settings to create more.",
+    "allWorkHint": "Work from every flow, together. Select a workflow to see its stage board.",
+    "flowWorkHint": "Work in the selected workflow and version. New work starts in this flow."
   },
   "runStatus": {
     "starting": "Starting",
@@ -775,7 +831,16 @@
     "detach": "Remove assignment",
     "detached": "Assignment removed.",
     "export": "Export Markdown",
-    "applyHint": "Designs are included in agent design and implementation instructions. Templates apply to new task artifacts. Existing documents are preserved."
+    "applyHint": "Designs are included in agent design and implementation instructions. Templates apply to new task artifacts. Existing documents are preserved.",
+    "sourceProject": "Reference project",
+    "chooseSourceProject": "Choose a reference project (optional)",
+    "selectLibrary": "Select library",
+    "projectSelection": "{{project}} · Select library",
+    "selectionHint": "Choose documents from the project library. Selections are saved immediately.",
+    "noTemplate": "Use default format",
+    "templateFor": "{{role}} template",
+    "unavailable": "Unavailable document",
+    "selectionEmpty": "No documents yet. Create a design or template in Project library in the sidebar first."
   },
   "mockupLibrary": {
     "title": "Mockups",
@@ -903,6 +968,18 @@
       "done": "View result",
       "discarding": "View rollback",
       "other": "View stage"
+    },
+    "workflowPicker": "Workflow used by work",
+    "allWorkflows": "All workflows · including earlier work",
+    "allWorkflowsHint": "View this project’s work using its original workflow and version.",
+    "nodeKind": {
+      "artifact": "Create artifact",
+      "agent": "Agent execution",
+      "check": "Verification",
+      "human": "Human review",
+      "condition": "Condition",
+      "subworkflow": "Subworkflow",
+      "end": "End"
     }
   },
   "menu": {
@@ -917,5 +994,47 @@
     "copyMarkdown": "Copy content",
     "openInEditor": "Open in editor",
     "copied": "Copied to the clipboard."
+  },
+  "creation": {
+    "newItem": "New item",
+    "newUnit": "New {{unit}}",
+    "item": "item",
+    "workflow": "Work workflow",
+    "chooseWorkflow": "Choose a workflow",
+    "chooseHint": "Choose a project and workflow for this work item.",
+    "continue": "Continue",
+    "route": "{{workflow}} · Starts at {{stage}}",
+    "inputHint": "Write the {{unit}} content.",
+    "create": "Create",
+    "discard": "Discard this draft?",
+    "savedInputFailed": "The item was created, but its input document could not be saved. Retry or open the saved item to continue.",
+    "openSaved": "Open saved item",
+    "goal": "goal",
+    "workflowUnavailable": "The workflow version configured for this project is unavailable. Check project settings or the workflow library.",
+    "projectRequired": "Add or select a project before creating work.",
+    "projectWorkflowChanged": "The selected workflow was removed from this project or is unavailable. Keep your draft and check project settings.",
+    "workflowHint": "Continue to the selected workflow’s input form. Created work keeps that exact workflow and version.",
+    "retiredWorkflow": "Bug fixes and refactoring are work types. Choose a process workflow such as SDD or TDD."
+  },
+  "workType": {
+    "label": "Work type",
+    "hint": "Classify the purpose. Stages and approval gates come from the selected workflow.",
+    "filter": "Filter work type",
+    "all": "All work types",
+    "insertTemplate": "Insert writing template",
+    "guides": {
+      "feature": "Describe the desired behavior, scope, and acceptance criteria.",
+      "bug": "Record reproduction steps, expected and actual behavior, cause, and regression criteria.",
+      "refactor": "Describe the structure to improve, behavior and public interfaces to preserve, and baseline tests.",
+      "task": "Record the context, scope, and completion criteria.",
+      "question": "Record the question, investigation scope, and evidence needed."
+    },
+    "templates": {
+      "feature": "## Desired behavior\n\n## Scope and exclusions\n\n## Acceptance criteria\n",
+      "bug": "## Reproduction steps and environment\n\n## Expected and actual behavior\n\n## Impact and root-cause evidence\n\n## Before/after regression checks\n",
+      "refactor": "## Structural problem and rationale\n\n## Behavior and public interfaces to preserve\n\n## Scope and exclusions\n\n## Baseline tests and behavior verification\n",
+      "task": "## Context\n\n## Scope\n\n## Completion criteria\n",
+      "question": "## Question\n\n## Investigation scope\n\n## Evidence needed\n"
+    }
   }
 }

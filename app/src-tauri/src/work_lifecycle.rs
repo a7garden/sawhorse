@@ -4,7 +4,7 @@ use super::*;
 use serde_json::json;
 
 pub fn supports(work: &WorkItem) -> bool {
-    work.workflow_id == "intent-flow" && work.workflow_version == "2.0.0"
+    work.workflow_id == "intent-flow" && matches!(work.workflow_version.as_str(), "2.0.0" | "2.0.1")
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]

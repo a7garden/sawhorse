@@ -86,8 +86,8 @@ struct RunRecord {
     #[serde(default)]
     instructions: String,
     repo_path: String,
-    /// 프로젝트가 launch 때 신뢰한 추가 디렉터리. `--add-dir` 인자는 여기서
-    /// 다시 조립하므로 재시작 뒤에도 같은 스코프가 유지된다.
+    /// Extra directories the project trusted at launch. The `--add-dir` arguments are
+    /// reassembled from here, so the same scope survives a restart.
     #[serde(default)]
     extra_paths: Vec<String>,
     output_path: String,
@@ -110,8 +110,8 @@ struct RunRecord {
     /// Last time the recorded session was reopened in herdr from the dashboard.
     #[serde(default)]
     resumed_at: Option<String>,
-    /// 사람이 "그만 신경 쓰겠다"고 고른 시각. 기록은 그대로 두고 주의 목록에서만
-    /// 내리므로, 다시 표시를 누르거나 실행이 다시 움직이면 저절로 풀린다.
+    /// When a human chose to "stop caring". The record is kept and the run only leaves
+    /// the attention list, so it clears itself on re-show or once the run moves again.
     #[serde(default)]
     dismissed_at: Option<String>,
 }
@@ -602,6 +602,7 @@ fn build_prompt(
         "skills/sdd/SKILL.md"
     };
     let skill = crate::plugin::resolve_root()?.join(skill);
+    let work_type = sdlc::work_type_guidance(work);
     let lifecycle_protocol = sdlc::lifecycle::protocol_prompt(root, work, run_id)?;
     let delegation = include_str!("../../../plugin/skills/delegate/SKILL.md");
     Ok(format!(
@@ -617,6 +618,7 @@ Dependencies:\n{dependencies}\n\n\
 Transitive project dependency repositories (context only; do not edit unless authorized):\n{project_dependencies}\n\n\
 Validation commands (run only when relevant; report results faithfully):\n- {verification}\n\n\
 Permitted deliverable for this role:\n{deliverable}\n\n\
+Work purpose and evidence criteria:\n{work_type}\n\n\
 Workflow node instructions:\n{node_instructions}\n\n\
 Instructions from the user:\n{instructions}\n\n\
 Write real, durable evidence in the permitted deliverable files above; terminal output alone is not a deliverable.\n\
@@ -1309,8 +1311,8 @@ async fn settle_pane(root: &Path, record: &mut RunRecord, h: &Herdr, captured: O
     }
 }
 
-/// 프로젝트가 추가로 신뢰하는 디렉터리를 vault 와 같은 방식으로 스코프에 넣는다.
-/// launch 때 기록해 둔 값이라 빈 항목 방어만 하면 된다.
+/// Adds the project's extra trusted directories to the scope the same way as the vault.
+/// The values were recorded at launch, so guarding only against empty entries suffices.
 fn push_extra_dirs(extra: &mut Vec<String>, extra_paths: &[String]) {
     for dir in extra_paths {
         let dir = dir.trim();
@@ -1672,7 +1674,7 @@ async fn refresh_record_with(
         return Ok(record);
     }
     let status = status_for_agent(&info.status);
-    if record.parent_run_id.is_none() && record.workflow_id == "intent-flow" && record.workflow_version == "2.0.0" {
+    if record.parent_run_id.is_none() && record.workflow_id == "intent-flow" && matches!(record.workflow_version.as_str(), "2.0.0" | "2.0.1") {
         sdlc::lifecycle::process_requests(
             root,
             &record.work_id,
@@ -1938,7 +1940,7 @@ pub async fn sdd_continue_run(id: String, instructions: String) -> Result<Harnes
     if record.status != "review" {
         return Err("review 상태의 실행에만 후속 지시를 보낼 수 있습니다".into());
     }
-    // 후속 지시를 보냈다는 것은 다시 신경 쓰기로 했다는 뜻이다. 아래 두 경로 모두 저장한다.
+    // Sending a follow-up means the human decided to care again. Both paths below save that.
     record.dismissed_at = None;
     if record.runner == "headless" {
         let _launch_guard = launch_mutex().lock().map_err(|_| "harness launch lock이 손상되었습니다".to_string())?;
@@ -2031,11 +2033,11 @@ pub async fn sdd_run_key(id: String, key: String) -> Result<HarnessRun, String> 
     Ok(record.public())
 }
 
-/// 실패·중단된 실행을 다시 실행하지 않고 주의 목록에서만 내린다. 기록과 출력은
-/// 그대로 남으므로 `dismissed = false` 로 언제든 되돌릴 수 있다.
+/// Takes a failed/stopped run off the attention list without rerunning it. The record
+/// and output remain, so `dismissed = false` reverses this at any time.
 fn dismiss_record(root: &Path, id: &str, dismissed: bool) -> Result<RunRecord, String> {
     let mut record = load_record(root, id)?;
-    // 진행 중인 실행은 아직 결과가 없다. 지금 닫으면 사람이 놓칠 뿐이다.
+    // A run in progress has no result yet. Closing it now would only make a human miss it.
     if matches!(record.status.as_str(), "starting" | "running") {
         return Err("진행 중인 실행은 닫을 수 없습니다".into());
     }
@@ -2051,8 +2053,8 @@ pub async fn sdd_dismiss_run(id: String, dismissed: bool) -> Result<HarnessRun, 
     Ok(dismiss_record(&root, &id, dismissed)?.public())
 }
 
-/// 사람이 다시 개입해 실행을 움직이면 "그만 신경 쓰겠다"는 판단도 함께 풀린다.
-/// 상태만 다시 읽는 refresh 계열은 이 표시를 건드리지 않는다.
+/// When a human intervenes again and moves the run, the "stop caring" dismissal lifts
+/// with it. Refresh-style calls that only re-read status never touch this marker.
 fn clear_dismissed(root: &Path, record: &mut RunRecord) -> Result<(), String> {
     if record.dismissed_at.is_none() {
         return Ok(());
@@ -2069,7 +2071,7 @@ pub fn sdd_run_output(id: String) -> Result<String, String> {
     fs::read_to_string(path).map_err(|e| format!("실행 출력을 읽을 수 없습니다: {e}"))
 }
 
-// ---------- 에이전트별 모델 목록 ----------
+// ---------- Per-agent model lists ----------
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -2092,13 +2094,13 @@ pub struct AgentModels {
     pub options: Vec<ModelOption>,
 }
 
-/// 최근 사용 모델은 제안일 뿐이다. 8개를 넘으면 소음이지 선택지가 아니다.
+/// Recently used models are a suggestion only. Past eight they are noise, not choices.
 const MAX_RECENT_MODELS: usize = 8;
 
-/// runs/ 기록에서 같은 에이전트가 최근에 쓴 모델을 모은다. created_at 내림차순으로
-/// 중복을 걷어내고 최대 8개다. 손상된 기록 파일은 조용히 건너뛴다 — 모델 제안은
-/// 사소한 부가 기능이라 기록 하나 때문에 함께 실패하지 않는다. runs/ 가 없으면
-/// 빈 목록이고, 디렉터리를 만들지 않는다(읽기 전용 조회라서).
+/// Collects models the same agent used recently from runs/ records. Deduplicates in
+/// descending created_at order, capped at 8. Corrupt record files are skipped silently —
+/// model suggestions are a minor side feature and must not fail over one record. A
+/// missing runs/ means an empty list; the directory is not created (read-only lookup).
 fn recent_models(root: &Path, agent: &str) -> Vec<String> {
     let Ok(entries) = fs::read_dir(root.join("runs")) else {
         return Vec::new();
@@ -2156,8 +2158,8 @@ fn catalog_of(agent: &str) -> &'static [crate::agents::ModelSpec] {
         .unwrap_or(&[])
 }
 
-/// 카탈로그(라이브 우선, 없으면 정본)와 최근 사용을 한 목록으로 합친다.
-/// 최근 사용은 어디까지나 보조라서 중복은 걸러낸다.
+/// Merges the catalog (live first, canonical fallback) and recent usage into one list.
+/// Recent usage is strictly secondary, so duplicates are filtered out.
 fn agent_models_from_parts(
     live: Option<Vec<ModelOption>>,
     catalog: &[crate::agents::ModelSpec],
@@ -2190,7 +2192,7 @@ fn agent_models_at(root: &Path, agent: &str) -> AgentModels {
     agent_models_from_parts(None, catalog_of(agent), recent_models(root, agent))
 }
 
-/// `codex debug models` 의 출력. 목록에 공개된 모델만 사용자에게 보인다.
+/// Output of `codex debug models`. Only models published in the list are shown to the user.
 #[derive(Deserialize)]
 struct CodexCatalog {
     #[serde(default)]
@@ -2206,8 +2208,8 @@ struct CodexModel {
     visibility: String,
 }
 
-/// 설치된 codex CLI 가 내려주는 모델 카탈로그(JSON)를 선택지로 바꾼다.
-/// `visibility` 가 `list` 인 것만 골라내고, 표시 이름이 없으면 slug 를 쓴다.
+/// Turns the model catalog (JSON) from the installed codex CLI into options. Keeps only
+/// entries whose `visibility` is `list`; falls back to the slug when no display name exists.
 fn codex_models_from_json(raw: &str) -> Vec<ModelOption> {
     let Ok(catalog) = serde_json::from_str::<CodexCatalog>(raw.trim()) else {
         return Vec::new();
@@ -2231,16 +2233,16 @@ fn codex_models_from_json(raw: &str) -> Vec<ModelOption> {
         .collect()
 }
 
-/// 라이브 카탈로그 캐시. CLI 스폰은 수백 ms 걸리므로 대화상자가 열릴 때마다
-/// 반복하지 않는다. 실패는 캐시하지 않는다 — 다음 조회에서 다시 시도한다.
+/// Live catalog cache. Spawning the CLI costs hundreds of ms, so it is not repeated on
+/// every dialog open. Failures are not cached — the next lookup retries.
 const LIVE_MODEL_TTL: Duration = Duration::from_secs(600);
 static LIVE_MODEL_CACHE: LazyLock<Mutex<HashMap<String, (Instant, AgentModels)>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 const PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// 설치된 codex CLI 에게 모델 카탈로그를 물어본다. CLI 가 없거나 깨졌거나
-/// 목록이 비면 None — 정본 카탈로그로 떨어진다.
+/// Asks the installed codex CLI for its model catalog. A missing or broken CLI, or an
+/// empty list, yields None — falling back to the canonical catalog.
 async fn probe_codex_models() -> Option<Vec<ModelOption>> {
     let mut cmd = crate::spawn::platform_command_async("codex", &["debug", "models"]);
     cmd.stdin(std::process::Stdio::null())
@@ -2257,9 +2259,9 @@ async fn probe_codex_models() -> Option<Vec<ModelOption>> {
     (!models.is_empty()).then_some(models)
 }
 
-/// 에이전트별 모델 선택지. codex 는 설치된 CLI 에게 라이브 카탈로그를 물어본다.
-/// CLI 가 없거나 실패하면 정본 카탈로그로 떨어진다. claude 는 모델 나열
-/// 커맨드가 없어 정본 카탈로그가 곧 목록이다. 최근 사용은 어느 쪽이든 보조로 붙는다.
+/// Per-agent model options. codex asks the installed CLI for a live catalog and falls
+/// back to the canonical catalog on failure. claude has no model listing command, so
+/// the canonical catalog is the list. Recent usage attaches as secondary either way.
 #[tauri::command]
 pub async fn agent_models(agent: String) -> Result<AgentModels, String> {
     let agent = agent.trim().to_lowercase();
@@ -2292,38 +2294,38 @@ pub async fn agent_models(agent: String) -> Result<AgentModels, String> {
     Ok(models)
 }
 
-// ---------- 프로젝트 자동 분석 ----------
+// ---------- Project auto-analysis ----------
 
-/// 분석 에이전트는 읽기만 한다. claude 의 variadic `--disallowedTools` 는 단일
-/// 인자로 넘긴다 — 펼치면 뒤따르는 위치 인자를 삼킨다.
+/// The analysis agent is read-only. claude's variadic `--disallowedTools` is passed as
+/// a single argument — spreading it swallows the positional argument that follows.
 const ANALYZE_DISALLOWED_TOOLS: &str = "Bash,Write,Edit";
 const ANALYZE_TIMEOUT: Duration = Duration::from_secs(180);
 
-/// 프롬프트는 한국어로 고정한다. 프로젝트 설명은 한국어 볼트에서 읽힌다.
+/// The prompt stays Korean. Project descriptions are read in a Korean vault.
 const ANALYZE_PROMPT: &str = "이 저장소를 분석해 1~2문장 한국어 프로젝트 설명과 검증 커맨드 후보를 JSON으로만 반환하라. 다른 텍스트 금지. 형식: {\"description\": string, \"verifyCommands\": string[]}";
 
-/// 분석이 지금 돌고 있는 프로젝트. 같은 프로젝트를 두 번 띄우면 두 에이전트가
-/// 같은 description을 경쟁하며 쓰게 되므로 애초에 막는다.
+/// Projects with an analysis currently running. Launching the same project twice would
+/// have two agents racing to write the same description, so it is blocked up front.
 static ANALYZE_IN_FLIGHT: LazyLock<Mutex<HashSet<String>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
-/// 분석 에이전트를 띄우기 위한 완성된 계획. 프로그램, 인자, 작업 디렉터리와
-/// 입력·출력 경로가 어디로 가는지를 한데 모은다.
+/// A complete plan for launching the analysis agent: program, arguments, working
+/// directory, and where input/output paths go, gathered in one place.
 struct AnalyzePlan {
     program: &'static str,
     args: Vec<String>,
     cwd: PathBuf,
-    /// claude 는 위치 프롬프트 대신 stdin 으로 프롬프트를 받는다.
+    /// claude takes the prompt on stdin instead of a positional prompt.
     stdin_text: Option<String>,
-    /// codex 만 최종 메시지를 파일로 받는다 — stdout 은 JSONL 이벤트 스트림이라
-    /// 최종 답이 어느 줄인지 알 수 없다.
+    /// Only codex receives the final message as a file — stdout is a JSONL event stream,
+    /// so there is no telling which line is the final answer.
     last_message_path: Option<PathBuf>,
-    /// OMP의 print 모드는 최종 답변을 stdout에 그대로 쓴다.
+    /// OMP's print mode writes the final answer straight to stdout.
     plain_stdout: bool,
 }
 
-/// 분석 커맨드 조립. 프로젝트 필드만 보고 결정하는 순수 함수라 단위 테스트 대상이다.
-/// 기본 에이전트가 비면 claude, 모델이 비면 모델 플래그를 뺀다.
+/// Assembles the analysis command. A pure function of project fields only, hence unit
+/// tested. An empty default agent falls back to claude; an empty model drops the model flag.
 fn analyze_plan(project: &sdlc::Project, last_message: &Path) -> AnalyzePlan {
     let repo = PathBuf::from(project.repo_path.trim());
     let model = project.default_model.trim().to_string();
@@ -2337,7 +2339,7 @@ fn analyze_plan(project: &sdlc::Project, last_message: &Path) -> AnalyzePlan {
             repo.display().to_string(),
             "-s".to_string(),
             "read-only".to_string(),
-            // repoPath 가 git 저장소가 아닌 경우가 있어서 검사를 건너뛴다.
+            // repoPath is sometimes not a git repository, so the check is skipped.
             "--skip-git-repo-check".to_string(),
             "-o".to_string(),
             last_message.display().to_string(),
@@ -2347,8 +2349,8 @@ fn analyze_plan(project: &sdlc::Project, last_message: &Path) -> AnalyzePlan {
             program: "codex",
             args,
             cwd: repo,
-            // stdin 을 닫아야 codex 가 "Reading additional input from stdin..."
-            // 에서 대기하지 않는다.
+            // stdin must be closed so codex does not wait at
+            // "Reading additional input from stdin...".
             stdin_text: None,
             last_message_path: Some(last_message.to_path_buf()),
             plain_stdout: false,
@@ -2391,7 +2393,7 @@ fn analyze_plan(project: &sdlc::Project, last_message: &Path) -> AnalyzePlan {
     }
 }
 
-/// `claude -p --output-format json` 의 stdout 에서 최종 텍스트(`.result`)를 뽑는다.
+/// Extracts the final text (`.result`) from the stdout of `claude -p --output-format json`.
 fn claude_result(stdout: &str) -> Result<String, String> {
     let value: Value = serde_json::from_str(stdout.trim())
         .map_err(|e| format!("claude 응답을 JSON으로 읽을 수 없습니다: {e}"))?;
@@ -2402,8 +2404,8 @@ fn claude_result(stdout: &str) -> Result<String, String> {
         .ok_or_else(|| "claude 응답에 result 필드가 없습니다".to_string())
 }
 
-/// 에이전트 응답 텍스트에서 분석 JSON을 뽑아낸다. 코드펜스를 벗기고, 앞뒤 잡답
-/// 사이의 JSON 도 찾아내며, description 이 비면 실패로 본다.
+/// Extracts the analysis JSON from agent response text. Strips code fences, also finds
+/// JSON between surrounding chatter, and treats an empty description as failure.
 fn parse_analyze_output(raw: &str) -> Result<(String, Vec<String>), String> {
     let text = raw.trim();
     let text = text
@@ -2450,9 +2452,9 @@ fn parse_analyze_output(raw: &str) -> Result<(String, Vec<String>), String> {
     Ok((description.to_string(), verify))
 }
 
-/// 분석 결과를 프로젝트에 반영한다. description 은 언제나 새 값으로 바꾸고,
-/// verifyCommands 는 비어 있을 때만 채운다 — 사용자가 손본 검증 명령을
-/// 배경 분석이 조용히 지우는 사고를 막는다.
+/// Applies analysis results to the project. The description is always replaced with the
+/// new value; verifyCommands is filled only when empty — preventing background analysis
+/// from quietly wiping verification commands the user has hand-tuned.
 fn apply_analysis(
     mut project: sdlc::Project,
     description: String,
@@ -2471,11 +2473,11 @@ struct AnalyzeOutput {
     success: bool,
 }
 
-/// 커맨드를 타임아웃 180초로 돌린다. 타임아웃으로 미래가 버려질 때
-/// `kill_on_drop` 이 자식 프로세스도 함께 정리한다.
+/// Runs the command with a 180-second timeout. When the future is dropped at timeout,
+/// `kill_on_drop` cleans up the child process as well.
 async fn run_analyze_plan(plan: &AnalyzePlan) -> Result<AnalyzeOutput, String> {
-    // Windows 에서 codex·claude 는 npm 셈(.cmd)인 경우가 많아 직접 실행이
-    // 실패한다. 콘솔 창 억제까지 한 번에 처리하는 공용 스폰 입구를 쓴다.
+    // On Windows codex and claude are often npm shims (.cmd), so direct execution fails.
+    // Uses the shared spawn entry point, which also suppresses the console window.
     let mut cmd = crate::spawn::platform_command_async(plan.program, &[]);
     cmd.args(&plan.args)
         .current_dir(&plan.cwd)
@@ -2523,8 +2525,8 @@ async fn run_analyze_plan(plan: &AnalyzePlan) -> Result<AnalyzeOutput, String> {
     })
 }
 
-/// 프로젝트를 읽고, 읽기 전용 에이전트로 돌려, description 만 교체 저장한다.
-/// verifyCommands 후보는 저장하지 않고 이벤트로만 전달한다.
+/// Reads the project, runs a read-only agent, and saves back only the replaced
+/// description. verifyCommands candidates are not saved, only delivered as an event.
 async fn analyze_project(project_id: String) -> Result<(String, Vec<String>), String> {
     let root = sdlc::vault_root()?;
     let project = sdlc::project_by_id(&root, &project_id)?;
@@ -2569,8 +2571,9 @@ async fn analyze_project(project_id: String) -> Result<(String, Vec<String>), St
     Ok((description, verify))
 }
 
-/// 프로젝트 설명 자동 생성. 백그라운드로 스폰하고 완료 때 `project-analyzed`
-/// 이벤트를 앱에 보낸다 — 분석은 분 단위로 걸릴 수 있으므로 커맨드는 즉시 돌아온다.
+/// Auto-generates the project description. Spawns in the background and sends the
+/// `project-analyzed` event to the app on completion — analysis can take minutes, so
+/// the command returns immediately.
 #[tauri::command]
 pub async fn sdd_analyze_project(app: tauri::AppHandle, project_id: String) -> Result<(), String> {
     let project_id = project_id.trim().to_string();
@@ -2609,26 +2612,26 @@ pub async fn sdd_analyze_project(app: tauri::AppHandle, project_id: String) -> R
     Ok(())
 }
 
-// ---------- 작업 코파일럿 ----------
+// ---------- Work copilot ----------
 //
-// 실행 하네스가 작업을 "하는" 입구라면, 코파일럿은 작업을 "묻는" 입구다.
-// 같은 CLI 에이전트를 쓰되 읽기 전용 한 번짜리 호출로 끝나고, 작업 상태·문서·
-// 실행 기록 어느 것도 바꾸지 않는다.
+// Where the run harness is the entry point for "doing" work, the copilot is the entry
+// point for "asking" about it. Same CLI agents, but a read-only one-shot call that
+// changes nothing — not work status, not documents, not run records.
 
 const COPILOT_MAX_QUESTION: usize = 4_000;
-/// 문서 하나에서 프롬프트로 넘길 최대 글자. 의도와 결론이 앞에 오므로 뒤를 자른다.
+/// Max characters taken from one document into the prompt. Intent and conclusions come first, so the tail is cut.
 const COPILOT_MAX_DOCUMENT: usize = 6_000;
-/// 프롬프트에 싣는 이전 대화 수. 오래된 것부터 버린다.
+/// Number of past turns carried into the prompt. Oldest dropped first.
 const COPILOT_MAX_TURNS: usize = 8;
 const COPILOT_MAX_TURN: usize = 1_200;
 const COPILOT_MAX_DECISIONS: usize = 5;
 
-/// 답하는 중인 작업. 같은 작업에 두 질문이 겹치면 CLI 두 개가 같은 저장소를 훑게 되므로
-/// 앞선 답이 끝날 때까지 막는다.
+/// Work items currently being answered. Two overlapping questions on one work item would
+/// put two CLIs over the same repository, so the second waits until the first answer ends.
 static COPILOT_IN_FLIGHT: LazyLock<Mutex<HashSet<String>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
-/// 미래가 버려져도 자리를 반납한다 — 한 번 새면 앱을 다시 켤 때까지 그 작업은 못 묻는다.
+/// Releases the slot even when the future is dropped — once leaked, that work item could not be asked again until the app restarts.
 struct CopilotSlot(String);
 impl Drop for CopilotSlot {
     fn drop(&mut self) {
@@ -2641,7 +2644,7 @@ impl Drop for CopilotSlot {
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CopilotTurn {
-    /// `question` 또는 `answer`.
+    /// `question` or `answer`.
     pub role: String,
     pub text: String,
 }
@@ -2658,7 +2661,7 @@ pub struct CopilotAsk {
 #[serde(rename_all = "camelCase")]
 pub struct CopilotAnswer {
     pub answer: String,
-    /// 실제로 답한 엔진. 화면이 "무엇이 답했는지" 를 사람에게 그대로 보인다.
+    /// The engine that actually answered. The screen shows the person "what answered" as-is.
     pub agent: String,
     pub model: String,
 }
@@ -2672,8 +2675,8 @@ fn head_chars(text: &str, max: usize) -> String {
     format!("{kept}\n…(이 뒤는 생략했습니다)")
 }
 
-/// 코파일럿 엔진 결정. 프로젝트가 정해 둔 에이전트·모델이 먼저이고, 프로젝트가 없거나
-/// 비어 있으면 설정의 기본 에이전트로 간다.
+/// Picks the copilot engine. The project's agent/model come first; with no project or an
+/// empty value, the settings' default agent is used.
 fn copilot_engine(project: Option<&sdlc::Project>, fallback_agent: &str) -> (String, String) {
     let agent = project
         .map(|project| project.default_agent.trim().to_string())
@@ -2685,7 +2688,7 @@ fn copilot_engine(project: Option<&sdlc::Project>, fallback_agent: &str) -> (Str
     (agent, model)
 }
 
-/// 작업 하나의 문맥과 지금까지의 문답을 프롬프트로 묶는다. 순수 함수라 단위 테스트 대상이다.
+/// Binds one work item's context and the Q&A so far into a prompt. Pure function, hence unit tested.
 fn copilot_prompt(
     work: &sdlc::WorkItem,
     project: Option<&sdlc::Project>,
@@ -2694,7 +2697,7 @@ fn copilot_prompt(
     question: &str,
 ) -> String {
     let mut prompt = String::from(
-        "너는 Sawhorse 작업대의 코파일럿이다. 아래 한 작업에 대한 질문에 답한다.\n\
+        "너는 Sawhorse의 코파일럿이다. 아래 한 작업에 대한 질문에 답한다.\n\
          규칙:\n\
          - 질문과 같은 언어로 답한다.\n\
          - 아래 문맥과 저장소에서 읽은 것만 근거로 삼는다. 없는 사실은 지어내지 말고 모르면 모른다고 답한다.\n\
@@ -2719,6 +2722,8 @@ fn copilot_prompt(
         work.workflow_id,
         work.workflow_version,
     ));
+    prompt.push_str(&sdlc::work_type_guidance(work));
+    prompt.push_str("\n");
     if !work.depends_on.is_empty() {
         prompt.push_str(&format!("- 선행 작업: {}\n", work.depends_on.join(", ")));
     }
@@ -2795,8 +2800,8 @@ fn copilot_prompt(
     prompt
 }
 
-/// 코파일럿 호출 계획. 분석과 같은 읽기 전용 실행이되 프롬프트는 stdin 으로 넘긴다 —
-/// 작업 문맥은 커맨드라인 인자로 넘기기에는 길다.
+/// Copilot invocation plan. A read-only run like analysis, but the prompt goes over
+/// stdin — work context is too long for command-line arguments.
 fn copilot_plan(
     agent: &str,
     model: &str,
@@ -2818,7 +2823,7 @@ fn copilot_plan(
             "--skip-git-repo-check".to_string(),
             "-o".to_string(),
             last_message.display().to_string(),
-            // 프롬프트를 stdin 에서 읽으라는 codex 의 위치 인자.
+            // codex's positional argument telling it to read the prompt from stdin.
             "-".to_string(),
         ]);
         AnalyzePlan {
@@ -2853,7 +2858,7 @@ fn copilot_plan(
     }
 }
 
-/// 작업 하나에 대해 묻고 답을 받는다. 사용자가 설정해 둔 에이전트를 그대로 엔진으로 쓴다.
+/// Asks about one work item and returns the answer. Uses the user-configured agent as the engine unchanged.
 #[tauri::command]
 pub async fn sdd_work_copilot(input: CopilotAsk) -> Result<CopilotAnswer, String> {
     let question = input.question.trim().to_string();
@@ -2908,7 +2913,7 @@ pub async fn sdd_work_copilot(input: CopilotAsk) -> Result<CopilotAnswer, String
     let scratch = std::env::temp_dir().join(format!("sawhorse-copilot-{}", Uuid::new_v4()));
     fs::create_dir_all(&scratch).map_err(|error| error.to_string())?;
     let last_message = scratch.join("answer.md");
-    // 저장소가 있으면 거기서 돌려 코드까지 읽게 한다. 없으면 빈 임시 폴더가 작업 폴더다.
+    // With a repository, run there so the code is readable too; otherwise an empty temp folder is the work folder.
     let cwd = project
         .as_ref()
         .map(|project| PathBuf::from(project.repo_path.trim()))
@@ -3169,13 +3174,13 @@ mod tests {
 
         let dismissed = dismiss_record(&root, &failed.id, true).unwrap();
         assert!(dismissed.dismissed_at.is_some());
-        // 기록은 사라지지 않고, 화면도 닫힌 실행임을 알 수 있어야 한다.
+        // The record must survive, and the screen must show the run as closed.
         let saved = load_record(&root, &failed.id).unwrap();
         assert_eq!(saved.dismissed_at, dismissed.dismissed_at);
         assert_eq!(saved.status, "failed");
         assert_eq!(saved.public().dismissed_at, dismissed.dismissed_at);
 
-        // 되돌리면 다시 주의 목록으로 올라온다.
+        // Undoing puts it back on the attention list.
         assert!(dismiss_record(&root, &failed.id, false)
             .unwrap()
             .dismissed_at
@@ -3194,7 +3199,7 @@ mod tests {
             .unwrap_err()
             .contains("진행 중인 실행"));
         assert!(load_record(&root, &running.id).unwrap().dismissed_at.is_none());
-        // 사람이 그만 신경 쓰겠다고 고를 수 있는 대상은 멈춰 선 실행들이다.
+        // Only settled runs are candidates for a human "stop caring" dismissal.
         for status in ["blocked", "unknown", "stopped"] {
             let settled = record(Uuid::new_v4().to_string(), None, status);
             save_record(&root, &settled).unwrap();
@@ -3672,7 +3677,7 @@ esac
     #[test]
     fn recent_models_scan_runs_descending_and_deduplicate() {
         let root = tempdir("recent-models");
-        // runs/ 가 없으면 디렉터리를 만들지 않고 빈 목록이다.
+        // Without runs/, no directory is created and the list is empty.
         assert!(recent_models(&root, "claude").is_empty());
         fs::create_dir_all(root.join("runs")).unwrap();
 
@@ -3691,7 +3696,7 @@ esac
         codex_run.agent = "codex".into();
         codex_run.model = "gpt-5-codex".into();
         save_record(&root, &codex_run).unwrap();
-        // 파싱이 깨진 파일 하나는 목록 전체를 망가뜨리지 않는다.
+        // One unparsable file must not break the whole list.
         fs::write(root.join("runs/not-a-record.md"), "깨진 내용").unwrap();
 
         assert_eq!(
@@ -3898,7 +3903,7 @@ esac
         );
         assert!(plan.plain_stdout && plan.stdin_text.is_none());
 
-        // 기본 에이전트·모델이 비면 claude 로 가고 모델 플래그를 생략한다.
+        // Empty default agent/model falls back to claude and omits the model flag.
         let plan = analyze_plan(&base("", ""), Path::new("/tmp/last.md"));
         assert_eq!(plan.program, "claude");
         assert!(!plan.args.contains(&"--model".to_string()));
@@ -3924,7 +3929,7 @@ esac
         assert_eq!(description, "설명");
         assert_eq!(verify, vec!["a".to_string()], "빈 후보는 버린다");
 
-        // 답 앞뒤로 잡답이 섞여도 JSON 만 뽑는다.
+        // Chatter around the answer is fine; only the JSON is extracted.
         let (description, _) =
             parse_analyze_output("여기 결과입니다:\n{\"description\":\"  설명  \"}").unwrap();
         assert_eq!(description, "설명");

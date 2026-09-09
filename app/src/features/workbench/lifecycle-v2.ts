@@ -1,5 +1,5 @@
 import type { WorkItem } from "./types";
-export const isLifecycleV2 = (work: Pick<WorkItem, "workflowId" | "workflowVersion">) => work.workflowId === "intent-flow" && work.workflowVersion === "2.0.0";
+export const isLifecycleV2 = (work: Pick<WorkItem, "workflowId" | "workflowVersion">) => work.workflowId === "intent-flow" && ["2.0.0", "2.0.1"].includes(work.workflowVersion);
 export const lifecycleStages = ["inbox", "clarify", "design", "approval", "queued", "build", "unconfirmed", "done"];
 export interface Interview { id: string; runId: string; stage: string; question: string; options: string[]; answer: string; answeredAt: string }
 export interface LifecycleState {

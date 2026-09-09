@@ -8,16 +8,16 @@ export const STATUSES = [
   "review",
   "blocked",
   "done",
-  // 반려와 취소는 다른 사건이다. 반려는 요청을 받아들이지 않은 것이고, 취소는
-  // 하기로 정한 뒤 그만둔 것이다. 둘 다 닫힘이지만 함께 세면 안 된다.
+  // Rejection and cancellation are different events. A rejection means the request was not
+  // accepted; a cancellation means it was agreed to and then abandoned. Both are closed, but they must not be counted together.
   "rejected",
   "cancelled",
 ] as const;
 export type WorkStatus = (typeof STATUSES)[number];
 /**
- * 닫힘을 뜻하는 상태. Rust 의 `CLOSED_STATUSES` 와 같은 목록이며 `state` 와
- * `closed` 가 여기서 파생한다. 열림 판정을 손으로 나열하지 말고 이 함수를 쓴다 —
- * 종료 상태를 하나 더할 때 빠뜨리는 곳이 생긴다.
+ * Statuses meaning closed. The same list as Rust's `CLOSED_STATUSES`; `state` and
+ * `closed` derive from here. Do not hand-list open checks — use this function,
+ * or adding one more terminal status leaves a spot missed.
  */
 export const CLOSED_STATUSES: readonly WorkStatus[] = [
   "done",
@@ -44,9 +44,9 @@ export type WorkbenchView =
   | "harness"
   | "knowledge"
   | "projects"
-  // 이전 진입점 호환용. work 화면으로 연결한다.
+  // Legacy entry-point compatibility. Routes to the work screen.
   | "issues";
-export const ISSUE_TYPES = ["버그", "기능", "작업", "질문"] as const;
+export const ISSUE_TYPES = ["기능", "버그", "리팩토링", "작업", "질문"] as const;
 export type IssueType = (typeof ISSUE_TYPES)[number];
 export const EXECUTION_TYPES = [
   "코드",
@@ -62,10 +62,10 @@ export const STAGE_LABELS: Record<string, string> = {
   build: "구현",
   test: "검증",
   deploy: "배포",
-  // 이슈 흐름의 단계. 요청·설계·수행 셋이 실제로 쓰는 어휘다.
+  // Stages of the issue flow. The request/design/perform trio is the vocabulary actually used.
   request: "요청",
   resolve: "수행",
-  // 옛 판을 고정한 항목이 아직 이 노드 id 를 쓴다.
+  // Items pinned to an old revision still use these node ids.
   plan: "의도",
   execute: "수행",
   maintain: "학습",
@@ -75,8 +75,8 @@ export const STATUS_LABELS: Record<WorkStatus, string> = {
   ready: "예정",
   running: "진행",
   review: "결과 검토",
-  // 막힘이 아니라 보류다. 볼트의 이슈·개선·마일스톤·프로젝트 템플릿이 모두
-  // 보류를 쓴다.
+  // Not a block but a hold. The vault's issue, improvement, milestone, and project templates all
+  // use "hold".
   blocked: "보류",
   done: "완료",
   rejected: "반려",
@@ -94,7 +94,7 @@ export const ARTIFACT_LABELS: Record<string, string> = {
   plan: "계획",
   verification: "검증 근거",
   release: "배포 기록",
-  // 옛 판을 고정한 항목이 아직 이 문서를 가질 수 있다.
+  // Items pinned to an old revision can still carry this document.
   learning: "학습 기록",
 };
 export interface Project {
@@ -102,9 +102,9 @@ export interface Project {
   name: string;
   description: string;
   repoPath: string;
-  /** 기본 폴더 외에 프로젝트가 같이 보는 폴더들. 비어 있으면 단일 폴더 프로젝트다. */
+  /** Folders the project views alongside the default one. Empty means a single-folder project. */
   extraPaths: string[];
-  /** 프로젝트에 연결된 GitHub 저장소(owner/repo). 이슈 연결·동기화가 이 바인딩을 따른다. */
+  /** GitHub repositories linked to the project (owner/repo). Issue linking and sync follow these bindings. */
   githubRepos: string[];
   dependsOn: string[];
   verifyCommands: string[];
@@ -113,6 +113,8 @@ export interface Project {
   workflowId: string;
   workflowVersion: string;
   workflowDigest: string;
+  /** Exact additional workflows enabled for creation. The default is always enabled. */
+  additionalWorkflows?: WorkflowRef[];
 }
 export interface Decision {
   stage: Stage;
@@ -141,17 +143,17 @@ export interface WorkItem {
   workflowDigest: string;
   workflowInstanceId: string | null;
   activeNodes: RuntimeActiveNode[];
-  // 이슈 축. 별도 저장소가 아니라 같은 개발 항목의 요청·승인·외부 연결 정보다.
+  // The issue axis. Not a separate store — request, approval, and external-link info of the same development item.
   issueType: string;
   executionType: string;
   labels: string[];
   assignees: string[];
-  /** 소속 마일스톤. `calendar/<id>.md`의 `kind: milestone` 일정 ID. */
+  /** Milestone membership. A `kind: milestone` calendar event ID in `calendar/<id>.md`. */
   milestone: string;
   approvalRequired: boolean;
   approve: boolean;
   approved: string;
-  /** status에서 파생한다. 직접 쓰지 않는다. */
+  /** Derived from status. Not written directly. */
   state: string;
   closed: string;
   githubRepo: string;
@@ -160,7 +162,7 @@ export interface WorkItem {
   githubState: string;
   githubUpdated: string;
 }
-/** 레거시 이슈 노트 한 건의 이관 계획. `blocked`가 비어 있을 때만 옮길 수 있다. */
+/** Migration plan for one legacy issue note. Movable only when `blocked` is empty. */
 export interface IssueMigrationItem {
   path: string;
   project: string;
@@ -199,7 +201,7 @@ export interface WorkspaceSnapshot {
   workflows: WorkflowDefinition[];
   diagnostics: string[];
 }
-/** sdd_repair_documents 가 적용한 필드 단위 수정 하나. */
+/** One field-level fix applied by sdd_repair_documents. */
 export interface DocumentRepair {
   path: string;
   field: string;
@@ -208,7 +210,7 @@ export interface DocumentRepair {
 }
 export interface RepairReport {
   repairs: DocumentRepair[];
-  /** 수리 후에도 남아 있는 스냅샷 진단. */
+  /** Snapshot diagnostics still remaining after the repair. */
   remaining: string[];
 }
 export interface Document {
@@ -238,7 +240,7 @@ export interface LaunchInput {
   workId: string;
   projectId: string;
   role: AgentRole;
-  /** Herdr의 canonical agent kind. */
+  /** Herdr's canonical agent kind. */
   agent: string;
   model: string;
   instructions: string;
@@ -284,15 +286,15 @@ export interface HarnessRun {
   createdAt: string;
   updatedAt: string;
   error: string | null;
-  /** 에이전트 자신의 세션 id. 닫힌 화면을 같은 대화로 다시 여는 열쇠다. */
+  /** The agent's own session id. The key to reopening a closed pane as the same conversation. */
   agentSession: string | null;
-  /** 실행이 끝나 herdr 화면을 닫은 시각. 비어 있으면 화면이 살아 있다. */
+  /** When the herdr pane was closed after the run ended. Empty means the pane is still alive. */
   tabClosedAt: string | null;
-  /** 화면을 닫기 직전에 갈무리한 에이전트의 마지막 보고. */
+  /** The agent's final report, captured just before closing the pane. */
   finalReport: string | null;
-  /** 사람이 주의 목록에서 내린 시각. 기록은 남으므로 언제든 되돌릴 수 있다. */
+  /** When a person dismissed it from the attention list. The record remains, so it can be reverted anytime. */
   dismissedAt?: string | null;
-  /** 세션 이어하기가 가능한 실행인지 (세션 id 가 기록된 claude 실행). */
+  /** Whether the run supports session resume (a claude run with its session id recorded). */
   resumable: boolean;
 }
 
@@ -470,7 +472,7 @@ export interface WorkflowEventRecord {
   facts: Record<string, unknown>;
   createdAt: string;
 }
-/** 작업 코파일럿의 한 마디. 질문과 답이 같은 목록에 시간순으로 쌓인다. */
+/** One turn of the work copilot. Questions and answers stack in one list, in time order. */
 export interface CopilotTurn {
   role: "question" | "answer";
   text: string;
@@ -478,7 +480,7 @@ export interface CopilotTurn {
 
 export interface CopilotAnswer {
   answer: string;
-  /** 실제로 답한 엔진. 사용자가 설정해 둔 에이전트를 그대로 쓴다. */
+  /** The engine that actually answered. Uses the agent the user configured as-is. */
   agent: string;
   model: string;
 }

@@ -46,7 +46,7 @@ async function call<T>(
 }
 export const sddApi = {
   startSelectedGoals: (workIds: string[]): Promise<GoalBatchItem[]> => call("goal_start_selected", { workIds }),
-  createGoal: (input: { id: string; projectId: string; objective: string; maxParallel: number; start: boolean }): Promise<WorkItem> => call("goal_create", { input }),
+  createGoal: (input: { id: string; projectId: string; objective: string; maxParallel: number; start: boolean; workflowVersion?: string; issueType?: string }): Promise<WorkItem> => call("goal_create", { input }),
   goalState: (workId: string): Promise<GoalState[]> => call("goal_state", { workId }),
   goalControl: (workId: string, action: "pause" | "resume" | "cancel"): Promise<void> => call("goal_control", { workId, action }),
   lifecycle: (workId: string): Promise<LifecycleState> => call("sdd_lifecycle", { workId }),
@@ -71,7 +71,7 @@ export const sddApi = {
   intentCheckpoint: (workId: string, checkpointId: string): Promise<Document[]> =>
     call("sdd_intent_checkpoint", { workId, checkpointId }),
   snapshot: (): Promise<WorkspaceSnapshot> => call("sdd_snapshot"),
-  /** 알려진 안전한 규칙(동의어 issueType, 뒤바뀐 날짜 등)으로 문서 형식 문제를 고친다. */
+  /** Fixes document format problems with known safe rules (synonym issueType, swapped dates, etc.). */
   repairDocuments: (): Promise<RepairReport> => call("sdd_repair_documents"),
   initialize: (): Promise<WorkspaceSnapshot> => call("sdd_initialize"),
   saveProject: (input: Project): Promise<Project> =>
@@ -100,10 +100,10 @@ export const sddApi = {
   refreshRun: (id: string): Promise<HarnessRun> =>
     call("sdd_refresh_run", { id }),
   stopRun: (id: string): Promise<HarnessRun> => call("sdd_stop_run", { id }),
-  /** 닫힌 실행의 에이전트 세션을 herdr 에서 같은 대화로 다시 연다. */
+  /** Reopens a closed run's agent session in herdr as the same conversation. */
   resumeRun: (id: string): Promise<HarnessRun> =>
     call("sdd_resume_run", { id }),
-  /** 다시 실행하지 않고 주의 목록에서만 내린다. 기록은 남고 되돌릴 수 있다. */
+  /** Dismisses from the attention list only, without re-running. The record remains and can be reverted. */
   dismissRun: (id: string, dismissed: boolean): Promise<HarnessRun> =>
     call("sdd_dismiss_run", { id, dismissed }),
   continueRun: (id: string, instructions: string): Promise<HarnessRun> =>
@@ -122,20 +122,20 @@ export const sddApi = {
         )[key] ?? key,
     }),
   runOutput: (id: string): Promise<string> => call("sdd_run_output", { id }),
-  /** 아직 개발 항목으로 옮기지 않은 레거시 이슈 노트. 아무것도 쓰지 않는다. */
+  /** Legacy issue notes not yet migrated to development items. Writes nothing. */
   issueMigrationPlan: (): Promise<IssueMigrationItem[]> =>
     call("issue_migration_plan"),
   issueMigrate: (paths: string[]): Promise<IssueMigrationReport> =>
     call("issue_migrate", { paths }),
-  /** 에이전트별 모델 후보. 카탈로그가 먼저, 최근 사용이 다음이며 순서는 보존된다. */
+  /** Model candidates per agent. Catalog first, recent use next; order is preserved. */
   agentModels: (
     agent: string,
   ): Promise<{
     options: Array<{ id: string; label: string; source: "catalog" | "recent" }>;
   }> => call("agent_models", { agent }),
   /**
-   * 작업 하나에 대한 질문에 답한다. 엔진은 프로젝트(없으면 설정)의 기본 에이전트다.
-   * 읽기 전용 한 번짜리 호출이라 작업 상태를 바꾸지 않는다.
+   * Answers a question about one work item. The engine is the project's (or settings') default agent.
+   * A read-only one-shot call, so it does not change work status.
    */
   copilotAsk: (input: {
     workId: string;
@@ -143,8 +143,8 @@ export const sddApi = {
     history: CopilotTurn[];
   }): Promise<CopilotAnswer> => call("sdd_work_copilot", { input }),
   /**
-   * 프로젝트 분석을 백그라운드로 돌린다. 커맨드는 즉시 돌아오고 완료는
-   * `project-analyzed` 이벤트로 온다.
+   * Runs project analysis in the background. The command returns immediately; completion
+   * arrives via the `project-analyzed` event.
    */
   analyzeProject: (projectId: string): Promise<void> =>
     call("sdd_analyze_project", { projectId }),

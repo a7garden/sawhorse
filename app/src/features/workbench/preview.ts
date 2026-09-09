@@ -1,4 +1,7 @@
+import { isSelectableWorkflow } from "./workflow-version";
 import type { GoalState } from "./goals";
+import { projectWorkflowRefs } from "./workflow-creation";
+import bundledDefinitions from "./samples/workflows.json";
 import { isLifecycleV2, lifecycleStages, emptyLifecycle, type LifecycleState, type ResourceDocument, type ResourceAssignment } from "./lifecycle-v2";
 // Opt-in browser tour only. Failed desktop IPC never falls back to this store.
 import i18n from "@/i18n";
@@ -8,7 +11,6 @@ import type { Mockup } from "@/features/mockups/types";
 import { isFinalWorkNode, workActions } from "./lifecycle";
 import {
   ARTIFACTS,
-  STAGES,
   isClosedStatus,
   type Document,
   type WorkItem,
@@ -20,154 +22,8 @@ import {
 } from "./types";
 const KEY = "sawhorse.workflow.preview.v2";
 const now = () => new Date().toISOString();
-const intentWorkflow: WorkflowDefinition = {
-  definitionVersion: 1, id: "intent-flow", version: "1.0.0", label: "메모에서 구현까지", description: "의도와 이미지에서 설계 승인, 구현까지", entry: "design",
-  artifacts: ["intent", "spec", "plan", "verification"].map((role) => ({ role, label: role, path: `work/{workId}/${role}.md`, template: role === "intent" ? "" : `# ${role}\n` })),
-  nodes: ["design", "build"].map((id) => ({ id, label: id === "design" ? "설계" : "구현·검증", kind: "agent", artifactRole: null,
-    actionRef: `intent-${id}`, workflowRef: null, decision: null, inputs: id === "design" ? ["intent"] : ["intent", "spec", "plan"],
-    outputs: id === "design" ? ["spec", "plan"] : ["verification"], allowedRoles: id === "design" ? ["planner", "research"] : ["implementer", "verifier"],
-    instructions: "", requiresCompletedDependencies: id === "build" })),
-  edges: [{ from: "design", to: "build", on: "approved", condition: null, loopRef: null }, { from: "build", to: "design", on: "revise", condition: null, loopRef: "intent-revision" }],
-  loops: [{ id: "intent-revision", maxIterations: 20, onLimit: "pause" }],
-};
-const intentWorkflowV2: WorkflowDefinition = {
-  ...intentWorkflow, version: "2.0.0", label: "SDD · 의도에서 완료까지", entry: "inbox",
-  artifacts: ["intent", "brief", "spec", "plan", "verification", "rollback"].map((role) => ({ role, label: role, path: `work/{workId}/${role}.md`, template: role === "intent" ? "" : `# ${role}\n` })),
-  nodes: [...lifecycleStages, "discarding", "discarded", "cancelled"].map((id) => ({ id, label: id, kind: ["done", "discarded", "cancelled"].includes(id) ? "end" : ["clarify", "design", "build", "discarding"].includes(id) ? "agent" : "human", artifactRole: null, actionRef: null, workflowRef: null, decision: null, inputs: [], outputs: [], allowedRoles: ["build", "discarding"].includes(id) ? ["implementer"] : ["planner"], instructions: "", requiresCompletedDependencies: false })),
-  edges: lifecycleStages.slice(0, -1).map((stage, i) => ({ from: stage, to: lifecycleStages[i+1], on: "completed", condition: null, loopRef: null })), loops: [],
-};
-const previewWorkflows: WorkflowDefinition[] = [
-  intentWorkflow,
-  intentWorkflowV2,
-  {
-    definitionVersion: 1,
-    id: "sdd-main",
-    label: "기본 SDD",
-    description: "의도에서 배포까지 이어지는 기본 흐름",
-    version: "1.1.0",
-    entry: "intent",
-    artifacts: ARTIFACTS.map((role) => ({
-      role,
-      label: role,
-      path: `work/{workId}/${role}.md`,
-      template: `# ${role}\n`,
-    })),
-    nodes: STAGES.map((id, index) => ({
-      id,
-      label: ["의도", "설계", "구현", "검증", "배포"][index],
-      kind: index === 0 ? "artifact" : "agent",
-      artifactRole: index === 0 ? "intent" : null,
-      actionRef: index === 0 ? null : `sdd-${id}`,
-      workflowRef: null,
-      decision: null,
-      inputs: index ? [ARTIFACTS[index - 1]] : [],
-      outputs: [ARTIFACTS[index]],
-      allowedRoles: [
-        "research",
-        "planner",
-        "implementer",
-        "verifier",
-        "reviewer",
-      ],
-      instructions: "현재 노드의 산출물과 근거를 작성합니다.",
-      requiresCompletedDependencies: index >= 2,
-    })),
-    edges: STAGES.slice(0, -1).flatMap((from, index) => [
-      {
-        from,
-        to: STAGES[index + 1],
-        on: "approved",
-        condition: null,
-        loopRef: null,
-      },
-      {
-        from: STAGES[index + 1],
-        to: from,
-        on: "revise",
-        condition: null,
-        loopRef: "sdd-revision",
-      },
-    ]),
-    loops: [{ id: "sdd-revision", maxIterations: 20, onLimit: "pause" }],
-  },
-  {
-    definitionVersion: 1,
-    id: "tdd-cycle",
-    label: "TDD 사이클",
-    description: "Red, Green, 리팩터링과 회귀 검증을 잇는 흐름",
-    version: "1.0.0",
-    entry: "test-intent",
-    artifacts: [
-      ["test-intent", "테스트 의도"],
-      ["red-evidence", "Red 근거"],
-      ["implementation", "최소 구현"],
-      ["green-evidence", "Green 근거"],
-      ["refactor", "리팩터링"],
-      ["regression", "회귀 검증"],
-    ].map(([role, label]) => ({
-      role,
-      label,
-      path: `work/{workId}/${role}.md`,
-      template: `# ${label}\n`,
-    })),
-    nodes: [
-      ["test-intent", "테스트 의도", "artifact"],
-      ["red", "Red", "check"],
-      ["green", "Green", "agent"],
-      ["refactor", "리팩터링", "agent"],
-      ["verify", "재검증", "check"],
-      ["done", "완료", "end"],
-    ].map(([id, label, kind], index) => ({
-      id,
-      label,
-      kind: kind as "artifact" | "check" | "agent" | "end",
-      artifactRole: index === 0 ? "test-intent" : null,
-      actionRef: index > 0 && index < 5 ? `tdd-${id}` : null,
-      workflowRef: null,
-      decision: null,
-      inputs: index
-        ? [
-            [
-              "test-intent",
-              "red-evidence",
-              "green-evidence",
-              "refactor",
-              "regression",
-            ][index - 1],
-          ]
-        : [],
-      outputs:
-        index < 5
-          ? [
-              [
-                "test-intent",
-                "red-evidence",
-                "green-evidence",
-                "refactor",
-                "regression",
-              ][index],
-            ]
-          : [],
-      allowedRoles: ["implementer", "verifier"],
-      instructions: "현재 TDD 증거를 실제 실행 결과와 함께 기록합니다.",
-      requiresCompletedDependencies: index > 0,
-    })),
-    edges: [
-      ["test-intent", "red"],
-      ["red", "green"],
-      ["green", "refactor"],
-      ["refactor", "verify"],
-      ["verify", "done"],
-    ].map(([from, to]) => ({
-      from,
-      to,
-      on: "approved",
-      condition: null,
-      loopRef: null,
-    })),
-    loops: [{ id: "tdd-iteration", maxIterations: 50, onLimit: "pause" }],
-  },
-];
+const previewWorkflows = bundledDefinitions as WorkflowDefinition[];
+const intentWorkflowV2 = previewWorkflows.find((item) => item.id === "intent-flow" && item.version === "2.0.0")!;
 const date = (offset = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -376,8 +232,16 @@ function load(): Store {
     if (raw) {
       const p = JSON.parse(raw) as Store;
       if (p.snapshot?.schemaVersion === 1) {
-        if (!p.snapshot.workflows.some((w) => w.id === "intent-flow")) p.snapshot.workflows.push(structuredClone(intentWorkflow));
-        if (!p.snapshot.workflows.some((w) => w.id === "intent-flow" && w.version === "2.0.0")) p.snapshot.workflows.push(structuredClone(intentWorkflowV2));
+        for (const definition of previewWorkflows) {
+          if (!p.snapshot.workflows.some((item) => item.id === definition.id && item.version === definition.version))
+            p.snapshot.workflows.push(structuredClone(definition));
+        }
+        for (const project of p.snapshot.projects) {
+          if (!isSelectableWorkflow(project.workflowId)) {
+            project.workflowId = "sdd-main"; project.workflowVersion = "1.1.1"; project.workflowDigest = "";
+          }
+          project.additionalWorkflows = (project.additionalWorkflows ?? []).filter((reference) => isSelectableWorkflow(reference.id));
+        }
         return p;
       }
     }
@@ -448,6 +312,17 @@ export async function previewInvoke(
   state = load();
   const s = state.snapshot;
   const id = String(args.id ?? "");
+  const bindProjectWorkflow = (item: Pick<WorkItem, "projectId" | "workflowId" | "workflowVersion">) => {
+    const project = s.projects.find((candidate) => candidate.id === item.projectId);
+    if (!project) throw new Error(i18n.t("workbench:creation.projectRequired"));
+    item.workflowId ||= project.workflowId;
+    if (!item.workflowVersion && item.workflowId === project.workflowId) item.workflowVersion = project.workflowVersion;
+    if (!isSelectableWorkflow(item.workflowId)) throw new Error(i18n.t("workbench:creation.retiredWorkflow"));
+    if (!projectWorkflowRefs(project).some((reference) => reference.id === item.workflowId && reference.version === item.workflowVersion))
+      throw new Error(i18n.t("workbench:creation.projectWorkflowChanged"));
+    if (!s.workflows.some((definition) => definition.id === item.workflowId && definition.version === item.workflowVersion))
+      throw new Error(i18n.t("workbench:creation.workflowUnavailable"));
+  };
   switch (command) {
     case "goal_start_selected": {
       const ids = [...new Set(args.workIds as string[])];
@@ -486,12 +361,16 @@ export async function previewInvoke(
       save(); return results;
     }
     case "goal_create": {
-      const input = args.input as { id: string; projectId: string; objective: string; maxParallel: number; start: boolean };
+      const input = args.input as { id: string; projectId: string; objective: string; maxParallel: number; start: boolean; workflowVersion?: string; issueType?: string };
       if (input.start) throw new Error(i18n.t("workbench:api.desktopOnly"));
       if (!input.objective.trim() || !s.projects.some((p) => p.id === input.projectId) || input.maxParallel < 1 || input.maxParallel > 16) throw new Error("Invalid goal");
       if (state.goals?.[input.id]) return structuredClone(s.work.find((w) => w.id === input.id));
+      const project = s.projects.find((item) => item.id === input.projectId)!;
+      const selection = { projectId: input.projectId, workflowId: "goal-main", workflowVersion: input.workflowVersion || (project.workflowId === "goal-main" ? project.workflowVersion : "") };
+      if (!["1.0.0", "1.0.1"].includes(selection.workflowVersion)) throw new Error(i18n.t("workbench:creation.projectWorkflowChanged"));
+      bindProjectWorkflow(selection);
       const item = { ...work(input.id, input.objective.split("\n")[0].slice(0, 100), "pursue", "blocked", input.projectId, 0), description: input.objective,
-        workflowId: "goal-main", workflowVersion: "1.0.0", workflowDigest: "", artifacts: ["evidence"], activeNodes: [] };
+        issueType: input.issueType || "작업", workflowId: "goal-main", workflowVersion: selection.workflowVersion, workflowDigest: "", artifacts: ["evidence"], activeNodes: [] };
       s.work.push(item);
       state.goals ??= {};
       state.goals[item.id] = { workId: item.id, parentId: null, objective: input.objective, status: "paused", phase: "plan", maxParallel: input.maxParallel, iteration: 0, runId: null, nextRetryAt: null, lastError: "", evidence: "", scope: ["."], tasks: [] };
@@ -587,10 +466,10 @@ export async function previewInvoke(
     case "sdd_snapshot":
     case "workflow_snapshot":
       return structuredClone(s);
-    // 체험 데이터는 형식이 항상 올바르다. 고칠 것이 없다는 보고가 곧 정답이다.
+    // Demo data is always well-formed. A report of nothing to fix is the correct answer.
     case "sdd_repair_documents":
       return { repairs: [], remaining: structuredClone(s.diagnostics ?? []) };
-    // 브라우저 체험에는 레거시 볼트가 없다. 이관할 것이 없다는 사실 자체가 답이다.
+    // The browser demo has no legacy vault. The fact that there is nothing to migrate is itself the answer.
     case "issue_migration_plan":
       return [];
     case "issue_migrate":
@@ -612,6 +491,19 @@ export async function previewInvoke(
       save();
       return record;
     }
+    case "workflow_import": {
+      const definition = JSON.parse(String(args.json)) as WorkflowDefinition;
+      if (!definition || typeof definition.id !== "string" || typeof definition.label !== "string" ||
+          typeof definition.version !== "string" || typeof definition.entry !== "string" ||
+          !Array.isArray(definition.nodes) || !Array.isArray(definition.edges) ||
+          !Array.isArray(definition.artifacts) || !Array.isArray(definition.loops) ||
+          definition.nodes.some(node => !node || typeof node.id !== "string" ||
+            !Array.isArray(node.inputs) || !Array.isArray(node.outputs) || !Array.isArray(node.allowedRoles)))
+        throw new Error(i18n.t("dashboard:workflowStudio.jsonSyntaxError"));
+      return previewInvoke("workflow_draft_save", { input: {
+        draftId: `import-${crypto.randomUUID()}`, definition,
+      } });
+    }
     case "workflow_publish": {
       const definition = structuredClone(args.definition) as WorkflowDefinition;
       const existing = s.workflows.find(item => item.id === definition.id && item.version === definition.version);
@@ -629,6 +521,11 @@ export async function previewInvoke(
         (candidate) => candidate.id === id || candidate.id === args.projectId,
       );
       if (!project) throw new Error(i18n.t("workbench:preview.projectNotFound"));
+      const nextId = String(args.workflowId), nextVersion = String(args.workflowVersion);
+      if (!isSelectableWorkflow(nextId)) throw new Error(i18n.t("workbench:creation.retiredWorkflow"));
+      if (!s.workflows.some((definition) => definition.id === nextId && definition.version === nextVersion))
+        throw new Error(i18n.t("workbench:creation.workflowUnavailable"));
+      project.additionalWorkflows = projectWorkflowRefs(project).filter((reference) => reference.id !== nextId || reference.version !== nextVersion);
       project.workflowId = String(args.workflowId);
       project.workflowVersion = String(args.workflowVersion);
       project.workflowDigest = `preview-${project.workflowId}-${project.workflowVersion}`;
@@ -646,6 +543,12 @@ export async function previewInvoke(
       p.id ||= crypto.randomUUID();
       if (!p.name.trim())
         throw new Error(i18n.t("workbench:preview.projectNameRequired"));
+      if (![p.workflowId, ...(p.additionalWorkflows ?? []).map((reference) => reference.id)].every(isSelectableWorkflow))
+        throw new Error(i18n.t("workbench:creation.retiredWorkflow"));
+      const references = projectWorkflowRefs(p);
+      if (references.some((reference) => !s.workflows.some((definition) => definition.id === reference.id && definition.version === reference.version)))
+        throw new Error(i18n.t("workbench:creation.workflowUnavailable"));
+      p.additionalWorkflows = references.slice(1);
       p.workflowDigest = `preview-${p.workflowId}-${p.workflowVersion}`;
       const i = s.projects.findIndex((v) => v.id === p.id);
       if (i < 0) s.projects.push(p);
@@ -669,7 +572,7 @@ export async function previewInvoke(
         if (existing.workflowId === "intent-flow" && existing.projectId === input.work.projectId && doc(existing.id, "intent").markdown === markdown) return existing;
         throw new Error("An intent with this ID already exists");
       }
-      const work = await previewInvoke("sdd_save_work", { input: { ...input.work, description: input.markdown.slice(0, 180), workflowId: "intent-flow", workflowVersion: "2.0.0" } }) as WorkItem;
+      const work = await previewInvoke("sdd_save_work", { input: { ...input.work, description: input.markdown.slice(0, 180), workflowId: "intent-flow", workflowVersion: input.work.workflowVersion || "2.0.0" } }) as WorkItem;
       state.documents[`${work.id}/intent`] = { workId: work.id, artifact: "intent", path: `work/${work.id}/intent.md`, markdown, revision: crypto.randomUUID() };
       checkpoint(work, "captured");
       save(); return work;
@@ -703,16 +606,12 @@ export async function previewInvoke(
       w.createdAt ||= now();
       w.updatedAt = now();
       if (i < 0) {
-        const project = s.projects.find(
-          (project) => project.id === w.projectId,
-        );
+        bindProjectWorkflow(w);
         w.status = "backlog";
         w.approve = false;
         w.approved = "";
         w.approvalRequired = false;
         w.decisions = [];
-        w.workflowId = w.workflowId || project?.workflowId || "sdd-main";
-        w.workflowVersion = w.workflowVersion || project?.workflowVersion || "1.1.0";
         w.workflowDigest = `preview-${w.workflowId}-${w.workflowVersion}`;
         w.workflowInstanceId = null;
         w.activeNodes = [];
@@ -721,6 +620,7 @@ export async function previewInvoke(
             candidate.id === w.workflowId &&
             candidate.version === w.workflowVersion,
         );
+        if (!definition) throw new Error(i18n.t("workbench:creation.workflowUnavailable"));
         w.stage = definition?.entry ?? "intent";
         w.artifacts = definition?.artifacts.map(
           (artifact) => artifact.role,
@@ -880,7 +780,7 @@ export async function previewInvoke(
       return structuredClone(run);
     }
     case "sdd_dismiss_run": {
-      // 기록을 지우지 않는 표시 변경이라 체험 모드에서도 그대로 해 볼 수 있다.
+      // A flag change that keeps the record, so it can be tried as-is in demo mode too.
       const run = state.runs?.find((run) => run.id === id);
       if (!run) throw new Error("실행 기록을 찾을 수 없습니다");
       if (["starting", "running"].includes(run.status)) throw new Error("진행 중인 실행은 닫을 수 없습니다");
@@ -889,7 +789,7 @@ export async function previewInvoke(
       return structuredClone(run);
     }
     case "sdd_work_copilot": {
-      // 체험 모드에는 부를 에이전트가 없다. 질문이 어떻게 흘러가는지만 보여 준다.
+      // Demo mode has no agent to call. It only shows how a question would flow.
       const input = (args.input ?? {}) as { workId?: string; question?: string };
       const work = s.work.find((candidate) => candidate.id === input.workId);
       if (!work) throw new Error(i18n.t("workbench:errors.workNotFound"));

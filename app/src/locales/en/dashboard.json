@@ -15,7 +15,7 @@
     "emptyTitle": "No widgets to display.",
     "emptyHint": "Pick the ones you need from the add-widget button above.",
     "catalogTitle": "Widget catalog",
-    "catalogIntro": "Choose which widgets to show. Added widgets appear at the bottom of your desk.",
+    "catalogIntro": "Build your dashboard with activity, runs, events, and personal notes.",
     "searchPlaceholder": "Search by widget name or description",
     "searchLabel": "Search widgets",
     "noResults": "No widgets match your search."
@@ -193,7 +193,10 @@
     "actions": {
       "stop": "Stop",
       "log": "Log"
-    }
+    },
+    "shared": "Shared tools",
+    "liveCount": "{{count}} running",
+    "failedCount": "{{count}} failed"
   },
   "duration": {
     "seconds": "{{n}}s",
@@ -292,7 +295,10 @@
     "addRequirement": "Requirement",
     "requirementsHint": "Declare extensions and programs used only by this workflow. Required entries are checked before execution and do not become core app dependencies.",
     "requirementKind": "Kind",
-    "requirementKinds": { "extension": "Extension", "program": "Program" },
+    "requirementKinds": {
+      "extension": "Extension",
+      "program": "Program"
+    },
     "requirementLevel": "Level",
     "commands": "Executable candidates (comma separated)",
     "versionArgs": "Version arguments (comma separated)",
@@ -477,5 +483,74 @@
       }
     },
     "applyJson": "Validate & apply"
+  },
+  "gallery": {
+    "eyebrow": "WORKFLOW LIBRARY",
+    "title": "Find your team’s way of working",
+    "intro": "Compare workflows by their stages and approval model. Choose feature, bug fix, or refactoring as a work type when creating an item.",
+    "import": "Import",
+    "extensions": "Explore extensions",
+    "importTitle": "Turn a shared workflow into your draft",
+    "importHint": "Paste workflow JSON. Save it as a draft, review its steps and requirements, then publish.",
+    "json": "Workflow JSON",
+    "importDraft": "Import as draft",
+    "filter": "Workflow filters",
+    "filters": {
+      "all": "All",
+      "human": "Human participation",
+      "loops": "Loops",
+      "composed": "Subworkflows"
+    },
+    "search": "Search by name or purpose",
+    "count": "{{count}} workflows",
+    "latestOnly": "Latest version per workflow · older versions in history",
+    "compare": "Compare",
+    "compareNamed": "Compare {{name}}",
+    "steps": "{{count}} steps",
+    "humanCount": "{{count}} human steps",
+    "artifacts": "{{count}} artifacts",
+    "stages": "Step inventory",
+    "details": "Explore and choose",
+    "empty": "No matching workflows. Try another search or filter.",
+    "comparison": "Compare workflows",
+    "clear": "Clear comparison",
+    "compareHint": "Compare up to 3 workflows. Human counts include explicit human nodes; inspect the full flow for approval events and participation in subworkflows.",
+    "criteria": "Criteria",
+    "rows": {
+      "fit": "Best suited for",
+      "human": "Human participation",
+      "artifacts": "Deliverables",
+      "loops": "Loops",
+      "children": "Subworkflows"
+    },
+    "noLoops": "No declared loops",
+    "noChildren": "No subworkflows",
+    "maxLoops": "Up to {{count}} iterations",
+    "detailNamed": "{{name}} details",
+    "close": "Close details",
+    "project": "Choose a project",
+    "apply": "Apply to project",
+    "applyHint": "Use this version as the default for new work in this project. Existing work keeps its original version and definition.",
+    "copy": "Duplicate and customize",
+    "edit": "Open and revise",
+    "inspect": "Open this version",
+    "historyHint": "Previous versions remain available for existing work and subworkflows. Publishing a version does not automatically migrate existing work.",
+    "customGuide": "A workflow built for a team’s needs. Review its steps and deliverables to choose.",
+    "shareTitle": "Made by anyone. Shared with your team.",
+    "shareHint": "Create or duplicate → edit and simulate → publish → export JSON. Others can add it with Import. Distribute multiple workflows and tools through extension packages.",
+    "browse": "Browse workflows",
+    "imported": "Shared workflow saved as a draft. Review it before publishing.",
+    "copied": "Saved a duplicate draft with an independent ID.",
+    "copyName": "{{name}} · Our team",
+    "applied": "Applied {{workflow}} v{{version}} to {{name}}. Existing work retains its version.",
+    "guides": {
+      "sdd": "Development with documented design, planning, verification and delivery.",
+      "intent": "Refine an early idea through interviews, then approve and implement it.",
+      "tdd": "Start with a failing test and iterate on small implementation steps.",
+      "composed": "Keep SDD planning and use TDD within the implementation step.",
+      "issue": "Lightweight issue handling focused on requests, design, approval and execution.",
+      "goal": "Delegate a clear goal to an agent without approval at each stage."
+    },
+    "retired": "Existing work only"
   }
 }

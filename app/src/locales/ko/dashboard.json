@@ -15,7 +15,7 @@
     "emptyTitle": "표시할 위젯이 없습니다.",
     "emptyHint": "상단의 위젯 추가 버튼에서 필요한 항목을 선택하세요.",
     "catalogTitle": "위젯 카탈로그",
-    "catalogIntro": "필요한 위젯을 켜거나 끄세요. 추가한 위젯은 작업대 맨 아래에 놓입니다.",
+    "catalogIntro": "오늘 활동, 실행, 일정과 개인 기록을 골라 나만의 대시보드를 구성하세요.",
     "searchPlaceholder": "위젯 이름이나 설명으로 찾기",
     "searchLabel": "위젯 검색",
     "noResults": "검색어와 맞는 위젯이 없습니다."
@@ -193,7 +193,10 @@
     "actions": {
       "stop": "중지",
       "log": "기록"
-    }
+    },
+    "shared": "공통 도구",
+    "liveCount": "실행 중 {{count}}",
+    "failedCount": "실패 {{count}}"
   },
   "duration": {
     "seconds": "{{n}}초",
@@ -292,7 +295,10 @@
     "addRequirement": "요구사항",
     "requirementsHint": "이 워크플로에서만 필요한 확장과 프로그램을 선언합니다. 필수 항목은 실행 전에 검사하며 앱 공통 설치 항목이 되지 않습니다.",
     "requirementKind": "종류",
-    "requirementKinds": { "extension": "확장", "program": "프로그램" },
+    "requirementKinds": {
+      "extension": "확장",
+      "program": "프로그램"
+    },
     "requirementLevel": "필요 수준",
     "commands": "실행 파일 후보(쉼표)",
     "versionArgs": "버전 확인 인자(쉼표)",
@@ -477,5 +483,74 @@
       }
     },
     "applyJson": "검증하고 적용"
+  },
+  "gallery": {
+    "eyebrow": "WORKFLOW LIBRARY",
+    "title": "우리 팀에 맞는 일의 흐름",
+    "intro": "단계와 승인 방식으로 워크플로우를 비교하세요. 기능 추가·버그 수정·리팩토링은 작업을 만들 때 유형으로 선택합니다.",
+    "import": "가져오기",
+    "extensions": "확장 둘러보기",
+    "importTitle": "공유받은 흐름을 내 초안으로",
+    "importHint": "워크플로우 JSON을 붙여 넣으세요. 초안으로 저장한 뒤 단계와 필요한 확장을 검토하고 발행할 수 있습니다.",
+    "json": "워크플로우 JSON",
+    "importDraft": "초안으로 가져오기",
+    "filter": "워크플로우 필터",
+    "filters": {
+      "all": "전체",
+      "human": "사람 참여",
+      "loops": "반복 흐름",
+      "composed": "하위 흐름 조합"
+    },
+    "search": "이름이나 용도로 검색",
+    "count": "{{count}}개 흐름",
+    "latestOnly": "종류별 최신 버전 · 구버전은 이력에 보관",
+    "compare": "비교",
+    "compareNamed": "{{name}} 비교",
+    "steps": "{{count}}개 단계",
+    "humanCount": "사람 단계 {{count}}개",
+    "artifacts": "산출물 {{count}}개",
+    "stages": "단계 구성",
+    "details": "살펴보고 선택",
+    "empty": "조건에 맞는 흐름이 없습니다. 다른 검색어나 필터를 선택해 보세요.",
+    "comparison": "흐름 비교",
+    "clear": "비교 비우기",
+    "compareHint": "최대 3개를 비교할 수 있습니다. 사람 단계 수는 명시된 human 노드 기준이며, 승인 이벤트나 하위 흐름의 참여 지점은 상세 흐름에서 확인하세요.",
+    "criteria": "선택 기준",
+    "rows": {
+      "fit": "이럴 때 어울려요",
+      "human": "사람 참여",
+      "artifacts": "남기는 산출물",
+      "loops": "반복 구조",
+      "children": "하위 흐름"
+    },
+    "noLoops": "선언된 루프 없음",
+    "noChildren": "하위 흐름 없음",
+    "maxLoops": "최대 {{count}}회",
+    "detailNamed": "{{name}} 상세",
+    "close": "상세 닫기",
+    "project": "적용할 프로젝트 선택",
+    "apply": "프로젝트에 적용",
+    "applyHint": "선택한 버전을 프로젝트의 새 작업 기본값으로 사용합니다. 기존 작업은 생성 당시 버전과 정의를 유지합니다.",
+    "copy": "복제해서 만들기",
+    "edit": "흐름 열기 · 개정",
+    "inspect": "이 버전 열기",
+    "historyHint": "이전 버전은 기존 작업과 하위 흐름의 실행을 위해 보존됩니다. 새 버전을 발행해도 기존 작업을 자동으로 옮기지 않습니다.",
+    "customGuide": "팀의 목적에 맞춰 만든 흐름입니다. 단계와 산출물을 확인해 선택하세요.",
+    "shareTitle": "누구나 만들고, 함께 쓰는 워크플로우",
+    "shareHint": "새로 만들기 또는 복제 → 편집·시뮬레이션 → 발행 → JSON 내보내기. 다른 사람은 가져오기로 추가합니다. 여러 흐름과 도구는 확장 패키지로 배포할 수 있습니다.",
+    "browse": "흐름 둘러보기",
+    "imported": "공유받은 흐름을 초안으로 저장했습니다. 검토한 뒤 발행하세요.",
+    "copied": "독립된 ID로 복제한 초안을 저장했습니다.",
+    "copyName": "{{name}} · 우리 팀",
+    "applied": "{{name}}에 {{workflow}} v{{version}}을 적용했습니다. 기존 작업의 버전은 유지됩니다.",
+    "guides": {
+      "sdd": "설계와 계획부터 검증·배포까지, 산출물을 빠짐없이 남기는 개발에.",
+      "intent": "아직 모호한 아이디어를 인터뷰로 다듬고, 승인 후 구현하고 싶을 때.",
+      "tdd": "실패하는 테스트부터 시작해 작은 단위로 구현과 개선을 반복할 때.",
+      "composed": "SDD의 설계 절차를 유지하면서 구현 단계에 TDD를 결합할 때.",
+      "issue": "요청과 설계, 승인과 수행에 집중하는 가벼운 이슈 처리에.",
+      "goal": "완료 기준이 명확하고, 단계별 승인 없이 에이전트에 목표 달성을 맡길 때."
+    },
+    "retired": "기존 작업 전용"
   }
 }

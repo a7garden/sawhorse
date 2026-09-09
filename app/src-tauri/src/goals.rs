@@ -127,6 +127,10 @@ pub struct CreateGoal {
     pub objective: String,
     pub max_parallel: usize,
     pub start: bool,
+    #[serde(default)]
+    pub workflow_version: String,
+    #[serde(default)]
+    pub issue_type: String,
 }
 
 pub fn read(root: &Path, id: &str) -> Result<GoalState, String> {
@@ -212,7 +216,15 @@ pub fn create_at(root: &Path, input: CreateGoal) -> Result<WorkItem, String> {
             return Err("이미 사용 중인 작업 ID입니다".into());
         }
     }
-    save_work_at(
+    let version = if input.workflow_version.is_empty() && project.workflow_id == WORKFLOW {
+        project.workflow_version.clone()
+    } else {
+        input.workflow_version.clone()
+    };
+    if !matches!(version.as_str(), "1.0.0" | "1.0.1") {
+        return Err("프로젝트에서 사용할 Goal 워크플로우 버전을 선택하세요".into());
+    }
+    save_project_work_at(
         root,
         WorkItem {
             id: input.id.clone(),
@@ -227,7 +239,8 @@ pub fn create_at(root: &Path, input: CreateGoal) -> Result<WorkItem, String> {
                 .collect(),
             description: input.objective.clone(),
             workflow_id: WORKFLOW.into(),
-            workflow_version: "1.0.0".into(),
+            workflow_version: version,
+            issue_type: input.issue_type,
             ..Default::default()
         },
     )?;
@@ -247,14 +260,15 @@ pub fn create_at(root: &Path, input: CreateGoal) -> Result<WorkItem, String> {
 }
 
 pub fn materialize_tasks(root: &Path, parent: &GoalState) -> Result<(), String> {
-    let project_id = work_by_id(root, &parent.work_id)?.project_id;
+    let parent_work = work_by_id(root, &parent.work_id)?;
     for task in &parent.tasks {
         if !work_path(root, &task.id).exists() {
             save_work_at(
                 root,
                 WorkItem {
                     id: task.id.clone(),
-                    project_id: project_id.clone(),
+                    project_id: parent_work.project_id.clone(),
+                    issue_type: parent_work.issue_type.clone(),
                     title: task.title.clone(),
                     description: task.objective.clone(),
                     depends_on: Vec::new(),

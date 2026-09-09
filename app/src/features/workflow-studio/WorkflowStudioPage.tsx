@@ -1,9 +1,11 @@
+import { isSelectableWorkflow } from "@/features/workbench/workflow-version";
 import { useApp } from "@/lib/store";
 import { EVENTS } from "@/lib/api";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useTranslation } from "react-i18next";
 import { WorkflowCanvas } from "./WorkflowCanvas";
 import { WorkflowBrief } from "./WorkflowBrief";
+import { WorkflowGallery } from "./WorkflowGallery";
 import "./studio.css";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -144,6 +146,7 @@ export default function WorkflowStudioPage() {
   );
   const [selected, setSelected] = useState(initial?.entry ?? "start");
   const [editing, setEditing] = useState(false);
+  const [browsing, setBrowsing] = useState(!initial);
   const [hasDraft, setHasDraft] = useState(!!initial);
   const [request, setRequest] = useState("");
   const [agent, setAgent] = useState(defaultAgent);
@@ -178,7 +181,7 @@ export default function WorkflowStudioPage() {
           );
         return [];
       }),
-      // 라이브러리의 "어디에 쓰이는지" 표시용. 실패해도 편집은 계속된다.
+      // For the library's "어디에 쓰이는지" (where used) display. Editing continues even if this fails.
       sddApi.snapshot().catch(() => null),
     ]);
     if (sequence !== loadSequence.current) return;
@@ -218,7 +221,7 @@ export default function WorkflowStudioPage() {
     [definition, selected],
   );
 
-  // 발행 정의를 id별로 묶어 버전 이력을 한 자리에 보여준다.
+  // Groups published definitions by id so version history shows in one place.
   const publishedGroups = useMemo(() => {
     const groups = new Map<string, WorkflowDefinition[]>();
     for (const item of catalog) {
@@ -231,7 +234,7 @@ export default function WorkflowStudioPage() {
     return [...groups.entries()];
   }, [catalog]);
 
-  // 프로젝트 기본 워크플로와 개별 작업의 고정 버전을 한 번에 센다.
+  // Counts project default workflows and per-work pinned versions in one pass.
   const usage = useMemo(() => {
     const map = new Map<string, { projects: string[]; work: number }>();
     const entry = (id: string, version: string) => {
@@ -298,6 +301,7 @@ export default function WorkflowStudioPage() {
     nextRevision = nextDraftId === draftId ? draftRevision : undefined,
   ) {
     const value = clone(next);
+    setBrowsing(false);
     setDefinition(value);
     setDraftId(nextDraftId);
     setDraftRevision(nextRevision);
@@ -352,10 +356,10 @@ export default function WorkflowStudioPage() {
           .map((item) => item.version)
           .sort(compareWorkflowVersions);
         const last = versions[versions.length - 1] || next.version;
-        const parts = last.split(".").map(Number);
+        const parts = last.split(/[+-]/)[0].split(".").map(Number);
         next = {
           ...next,
-          version: `${parts[0] || 1}.${parts[1] || 0}.${(parts[2] || 0) + 1}`,
+          version: `${parts[0] ?? 1}.${parts[1] ?? 0}.${(parts[2] ?? 0) + 1}`,
         };
       }
       await workflowApi.publish(next);
@@ -368,7 +372,10 @@ export default function WorkflowStudioPage() {
   return (
     <div className="studio flex h-full min-h-0 flex-col overflow-hidden">
       <PageHeader title={t("workflowStudio.title")}>
-        {hasDraft && (
+        <Button size="sm" variant={browsing ? "outline" : "ghost"} disabled={busy} onClick={() => setBrowsing(true)}>
+          <GitBranch />{t("gallery.browse")}
+        </Button>
+        {hasDraft && !browsing && (
           <Button
             size="sm"
             variant="ghost"
@@ -421,7 +428,7 @@ export default function WorkflowStudioPage() {
                   <GitBranch />
                   <span>
                     <strong>{item.label}</strong>
-                    <small>{usageText(item.id, item.version)}</small>
+                    <small>{!isSelectableWorkflow(item.id) && `${t("gallery.retired")} · `}{usageText(item.id, item.version)}</small>
                   </span>
                 </button>
                 {versions.length > 1 && (
@@ -473,7 +480,45 @@ export default function WorkflowStudioPage() {
           ))}
         </aside>
         <main ref={mainRef} className="studio-main">
-          {editing ? (
+          {message && <p className="studio-notice studio-feedback" role="status">{message}</p>}
+          {browsing ? (
+            <WorkflowGallery
+              catalog={catalog}
+              projects={snapshot?.projects ?? []}
+              busy={busy}
+              usageText={usageText}
+              onCreate={() => {
+                selectDefinition(freshDefinition());
+                setHasDraft(false);
+              }}
+              onSelect={selectDefinition}
+              onCopy={(item) => void action(async () => {
+                const copy = { ...clone(item), id: `team-${crypto.randomUUID()}`, label: t("gallery.copyName", { name: item.label }), version: "1.0.0" };
+                const saved = await workflowApi.saveDraft(`draft-${crypto.randomUUID()}`, copy);
+                selectDefinition(saved.definition, saved.draftId, saved.revision);
+                setValidation(saved.validation);
+                await load();
+                setMessage(t("gallery.copied"));
+              })}
+              onImport={(json) => void action(async () => {
+                const saved = await workflowApi.import(json);
+                selectDefinition(saved.definition, saved.draftId, saved.revision);
+                setValidation(saved.validation);
+                await load();
+                setMessage(t("gallery.imported"));
+              })}
+              onExport={(item) => void action(async () => {
+                await navigator.clipboard.writeText(await workflowApi.export(item));
+                setMessage(t("workflowStudio.copied"));
+              })}
+              onApply={(projectId, item) => void action(async () => {
+                const project = await workflowApi.activate(projectId, item.id, item.version);
+                await load();
+                setMessage(t("gallery.applied", { name: project.name, workflow: item.label, version: item.version }));
+              })}
+              onExtensions={() => useApp.getState().setPage("packs")}
+            />
+          ) : editing ? (
             <>
               <div className="studio-editor-header">
                 <Button
@@ -1343,11 +1388,7 @@ export default function WorkflowStudioPage() {
               ))}
             </div>
           )}
-          {message && (
-            <p className="studio-notice" role="status">
-              {message}
-            </p>
-          )}
+
         </main>
       </div>
     </div>

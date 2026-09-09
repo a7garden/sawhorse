@@ -585,7 +585,8 @@ fn dispatch(cli: &Cli) -> Result<Output> {
                     workflow::catalog(root.as_deref()).map_err(CliError::operation)?;
                 let text = definitions
                     .iter()
-                    .map(|item| format!("{}@{}\t{}", item.id, item.version, item.label))
+                    .map(|item| format!("{}@{}\t{}{}", item.id, item.version, item.label,
+                        if workflow::builtins::is_selectable(&item.id) { "" } else { " (기존 작업 전용 · 작업 유형으로 이동)" }))
                     .collect::<Vec<_>>()
                     .join("\n");
                 Output::text(definitions, text)

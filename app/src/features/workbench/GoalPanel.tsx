@@ -1,19 +1,20 @@
+import { WorkTypeField } from "./WorkTypeField";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
-import { Select } from "@/components/ui/select";
 import { sddApi } from "./api";
 import type { GoalState } from "./goals";
 import type { HarnessRun, Project, WorkItem } from "./types";
 import "./goals.css";
 
-export function GoalComposer({ initial, projects, onClose, onSaved, onMode }: {
-  initial: WorkItem; projects: Project[]; onClose: () => void; onSaved: (work: WorkItem) => void; onMode: () => void;
+export function GoalComposer({ initial, projects, onClose, onSaved }: {
+  initial: WorkItem; projects: Project[]; onClose: () => void; onSaved: (work: WorkItem) => void;
 }) {
   const { t } = useTranslation("workbench");
   const [objective, setObjective] = useState(initial.description);
-  const [projectId, setProjectId] = useState(initial.projectId || (projects.length === 1 ? projects[0].id : ""));
+  const [issueType, setIssueType] = useState(initial.issueType || "작업");
+  const projectId = initial.projectId;
   const [parallel, setParallel] = useState(3);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -22,17 +23,17 @@ export function GoalComposer({ initial, projects, onClose, onSaved, onMode }: {
   const submit = async (start: boolean) => {
     if (submitting.current || !objective.trim() || !projectId) return;
     submitting.current = true; setBusy(true); setError("");
-    try { onSaved(await sddApi.createGoal({ id: id.current, projectId, objective, maxParallel: parallel, start })); }
+    try { onSaved(await sddApi.createGoal({ id: id.current, projectId, objective, maxParallel: parallel, start, workflowVersion: initial.workflowVersion, issueType })); }
     catch (e) { setError(String(e)); }
     finally { submitting.current = false; setBusy(false); }
   };
   return <Dialog open wide title={t("goal.title")} onClose={() => { if (!busy) onClose(); }}>
     <div className="wb-goal">
-      <div className="wb-goal-actions"><Button variant="ghost" disabled={busy} onClick={onMode}>{t("goal.sddMode")}</Button><Button variant="outline" aria-pressed>{t("goal.title")}</Button></div>
+      <p>{t("form.project")}: {projects.find((project) => project.id === projectId)?.name} · v{initial.workflowVersion}</p>
       <h2>{t("goal.heading")}</h2><p>{t("goal.hint")}</p>
+      <WorkTypeField value={issueType} onChange={setIssueType} disabled={busy} empty={!objective.trim()} onTemplate={setObjective} />
       <textarea aria-label={t("goal.objective")} placeholder={t("goal.placeholder")} value={objective} disabled={busy} onChange={(e) => setObjective(e.target.value)} rows={9} />
       <div className="wb-goal-actions">
-        <Select aria-label={t("form.project")} value={projectId} disabled={busy} onChange={setProjectId} options={[{ value: "", label: t("intent.chooseProject") }, ...projects.map((p) => ({ value: p.id, label: p.name }))]} />
         <label>{t("goal.parallel")}<input aria-label={t("goal.parallel")} type="number" min={1} max={16} value={parallel} disabled={busy} onChange={(e) => setParallel(Number(e.target.value))} /></label>
       </div>
       <p>{t("goal.retryHint")}</p>

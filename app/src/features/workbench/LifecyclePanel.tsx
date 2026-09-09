@@ -25,10 +25,10 @@ export function LifecyclePanel({ work, project, onReload, onDirtyChange }: { wor
   const [impact, setImpact] = useState<WorkItem[] | null>(null);
   const lock = useRef(false);
   const latest = useRef({ onReload }); latest.current = { onReload };
-  // 4초마다 도는 폴링이 같은 내용을 다시 넣으면 문서 뷰가 새로 그려져 스크롤과 포커스가 튄다.
-  // 직전 응답을 문자열로 기억해 두고 정말 달라졌을 때만 state 를 바꾼다.
+  // When the 4-second polling re-feeds the same content, the document view re-renders and scroll and focus jump.
+  // Remember the previous response as a string and change state only when it truly differs.
   const seen = useRef({ state: "", review: "", runs: "" });
-  // 편집 중이거나 인터뷰 답을 쓰는 중이면 문서 갱신을 미룬다. 실행 상태만 계속 따라간다.
+  // While editing or writing interview answers, defer the document refresh. Run status keeps following along.
   const holdingInput = !!editing || Object.values(answers).some(Boolean);
   const holding = useRef(holdingInput); holding.current = holdingInput;
   const deferredReview = useRef<Awaited<ReturnType<typeof sddApi.intentReview>> | null>(null);
@@ -48,7 +48,7 @@ export function LifecyclePanel({ work, project, onReload, onDirtyChange }: { wor
     if (!force && holding.current) { deferredReview.current = next; return; }
     deferredReview.current = null; seen.current.review = key; setReview(next);
   }, []);
-  // 입력을 끝내면 그때 미뤄 둔 최신본을 반영한다. 저장 충돌은 기존 revision 검사가 잡는다.
+  // When input ends, apply the deferred latest version then. Save conflicts are caught by the existing revision check.
   useEffect(() => {
     if (holdingInput || !deferredReview.current) return;
     const next = deferredReview.current; deferredReview.current = null;
@@ -68,7 +68,7 @@ export function LifecyclePanel({ work, project, onReload, onDirtyChange }: { wor
         const [next, docs] = await Promise.all([sddApi.lifecycle(work.id), sddApi.intentReview(work.id)]);
         if (!alive) return;
         applyRuns(refreshed); applyState(next); applyReview(docs);
-        // 상위 목록에 드러나는 값(단계·실행 상태)이 달라졌을 때만 스냅샷을 다시 읽는다.
+        // Re-read the snapshot only when a value visible to the parent list (stage, run status) changed.
         const key = `${next.revision}:${refreshed.map((r) => `${r.id}:${r.status}`).join()}`;
         if (signature && signature !== key) await latest.current.onReload();
         signature = key;
