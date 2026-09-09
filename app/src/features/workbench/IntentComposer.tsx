@@ -1,8 +1,9 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect, useRef, useState } from "react";
-import { isolateHistory } from "@codemirror/commands";
-import { EditorView } from "@codemirror/view";
+import { isolateHistory, redo, undo } from "@codemirror/commands";
+import { Prec } from "@codemirror/state";
+import { EditorView, keymap } from "@codemirror/view";
 import { embeddedImages, imageMarkdown } from "./embedded-images";
 import { AtomicCodeMirrorEditor, type AtomicCodeMirrorEditorHandle } from "@atomic-editor/editor";
 import { ImagePlus, Loader2, Send } from "lucide-react";
@@ -16,6 +17,17 @@ import { intentTitle, launchIntent, type IntentAttachment } from "./intent";
 import type { Project, WorkItem } from "./types";
 import "./intent.css";
 import { GoalComposer } from "./GoalPanel";
+// historyKeymap resolves redo per platform ("mac": Meta-Shift-z,
+// "linux": Ctrl-Shift-z), but headless Linux chromium never matched those
+// chords in CI. Bind undo/redo explicitly, spelling out every platform's
+// modifiers, at high precedence over the built-in maps.
+const historyChords = Prec.high(keymap.of([
+  { key: "Mod-z", run: undo },
+  { key: "Mod-Shift-z", run: redo },
+  { key: "Meta-Shift-z", run: redo },
+  { key: "Ctrl-Shift-z", run: redo },
+  { key: "Ctrl-y", run: redo },
+]));
 
 export function IntentComposer({ initial, projects, onClose, onSaved }: {
   initial: WorkItem; projects: Project[]; onClose: () => void; onSaved: (work: WorkItem) => void;
@@ -147,7 +159,7 @@ export function IntentComposer({ initial, projects, onClose, onSaved }: {
             onChange={(event) => { void addImages(Array.from(event.target.files ?? [])); event.target.value = ""; }} />
         </div>
         {preview && <MarkdownView className="wb-intent-preview" src={markdown || t("intent.emptyPreview")} />}
-        <div className="wb-atomic-editor" hidden={preview}><AtomicCodeMirrorEditor editorHandleRef={editor} documentId={id.current} markdownSource={markdown} readOnly={busy || reading || !!saved} onMarkdownChange={updateMarkdown} /></div>
+        <div className="wb-atomic-editor" hidden={preview}><AtomicCodeMirrorEditor extensions={[historyChords]} editorHandleRef={editor} documentId={id.current} markdownSource={markdown} readOnly={busy || reading || !!saved} onMarkdownChange={updateMarkdown} /></div>
         {!markdown && !preview && <p className="wb-intent-placeholder">{t("intent.placeholder")}</p>}
         <p className="wb-intent-attachment-hint">{reading ? t("intent.readingImages") : t("intent.imageHint")}</p>
       </div>
