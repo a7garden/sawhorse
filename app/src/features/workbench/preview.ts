@@ -300,6 +300,9 @@ function load(): Store {
     }
     const result = { snapshot, documents, lifecycle }; localStorage.setItem(KEY, JSON.stringify(result)); return result;
   }
+  // Persist like the fixture paths: the tour keeps its example data in this browser
+  // from the first visit, so reloads and later commands observe the same state.
+  localStorage.setItem(KEY, JSON.stringify({ snapshot, documents }));
   return { snapshot, documents };
 }
 let state = load();

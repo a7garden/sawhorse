@@ -45,8 +45,15 @@ test("intent-first creation, refinement, persistence and immutable publishing", 
   await page
     .getByRole("button", { name: "검토하고 발행", exact: true })
     .click();
-  await page.getByText("이전 버전", { exact: true }).click();
-  await expect(page.getByRole("button", { name: /v1.0.0/ })).toBeVisible();
+  // Every library entry with old revisions renders its own "이전 버전" disclosure,
+  // so scope the toggle to the history of the workflow we just published.
+  const published = page
+    .locator(".studio-library-item")
+    .filter({ hasText: "검증용 워크플로" })
+    .first();
+  const history = published.locator("xpath=following-sibling::details");
+  await history.getByText("이전 버전", { exact: true }).click();
+  await expect(history.getByRole("button", { name: /v1\.0\.0/ })).toBeVisible();
   await page.reload();
   await page
     .locator("aside nav")

@@ -11,11 +11,20 @@ const screenButton = (page: Page, label: string) =>
     .getByRole("button", { name: new RegExp(label) });
 async function open(page: Page) {
   await page.goto(tour);
+  // A fresh preview load selects no project; the work-scope nav appears after picking one.
+  await page
+    .getByRole("combobox", { name: "프로젝트 전환", exact: true })
+    .click();
+  await page.getByRole("option", { name: "Sawhorse", exact: true }).click();
   await page
     .locator(".app-navigation")
     .getByRole("button", { name: "작업대", exact: true })
     .click();
-  await page.getByRole("group", {name:/작업 공간|Work spaces/}).getByRole("button",{name:/^목업|^Mockups/}).click();
+  // Mockup work is reached through the 목업 검토 workbench view.
+  await page
+    .getByRole("combobox", { name: "작업대 보기", exact: true })
+    .click();
+  await page.getByRole("option", { name: /목업 검토/ }).click();
   await page
     .getByRole("button", { name: "작업 검토 경험 개선", exact: true })
     .click();
@@ -284,7 +293,6 @@ test("compact review stays within the dialog and English labels are available", 
     .locator(".app-navigation")
     .getByRole("button", { name: "Workbench", exact: true })
     .click();
-  await page.getByRole("group", {name:/작업 공간|Work spaces/}).getByRole("button",{name:/^목업|^Mockups/}).click();
   await page
     .getByRole("button", { name: "작업 검토 경험 개선", exact: true })
     .click();

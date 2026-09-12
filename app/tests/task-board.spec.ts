@@ -1,49 +1,73 @@
 import { expect, test, type Page } from "@playwright/test";
-import { isTaskRecord, taskStage, workArea } from "../src/features/workbench/task-board";
-import type { WorkItem } from "../src/features/workbench/types";
+import { isTaskRecord, taskStage, workArea, workflowBoardLanes, workflowBoardStage } from "../src/features/workbench/task-board";
+import type { WorkItem, WorkflowDefinition } from "../src/features/workbench/types";
 
 const KEY = "sawhorse.workflow.preview.v2";
 const nav = (page: Page) => page.locator("aside nav").getByRole("button", { name: "작업대", exact: true });
 const area = (page: Page, name: RegExp) => page.getByRole("group", { name: "작업 공간" }).getByRole("button", { name });
 const stages = ["구체화", "설계", "승인 대기", "구현 대기", "구현", "완료·미확인", "완료"];
-async function open(page: Page, fixture = false) { await page.goto(fixture ? "/?preview=1&lifecycle=1&mockups=1" : "/?preview=1"); await nav(page).click(); }
+const sddLanes = ["의도", "설계", "구현", "검증", "배포", "완료"];
+const scope = (page: Page) => page.getByRole("combobox", { name: "프로젝트 전환", exact: true });
+async function selectProject(page: Page, name: string) {
+  await scope(page).click();
+  await page.getByRole("option", { name, exact: true }).click();
+}
+async function selectView(page: Page, name: string) {
+  await page.getByRole("combobox", { name: "작업대 보기", exact: true }).click();
+  await page.getByRole("option").filter({ hasText: name }).click();
+}
+// The workbench is project-gated: pick the project, then 작업대. Fixture runs also enable the intent
+// flow on Sawhorse so the lifecycle board, inbox and intent creation stay reachable inside the scope.
+  async function open(page: Page, fixture = false) {
+    await page.goto(fixture ? "/?preview=1&lifecycle=1&mockups=1" : "/?preview=1");
+    if (fixture) {
+      // The preview chunk loads lazily with the first command; wait for it to persist the seed.
+      await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), KEY), { timeout: 15000 }).not.toBeNull();
+      await page.evaluate((key) => {
+        const state = JSON.parse(localStorage.getItem(key)!);
+        state.snapshot.projects.find((project: { id: string }) => project.id === "sawhorse").additionalWorkflows =
+          [{ id: "intent-flow", version: "2.0.0" }];
+        localStorage.setItem(key, JSON.stringify(state));
+      }, KEY);
+      await page.reload();
+    }
+    await selectProject(page, "Sawhorse");
+    await nav(page).click();
+  }
 
-test("normal entry has one complete lifecycle board and excludes inbox notes from task counts", async ({ page }) => {
+test("normal entry has one complete board for the project's default workflow", async ({ page }) => {
   await open(page);
-  await expect(page.locator(".wb-task-lane-head h2")).toHaveText(stages);
-  await expect(page.locator(".wb-process-group")).toHaveCount(0);
-  await expect(page.locator(".wb-work-heading > span")).toHaveText("5");
-  await expect(page.locator(".wb-board-card")).toHaveCount(5);
+  await expect(page.locator(".wb-task-lane-head h2")).toHaveText(sddLanes);
+  await expect(page.locator(".wb-process-group")).toHaveCount(1);
+  await expect(page.locator(".wb-work-heading > span")).toHaveText("4");
+  await expect(page.locator(".wb-board-card")).toHaveCount(4);
   await expect(page.locator('[data-stage="done"]')).toContainText("첫 작업대 배포 기록");
-  await area(page, /^의도 인박스/).click();
-  await expect(page.locator(".wb-inbox-notes article")).toHaveCount(2);
-  await expect(page.locator(".wb-work-results")).toContainText("작업 수에 포함되지 않음");
-  await expect(page.getByRole("button", { name: "마일스톤과 개발 일정 연결", exact: true })).toBeVisible();
+  // Backlog ideas are not lost: they wait in the workflow's intent lane.
+  await expect(page.locator('[data-stage="intent"]')).toContainText("마일스톤과 개발 일정 연결");
 });
 
-test("an empty project still shows every lifecycle stage and keeps its inbox separate", async ({ page }) => {
+test("a project with only a backlog idea still shows every workflow stage", async ({ page }) => {
   await open(page);
-  await page.getByRole("combobox", { name: "프로젝트 필터" }).click();
-  await page.getByRole("option", { name: "Knowledge", exact: true }).click();
-  await expect(page.locator(".wb-task-lane-head h2")).toHaveText(stages);
-  await expect(page.locator(".wb-board-card")).toHaveCount(0);
-  await expect(page.locator(".wb-work-heading > span")).toHaveText("0");
-  await expect(area(page, /^의도 인박스/)).toContainText("1");
+  await selectProject(page, "Knowledge");
+  await expect(page.locator(".wb-task-lane-head h2")).toHaveText(["의도", "설계", "구현", "검증", "배포"]);
+  await expect(page.locator(".wb-board-card")).toHaveCount(1);
+  await expect(page.locator('[data-stage="intent"]')).toContainText("프로젝트를 넘나드는 지식 검색");
+  await expect(page.locator(".wb-work-heading > span")).toHaveText("1");
 });
 
 test("a saved note becomes a task only when clarification is requested", async ({ page }) => {
-  await open(page);
-  await page.getByRole("button", { name: "새 항목", exact: true }).click();
-  await page.getByRole("combobox", { name: "시작할 워크플로", exact: true }).click();
-  await page.getByRole("option", { name: "SDD · 의도에서 완료까지", exact: true }).click();
+  await open(page, true);
+  await selectView(page, "SDD · 의도에서 완료까지");
+  await page.getByRole("button", { name: "새 의도", exact: true }).click();
+  await page.getByRole("combobox", { name: "작업 워크플로우", exact: true }).click();
+  await page.getByRole("option", { name: "SDD · 의도에서 완료까지 · v2.0.0", exact: true }).click();
   await page.getByRole("button", { name: "계속", exact: true }).click();
-  await page.getByRole("dialog").getByRole("combobox", { name: "프로젝트", exact: true }).click();
-  await page.getByRole("option", { name: "Sawhorse", exact: true }).click();
   await page.getByRole("dialog").getByRole("textbox").fill("인박스에 남긴 생각");
   await page.getByRole("button", { name: "메모만 저장", exact: true }).click();
   await expect(page.locator(".wb-lifecycle")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(page.locator(".wb-work-heading > span")).toHaveText("5");
+  // The inbox note is not counted as a task yet.
+  await expect(page.locator(".wb-work-heading > span")).toHaveText("7");
   await expect(page.locator(".wb-task-board")).not.toContainText("인박스에 남긴 생각");
   await area(page, /^의도 인박스/).click();
   await page.getByRole("button", { name: "인박스에 남긴 생각", exact: true }).click();
@@ -52,11 +76,12 @@ test("a saved note becomes a task only when clarification is requested", async (
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
   await area(page, /^작업 흐름/).click();
   await expect(page.locator('[data-stage="clarify"]')).toContainText("인박스에 남긴 생각");
-  await expect(page.locator(".wb-work-heading > span")).toHaveText("6");
+  await expect(page.locator(".wb-work-heading > span")).toHaveText("8");
 });
 
 test("attention filters select designs and unconfirmed results while archive keeps cancellation separate", async ({ page }) => {
   await open(page, true);
+  await selectView(page, "SDD · 의도에서 완료까지");
   await page.evaluate((key) => {
     const state = JSON.parse(localStorage.getItem(key)!);
     const item = state.snapshot.work.find((w: WorkItem) => w.id === "lifecycle-inbox");
@@ -81,6 +106,7 @@ test("attention filters select designs and unconfirmed results while archive kee
 
 test("designs are approved and results confirmed from the list without opening the detail", async ({ page }) => {
   await open(page, true);
+  await selectView(page, "SDD · 의도에서 완료까지");
   const overview = page.locator(".wb-task-overview");
   await overview.getByRole("button", { name: /검토할 설계/ }).click();
   await page.getByRole("button", { name: "승인 대기 설계 승인", exact: true }).click();
@@ -112,7 +138,8 @@ test("legacy projection never invents approval or overwrites workflow data", () 
 });
 
 test("English navigation and both themes retain the lifecycle layout", async ({ page }) => {
-  await page.goto("/?preview=1");
+  await open(page, true);
+  await selectView(page, "SDD · 의도에서 완료까지");
   await page.evaluate(() => localStorage.setItem("sawhorse.language", "en"));
   await page.reload();
   await page.locator("aside nav").getByRole("button", { name: "Workbench", exact: true }).click();
@@ -129,38 +156,36 @@ test("English navigation and both themes retain the lifecycle layout", async ({ 
 
 test("workflow selection changes lanes and keeps list, stage filters and counts in the same scope", async ({ page }) => {
   await open(page);
-  const chooseWorkflow = async (name: string) => {
-    await page.getByRole("combobox", { name: "작업대 워크플로", exact: true }).click();
-    await page.getByRole("option", { name, exact: true }).click();
-  };
-  await chooseWorkflow("기본 SDD · 1.1.0");
-  await expect(page.locator(".wb-task-lane-head h2")).toHaveText(["의도", "설계", "구현", "검증", "배포", "완료"]);
-  await expect(page.locator(".wb-work-heading > span")).toHaveText("5");
-  await expect(page.locator(".wb-board-card")).toHaveCount(5);
+  // Additional flows are enabled through project settings; the newest selectable version per flow is offered.
+  await page.getByRole("button", { name: "프로젝트 설정", exact: true }).click();
+  await page.getByRole("checkbox", { name: "TDD · 테스트 기반 개발 · v1.0.1", exact: true }).check();
+  await page.getByRole("checkbox", { name: "Intent · 의도 기반 개발 · v2.0.1", exact: true }).check();
+  await page.getByRole("dialog").getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await selectView(page, "기본 SDD");
+  await expect(page.locator(".wb-task-lane-head h2")).toHaveText(sddLanes);
+  await expect(page.locator(".wb-work-heading > span")).toHaveText("4");
+  await expect(page.locator(".wb-board-card")).toHaveCount(4);
   await page.locator(".wb-work-toolbar").getByRole("button", { name: /^필터/ }).click();
   await page.getByRole("combobox", { name: "단계 필터", exact: true }).click();
   await page.getByRole("option", { name: "검증", exact: true }).click();
-  await expect(page.locator(".wb-board-card")).toHaveCount(2);
+  await expect(page.locator(".wb-board-card")).toHaveCount(1);
   await page.getByRole("button", { name: "목록", exact: true }).click();
-  await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(2);
+  await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(1);
   await page.getByRole("checkbox", { name: "전체 선택", exact: true }).check();
-  await chooseWorkflow("TDD 사이클 · 1.0.0");
+  await selectView(page, "TDD · 테스트 기반 개발");
   await expect(page.locator(".wb-bulk-bar")).toHaveCount(0);
   await expect(page.getByRole("combobox", { name: "단계 필터", exact: true })).toContainText("모든 단계");
   await page.getByRole("button", { name: "칸반", exact: true }).click();
   await expect(page.locator(".wb-task-lane-head h2")).toHaveText(["테스트 의도", "Red", "Green", "리팩터링", "재검증", "완료"]);
   await expect(page.locator(".wb-board-card")).toHaveCount(0);
-  await chooseWorkflow("메모에서 구현까지 · 1.0.0");
-  await expect(page.locator(".wb-task-lane-head h2")).toHaveText(["설계", "구현·검증"]);
-  await expect(page.locator(".wb-board-card")).toHaveCount(0);
-  await chooseWorkflow("SDD · 의도에서 완료까지 · 2.0.0");
+  await selectView(page, "Intent · 의도 기반 개발");
   await expect(page.locator(".wb-task-lane-head h2")).toHaveText(stages);
   await expect(page.locator(".wb-board-card")).toHaveCount(0);
 });
 
-test("native workflow lanes preserve pinned revisions, child execution and unknown stages", async () => {
-  const { workflowBoardLanes, workflowBoardStage } = await import("../src/features/workbench/task-board");
-  const workflow = { id: "custom", version: "1.0.0", nodes: [{ id: "review", label: "검토", kind: "human" }] } as import("../src/features/workbench/types").WorkflowDefinition;
+test("native workflow lanes preserve pinned revisions, child execution and unknown stages", () => {
+  const workflow = { id: "custom", version: "1.0.0", nodes: [{ id: "review", label: "검토", kind: "human" }] } as WorkflowDefinition;
   const work = { workflowId: "custom", workflowVersion: "1.0.0", stage: "review", status: "running", activeNodes: [{ workflowId: "child", workflowVersion: "1.0.0", nodeId: "implement" }] } as WorkItem;
   expect(workflowBoardStage(work, workflow)).toBe("review");
   expect(workflowBoardStage({ ...work, activeNodes: [{ ...work.activeNodes[0], workflowId: "custom", workflowVersion: "2.0.0" }] }, workflow)).toBe("review");

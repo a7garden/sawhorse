@@ -37,17 +37,19 @@ test('journal reader switches back to the list in a narrow window', async ({ pag
 });
 
 test('checklist completion persists and journal widget opens the reading page', async ({ page }) => {
-  await page.locator('aside nav').getByRole('button', { name: '작업대', exact: true }).click();
-  const checklist = page.locator('.journal-checklist');
+  await page.locator('aside nav').getByRole('button', { name: '대시보드', exact: true }).click();
+  await expect(page.getByRole('heading', { name: '대시보드', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '위젯 추가', exact: true }).click();
+  await page.getByRole('textbox', { name: '위젯 검색', exact: true }).fill('할 일');
+  await page.getByRole('dialog').getByRole('switch', { name: /^할 일/ }).check();
+  await page.getByRole('textbox', { name: '위젯 검색', exact: true }).fill('일지');
+  await page.getByRole('dialog').getByRole('switch', { name: /^일지/ }).check();
+  await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
+  const checklist = page.locator('.widget-grid-item .journal-checklist');
   await checklist.getByRole('checkbox', { name: '작업대 위젯 훑어보기' }).click();
   await expect(checklist.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '50');
   await page.reload();
-  await expect(page.locator('.journal-checklist').getByRole('checkbox', { name: '작업대 위젯 훑어보기' })).toBeChecked();
-  await page.getByRole('button', { name: '위젯 추가', exact: true }).click();
-  await page.getByLabel('위젯 검색').fill('일지');
-  await page.getByRole('dialog').getByRole('switch', { name: /^일지 볼트/ }).check();
-  await page.getByRole('dialog').getByRole('button', { name: '닫기', exact: true }).click();
-  await expect(page.locator('.widget-grid-item .journal-widget')).toBeVisible();
+  await expect(page.locator('.widget-grid-item .journal-checklist').getByRole('checkbox', { name: '작업대 위젯 훑어보기' })).toBeChecked();
   await page.locator('.widget-grid-item .journal-widget-latest').click();
   await expect(page.getByRole('heading', { name: '일지', exact: true })).toBeVisible();
 });

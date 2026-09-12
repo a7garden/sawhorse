@@ -1,6 +1,23 @@
 import { test, expect, type Page } from "@playwright/test";
 const nav = (page: Page, name: string) =>
   page.locator("aside nav").getByRole("button", { name, exact: true }).click();
+const scope = (page: Page) =>
+  page.getByRole("combobox", { name: "프로젝트 전환", exact: true });
+async function selectProject(page: Page, name: string) {
+  await scope(page).click();
+  await page.getByRole("option", { name, exact: true }).click();
+}
+// The workbench is project-scoped: 작업대·실행 nav entries exist only after a
+// project is picked, and work details open from the flow-board cards.
+async function openWorkDetail(page: Page, title: string) {
+  await selectProject(page, "Sawhorse");
+  await nav(page, "작업대");
+  await page
+    .locator(".wb-task-board")
+    .getByRole("button", { name: title, exact: true })
+    .click();
+  await expect(page.locator(".wb-detail-dialog")).toBeVisible();
+}
 test.beforeEach(async ({ page }) => {
   await page.goto("/?preview=1");
   await expect(page.locator(".wb-header")).toBeVisible();
@@ -20,9 +37,9 @@ test("workbench tabs reuse the shared snapshot without returning to a loading sc
     }).observe(document.body, { childList: true, subtree: true });
   });
 
+  await selectProject(page, "Sawhorse");
   await nav(page, "작업대");
-  await page.getByRole("button", { name: "공정 보드", exact: true }).click();
-  await expect(page.locator(".wb-board")).toBeVisible();
+  await expect(page.locator(".wb-task-board")).toBeVisible();
   await nav(page, "캘린더");
   await expect(page.locator(".wb-calendar")).toBeVisible();
 
@@ -52,6 +69,11 @@ test("project and work creation persist and decisions advance the process board"
   await expect(
     page.locator(".wb-folder-row").filter({ hasText: "/tmp/sawhorse-demo" }),
   ).toBeVisible();
+  // The board contract below needs the SDD process, so the new project pins it at creation.
+  await page
+    .getByRole("combobox", { name: "프로젝트 워크플로우", exact: true })
+    .click();
+  await page.getByRole("option", { name: /SDD · 명세 기반 개발/ }).click();
   await page
     .locator("form")
     .getByRole("button", { name: "저장", exact: true })
@@ -59,24 +81,25 @@ test("project and work creation persist and decisions advance the process board"
   await expect(
     page.locator(".wb-project-card").filter({ hasText: "검증 프로젝트" }),
   ).toBeVisible();
+  await selectProject(page, "검증 프로젝트");
   await nav(page, "작업대");
-  await page.getByRole("button", { name: "공정 보드", exact: true }).click();
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
+  // 검증 프로젝트 has no intake artifact yet, so the header button is the generic 새 항목
+  // and the chooser dialog (project + workflow preselected) leads to the composer.
+  await page.getByRole("button", { name: "새 항목", exact: true }).first().click();
+  await page.getByRole("dialog").getByRole("button", { name: "계속", exact: true }).click();
+  await page.getByLabel("작업 이름", { exact: true }).fill("브라우저 흐름 검증");
   await page
-    .getByLabel("작업 이름", { exact: true })
-    .fill("브라우저 흐름 검증");
-  await page
-    .getByLabel("프로젝트", { exact: true })
-    .selectOption({ label: "검증 프로젝트" });
-  await page.getByLabel("기한", { exact: true }).fill("2026-09-15");
-  await page
-    .getByRole("button", { name: "작업 만들기", exact: true })
-    .click();
+    .getByRole("textbox", { name: "의도" })
+    .fill("브라우저 흐름이 끊기지 않고 이어지는지 확인합니다.");
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(page.locator(".wb-detail h2")).toHaveText("브라우저 흐름 검증");
   await page
     .locator(".wb-detail-dialog")
     .getByRole("button", { name: "닫기", exact: true })
     .click();
+  // A fresh project opens on the 전체 작업 list; the flow board lives in its workflow view.
+  await page.getByRole("combobox", { name: "작업대 보기", exact: true }).click();
+  await page.getByRole("option", { name: /SDD · 명세 기반 개발 · v1\.1\.1/ }).click();
   const card = page
     .locator(".wb-board-card")
     .filter({ hasText: "브라우저 흐름 검증" });
@@ -85,19 +108,17 @@ test("project and work creation persist and decisions advance the process board"
   await page.getByLabel("검토 결정", { exact: true }).fill("요청의 범위와 성공 기준을 확인했습니다.");
   await page.getByRole("button", { name: "검토 후 다음: 설계", exact: true }).click();
   await page.locator(".wb-detail-dialog").getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(page.locator('.wb-board-column[data-stage="design"]').getByText("브라우저 흐름 검증", { exact: true })).toBeVisible();
+  await expect(page.locator('.wb-task-lane[data-stage="design"]').getByText("브라우저 흐름 검증", { exact: true })).toBeVisible();
   await page.reload();
   await nav(page, "작업대");
-  await expect(page.locator('.wb-board-column[data-stage="design"]').getByText("브라우저 흐름 검증", { exact: true })).toBeVisible();
+  // The reload resets the workbench to the 전체 작업 list; reopen the SDD flow board.
+  await page.getByRole("combobox", { name: "작업대 보기", exact: true }).click();
+  await page.getByRole("option", { name: /SDD · 명세 기반 개발 · v1\.1\.1/ }).click();
 
 });
 
 test("editing metadata from a task detail is reachable", async ({ page }) => {
-  await page
-    .getByRole("button", {
-      name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
-    })
-    .click();
+  await openWorkDetail(page, "의도에서 시작하는 개발 흐름");
   await page
     .locator(".wb-detail-head")
     .getByRole("button", { name: "편집", exact: true })
@@ -162,11 +183,7 @@ test("undated milestones can be saved and scheduled later", async ({ page }) => 
 });
 
 test("markdown edits save and remain after reopening", async ({ page }) => {
-  await page
-    .getByRole("button", {
-      name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
-    })
-    .click();
+  await openWorkDetail(page, "의도에서 시작하는 개발 흐름");
   const editor = page.locator(".cm-content");
   await expect(editor).toBeVisible();
   await editor.fill("# 검증된 의도\n\n사용자가 원하는 결과를 보존합니다.");
@@ -182,9 +199,8 @@ test("markdown edits save and remain after reopening", async ({ page }) => {
     .getByRole("button", { name: "닫기", exact: true })
     .click();
   await page
-    .getByRole("button", {
-      name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
-    })
+    .locator(".wb-task-board")
+    .getByRole("button", { name: "의도에서 시작하는 개발 흐름", exact: true })
     .click();
   await expect(editor).toContainText("검증된 의도");
 });
@@ -192,11 +208,7 @@ test("markdown edits save and remain after reopening", async ({ page }) => {
 test("launch failures remain visible instead of claiming a run succeeded", async ({
   page,
 }) => {
-  await page
-    .getByRole("button", {
-      name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
-    })
-    .click();
+  await openWorkDetail(page, "의도에서 시작하는 개발 흐름");
   await page.getByRole("button", { name: "실행 시작", exact: true }).click();
   await expect(
     page.getByText(
@@ -221,10 +233,11 @@ test("an external document revision preserves the conflicting local draft", asyn
   context,
 }) => {
   const open = async (p: Page) => {
+    await selectProject(p, "Sawhorse");
+    await nav(p, "작업대");
     await p
-      .getByRole("button", {
-        name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
-      })
+      .locator(".wb-task-board")
+      .getByRole("button", { name: "의도에서 시작하는 개발 흐름", exact: true })
       .click();
     await expect(p.locator(".cm-content")).toBeVisible();
   };
@@ -256,11 +269,7 @@ test("an external document revision preserves the conflicting local draft", asyn
 test("discard confirmation protects unsaved edits when closing the document", async ({
   page,
 }) => {
-  await page
-    .getByRole("button", {
-      name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
-    })
-    .click();
+  await openWorkDetail(page, "의도에서 시작하는 개발 흐름");
   await page.locator(".cm-content").fill("# 아직 저장하지 않은 의도");
   page.once("dialog", (dialog) => dialog.dismiss());
   await page
@@ -275,11 +284,7 @@ test("discard confirmation protects unsaved edits when closing the document", as
 test("forward stage transitions require and retain a review decision", async ({
   page,
 }) => {
-  await page
-    .getByRole("button", {
-      name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
-    })
-    .click();
+  await openWorkDetail(page, "의도에서 시작하는 개발 흐름");
   await expect(page.getByRole("button", { name: "수정 요청" })).toBeVisible();
   await page.getByRole("button", { name: "검토 후 다음: 구현" }).click();
   await expect(page.getByRole("alert")).toContainText("검토 근거");
@@ -294,10 +299,12 @@ test("forward stage transitions require and retain a review decision", async ({
 test("project and stage filters combine and search opens an artifact", async ({
   page,
 }) => {
+  // The in-board 프로젝트 필터 is gone: project narrowing now happens in the sidebar scope.
+  await selectProject(page, "Herdr");
   await nav(page, "작업대");
-  await page.getByRole("button", { name: "공정 보드", exact: true }).click();
-  await page.getByLabel("프로젝트 필터").selectOption("herdr");
-  await page.getByLabel("단계 필터").selectOption("sdd-main@1.1.0:build");
+  await page.getByRole("button", { name: "필터", exact: true }).click();
+  await page.getByRole("combobox", { name: "단계 필터", exact: true }).click();
+  await page.getByRole("option", { name: "구현", exact: true }).click();
   await expect(page.locator(".wb-board-card")).toHaveCount(1);
   await expect(page.locator(".wb-board-card")).toContainText(
     "Herdr 실행과 기록 연결",
@@ -317,27 +324,33 @@ test("project and stage filters combine and search opens an artifact", async ({
 test("a project switches to TDD without changing existing SDD work", async ({
   page,
 }) => {
+  await selectProject(page, "Sawhorse");
   await nav(page, "프로젝트");
   await page
     .locator(".wb-project-card")
     .filter({ hasText: "Sawhorse" })
     .getByRole("button", { name: "프로젝트 편집" })
     .click();
-  await page.getByLabel("프로젝트 워크플로우").selectOption("tdd-cycle@1.0.0");
+  await page
+    .getByRole("combobox", { name: "프로젝트 워크플로우", exact: true })
+    .click();
+  await page.getByRole("option", { name: /TDD · 테스트 기반 개발/ }).click();
   await page
     .locator("form")
     .getByRole("button", { name: "저장", exact: true })
     .click();
   await expect(
     page.locator(".wb-project-card").filter({ hasText: "Sawhorse" }),
-  ).toContainText("TDD 사이클");
+  ).toContainText("TDD · 테스트 기반 개발");
 
   await nav(page, "작업대");
-  await page.getByRole("button", { name: "공정 보드", exact: true }).click();
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
-  await page.getByLabel("작업 이름").fill("TDD로 만든 새 항목");
-  await page.getByLabel("프로젝트", { exact: true }).selectOption("sawhorse");
-  await page.getByRole("button", { name: "작업 만들기" }).click();
+  await page.getByRole("button", { name: "새 항목", exact: true }).click();
+  await page.getByRole("button", { name: "계속", exact: true }).click();
+  await page.getByLabel("작업 이름", { exact: true }).fill("TDD로 만든 새 항목");
+  await page
+    .getByLabel("테스트 의도", { exact: true })
+    .fill("Red 단계부터 검증합니다.");
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
   await expect(page.locator(".wb-stepper .is-current")).toContainText(
     "테스트 의도",
   );
@@ -346,11 +359,18 @@ test("a project switches to TDD without changing existing SDD work", async ({
     .locator(".wb-detail-dialog")
     .getByRole("button", { name: "닫기", exact: true })
     .click();
+  await page
+    .getByRole("combobox", { name: "작업대 보기", exact: true })
+    .click();
+  await page.getByRole("option", { name: /기본 SDD · v1\.1\.0/ }).click();
+  await expect(
+    page
+      .locator('.wb-task-lane[data-stage="design"]')
+      .getByText("의도에서 시작하는 개발 흐름", { exact: true }),
+  ).toBeVisible();
   await nav(page, "대시보드");
   await expect(
-    page.getByRole("button", {
-      name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
-    }),
+    page.getByRole("button", { name: /의도에서 시작하는 개발 흐름 Sawhorse/ }),
   ).toBeVisible();
 });
 
@@ -381,7 +401,10 @@ test("workflow studio and resumable project ingestion are reachable", async ({
   page,
 }) => {
   await nav(page, "워크플로");
-  await page.getByRole("button", { name: "새 워크플로", exact: true }).click();
+  // The library rail and the gallery both offer 새 워크플로; the gallery one opens the brief,
+  // and the canvas editor lives behind 직접 구성하고 싶다면.
+  await page.getByRole("button", { name: "새 워크플로", exact: true }).last().click();
+  await page.getByRole("button", { name: "직접 구성하고 싶다면", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "워크플로", exact: true }),
   ).toBeVisible();
@@ -396,15 +419,21 @@ test("workflow studio and resumable project ingestion are reachable", async ({
   await expect(
     page.getByRole("heading", { name: /문서 만들기/ }),
   ).toBeVisible();
-  await expect(page.getByLabel("입력 경로")).toBeVisible();
+  // The old 입력 경로 input became the source drop zone.
+  await expect(page.getByLabel("자료 던지기 영역")).toBeVisible();
 });
 
-
-test("final acceptance closes the work in both views and freezes further execution", async ({ page }) => {
+test("final acceptance closes the work in both views and freezes further execution", async ({
+  page,
+}) => {
+  await selectProject(page, "Sawhorse");
   await nav(page, "작업대");
-  await page.getByRole("button", { name: "새 작업", exact: true }).click();
+  await page.getByRole("button", { name: "새 의도", exact: true }).click();
   await page.getByLabel("작업 이름", { exact: true }).fill("결과 인수 검증");
-  await page.getByRole("button", { name: "작업 만들기", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "의도" })
+    .fill("배포 결과를 인수하고 작업을 완료합니다.");
+  await page.getByRole("button", { name: "만들기", exact: true }).click();
   const detail = page.locator(".wb-detail-dialog");
   await expect(detail.getByRole("button", { name: "결과 인수·완료", exact: true })).toHaveCount(0);
   for (const stage of ["설계", "구현", "검증", "배포"]) {
@@ -423,12 +452,18 @@ test("final acceptance closes the work in both views and freezes further executi
   await expect(detail.getByLabel("검토 결정", { exact: true })).toHaveCount(0);
   await expect(detail.getByRole("button", { name: "실행 시작", exact: true })).toHaveCount(0);
   await detail.getByRole("button", { name: "닫기", exact: true }).click();
-  await page.getByLabel("열림 상태").selectOption("closed");
-  await expect(page.locator('.wb-board-column[data-stage="__closed"]').getByText("결과 인수 검증", { exact: true })).toBeVisible();
+  // The open/closed state filter is gone; the list keeps closed work visible.
   await page.getByRole("button", { name: "목록", exact: true }).click();
-  await expect(page.locator(".wb-issue-table tbody tr").filter({hasText: "결과 인수 검증"})).toContainText("완료");
+  await expect(
+    page
+      .locator(".wb-issue-table tbody tr")
+      .filter({ hasText: "결과 인수 검증" }),
+  ).toContainText("완료");
   await page.reload();
   await nav(page, "작업대");
-  await page.getByLabel("열림 상태").selectOption("closed");
-  await expect(page.locator(".wb-issue-table tbody tr").filter({hasText: "결과 인수 검증"})).toContainText("완료");
+  await expect(
+    page
+      .locator(".wb-issue-table tbody tr")
+      .filter({ hasText: "결과 인수 검증" }),
+  ).toContainText("완료");
 });

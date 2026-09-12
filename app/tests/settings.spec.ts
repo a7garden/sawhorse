@@ -57,8 +57,12 @@ test("theme and language apply immediately and compact navigation stays usable",
   await page.getByRole("option", { name: "English", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Appearance", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+  await page.locator("aside nav").getByRole("button", { name: "Dashboard", exact: true }).click();
+  await expect(page.locator('[data-widget="due"] time').first()).toHaveText(/^[A-Z][a-z]{2} \d{1,2}$/);
+  await page.getByRole("combobox", { name: "Switch project", exact: true }).click();
+  await page.getByRole("option", { name: "Herdr", exact: true }).click();
   await page.locator("aside nav").getByRole("button", { name: "Workbench", exact: true }).click();
-  await expect(page.locator('[data-widget="next"] time').first()).toHaveText(/^[A-Z][a-z]{2} \d{1,2}$/);
+  await expect(page.getByRole("heading", { name: "Herdr workbench", exact: true })).toBeVisible();
   await page.locator("aside nav").getByRole("button", { name: "Settings", exact: true }).click();
   await page.setViewportSize({ width: 800, height: 900 });
   const nav = page.getByRole("navigation", { name: "Settings", exact: true });

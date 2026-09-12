@@ -1,8 +1,14 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
-test("dashboard retains interrupted tasks and opens their execution details", async ({ page }) => {
+const nav = (page: Page, name: string) =>
+  page.locator("aside nav").getByRole("button", { name, exact: true }).click();
+
+// The dashboard attention region moved into the project 실행 (harness) view. The
+// "확인 필요한 작업 · N" toggle filters the run list; details open from the list.
+test("harness retains interrupted tasks and opens their execution details", async ({ page }) => {
   await page.goto("/?preview=1");
-  await page.locator("aside nav").getByRole("button", { name: "프로젝트", exact: true }).click();
+  // Saving project settings initializes the disposable preview store.
+  await nav(page, "프로젝트");
   await page.locator(".wb-project-card").filter({ hasText: "Sawhorse" }).getByRole("button", { name: "프로젝트 설정", exact: true }).click();
   await page.locator("form").getByRole("button", { name: "저장", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -22,20 +28,25 @@ test("dashboard retains interrupted tasks and opens their execution details", as
       { ...base, id: "running-background", role: "research", status: "running", error: null, createdAt: "2026-09-09T03:00:00Z", updatedAt: "2026-09-09T03:00:00Z" },
     ];
     localStorage.setItem(key, JSON.stringify(state));
+    // 실행 (harness) is project-scoped now; the nav button only exists with a selected project.
     localStorage.setItem("sawhorse.project-scope", "sawhorse");
   });
   await page.reload();
-  const attention = page.getByRole("region", { name: "확인 필요한 작업" });
-  await expect(attention).toContainText("완료 보고 없이 조기 종료했습니다");
-  await expect(attention).not.toContainText("오래된 오류");
-  await attention.locator(".wb-run-attention-open").click();
+  await nav(page, "실행");
+  const attention = page.getByRole("button", { name: "확인 필요한 작업 · 1", exact: true });
+  await expect(attention).toBeVisible();
+  // Only the latest failure per work:role stays in the attention list; the older duplicate is dropped.
+  await attention.click();
+  const list = page.locator(".wb-run-list > button");
+  await expect(list).toHaveCount(1);
+  await expect(list).toContainText("완료 보고 없이 조기 종료했습니다");
+  await expect(list).not.toContainText("오래된 오류");
+  await list.click();
   await expect(page.locator(".wb-run-detail")).toContainText("백그라운드");
   await expect(page.locator(".wb-run-detail .wb-inline-error")).toContainText("조기 종료");
   await expect(page.getByRole("button", { name: "다시 실행", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "herdr로 보기", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "확인 필요한 작업 · 1", exact: true }).click();
-  await expect(page.locator(".wb-run-list > button")).toHaveCount(1);
-  await page.getByRole("button", { name: "확인 필요한 작업 · 1", exact: true }).click();
+  await attention.click();
   await page.locator(".wb-run-list > button").filter({ hasText: "실행 중" }).click();
   await expect(page.getByRole("button", { name: "herdr로 보기", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "다시 실행", exact: true })).toHaveCount(0);

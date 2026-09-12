@@ -1,20 +1,25 @@
 import { expect, test, type Page } from "@playwright/test";
 const KEY = "sawhorse.workflow.preview.v2";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=", "base64");
+// Project-gated nav: pick Sawhorse first, enable the SDD intent workflow for the
+// project (otherwise the creation dialog only offers the default workflow), then
+// start the intent composer via 새 항목 → 작업 워크플로우 → 계속.
 async function open(page: Page) {
   await page.goto("/?preview=1");
-  await page.locator("aside nav").getByRole("button", {name:"작업대",exact:true}).click();
+  await page.getByRole("combobox", { name: "프로젝트 전환", exact: true }).click();
+  await page.getByRole("option", { name: "Sawhorse", exact: true }).click();
+  await page.locator("aside nav").getByRole("button", { name:"작업대", exact:true}).click();
+  await page.getByRole("button", { name: "프로젝트 설정", exact: true }).click();
+  await page.getByRole("checkbox", { name: "Intent · 의도 기반 개발 · v2.0.1" }).check();
+  await page.getByRole("dialog").getByRole("button", { name: "저장", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
   await page.getByRole("button", { name: "새 항목", exact: true }).click();
-  await page.getByRole("combobox", { name: "시작할 워크플로", exact: true }).click();
-  await page.getByRole("option", { name: "SDD · 의도에서 완료까지", exact: true }).click();
+  await page.getByRole("combobox", { name: "작업 워크플로우", exact: true }).click();
+  await page.getByRole("option", { name: "Intent · 의도 기반 개발" }).click();
   await page.getByRole("button", { name: "계속", exact: true }).click();
 }
-async function project(page: Page) {
-  await page.getByRole("dialog").getByRole("combobox",{name:"프로젝트",exact:true}).click();
-  await page.getByRole("option",{name:"Sawhorse",exact:true}).click();
-}
 async function design(page: Page) {
-  await open(page); await project(page);
+  await open(page);
   await page.getByRole("dialog").getByRole("textbox").fill("# 설계 검토\n\n메모를 보존해 주세요.");
   await page.getByRole("button",{name:"메모만 저장",exact:true}).click();
   await expect(page.locator(".wb-intent-flow")).toBeVisible();
@@ -53,6 +58,9 @@ test("note and image survive saving, editing and reopening", async ({page}) => {
   await page.getByRole("dialog").getByRole("button",{name:"닫기",exact:true}).click();
   await page.reload();
   await page.locator("aside nav").getByRole("button",{name:"작업대",exact:true}).click();
+  // Saved intents live in the intent inbox of the SDD workflow view.
+  await page.getByRole("combobox", { name: "작업대 보기", exact: true }).click();
+  await page.getByRole("option", { name: "Intent · 의도 기반 개발 · v2.0.1" }).click();
   await page.getByRole("group", {name:"작업 공간"}).getByRole("button",{name:/^의도 인박스/}).click();
   await page.getByRole("button",{name:/거친 메모/}).first().click();
   await expect(page.locator(".wb-intent-review-document")).toContainText("추가 메모.");
@@ -71,7 +79,7 @@ test("image-only intent supports removal and saving",async ({page}) => {
   await expect(page.locator(".wb-intent-review-document img")).toHaveJSProperty("naturalWidth",1);
 });
 test("failed design launch preserves the note and does not duplicate it",async ({page}) => {
-  await open(page); await project(page);
+  await open(page);
   await page.getByRole("dialog").getByRole("textbox").fill("실행 실패 복구");
   await page.getByRole("button",{name:"구체화 시작",exact:true}).click();
   await expect(page.getByRole("alert")).toContainText("의도는 저장됐지만");
@@ -146,7 +154,7 @@ test("deleting an embedded image does not append it again when saving", async ({
 });
 
 test("a rejected clarification launch preserves intent without claiming a run", async ({page}) => {
-  await open(page); await project(page);
+  await open(page);
   await page.getByRole("dialog").getByRole("textbox").fill("실행 접수 실패 상태");
   await page.getByRole("button",{name:"구체화 시작",exact:true}).click();
   await expect(page.getByRole("alert")).toContainText("의도는 저장됐지만");
@@ -212,7 +220,7 @@ test("a blocked run opens the exact execution from the intent detail", async ({p
     const state = JSON.parse(localStorage.getItem(key)!);
     const work = state.snapshot.work.find((w:{workflowId:string}) => w.workflowId === "intent-flow");
     const base = {workId:work.id,projectId:work.projectId,role:"planner",agent:"codex",model:"",parentRunId:null,stage:"design",workflowId:"intent-flow",workflowVersion:"1.0.0",workflowDigest:"",workflowInstanceId:null,nodeRunId:null,status:"blocked",agentName:"review-agent",paneId:null,workspaceId:null,session:"default",prompt:"Human response needed",createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),error:null,agentSession:null,tabClosedAt:null,finalReport:null,resumable:false};
-    state.runs = [{...base,id:"another-run",workId:"work-intent"},{...base,id:"target-run"}];
+    state.runs = [{...base,id:"another-run"},{...base,id:"target-run"}];
     localStorage.setItem(key,JSON.stringify(state));
   },KEY);
   await page.getByRole("dialog").getByRole("button",{name:"닫기",exact:true}).click();

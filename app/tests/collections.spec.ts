@@ -80,7 +80,8 @@ test("run history filters retain active runs and expose logs and reports", async
     );
   });
   await openPreview(page);
-  await nav(page, "실행");
+  // Jobs (run history) live under the global 자동화 screen; 실행 opens the project harness now.
+  await nav(page, "자동화");
   await page.getByLabel("화면 선택", { exact: true }).getByRole("button", { name: "자동화·도구 실행", exact: true }).click();
   const history = page.getByRole("region", { name: "지난 실행" });
   await page
@@ -161,7 +162,12 @@ async function readingFixture(page: Page) {
       },
     ];
     fixtureWindow.isTauri = true;
+    // The app is not running inside Tauri, so only the IPC surface the reading page uses is
+    // mocked. `metadata` must be present: the toolbar title effect calls getCurrentWindow() on
+    // every navigation, and without it that call throws synchronously and React unmounts the app.
     fixtureWindow.__TAURI_INTERNALS__ = {
+      metadata: { currentWindow: { label: "main" }, currentWebview: { label: "main" } },
+      transformCallback: (callback: unknown) => 1,
       invoke: async (command: string, args: Record<string, unknown>) => {
         if (command === "sources_list_instances")
           return {

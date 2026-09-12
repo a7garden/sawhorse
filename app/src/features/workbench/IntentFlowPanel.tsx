@@ -26,6 +26,10 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
   const [error, setError] = useState("");
   const [feedback, setFeedback] = useState("");
   const actionLock = useRef(false);
+  // Action failures (launch refused in this browser, approval rejected) must stay
+  // visible: the run poller re-runs whenever the stage changes and would otherwise
+  // wipe the message the moment it was set.
+  const actionError = useRef(false);
   const initialTab = useRef(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -79,7 +83,7 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
         if (!alive) return;
         const runKey = JSON.stringify(next);
         if (runKey !== seen.current.runs) { seen.current.runs = runKey; setRuns(next); }
-        setLoadedRuns(true); setError("");
+        setLoadedRuns(true); if (!actionError.current) setError("");
         const signature = next.map((run) => `${run.id}:${run.status}:${run.updatedAt}`).join("|");
         if (previous && previous !== signature) { await refresh(); await onReload(); }
         previous = signature;
@@ -112,7 +116,7 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
     : designReady ? "designReady" : "designMissing";
   async function act(action: "run" | "approve" | "complete" | "revise" | "resume" | "stop") {
     if (actionLock.current || !review || !loadedRuns || (active && action !== "stop")) return;
-    actionLock.current = true; setBusy(true); setError("");
+    actionLock.current = true; setBusy(true); actionError.current = false; setError("");
     let transitioned = false;
     try {
       if (action === "stop") {
@@ -144,9 +148,8 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
         await launchIntent(current, project, action === "approve" ? "" : feedback.trim());
         setFeedback("");
       }
-    } catch (error) { setError(`${transitioned ? t("intent.approvedLaunchFailed") + " " : ""}${String(error)}`); }
-    finally {
-      try {
+    } catch (error) { actionError.current = true; setError(`${transitioned ? t("intent.approvedLaunchFailed") + " " : ""}${String(error)}`); }
+    finally { try {
         const saved = (await sddApi.runs()).filter((run) => run.workId === work.id && !run.parentRunId);
         const runKey = JSON.stringify(saved);
         if (runKey !== seen.current.runs) { seen.current.runs = runKey; setRuns(saved); }
@@ -171,7 +174,7 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
     </ol>
     <div className="wb-intent-flow-head"><div><h3>{t(closed ? "intent.finished" : building ? "intent.build" : "intent.design")}</h3>
       <p>{t(closed ? "intent.completedHint" : `intent.${nextStep}`)}</p></div>
-      <Button size="sm" variant="outline" disabled={busy || editing} onClick={() => { void refresh(true).then(() => setError("")).catch((error) => setError(String(error))); }}><RefreshCw />{t("intent.refresh")}</Button>
+      <Button size="sm" variant="outline" disabled={busy || editing} onClick={() => { actionError.current = false; void refresh(true).then(() => setError("")).catch((error) => setError(String(error))); }}><RefreshCw />{t("intent.refresh")}</Button>
     </div>
     {currentRun && <div className="wb-intent-run" role="status">
       <span>{active && currentRun.status !== "blocked" && <Loader2 className="wb-spin" size={14} />}{t(`intent.runStatus.${currentRun.status}`)}{currentRun.error && <small>{currentRun.error}</small>}</span>
