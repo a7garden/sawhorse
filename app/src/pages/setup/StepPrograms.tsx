@@ -1,7 +1,8 @@
-// 마법사 「기본 환경」 단계 — 모든 워크플로에 공통인 선택 연동만 확인한다.
+// Wizard "Base environment" step — only checks the optional integrations common to all workflows.
 //
-// Node.js, pandoc, Git 같은 기능별 도구는 여기에 넣지 않는다. 워크플로 정의가 소유하고
-// 실행 직전에 검사해야, 시작 마법사가 특정 회사의 산출물 방식에 종속되지 않는다.
+// Per-feature tools like Node.js, pandoc, Git don't go here. A workflow definition owns them
+// and checks them right before running, keeping the setup wizard independent of any
+// particular company's way of producing things.
 import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";

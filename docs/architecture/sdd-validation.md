@@ -30,7 +30,7 @@ Markdown 편집, 여러 탭의 저장 충돌, 미저장 문서 이탈 확인, �
 
 ## 처음 실행할 때
 
-1. `app/src-tauri/target/release/bundle/macos/Sawhorse 작업대.app`을 연다.
+1. `app/src-tauri/target/release/bundle/macos/Sawhorse.app`을 연다.
 2. 설정에서 작업공간 경로를 정하고 작업대의 **작업공간 초기화**를 실행한다.
 3. **프로젝트**에 폴더와 에이전트 기본값을 등록한다. 설명·검증 명령은 저장 후 분석 에이전트가 채운다.
 4. **새 작업**에서 의도를 작성하고 검토 결정을 남기며 다음 단계로 진행한다.

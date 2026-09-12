@@ -165,6 +165,9 @@ fn design_content(root: &Path, project_id: &str) -> Result<String, String> {
     if !assigned.design_id.is_empty() {
         let path = project_path(root, project_id).with_file_name("DESIGN.md");
         safe_path(root, &path)?;
+        if fs::metadata(&path).map_err(|e| e.to_string())?.len() > 512_000 {
+            return Err("DESIGN.md가 512KB를 초과합니다".into());
+        }
         return fs::read_to_string(path).map_err(|e| e.to_string());
     }
     let project = project_by_id(root, project_id)?;

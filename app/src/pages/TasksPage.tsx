@@ -1,12 +1,12 @@
-import ScheduleCard from "./settings/ScheduleCard";
-// TasksPage — 자동화의 자동화 작업(TaskDef)를 관리한다: 승인대기 요청, 예약된 정의,
-// 필요할 때 직접 실행하는 정의. 개발 보드의 개발 항목(WorkItem)과는 다른 개념이다.
+// TasksPage — manages automation tasks (TaskDef): pending-review requests, scheduled definitions,
+// and definitions run on demand. A different concept from the dev board's work items (WorkItem).
 import { useCallback, useEffect, useState } from "react";
 import {
   CalendarClock,
   ClipboardCopy,
   Pencil,
   Plus,
+  Play,
   Repeat,
   Search,
   Trash2,
@@ -23,12 +23,14 @@ import {
   CollectionSearch,
 } from "@/components/CollectionTools";
 import { RunButton } from "@/components/RunButton";
+import AutomationTimeline from "@/features/automation/AutomationTimeline";
 import type {
   PackAction,
   PackInfo,
   ScheduleKind,
   TaskDef,
   TaskRow,
+  TaskSchedule,
   TasksView,
 } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
@@ -54,6 +56,9 @@ function scheduleLabel(def: TaskDef): string {
   const kind: Record<ScheduleKind, string> = {
     daily: i18n.t("settings:tasks.schedule.daily"),
     weekdays: i18n.t("settings:tasks.schedule.weekdays"),
+    weekly: (s.days ?? [])
+      .map((day) => i18n.t(`settings:tasks.days.${day}`))
+      .join("·"),
     once: s.date ?? "",
   };
   return `${kind[s.kind]} ${s.time}`;
@@ -75,6 +80,7 @@ export default function TasksPage({
   const [err, setErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<TaskDef | null>(null);
   const [open, setOpen] = useState(false);
+  const [scheduleEditing, setScheduleEditing] = useState(false);
   const [actionTarget, setActionTarget] = useState<{
     pack: PackInfo;
     action: PackAction;
@@ -82,6 +88,8 @@ export default function TasksPage({
   const packs = useApp((s) => s.packs);
   const config = useApp((s) => s.config);
   const refreshJobs = useApp((s) => s.refreshJobs);
+  const refreshSchedules = useApp((s) => s.refreshSchedules);
+  const refreshConfig = useApp((s) => s.refreshConfig);
   const setPage = useApp((s) => s.setPage);
 
   const refresh = useCallback(async () => {
@@ -94,7 +102,7 @@ export default function TasksPage({
 
   useEffect(() => {
     void refresh();
-    // tasks-changed 이벤트로 재조회. 늦게 도착한 listen은 해제 후 폐기한다(언마운트 경합).
+    // Re-fetch on the tasks-changed event. A listen that arrives late is unbound and discarded (unmount race).
     let un: UnlistenFn | undefined;
     let disposed = false;
     if (!("__TAURI_INTERNALS__" in window)) return;
@@ -115,7 +123,7 @@ export default function TasksPage({
     setErr(null);
     try {
       await fn();
-      await refresh();
+      await Promise.all([refresh(), refreshSchedules(), refreshConfig()]);
       return true;
     } catch (e) {
       setErr(String(e));
@@ -135,7 +143,9 @@ export default function TasksPage({
           : r.def.schedule.kind !== "once")),
   );
   const packActionFor = (row: TaskRow) => {
-    const [packId, actionId] = row.def.id.split(".", 2);
+    const separator = row.def.id.indexOf(".");
+    const packId = row.def.id.slice(0, separator);
+    const actionId = row.def.id.slice(separator + 1);
     const pack = packs?.packs.find((candidate) => candidate.id === packId);
     const action = pack?.actions.find((candidate) => candidate.id === actionId);
     return pack && action ? { pack, action } : null;
@@ -170,9 +180,53 @@ export default function TasksPage({
     setFilter("all");
   }
 
+  function openSchedule(row: TaskRow, schedule?: TaskSchedule) {
+    setEditing({
+      ...row.def,
+      schedule: schedule ??
+        row.def.schedule ?? { kind: "daily", time: "09:00" },
+      enabled: schedule || !row.def.schedule ? true : row.def.enabled,
+    });
+    setScheduleEditing(true);
+    setOpen(true);
+  }
+
+  async function placeSchedule(row: TaskRow, schedule: TaskSchedule) {
+    const action = packActionFor(row)?.action;
+    const params = row.def.action?.params ?? {};
+    if (
+      action?.params.some(
+        (field) =>
+          field.required &&
+          (params[field.key] == null ||
+            String(params[field.key]).trim() === ""),
+      )
+    ) {
+      openSchedule(row, schedule);
+      return;
+    }
+    await guard(() =>
+      api.saveTask({
+        ...row.def,
+        schedule,
+        enabled: row.def.schedule ? row.def.enabled : true,
+        action: row.def.builtin ? { id: row.def.id, params } : row.def.action,
+      }),
+    );
+  }
+
   async function runRow(row: TaskRow) {
     const target = packActionFor(row);
-    if (target && target.action.params.length > 0) {
+    if (
+      target &&
+      target.action.params.length > 0 &&
+      (!row.def.action ||
+        target.action.params.some(
+          (field) =>
+            field.required &&
+            !String(row.def.action?.params[field.key] ?? "").trim(),
+        ))
+    ) {
       setActionTarget(target);
       return;
     }
@@ -197,6 +251,7 @@ export default function TasksPage({
             if (mode === "schedules") setChoosing(true);
             else {
               setEditing(null);
+              setScheduleEditing(false);
               setOpen(true);
             }
           }}
@@ -227,7 +282,10 @@ export default function TasksPage({
           )}
         </CollectionIntro>
         {err && (
-          <div className="rounded-md border border-destructive/40 px-2 py-1 text-[11px] text-destructive">
+          <div
+            role="alert"
+            className="rounded-md border border-destructive/40 px-2 py-1 text-[11px] text-destructive"
+          >
             {err}
           </div>
         )}
@@ -314,6 +372,15 @@ export default function TasksPage({
           </Card>
         )}
 
+        {mode === "schedules" && (
+          <AutomationTimeline
+            rows={all}
+            busy={busy}
+            onPlace={placeSchedule}
+            onEdit={openSchedule}
+          />
+        )}
+
         <section
           className="overflow-hidden rounded-xl border bg-background"
           aria-label={
@@ -375,11 +442,13 @@ export default function TasksPage({
                       (packActionFor(row)?.action.params.length ?? 0) > 0
                     }
                     onRun={() => void runRow(row)}
+                    onSchedule={() => openSchedule(row)}
                     onEdit={
                       row.def.builtin
                         ? undefined
                         : (d) => {
                             setEditing(d);
+                            setScheduleEditing(false);
                             setOpen(true);
                           }
                     }
@@ -417,7 +486,9 @@ export default function TasksPage({
                       onClick={() =>
                         mode === "schedules"
                           ? setChoosing(true)
-                          : (setEditing(null), setOpen(true))
+                          : (setEditing(null),
+                            setScheduleEditing(false),
+                            setOpen(true))
                       }
                     >
                       <Plus />
@@ -431,14 +502,6 @@ export default function TasksPage({
             </>
           )}
         </section>
-        {mode === "schedules" && (
-          <details className="rounded-lg border p-3">
-            <summary className="cursor-pointer text-sm">
-              {t("tasks.builtinScheduleTitle")}
-            </summary>
-            <ScheduleCard onChange={() => void refresh()} />
-          </details>
-        )}
       </div>
 
       <Dialog
@@ -449,14 +512,13 @@ export default function TasksPage({
         <p className="mb-3 text-xs text-muted-foreground">
           {t("tasks.chooseHint")}
         </p>
-        {view?.tasks.map((row) => (
+        {all.map((row) => (
           <button
             key={row.def.id}
             className="mb-2 block w-full rounded-lg border p-3 text-left text-sm"
             onClick={() => {
-              setEditing(row.def);
               setChoosing(false);
-              setOpen(true);
+              openSchedule(row);
             }}
           >
             {row.def.title}
@@ -465,11 +527,17 @@ export default function TasksPage({
             </small>
           </button>
         ))}
-        {!view?.tasks.length && <Empty>{t("tasks.chooseEmpty")}</Empty>}
+        {!all.length && <Empty>{t("tasks.chooseEmpty")}</Empty>}
       </Dialog>
       <TaskDialog
         error={err}
-        scheduleOnly={mode === "schedules"}
+        scheduleOnly={scheduleEditing}
+        action={
+          editing
+            ? packActionFor({ def: editing } as TaskRow)?.action
+            : undefined
+        }
+        projects={config?.projects.map((project) => project.name) ?? []}
         open={open}
         setOpen={setOpen}
         editing={editing}
@@ -510,6 +578,7 @@ function TaskLine({
   guard,
   onEdit,
   onRun,
+  onSchedule,
   packName,
   hasParameters,
 }: {
@@ -518,21 +587,25 @@ function TaskLine({
   guard: (fn: () => Promise<unknown>) => Promise<boolean>;
   onEdit?: (def: TaskDef) => void;
   onRun: () => void;
+  onSchedule?: () => void;
   packName?: string;
   hasParameters: boolean;
 }) {
   const def = row.def;
   const { t } = useTranslation("settings");
   return (
-    <div className="flex flex-wrap items-center gap-4 px-4 py-4 transition-colors hover:bg-muted/30">
+    <article
+      aria-label={def.title}
+      className="flex flex-wrap items-center gap-4 px-4 py-4 transition-colors hover:bg-muted/30"
+    >
       <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground">
         {def.schedule ? (
           <CalendarClock className="size-4" />
         ) : (
-          <Repeat className="size-4" />
+          <Play className="size-4" />
         )}
       </div>
-      <div className="min-w-48 flex-1">
+      <div className="min-w-40 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-[13px] font-semibold">
             {def.title}
@@ -547,70 +620,110 @@ function TaskLine({
           {hasParameters && (
             <Badge variant="secondary">{t("tasks.badge.needsInput")}</Badge>
           )}
-          {!def.enabled && (
-            <Badge variant="warning">{t("tasks.badge.off")}</Badge>
-          )}
         </div>
         {def.prompt && (
           <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
             {def.prompt}
           </p>
         )}
-        <p className="mt-2 text-xs text-muted-foreground">
-          {scheduleLabel(def)}
-          {packName ? ` · ${packName}` : ""}
-          {row.lastRun ? ` · ${t("tasks.lastRun", { time: row.lastRun })}` : ""}
-        </p>
+        {(def.schedule || packName || row.lastRun) && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {[
+              def.schedule ? scheduleLabel(def) : null,
+              packName,
+              row.lastRun ? t("tasks.lastRun", { time: row.lastRun }) : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        )}
       </div>
-      {(!def.builtin || def.schedule) && (
-        <label className="flex items-center gap-2">
-          <span className="sr-only">
-            {t("collections:tasks.enabledLabel", { title: def.title })}
-          </span>
-          <Switch
-            checked={def.enabled}
-            disabled={busy}
-            onCheckedChange={(v) =>
-              void guard(() => api.setTaskEnabled(def.id, v))
-            }
-          />
-        </label>
-      )}
-      <RunButton
-        size="xs"
-        variant="outline"
-        label={t("actions.runNow")}
-        ariaLabel={t("actions.runNow")}
-        title={t("actions.runNow")}
-        jobKey={row.jobKey}
-        disabled={busy}
-        onRun={onRun}
-      />
-      {onEdit && (
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label={t("actions.edit")}
-          title={t("actions.edit")}
+      <div className="ml-auto flex flex-wrap items-center gap-2">
+        {
+          <label
+            className="flex w-28 shrink-0 items-center justify-between gap-2 text-xs"
+            htmlFor={`task-enabled-${def.id}`}
+          >
+            <span className="sr-only">
+              {t("collections:tasks.enabledLabel", { title: def.title })}
+            </span>
+            <span
+              aria-hidden="true"
+              className={
+                def.schedule && def.enabled
+                  ? "text-primary"
+                  : "text-muted-foreground"
+              }
+            >
+              {t(
+                def.schedule && def.enabled
+                  ? "tasks.state.on"
+                  : "tasks.state.off",
+              )}
+            </span>
+            <Switch
+              id={`task-enabled-${def.id}`}
+              checked={Boolean(def.schedule && def.enabled)}
+              disabled={busy}
+              onCheckedChange={(v) =>
+                def.schedule
+                  ? void guard(() => api.setTaskEnabled(def.id, v))
+                  : onSchedule?.()
+              }
+            />
+          </label>
+        }
+        <div className="flex w-24 shrink-0 justify-center">
+          {onSchedule && (
+            <Button
+              size="xs"
+              variant="ghost"
+              disabled={busy}
+              onClick={onSchedule}
+            >
+              <CalendarClock />
+              {t(def.schedule ? "tasks.editSchedule" : "tasks.addSchedule")}
+            </Button>
+          )}
+        </div>
+        <RunButton
+          size="xs"
+          variant="outline"
+          label={t("actions.runNow")}
+          ariaLabel={t("actions.runNow")}
+          title={t("actions.runNow")}
+          jobKey={row.jobKey}
           disabled={busy}
-          onClick={() => onEdit(def)}
-        >
-          <Pencil />
-        </Button>
-      )}
-      {!def.builtin && (
-        <Button
-          size="icon"
-          variant="ghost"
-          aria-label={t("actions.delete")}
-          title={t("actions.delete")}
-          disabled={busy}
-          onClick={() => void guard(() => api.deleteTask(def.id))}
-        >
-          <Trash2 />
-        </Button>
-      )}
-    </div>
+          onRun={onRun}
+        />
+        <div className="flex w-18 shrink-0 items-center gap-2">
+          {onEdit && (
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={t("actions.edit")}
+              title={t("actions.edit")}
+              disabled={busy}
+              onClick={() => onEdit(def)}
+            >
+              <Pencil />
+            </Button>
+          )}
+          {!def.builtin && (
+            <Button
+              size="icon"
+              variant="ghost"
+              aria-label={t("actions.delete")}
+              title={t("actions.delete")}
+              disabled={busy}
+              onClick={() => void guard(() => api.deleteTask(def.id))}
+            >
+              <Trash2 />
+            </Button>
+          )}
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -673,51 +786,12 @@ function PackActionTaskDialog({
               {target.action.description}
             </p>
           </div>
-          {target.action.params.map((param) => (
-            <label key={param.key} className="block space-y-1 text-sm">
-              {param.label}
-              {param.required ? " *" : ""}
-              {param.type === "select" ? (
-                <Select
-                  className="w-full"
-                  value={values[param.key] ?? ""}
-                  onChange={(v) => setValues({ ...values, [param.key]: v })}
-                  options={[
-                    { value: "", label: t("tasks.dialog.select") },
-                    ...param.options.map((option) => ({
-                      value: option.value,
-                      label: option.label || option.value,
-                    })),
-                  ]}
-                />
-              ) : param.type === "project" ? (
-                <Select
-                  className="w-full"
-                  value={values[param.key] ?? ""}
-                  onChange={(v) => setValues({ ...values, [param.key]: v })}
-                  options={[
-                    { value: "", label: t("fields.defaultProject") },
-                    ...projects.map((project) => ({
-                      value: project,
-                      label: project,
-                    })),
-                  ]}
-                />
-              ) : (
-                <Input
-                  value={values[param.key] ?? ""}
-                  placeholder={
-                    param.type === "list"
-                      ? t("tasks.dialog.listPlaceholder")
-                      : undefined
-                  }
-                  onChange={(event) =>
-                    setValues({ ...values, [param.key]: event.target.value })
-                  }
-                />
-              )}
-            </label>
-          ))}
+          <ActionFields
+            action={target.action}
+            projects={projects}
+            values={values}
+            setValues={setValues}
+          />
           {error && (
             <p role="alert" className="text-xs text-destructive">
               {error}
@@ -737,6 +811,86 @@ function PackActionTaskDialog({
   );
 }
 
+function ActionFields({
+  action,
+  projects,
+  values,
+  setValues,
+}: {
+  action: PackAction;
+  projects: string[];
+  values: Record<string, string>;
+  setValues: (values: Record<string, string>) => void;
+}) {
+  const { t } = useTranslation("settings");
+  return (
+    <div className="space-y-3">
+      {" "}
+      {action.params.map((param) => (
+        <label key={param.key} className="block space-y-1 text-sm">
+          {param.label}
+          {param.required ? " *" : ""}
+          {param.type === "select" ? (
+            <Select
+              className="w-full"
+              value={values[param.key] ?? ""}
+              onChange={(v) => setValues({ ...values, [param.key]: v })}
+              options={[
+                { value: "", label: t("tasks.dialog.select") },
+                ...param.options.map((option) => ({
+                  value: option.value,
+                  label: option.label || option.value,
+                })),
+              ]}
+            />
+          ) : param.type === "project" ? (
+            <Select
+              className="w-full"
+              value={values[param.key] ?? ""}
+              onChange={(v) => setValues({ ...values, [param.key]: v })}
+              options={[
+                { value: "", label: t("fields.defaultProject") },
+                ...projects.map((project) => ({
+                  value: project,
+                  label: project,
+                })),
+              ]}
+            />
+          ) : (
+            <Input
+              value={values[param.key] ?? ""}
+              placeholder={
+                param.type === "list"
+                  ? t("tasks.dialog.listPlaceholder")
+                  : undefined
+              }
+              onChange={(event) =>
+                setValues({ ...values, [param.key]: event.target.value })
+              }
+            />
+          )}
+        </label>
+      ))}
+    </div>
+  );
+}
+
+function actionValues(values: Record<string, string>, action?: PackAction) {
+  return Object.fromEntries(
+    (action?.params ?? [])
+      .filter((param) => values[param.key]?.trim())
+      .map((param) => [
+        param.key,
+        param.type === "list"
+          ? values[param.key]
+              .split(",")
+              .map((v) => v.trim())
+              .filter(Boolean)
+          : values[param.key].trim(),
+      ]),
+  );
+}
+
 function TaskDialog({
   open,
   setOpen,
@@ -745,7 +899,11 @@ function TaskDialog({
   guard,
   scheduleOnly,
   error,
+  action,
+  projects,
 }: {
+  action?: PackAction;
+  projects: string[];
   error: string | null;
   scheduleOnly: boolean;
   open: boolean;
@@ -760,6 +918,8 @@ function TaskDialog({
   const [kind, setKind] = useState<ScheduleKind | "none">("none");
   const [time, setTime] = useState("09:00");
   const [date, setDate] = useState("");
+  const [days, setDays] = useState<number[]>([0]);
+  const [values, setValues] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
@@ -769,6 +929,15 @@ function TaskDialog({
     setKind(d?.schedule?.kind ?? "none");
     setTime(d?.schedule?.time ?? "09:00");
     setDate(d?.schedule?.date ?? "");
+    setDays(d?.schedule?.days?.length ? d.schedule.days : [0]);
+    setValues(
+      Object.fromEntries(
+        Object.entries(d?.action?.params ?? {}).map(([key, value]) => [
+          key,
+          Array.isArray(value) ? value.join(", ") : String(value),
+        ]),
+      ),
+    );
   }, [open, editing]);
 
   const submit = async () => {
@@ -790,8 +959,8 @@ function TaskDialog({
         ? null
         : kind === "once"
           ? { kind, time, date }
-          : { kind, time, date: null };
-    // saveTask가 정규화된 TaskDef를 반환해도 페이지는 무시하고 재조회로 동기화한다.
+          : { kind, time, date: null, days: kind === "weekly" ? days : [] };
+    // Even though saveTask returns a normalized TaskDef, the page ignores it and syncs by re-fetching.
     if (
       await guard(() =>
         api.saveTask({
@@ -799,6 +968,10 @@ function TaskDialog({
           title: title.trim(),
           prompt: prompt.trim(),
           schedule,
+          action: base.builtin
+            ? { id: base.id, params: actionValues(values, action) }
+            : base.action,
+          enabled: !schedule || !base.schedule ? true : base.enabled,
         }),
       )
     )
@@ -815,7 +988,9 @@ function TaskDialog({
               cycle:
                 kind === "daily"
                   ? t("tasks.ask.daily")
-                  : t("tasks.ask.weekdays"),
+                  : kind === "weekly"
+                    ? days.map((day) => t(`tasks.days.${day}`)).join("·")
+                    : t("tasks.ask.weekdays"),
               time,
             });
     const text = t("tasks.ask.body", {
@@ -873,12 +1048,14 @@ function TaskDialog({
               { value: "none", label: t("tasks.dialog.freq.none") },
               { value: "daily", label: t("tasks.dialog.freq.daily") },
               { value: "weekdays", label: t("tasks.dialog.freq.weekdays") },
+              { value: "weekly", label: t("tasks.dialog.freq.weekly") },
               { value: "once", label: t("tasks.dialog.freq.once") },
             ]}
           />
           {kind !== "none" && (
             <Input
               type="time"
+              aria-label={t("tasks.dialog.timeLabel")}
               className="w-28"
               value={time}
               onChange={(e) => setTime(e.target.value)}
@@ -887,23 +1064,91 @@ function TaskDialog({
           {kind === "once" && (
             <Input
               type="date"
+              aria-label={t("tasks.dialog.dateLabel")}
               className="w-40"
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
           )}
         </div>
-        <div className="flex justify-between">
-          <Button variant="ghost" size="sm" onClick={askAgent}>
-            <ClipboardCopy /> {t("tasks.dialog.askAgent")}
-          </Button>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            kind === "none"
+              ? "tasks.groups.manualHint"
+              : "tasks.groups.scheduledHint",
+          )}
+        </p>
+        {kind === "weekly" && (
+          <div
+            role="group"
+            aria-label={t("tasks.dialog.days")}
+            className="flex flex-wrap gap-2"
+          >
+            {Array.from({ length: 7 }, (_, day) => (
+              <Button
+                key={day}
+                size="sm"
+                variant={days.includes(day) ? "default" : "outline"}
+                aria-pressed={days.includes(day)}
+                onClick={() =>
+                  setDays(
+                    days.includes(day)
+                      ? days.filter((d) => d !== day)
+                      : [...days, day].sort(),
+                  )
+                }
+              >
+                {t(`tasks.days.${day}`)}
+              </Button>
+            ))}
+          </div>
+        )}
+        {kind !== "none" && (
+          <div className="flex gap-2">
+            {["09:00", "12:00", "18:00"].map((preset) => (
+              <Button
+                key={preset}
+                size="xs"
+                variant="outline"
+                onClick={() => setTime(preset)}
+              >
+                {preset}
+              </Button>
+            ))}
+          </div>
+        )}
+        {action && (
+          <ActionFields
+            action={action}
+            projects={projects}
+            values={values}
+            setValues={setValues}
+          />
+        )}
+        <div className="flex justify-end gap-2">
+          {!scheduleOnly && (
+            <Button
+              className="mr-auto"
+              variant="ghost"
+              size="sm"
+              onClick={askAgent}
+            >
+              <ClipboardCopy /> {t("tasks.dialog.askAgent")}
+            </Button>
+          )}
           <Button
             size="sm"
             disabled={
               busy ||
               !title.trim() ||
-              !prompt.trim() ||
-              (kind !== "none" && !time) ||
+              (!editing?.builtin && !prompt.trim()) ||
+              (kind === "weekly" && days.length === 0) ||
+              (kind !== "none" &&
+                (action?.params.some(
+                  (param) => param.required && !values[param.key]?.trim(),
+                ) ??
+                  false)) ||
+              (kind !== "none" && !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) ||
               (kind === "once" &&
                 (!date || new Date(`${date}T${time}`).getTime() <= Date.now()))
             }

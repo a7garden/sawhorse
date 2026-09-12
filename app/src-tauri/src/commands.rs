@@ -1,10 +1,8 @@
 // Tauri command layer. Thin wrappers: contract types live in config.rs / vault.rs / jobs.rs.
 
-use std::path::Path;
-use std::sync::Arc;
-
 use crate::agents;
 use crate::config;
+use crate::document_apps;
 use crate::herdr::{Herdr, HerdrSnapshot};
 use crate::jobs::{Job, JobManager, JobRequest};
 use crate::notes;
@@ -16,6 +14,8 @@ use crate::vault;
 use crate::workspace;
 use serde::Serialize;
 use serde_json::{Map, Value};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use tauri::{AppHandle, State};
 
 #[derive(Serialize)]
@@ -57,7 +57,7 @@ pub async fn diagnostics() -> config::Diagnostics {
     config::run_diagnostics(&view).await
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_improvements(project: Option<String>) -> Vec<vault::ImprovementNote> {
     let view = config::load_view();
     let vault_path = Path::new(&view.vault_path);
@@ -77,7 +77,7 @@ pub fn list_improvements(project: Option<String>) -> Vec<vault::ImprovementNote>
 }
 
 /// Preferred issue-oriented command. `list_improvements` stays for older UI clients.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_issues(project: Option<String>) -> Vec<vault::ImprovementNote> {
     list_improvements(project)
 }
@@ -121,9 +121,24 @@ pub fn set_issue_milestone(paths: Vec<String>, milestone: String) -> Result<(), 
     Ok(())
 }
 
+/// Vault-confined path guard: canonicalize and require the path to stay inside
+/// the vault root (same convention as `set_issue_milestone`). Arbitrary
+/// absolute paths from the frontend must never be read or rewritten as-is.
+fn vault_confined(path: &str) -> Result<PathBuf, String> {
+    let root = crate::sdlc::vault_root()?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let target = Path::new(path).canonicalize().map_err(|e| e.to_string())?;
+    if !target.starts_with(&root) {
+        return Err("볼트 밖의 경로는 접근할 수 없습니다.".into());
+    }
+    Ok(target)
+}
+
 #[tauri::command]
 pub fn read_note(path: String) -> Result<NoteView, String> {
-    let (frontmatter, markdown) = vault::read_note(Path::new(&path))?;
+    let confined = vault_confined(&path)?;
+    let (frontmatter, markdown) = vault::read_note(&confined)?;
     Ok(NoteView {
         frontmatter,
         markdown,
@@ -138,7 +153,8 @@ pub fn read_note_asset(note_path: String, src: String) -> Result<String, String>
 
 #[tauri::command]
 pub fn approve_note(path: String) -> Result<(), String> {
-    vault::approve_note(Path::new(&path))
+    let confined = vault_confined(&path)?;
+    vault::approve_note(&confined)
 }
 
 #[tauri::command]
@@ -147,8 +163,8 @@ pub fn approve_issue(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn list_obsidian_vaults() -> Vec<vault::VaultCandidate> {
-    vault::detect_obsidian_vaults()
+pub fn list_obsidian_vaults() -> Vec<document_apps::obsidian::VaultCandidate> {
+    document_apps::registry::default_registry().detect_vaults_for("obsidian")
 }
 #[tauri::command]
 pub fn list_inbox_count(project: Option<String>) -> u64 {
@@ -180,7 +196,7 @@ pub fn list_unpromoted() -> Vec<vault::UnpromotedItem> {
     vault::list_unpromoted(Path::new(&view.vault_path), &pairs)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn audit_vault() -> vault::VaultAudit {
     let view = config::load_view();
     if view.vault_path.is_empty() {
@@ -202,7 +218,7 @@ pub fn audit_vault() -> vault::VaultAudit {
     vault::audit_vault(Path::new(&view.vault_path), &pairs)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_todos() -> vault::TodoSections {
     let view = config::load_view();
     if view.vault_path.is_empty() {
@@ -229,7 +245,7 @@ pub fn add_todo(section: String, text: String) -> Result<(), String> {
     vault::add_todo(Path::new(&view.vault_path), &section, &text)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_vault_tree() -> Vec<vault::VaultNode> {
     let view = config::load_view();
     if view.vault_path.is_empty() {
@@ -279,6 +295,9 @@ pub fn list_jobs(state: State<'_, Arc<AppState>>) -> Vec<Job> {
 
 #[tauri::command]
 pub fn job_log(id: String, state: State<'_, Arc<AppState>>) -> Vec<String> {
+    if AppState::validate_job_id(&id).is_err() {
+        return vec![];
+    }
     let path = state.log_path(&id);
     let Ok(content) = std::fs::read_to_string(path) else {
         return vec![];
@@ -290,6 +309,7 @@ pub fn job_log(id: String, state: State<'_, Arc<AppState>>) -> Vec<String> {
 
 #[tauri::command]
 pub fn job_report(id: String, state: State<'_, Arc<AppState>>) -> Option<String> {
+    AppState::validate_job_id(&id).ok()?;
     std::fs::read_to_string(state.report_path(&id)).ok()
 }
 
@@ -331,7 +351,7 @@ pub fn plugin_info() -> Result<plugin::PluginBundle, String> {
     plugin::plugin_info()
 }
 
-// ---------- 확장(pack) ----------
+// ---------- Packs ----------
 
 fn registry() -> (packs::Registry, config::ConfigView) {
     let view = config::load_view();
@@ -345,24 +365,24 @@ pub fn list_packs() -> packs::PackRegistryView {
     packs::registry_view(&reg, &view)
 }
 
-/// 사이드바 구성. 코어 페이지(작업대·개발·자동화·실행·확장·설정)는 프론트엔드가 갖고 있고,
-/// 그 사이에 들어가는 팩 기여 화면만 백엔드가 정한다.
+/// Sidebar composition. Core pages (workbench, development, automation, runs, packs, settings)
+/// belong to the frontend; only the pack-contributed screens in between are chosen by the backend.
 #[tauri::command]
 pub fn list_nav() -> Vec<packs::NavEntry> {
     let (reg, _) = registry();
     packs::nav_entries(&reg)
 }
 
-/// 활성 목록이 비어 있으면 "전부 활성" 이라는 뜻이므로, 하나를 끄는 순간
-/// 나머지를 명시적으로 적어 둬야 의미가 유지된다.
+/// An empty enabled list means "all enabled", so the moment one pack is turned off the rest
+/// must be written out explicitly to keep the meaning intact.
 #[tauri::command]
 pub fn set_pack_enabled(id: String, on: bool) -> Result<config::ConfigView, String> {
     let (reg, _) = registry();
     if reg.get(&id).is_none() {
         return Err(format!("설치되지 않은 팩입니다: {id}"));
     }
-    // 레거시 si/starter 별칭까지 해석된 현재 상태를 정규 기능 id로 저장한다.
-    // 그렇지 않으면 별칭이 꺼진 기능을 다시 켜 버린다.
+    // Store the current state with legacy si/starter aliases resolved to canonical pack ids.
+    // Otherwise the alias would turn a pack the user disabled back on.
     let mut enabled: Vec<String> = reg
         .packs
         .iter()
@@ -384,7 +404,7 @@ pub fn save_pack_settings(
     config::save_patch(&serde_json::json!({ "packs": { "settings": { pack_id: values } } }))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn query_pack_view(
     pack_id: String,
     view_id: String,
@@ -461,7 +481,7 @@ pub fn read_pack_skill(pack_id: String, name: String) -> Result<String, String> 
     plugin::read_skill_at(&pack.skills_dir, &name)
 }
 
-// ---------- 에이전트 브리지 ----------
+// ---------- Agent bridge ----------
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -474,20 +494,20 @@ pub struct AgentSkillGroup {
 #[serde(rename_all = "camelCase")]
 pub struct PackAgentStatus {
     pub pack_id: String,
-    /// 설치 대상 에이전트별 스킬 상태. 에이전트별 필드를 두지 않아 대상이 늘어도
-    /// 스키마와 화면이 그대로다.
+    /// Skill status per install-target agent. No per-agent fields, so the schema and UI
+    /// stay unchanged as targets grow.
     pub agents: Vec<AgentSkillGroup>,
-    /// 같은 내용이 Claude Code 플러그인으로도 깔려 있으면 개인 스킬 설치를 권하지 않는다
+    /// When the same content is also shipped as a Claude Code plugin, individual skill installs are discouraged
     pub plugin_installs: Vec<agents::PluginInstall>,
 }
 
-/// 목록과 "그중 어느 것이 기본인가" 는 늘 함께 읽힌다. 따로 부르면 설정을 두 번 읽고
-/// 그 사이에 바뀔 수 있으므로 한 번에 돌려준다.
+/// The list and "which of them is the default" are always read together. Separate calls
+/// would read the config twice and could observe a change in between, so both return in one call.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentsView {
     pub agents: Vec<agents::AgentPresence>,
-    /// 저장값과 현재 PC의 감지 결과를 합쳐 고른 기본 에이전트 id
+    /// Default agent id chosen by merging the stored value with what this PC detected
     pub default_agent: String,
 }
 
@@ -501,15 +521,15 @@ pub async fn list_agents() -> AgentsView {
     }
 }
 
-/// 제품이 실제로 쓰는 외부 프로그램이 이 PC 에 있는지. 마법사의 「프로그램」 단계와
-/// 설정의 진단 화면이 같은 답을 쓴다.
+/// Whether the external programs the product actually uses exist on this PC. The wizard's
+/// "Programs" step and the settings diagnostics screen share the same answer.
 #[tauri::command]
 pub async fn check_requirements() -> Vec<crate::detect::RequirementStatus> {
     crate::detect::check_requirements().await
 }
 
-/// 기본 에이전트 저장. 감지되지 않은 에이전트도 고를 수 있게 두되(설치 직후 재검사 없이
-/// 넘어가는 흐름이 흔하다), 앱이 전혀 모르는 id 는 거절한다.
+/// Saves the default agent. Choosing an undetected agent is allowed (skipping the re-check
+/// right after install is a common flow), but ids the app knows nothing about are rejected.
 #[tauri::command]
 pub fn set_default_agent(id: String) -> Result<config::ConfigView, String> {
     let id = agents::normalize_id(&id).to_string();
@@ -519,8 +539,8 @@ pub fn set_default_agent(id: String) -> Result<config::ConfigView, String> {
     config::save_patch(&serde_json::json!({"dashboard": {"defaultAgent": id}}))
 }
 
-/// 작업공간을 처음 만들 때 채워 넣을 경로 제안. 빈 절대경로 입력칸만 내미는 것보다
-/// 하나라도 눌러 볼 수 있는 값이 있는 편이 낫다.
+/// Path suggestions to fill in when a workspace is first created. Offering at least one
+/// pressable value beats a bare empty absolute-path field.
 #[tauri::command]
 pub fn suggest_vault_path() -> String {
     let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from("."));
@@ -547,13 +567,13 @@ pub fn pack_agent_status(pack_id: String) -> Result<PackAgentStatus, String> {
     })
 }
 
-/// 에이전트 폴더에서 실제로 발견한 스킬 전부 — 출처(sawhorse·마켓플레이스·수동)를 가리지 않는다.
+/// Every skill actually found in the agent folder — regardless of origin (sawhorse, marketplace, manual).
 #[tauri::command]
 pub fn list_agent_skills(agent: String) -> Result<Vec<agents::AgentSkillEntry>, String> {
     agents::list_agent_skills(&agent)
 }
 
-/// 열람 화면이 고른 스킬 파일 본문. 경로 검증은 agents 쪽이 한다.
+/// Skill file body for the browse screen. Path validation is done on the agents side.
 #[tauri::command]
 pub fn read_agent_skill(path: String) -> Result<String, String> {
     agents::read_agent_skill(&path)
@@ -584,7 +604,7 @@ pub fn uninstall_pack_skills(
     agents::uninstall_pack_skills(pack, &agent)
 }
 
-// ---------- 작업공간 프로비저닝 ----------
+// ---------- Workspace provisioning ----------
 
 #[tauri::command]
 pub fn workspace_plan() -> Vec<String> {
@@ -593,7 +613,7 @@ pub fn workspace_plan() -> Vec<String> {
     workspace::plan(Path::new(&view.vault_path), &enabled)
 }
 
-/// 활성 팩의 폴더·템플릿을 작업공간에 만든다. 기존 파일은 덮지 않는다.
+/// Creates the enabled packs' folders and templates in the workspace. Existing files are never overwritten.
 #[tauri::command]
 pub fn provision_workspace(
     vault_path: Option<String>,
@@ -607,7 +627,7 @@ pub fn provision_workspace(
     workspace::provision(Path::new(&root), &enabled)
 }
 
-// ---------- 예약 ----------
+// ---------- Schedules ----------
 
 #[tauri::command]
 pub fn list_schedules(state: State<'_, Arc<AppState>>) -> Vec<scheduler::ScheduleView> {
@@ -637,7 +657,7 @@ pub fn set_schedule(
     }))
 }
 
-// ---------- herdr 터미널 ----------
+// ---------- herdr terminal ----------
 
 fn herdr() -> Herdr {
     Herdr::new(&config::load_view().dashboard.herdr)
@@ -666,7 +686,7 @@ pub async fn herdr_focus_pane(id: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 페인의 최근 출력. 앱을 떠나지 않고 승인 프롬프트 내용을 확인하기 위한 것이다.
+/// A pane's recent output. For checking approval prompt contents without leaving the app.
 #[tauri::command]
 pub async fn herdr_read_pane(id: String, lines: Option<u32>) -> Result<String, String> {
     herdr()
@@ -684,7 +704,7 @@ pub async fn herdr_close_tab(id: String) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-/// 사람이 쓸 빈 탭 하나. cwd 를 주지 않으면 작업공간에서 연다.
+/// A single empty tab for human use. Opens in the workspace when no cwd is given.
 #[tauri::command]
 pub async fn herdr_open_tab(cwd: Option<String>, label: Option<String>) -> Result<Value, String> {
     let view = config::load_view();
@@ -712,9 +732,9 @@ pub async fn herdr_open_tab(cwd: Option<String>, label: Option<String>) -> Resul
     Ok(serde_json::json!({ "tabId": tab.tab_id, "paneId": tab.pane_id, "workspaceId": workspace }))
 }
 
-// ---------- 기타 ----------
+// ---------- Misc ----------
 
-/// 폴더/파일을 OS 파일 관리자로 연다 (팩 폴더·작업공간 열기).
+/// Opens a folder/file in the OS file manager (pack folders, workspace opening).
 #[tauri::command]
 pub fn open_path(app: AppHandle, path: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
@@ -737,15 +757,15 @@ pub fn open_external(app: AppHandle, url: String) -> Result<(), String> {
         .map_err(|e| format!("링크 열기 실패: {e}"))
 }
 
-// ---------- 실행 정의(TaskDef) — 에이전트가 승인 큐로 만드는 자동화 항목.
-// 개발 보드의 개발 항목(WorkItem, sdlc.rs)과는 다른 개념이다. ----------
+// ---------- Run definitions (TaskDef) — automation items an agent queues for approval.
+// A different concept from the development board's work items (WorkItem, sdlc.rs). ----------
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TaskRow {
     pub def: crate::tasks::TaskDef,
     pub last_run: Option<String>,
-    /// 지금 실행했을 때 생길 잡의 중복 판정 키 — 화면이 "실행 중" 버튼을 찾는 데 쓴다.
+    /// Dedup key of the job a "run now" would create — the UI uses it to find the "running" button.
     pub job_key: String,
 }
 
@@ -773,9 +793,12 @@ fn task_request(id: &str) -> JobRequest {
     }
 }
 
-/// 이 정의를 "지금 실행"하면 만들어질 잡 요청. `run_task_now` 가 타는 분기와 같아야
-/// 버튼의 중복 판정과 실제 실행이 어긋나지 않는다.
+/// The job request a "run now" on this definition would create. Must match the branch
+/// `run_task_now` takes, so the button's dedup check and the actual run cannot diverge.
 fn task_run_request(id: &str) -> JobRequest {
+    if let Ok(task) = crate::tasks::get_task(&crate::tasks::workbench_root(), id) {
+        return scheduler::request_for_task(&task);
+    }
     if id == "core.promote" {
         return promote_request();
     }
@@ -817,6 +840,7 @@ fn builtin_rows(state: &AppState) -> Vec<TaskRow> {
                     },
                     time: entry.time,
                     date: None,
+                    days: vec![],
                 }),
                 source: crate::tasks::Source {
                     kind: "builtin".into(),
@@ -827,8 +851,8 @@ fn builtin_rows(state: &AppState) -> Vec<TaskRow> {
         })
         .collect();
 
-    // 예약 여부는 같은 정의의 실행 방식일 뿐이다. 활성 팩이 제공하는 수동 액션도
-    // 같은 정의 목록에 넣되, 이미 예약 행으로 들어온 액션은 중복시키지 않는다.
+    // Being scheduled is just one run mode of the same definition. Manual actions provided by
+    // enabled packs join the same definition list, but actions already in as schedule rows are not duplicated.
     let existing: std::collections::HashSet<String> =
         rows.iter().map(|row| row.def.id.clone()).collect();
     let view = config::load_view();
@@ -879,11 +903,26 @@ fn builtin_rows(state: &AppState) -> Vec<TaskRow> {
             ..Default::default()
         },
     });
+    for saved in crate::tasks::list_tasks(&crate::tasks::workbench_root())
+        .into_iter()
+        .filter(|task| task.builtin)
+    {
+        let replacement = TaskRow {
+            job_key: crate::jobs::dedup_key(&scheduler::request_for_task(&saved)),
+            last_run: last_run.get(&saved.id).cloned(),
+            def: saved,
+        };
+        if let Some(row) = rows.iter_mut().find(|row| row.def.id == replacement.def.id) {
+            *row = replacement;
+        } else if scheduler::LEGACY_ROUTINES.contains(&replacement.def.id.as_str()) {
+            rows.push(replacement);
+        }
+    }
     rows.sort_by(|a, b| a.def.title.cmp(&b.def.title).then(a.def.id.cmp(&b.def.id)));
     rows
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
     let root = crate::tasks::workbench_root();
     let _ = crate::tasks::ensure_dirs(&root);
@@ -895,6 +934,7 @@ pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
         drop(st);
         crate::tasks::list_tasks(&root)
             .into_iter()
+            .filter(|def| !def.builtin)
             .map(|def| TaskRow {
                 last_run: last_run.get(&def.id).cloned(),
                 job_key: crate::jobs::dedup_key(&task_request(&def.id)),
@@ -911,19 +951,63 @@ pub fn list_tasks(state: State<'_, Arc<AppState>>) -> TasksView {
 }
 
 #[tauri::command]
-pub fn save_task(mut def: crate::tasks::TaskDef) -> Result<crate::tasks::TaskDef, String> {
+pub fn save_task(
+    mut def: crate::tasks::TaskDef,
+    state: State<'_, Arc<AppState>>,
+) -> Result<crate::tasks::TaskDef, String> {
     let root = crate::tasks::workbench_root();
     let _ = crate::tasks::ensure_dirs(&root);
     let is_new = def.created_at.is_empty();
     if def.id.is_empty() {
         def.id = crate::tasks::new_id();
     }
-    if crate::scheduler::LEGACY_ROUTINES.contains(&def.id.as_str()) {
+    if def.builtin {
+        let original = builtin_rows(&state)
+            .into_iter()
+            .find(|row| row.def.id == def.id)
+            .ok_or("사용할 수 없는 기본 작업입니다")?
+            .def;
+        let params = def
+            .action
+            .take()
+            .map(|action| action.params)
+            .unwrap_or_default();
+        if let Some((pack_id, action_id)) = def.id.split_once('.') {
+            if def.id != "core.promote" {
+                let view = config::load_view();
+                let reg = packs::load_registry(&view.packs.enabled);
+                let (_, action) = reg
+                    .action(pack_id, action_id)
+                    .ok_or("사용할 수 없는 확장 작업입니다")?;
+                for field in &action.params {
+                    if def.schedule.is_some()
+                        && field.required
+                        && params.get(&field.key).is_none_or(|value| {
+                            value.is_null()
+                                || value.as_str().is_some_and(|v| v.trim().is_empty())
+                                || value.as_array().is_some_and(|v| v.is_empty())
+                        })
+                    {
+                        return Err(format!("{} 값을 입력하세요", field.label));
+                    }
+                }
+            }
+        }
+        def.title = original.title;
+        def.prompt = original.prompt;
+        def.source = original.source;
+        def.skill = original.skill;
+        def.action = Some(crate::tasks::TaskAction {
+            id: def.id.clone(),
+            params,
+        });
+    } else if builtin_rows(&state).iter().any(|row| row.def.id == def.id) {
         return Err("기본 제공 실행 정의의 ID는 사용할 수 없습니다".into());
+    } else {
+        def.skill = None;
+        def.action = None;
     }
-    def.builtin = false;
-    def.skill = None;
-    if is_new {
+    if is_new && !def.builtin {
         def.source = crate::tasks::Source {
             kind: "gui".into(),
             agent: None,
@@ -949,6 +1033,9 @@ pub fn delete_task(id: String) -> Result<(), String> {
 #[tauri::command]
 pub fn set_task_enabled(id: String, enabled: bool) -> Result<(), String> {
     let root = crate::tasks::workbench_root();
+    if crate::tasks::get_task(&root, &id).is_ok() {
+        return crate::tasks::set_enabled(&root, &id, enabled);
+    }
     if let Some(entry) = scheduler::entries(&config::load_view())
         .into_iter()
         .find(|e| e.pack_id != scheduler::TASKS_PACK_ID && (e.key == id || e.action_id == id))
@@ -976,6 +1063,9 @@ pub fn run_task_now(
     mgr: State<'_, Arc<JobManager>>,
     state: State<'_, Arc<AppState>>,
 ) -> Result<Job, String> {
+    if crate::tasks::get_task(&crate::tasks::workbench_root(), &id).is_ok() {
+        return scheduler::run_scheduled_now(&mgr, &state, &id);
+    }
     let request = task_run_request(&id);
     match request.kind.as_str() {
         "promote" => {
@@ -989,7 +1079,7 @@ pub fn run_task_now(
             Ok(job)
         }
         "action" => mgr.enqueue(request),
-        // 예약 엔트리·작업 정의는 last_run 기록까지 예약 경로가 맡는다.
+        // Schedule entries and task definitions hand last_run bookkeeping to the schedule path too.
         _ => scheduler::run_scheduled_now(&mgr, &state, &id),
     }
 }
@@ -1025,7 +1115,7 @@ pub fn reject_request(id: String, reason: Option<String>, app: AppHandle) -> Res
     result
 }
 
-// ---------- 협업(멀티에이전트 통합 레인) ----------
+// ---------- Collaboration (multi-agent integration lanes) ----------
 
 #[tauri::command]
 pub fn collab_create_session(
@@ -1059,7 +1149,7 @@ pub fn collab_session_audit(
     svc.store.list_audit_events(&id, 200)
 }
 
-/// 프로젝트 레지스트리 조회. 새 정본(UUID)과 legacy 후보를 함께 내려준다(설계 297줄).
+/// Project registry lookup. Returns both the new canonical (UUID) entries and legacy candidates (design line 297).
 #[tauri::command]
 pub fn collab_projects_view() -> Result<serde_json::Value, String> {
     let view = config::load_view();
@@ -1083,7 +1173,7 @@ pub fn collab_projects_view() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "registered": registered, "legacy": legacy }))
 }
 
-/// 사용자가 등록을 확인하면 UUID projectId를 만들어 새 블록으로 복사한다(설계 299-300줄).
+/// When the user confirms a registration, create the UUID projectId and copy it into a new block (design lines 299-300).
 #[tauri::command]
 pub fn collab_register_project(
     name: String,
@@ -1096,7 +1186,7 @@ pub fn collab_register_project(
     let project = crate::collab::model::CoreProject {
         path: path.clone(),
         integration: crate::collab::model::IntegrationTarget {
-            path: String::new(), // 비어 두면 코어가 path로 해석한다
+            path: String::new(), // when left empty the core resolves it as path
             branch: branch.clone(),
             verify_profile: verify_profile.clone(),
         },
@@ -1113,15 +1203,14 @@ pub fn collab_register_project(
         id.clone(),
         serde_json::to_value(&project).unwrap_or_default(),
     );
-    let config_path = config::config_path();
     let mut patch = serde_json::Map::new();
     patch.insert("coreProjects".into(), Value::Object(map));
-    view = config::save_patch_at(&config_path, &Value::Object(patch))?;
+    view = config::save_patch(&Value::Object(patch))?;
     let _ = &view;
     Ok(serde_json::json!({ "id": id, "name": name, "path": path, "branch": branch }))
 }
 
-/// 프로젝트 검증 프로필 저장(argv 배열만 허용 — 임의 shell 문자열 금지, 설계 307줄).
+/// Saves a project's verify profile (argv arrays only — arbitrary shell strings forbidden, design line 307).
 #[tauri::command]
 pub fn collab_save_verify_profile(
     project_id: String,
@@ -1144,10 +1233,9 @@ pub fn collab_save_verify_profile(
     if !map.contains_key(&project_id) {
         return Err(format!("등록되지 않은 프로젝트: {project_id}"));
     }
-    let config_path = config::config_path();
     let mut patch = serde_json::Map::new();
     patch.insert("coreProjects".into(), Value::Object(map));
-    config::save_patch_at(&config_path, &Value::Object(patch))?;
+    config::save_patch(&Value::Object(patch))?;
     Ok(serde_json::json!({ "ok": true }))
 }
 
@@ -1239,7 +1327,7 @@ pub fn collab_resume(
     svc.resume_session(&session_id)
 }
 
-/// 큐 즉시 진행(검토 화면의 「큐 진행」 버튼).
+/// Advance the queue now (the "Run queue" button on the review screen).
 #[tauri::command]
 pub async fn collab_run_queue(
     svc: State<'_, Arc<crate::collab::service::CollabService>>,
@@ -1254,7 +1342,7 @@ pub async fn collab_run_queue(
     .map_err(|e| format!("큐 스레드 실패: {e}"))?
 }
 
-/// 인박스 즉시 확인(에이전트 제출 수동 가져오기).
+/// Check the inbox now (manual import of agent submissions).
 #[tauri::command]
 pub fn collab_inbox_tick(
     svc: State<'_, Arc<crate::collab::service::CollabService>>,
@@ -1263,9 +1351,9 @@ pub fn collab_inbox_tick(
     svc.tick(&view)
 }
 
-// ---------- 확장·소스(connector) ----------
+// ---------- Extensions and sources (connector) ----------
 
-/// 내장 bundle manifest. 앱 리소스에 두지 않고 프로그램 상수로 등록한다(설계 648줄).
+/// Built-in bundle manifest. Registered as a program constant rather than an app resource (design line 648).
 pub fn builtin_extension_manifests() -> Vec<crate::extensions::manifest::ExtensionManifest> {
     let feeds = crate::extensions::manifest::ExtensionManifest {
         id: "core-feeds".into(),
@@ -1276,7 +1364,7 @@ pub fn builtin_extension_manifests() -> Vec<crate::extensions::manifest::Extensi
             kind: "connector".into(),
             adapter: "builtin:rss".into(),
             requests: crate::extensions::manifest::PermissionRequests {
-                network: vec![], // instance별 feed 도메인 grant
+                network: vec![], // per-instance feed domain grants
                 ..Default::default()
             },
             contributes: crate::extensions::manifest::ComponentContribution {
@@ -1378,7 +1466,7 @@ pub fn extensions_list() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({ "bundles": all }))
 }
 
-/// instance 생성/갱신. grant는 manifest 요청과 사용자 승인 결과를 합쳐 저장한다.
+/// Create/update an instance. The grant merges manifest requests with the user's approval result.
 #[tauri::command]
 pub fn sources_upsert_instance(
     instance_id: String,
@@ -1394,7 +1482,7 @@ pub fn sources_upsert_instance(
         .find(|m| m.id == extension_id)
         .and_then(|m| m.component(&component_id))
         .ok_or_else(|| format!("알 수 없는 connector: {extension_id}.{component_id}"))?;
-    // 권한은 manifest 요청 ∩ 사용자 승인. network는 사용자가 도메인을 승인한다.
+    // Permissions are manifest requests ∩ user approval. For network, the user approves domains.
     let mut grant = known.requests.clone();
     grant.network = network;
     let instance = crate::extensions::manifest::ConnectorInstance {
@@ -1528,14 +1616,14 @@ pub fn remote_operations_list(statuses: Vec<String>) -> Result<serde_json::Value
     Ok(serde_json::json!({ "operations": store.list_remote_operations(&refs, 100)? }))
 }
 
-/// 사람의 원격 쓰기 승인(issue_write·push·pr_create는 별도 승인이다, 설계 710줄).
+/// Human approval of a remote write (issue_write, push, and pr_create each need separate approval, design line 710).
 #[tauri::command]
 pub fn remote_operation_approve(operation_id: String, decided_by: String) -> Result<(), String> {
     let store = crate::collab::store::Store::open()?;
     crate::extensions::github_outbound::approve_operation(&store, &operation_id, &decided_by)
 }
 
-/// 승인된 원격 쓰기 실행. 네트워크 오류 시 uncertain으로 남고 reconcile을 기다린다.
+/// Runs an approved remote write. On network error it stays uncertain and waits for reconcile.
 #[tauri::command]
 pub fn remote_operation_execute(operation_id: String, repo_dir: String) -> Result<String, String> {
     let store = crate::collab::store::Store::open()?;
@@ -1546,7 +1634,7 @@ pub fn remote_operation_execute(operation_id: String, repo_dir: String) -> Resul
     )
 }
 
-/// uncertain operation의 재조정 결과 기록(사후 조회로 이미 생성됐는지 확인 뒤).
+/// Records the reconcile result of an uncertain operation (after a follow-up query confirms whether it was already created).
 #[tauri::command]
 pub fn remote_operation_reconcile(
     operation_id: String,
@@ -1671,4 +1759,37 @@ mod ux_catalog_tests {
         git["packages"][0]["source"]["commit"] = "a".repeat(40).into();
         assert!(validate_extension_catalog(&git).is_ok());
     }
+}
+
+#[tauri::command]
+pub fn list_managed_todos() -> Result<Vec<crate::todos::Todo>, String> {
+    let view = config::load_view();
+    if view.vault_path.is_empty() {
+        return Err("볼트 경로가 설정되지 않았습니다".into());
+    }
+    crate::todos::list(Path::new(&view.vault_path))
+}
+
+#[tauri::command]
+pub fn save_managed_todo(
+    id: Option<String>,
+    text: String,
+    checked: bool,
+    due_date: Option<String>,
+    priority: String,
+    deleted: bool,
+) -> Result<(), String> {
+    let view = config::load_view();
+    if view.vault_path.is_empty() {
+        return Err("볼트 경로가 설정되지 않았습니다".into());
+    }
+    crate::todos::save(
+        Path::new(&view.vault_path),
+        id,
+        text,
+        checked,
+        due_date,
+        priority,
+        deleted,
+    )
 }

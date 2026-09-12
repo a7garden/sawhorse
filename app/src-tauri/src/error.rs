@@ -1,18 +1,18 @@
-// error.rs — 코어 경계의 오류 코드 계약.
+// error.rs — error code contract at the core boundary.
 //
-// 지금까지 오류가 `Result<_, String>` 문자열로만 다녔다 — UI는 "미설치"와
-// "크래시"를 구분할 수 없었다. 코어는 코드를 붙여 오고, IPC 경계에서는
-// `"<code>: <message>"` 문자열로 직렬화해 기존 소비자를 깨지 않는다.
+// Until now errors travelled only as `Result<_, String>` strings — the UI could not tell
+// "not installed" apart from a "crash". The core now attaches a code, and at the IPC boundary
+// it is serialized as the `"<code>: <message>"` string so existing consumers keep working.
 
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CoreCode {
-    /// 실행 파일을 찾을 수 없다 — 미설치 또는 PATH 누락.
+    /// Executable not found — not installed or missing from PATH.
     SpawnNotFound,
-    /// 찾았지만 기동에 실패했다.
+    /// Found but failed to start.
     SpawnFailed,
-    /// 시간 안에 응답이 없었다.
+    /// No response within the time limit.
     Timeout,
 }
 
@@ -32,7 +32,7 @@ impl fmt::Display for CoreCode {
     }
 }
 
-/// 타입화된 코어 오류.
+/// Typed core error.
 #[derive(Debug, Clone, thiserror::Error)]
 #[error("{code}: {message}")]
 pub struct CoreError {
@@ -52,7 +52,7 @@ impl CoreError {
         self.code
     }
 
-    /// 스폰 io 오류 분류. NotFound는 거의 항상 "PATH에 없다"다.
+    /// Classifies a spawn io error. NotFound almost always means "not on PATH".
     pub fn from_io(bin: &str, error: &std::io::Error) -> Self {
         let code = if error.kind() == std::io::ErrorKind::NotFound {
             CoreCode::SpawnNotFound
@@ -62,7 +62,7 @@ impl CoreError {
         Self::new(code, format!("{bin} 기동 실패: {error}"))
     }
 
-    /// IPC 문자열 표현 — 프론트는 접두어 코드로 분기할 수 있다.
+    /// IPC string representation — the frontend can branch on the prefix code.
     pub fn to_ipc(&self) -> String {
         format!("{}: {}", self.code, self.message)
     }

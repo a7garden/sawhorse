@@ -1,12 +1,13 @@
-// 중복 실행 방지 — 버튼 하나에 실행 하나.
+// Dedup for runs — one run per button.
 //
-// 호스트는 잡마다 "무엇을 대상으로 무엇을 하는가"를 나타내는 키(Job.dedupKey)를 붙이고,
-// 같은 키의 잡이 대기·실행 중이면 새 요청을 받지 않는다(jobs.rs 의 dedup_key). 화면은
-// 같은 키로 진행 중인 잡을 찾아 버튼을 "실행 중"으로 바꾸고, 다시 누르면 중단시킨다.
+// The host attaches a key (Job.dedupKey) to each job expressing "what runs against what target";
+// a new request with the same key is rejected while a job with that key is queued or running
+// (dedup_key in jobs.rs). The UI finds the in-progress job by key, flips the button to
+// "실행 중" (running), and pressing it again aborts the job.
 //
-// 작업 정의·예약처럼 실행 경로가 여러 갈래인 것은 호스트가 계산한 키를 그대로 받아 쓴다
-// (TaskRow.jobKey · ScheduleView.jobKey). 여기서 직접 만드는 것은 화면이 인자를 다 아는
-// 팩 액션과 단순 잡뿐이다.
+// Execution paths with multiple entry routes, like task definitions and schedules, reuse
+// the host-computed key (TaskRow.jobKey · ScheduleView.jobKey). Only pack actions, where the
+// UI knows all the params, and simple jobs compose keys here.
 import type { Job, JobRequest } from "./types";
 
 function text(value: unknown): string {
@@ -28,14 +29,14 @@ function compose(
   return `${kind}|${target}|${project}|${[...new Set(ids)].sort().join(",")}`;
 }
 
-/** 팩 액션 버튼의 키. `run_pack_action` 이 만드는 요청과 같은 모양이어야 한다. */
+/** Key for a pack action button. Must match the request built by `run_pack_action`. */
 export function actionJobKey(
   packId: string,
   actionId: string,
   params: Record<string, unknown> = {},
   projectId?: string | null,
 ): string {
-  // 확장 팩(x-)은 호스트가 활성 프로젝트를 파라미터로 넣어 준다.
+  // Extension packs (x-) get the active project as a host-provided param.
   const project =
     text(params.project) ||
     text(params.projectId) ||
@@ -48,7 +49,7 @@ export function actionJobKey(
   );
 }
 
-/** `enqueueJob` 으로 바로 던지는 잡의 키. */
+/** Key for jobs thrown straight via `enqueueJob`. */
 export function jobRequestKey(req: JobRequest): string {
   const target =
     req.kind === "action"
@@ -69,7 +70,7 @@ export function isActive(job: Job): boolean {
   return job.status === "queued" || job.status === "running";
 }
 
-/** 이 키로 지금 돌고 있는 잡. 없으면 null. */
+/** The job currently running with this key. null if none. */
 export function activeJob(
   jobs: Job[],
   jobKey: string | null | undefined,

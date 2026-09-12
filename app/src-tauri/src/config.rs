@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 
 use arc_swap::ArcSwap;
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
@@ -69,12 +70,12 @@ impl Default for Schedules {
     }
 }
 
-/// 기본은 headless — 실행은 창 없이 돌고, herdr는 그 진행을 들여다보는 뷰어다.
-/// herdr가 실행 자체를 소유하려면 명시적으로 골라야 한다.
+/// The default is headless — runs execute without a window, and herdr is a viewer watching progress.
+/// To let herdr own execution itself, it must be chosen explicitly.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HerdrCfg {
-    /// "headless" | "herdr". 옛 "auto"는 코드상 headless와 같아서 정리했다.
+    /// "headless" | "herdr". The old "auto" behaved identically to headless in code, so it was retired.
     pub mode: String,
     pub bin: String,
     /// named herdr session; empty = default session
@@ -110,13 +111,13 @@ impl Default for HerdrCfg {
     }
 }
 
-/// 설정 화면에 내놓는 모드. 동작이 둘뿐이라 선택지도 둘이다.
+/// The modes offered in the settings screen. Only two behaviors exist, so only two choices.
 pub const HERDR_MODES: [&str; 2] = ["headless", "herdr"];
-/// 저장된 설정 파일에서 아직 들어올 수 있는 옛 값. 거부하지 않고 받아서 정규화한다.
+/// Legacy value still readable from a saved config file. Accepted, not rejected, then normalized.
 pub const HERDR_MODE_ALIASES: [&str; 1] = ["auto"];
 
-/// 설정 값 하나를 실제 동작 하나로 옮긴다. 옛 "auto"는 herdr가 떠 있든 말든
-/// `sdlc_harness`가 늘 headless로 돌렸으므로 headless로 읽는 것이 사실에 맞다.
+/// Maps one config value onto one actual behavior. The old "auto" always ran `sdlc_harness`
+/// headless whether or not herdr was up, so reading it as headless matches the facts.
 pub fn herdr_mode(value: &str) -> &'static str {
     if value == "herdr" {
         "herdr"
@@ -149,14 +150,14 @@ impl HerdrCfg {
     }
 }
 
-/// 카탈로그에 없는 에이전트를 사용자가 직접 등록하는 항목. 사내 도구나 직접 만든 CLI 가
-/// 마법사 감지 목록에 뜨게 하는 유일한 방법이다.
+/// Entry for a user registering an agent missing from the catalog. The only way an in-house
+/// tool or hand-rolled CLI shows up in the wizard's detection list.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CustomAgent {
     pub id: String,
     pub name: String,
-    /// 실행 파일 이름 또는 절대 경로. 비어 있으면 `id` 를 이름으로 본다.
+    /// Executable name or absolute path. When empty, `id` is treated as the name.
     pub bin: String,
     pub install_url: String,
 }
@@ -170,12 +171,12 @@ pub struct DashboardCfg {
     pub permission_mode: String,
     pub launch_at_login: bool,
     pub herdr: HerdrCfg,
-    /// 마법사에서 고른 기본 에이전트. 비어 있거나 현재 PC에서 찾을 수 없으면
-    /// 감지된 Herdr 호환 에이전트를 자동으로 고른다.
+    /// Default agent picked in the wizard. When empty or not found on this PC, a detected
+    /// herdr-compatible agent is chosen automatically.
     pub default_agent: String,
     pub custom_agents: Vec<CustomAgent>,
-    /// 승인 정책·통합 방식(설계 255-264줄). 새 세션의 초기값 계산에만 쓰고,
-    /// 활성 세션은 시작 때 찍은 policy snapshot을 따른다.
+    /// Approval policy and integration style (design lines 255-264). Used only to compute initial
+    /// values for new sessions; active sessions follow the policy snapshot taken at their start.
     pub collaboration: crate::collab::model::CollaborationPolicy,
 }
 
@@ -207,13 +208,13 @@ pub struct ProjectCfg {
     pub verify: String,
 }
 
-/// 확장(pack) 블록. 호스트 소유이고 플러그인은 모르는 키로 무시한다.
+/// Packs block. Owned by the host; the plugin ignores keys it does not know.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PacksCfg {
-    /// 활성 팩 id. **비어 있으면 전부 활성** — 업그레이드한 기존 사용자의 화면이 사라지지 않게.
+    /// Enabled pack ids. **Empty means all enabled** — so upgrading users' screens do not disappear.
     pub enabled: Vec<String>,
-    /// 팩 id -> 그 팩의 설정 값 (스키마는 팩이 선언)
+    /// Pack id -> that pack's settings values (schema declared by the pack)
     pub settings: Map<String, Value>,
 }
 
@@ -224,17 +225,17 @@ pub struct ConfigView {
     pub vault_path: String,
     pub default_project: String,
     pub projects: Vec<ProjectCfg>,
-    /// 새 코어 프로젝트 정본. key는 등록 때 생성한 UUID projectId다(설계 294-295줄).
+    /// New canonical core projects. The key is the UUID projectId generated at registration (design lines 294-295).
     pub core_projects: BTreeMap<String, crate::collab::model::CoreProject>,
     pub dashboard: DashboardCfg,
     pub packs: PacksCfg,
-    /// `dashboard.schedules` 원본 전체. 정규 키는 `<packId>.<actionId>` 이고
-    /// 예전 키(`morning`)도 그대로 실려 온다 — 별칭 폴백은 `schedule_override` 가 한다.
+    /// The full raw `dashboard.schedules`. Canonical keys are `<packId>.<actionId>`, and old
+    /// keys (`morning`) still ride along — the `schedule_override` fallback handles aliasing.
     pub schedules: BTreeMap<String, RoutineSched>,
 }
 
 impl ConfigView {
-    /// 예약 재정의 조회. 정규 키 우선, 없으면 예전 루틴 키(`morning` 등)를 본다.
+    /// Schedule override lookup. Canonical key first, then the old routine key (`morning` etc.).
     pub fn schedule_override(&self, key: &str, legacy: &str) -> Option<RoutineSched> {
         self.schedules
             .get(key)
@@ -256,7 +257,7 @@ impl ConfigView {
             .unwrap_or_default()
     }
 
-    #[allow(dead_code)] // 팩 설정 단일 값 조회 — 현재는 테스트/향후 네이티브 뷰용
+    #[allow(dead_code)] // single pack setting lookup — currently for tests/future native views
     pub fn pack_setting_str(&self, pack_id: &str, key: &str) -> String {
         self.pack_settings(pack_id)
             .get(key)
@@ -311,8 +312,8 @@ pub fn view(raw: &Value, exists: bool) -> ConfigView {
         .and_then(|o| o.get("dashboard"))
         .and_then(|v| serde_json::from_value::<DashboardCfg>(v.clone()).ok())
         .unwrap_or_default();
-    // 화면과 진단이 같은 값을 보게 여기서 한 번 정규화한다. 옛 "auto"가 남아 있으면
-    // 설정 화면의 선택지에 없어서 빈 칸으로 보이는데, 실제 동작은 headless였다.
+    // Normalize once here so the screen and diagnostics see the same value. A leftover old "auto"
+    // would show as blank since it is absent from the settings screen's choices, though it ran headless.
     dashboard.herdr = dashboard.herdr.sanitized();
     let packs = obj
         .and_then(|o| o.get("packs"))
@@ -348,8 +349,8 @@ pub fn load_view() -> ConfigView {
     SNAPSHOT.load_full().as_ref().clone()
 }
 
-/// 프로세스 공유 설정 스냅샷. 틱마다 파일을 다시 읽지 않게 한다 — 읽기는
-/// `load_view()`(스냅샷 조회), 갱신은 `refresh_view()`(저장 직후·파일 감시)만 한다.
+/// Process-shared config snapshot. Avoids re-reading the file every tick — reads go through
+/// `load_view()` (snapshot lookup); only `refresh_view()` replaces it (after saves and on file watches).
 static SNAPSHOT: LazyLock<ArcSwap<ConfigView>> =
     LazyLock::new(|| ArcSwap::from_pointee(load_view_from_disk()));
 
@@ -359,7 +360,7 @@ fn load_view_from_disk() -> ConfigView {
     view(&load_raw_at(&path), exists)
 }
 
-/// 디스크에서 다시 읽어 스냅샷을 교체한다.
+/// Re-reads from disk and swaps the snapshot.
 pub fn refresh_view() {
     SNAPSHOT.store(Arc::new(load_view_from_disk()));
 }
@@ -392,7 +393,7 @@ fn validate_herdr_key(key: &str, v: &Value) -> Result<(), String> {
             let m = v
                 .as_str()
                 .ok_or_else(|| "herdr.mode는 문자열이어야 합니다".to_string())?;
-            // 별칭까지 받아 준다 — 옛 설정을 그대로 되쓰는 클라이언트가 저장에서 막히면 안 된다.
+            // Accept aliases too — clients re-writing an old config unchanged must not be blocked at save time.
             if !HERDR_MODES.contains(&m) && !HERDR_MODE_ALIASES.contains(&m) {
                 return Err(format!("알 수 없는 herdr 실행 모드: {m}"));
             }
@@ -432,7 +433,7 @@ fn validate_herdr_key(key: &str, v: &Value) -> Result<(), String> {
     }
     Ok(())
 }
-/// 승인 정책 키 검증. 정책값은 설계 255-264줄·238-241줄의 허용 집합으로 제한한다.
+/// Validates collaboration policy keys. Values are limited to the allowed sets of design lines 255-264 and 238-241.
 fn validate_collaboration_key(key: &str, v: &Value) -> Result<(), String> {
     let as_enum = |allowed: &[&str]| -> Result<(), String> {
         let s = v
@@ -450,13 +451,18 @@ fn validate_collaboration_key(key: &str, v: &Value) -> Result<(), String> {
         "failurePolicy" => as_enum(&["pause"]),
         "integrationStrategy" => as_enum(&["mergeCommit"]),
         "remoteWriteApproval" => as_enum(&["required"]),
-        _ => Ok(()), // 미래 키는 보존만 한다
+        _ => Ok(()), // future keys are only preserved
     }
 }
+
+/// Serializes the config read-merge-write cycle; concurrent saves would
+/// otherwise drop each other's changes.
+static SAVE_LOCK: Mutex<()> = Mutex::new(());
 
 /// Merge a patch (ConfigPatch from the frontend) into the raw config and write it back.
 /// Unknown keys anywhere in the document are preserved untouched.
 pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
+    let _save_guard = SAVE_LOCK.lock();
     let mut raw = load_raw_at(path);
     let obj = raw
         .as_object_mut()
@@ -508,8 +514,8 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
     }
 
     if let Some(map) = patch.get("coreProjects").and_then(Value::as_object) {
-        // 새 코어 프로젝트 정본(설계 294-300줄). key는 UUID projectId. legacy
-        // improve.projects와 별개 블록이라 서로를 지우지 않는다 — rollback 대응.
+        // New canonical core projects (design lines 294-300). Keys are UUID projectIds. A separate
+        // block from legacy improve.projects, so neither deletes the other — rollback safety.
         let mut cleaned = Map::new();
         for (id, pv) in map {
             if id.trim().is_empty() {
@@ -522,7 +528,7 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
             }
             let mut value = serde_json::to_value(&p)
                 .map_err(|e| format!("coreProjects.{id} 직렬화 실패: {e}"))?;
-            // 통합 경로가 비어 있으면 프로젝트 path 자체를 쓴다(설계 269-271줄).
+            // When the integration path is empty, use the project path itself (design lines 269-271).
             if value
                 .get("integration")
                 .and_then(|i| i.get("path"))
@@ -577,8 +583,8 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
                     target.insert(k.clone(), v.clone());
                 }
                 "customAgents" => {
-                    // 목록 통째 교체. 항목 하나가 망가져 있으면 전부 거절해서 반쯤 저장된
-                    // 상태를 만들지 않는다.
+                    // Whole-list replacement. If one entry is broken, everything is rejected
+                    // rather than leaving a half-saved state.
                     let list = v
                         .as_array()
                         .ok_or_else(|| "customAgents는 배열이어야 합니다".to_string())?;
@@ -655,7 +661,7 @@ pub fn save_patch_at(path: &Path, patch: &Value) -> Result<ConfigView, String> {
                 .or_insert_with(|| Value::Object(Map::new()))
                 .as_object_mut()
                 .ok_or_else(|| "packs.settings 블록이 객체가 아닙니다".to_string())?;
-            // 팩 단위로 통째 교체 — 팩 스키마는 팩이 아는 것이고 호스트는 키를 모른다.
+            // Replaced whole per pack — the pack knows its schema; the host does not know the keys.
             for (pack_id, values) in map {
                 if !values.is_object() {
                     return Err(format!("packs.settings.{pack_id}는 객체여야 합니다"));
@@ -677,16 +683,18 @@ pub fn save_patch(patch: &Value) -> Result<ConfigView, String> {
 }
 
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let tmp = path.with_extension("tmp");
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    {
-        let mut f = std::fs::File::create(&tmp)?;
-        f.write_all(bytes)?;
-        f.sync_all().ok();
-    }
-    std::fs::rename(&tmp, path)
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    // Unique temp file per write: a fixed `.tmp` name lets concurrent saves
+    // clobber each other mid-write and corrupt the rename target.
+    let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
+    tmp.write_all(bytes)?;
+    tmp.as_file().sync_all().ok();
+    tmp.persist(path).map_err(|e| e.error)?;
+    Ok(())
 }
 
 // ---------- diagnostics ----------
@@ -721,9 +729,9 @@ pub struct HerdrDiag {
     pub server_ok: bool,
     /// what the next job would actually use: "herdr" | "headless"
     pub effective_runner: String,
-    /// herdr가 실행을 소유하지 않는 이유. herdr 모드로 돌 때는 없다.
+    /// Why herdr does not own execution. Absent when running in herdr mode.
     pub reason: Option<String>,
-    /// headless 실행을 herdr 창으로 들여다볼 수 있는가 — 「herdr로 보기」의 가부.
+    /// Whether a headless run can be watched through a herdr window — gates "view in herdr".
     pub viewer_ok: bool,
 }
 
@@ -755,14 +763,14 @@ async fn probe(bin: &str, args: &[&str], cwd: Option<&Path>) -> Option<String> {
 pub async fn herdr_diagnostics(cfg: &HerdrCfg) -> HerdrDiag {
     let cfg = cfg.sanitized();
     let h = crate::herdr::Herdr::new(&cfg);
-    // headless 모드에서도 herdr를 조회한다 — 실행은 창 없이 돌지만 「herdr로 보기」가
-    // 그 진행 로그를 herdr 창에 띄우므로, 서버가 떠 있는지가 여전히 답해야 할 질문이다.
+    // Query herdr even in headless mode — runs execute without a window, but "view in herdr"
+    // shows their progress log in a herdr window, so whether the server is up is still the question.
     let version = h.version().await;
     let server_ok = version.is_some() && h.reachable().await;
     let effective = herdr_mode(&cfg.mode);
-    // 다음 잡이 무엇으로 돌지, 왜 그런지를 늘 한 줄로 말한다. herdr 모드를 골랐는데
-    // herdr를 못 쓰는 경우는 실행 파일이 없는 것과 서버가 안 뜬 것이 처방이 달라서 나눈다.
-    // (이때 러너는 headless로 조용히 내려가지 않는다 — 잡이 herdr로 시작하려다 실패한다.)
+    // Always states in one line what the next job runs on and why. Choosing herdr mode while
+    // herdr is unusable splits into "executable missing" vs "server not up" because their remedies
+    // differ. (There the runner does not quietly fall back to headless — the job tries herdr and fails.)
     let reason = match effective {
         "herdr" if version.is_none() => Some("herdr 실행 파일을 찾지 못했다".to_string()),
         "herdr" if !server_ok => Some("herdr 서버에 연결하지 못했다".to_string()),
@@ -833,8 +841,8 @@ mod tests {
         assert_eq!(v.dashboard.herdr.max_parallel, 2);
     }
 
-    /// 기본은 headless 하나로 읽혀야 하고, 이미 저장된 "auto" 는 거부가 아니라
-    /// 같은 뜻(headless)으로 받아들여야 한다 — 그게 그 값이 원래 하던 동작이다.
+    /// The default must read as plain headless, and an already-stored "auto" should be accepted
+    /// as meaning the same thing (headless), not rejected — that is what the value always did.
     #[test]
     fn legacy_auto_mode_reads_as_headless_and_is_still_accepted() {
         assert_eq!(HerdrCfg::default().mode, "headless");
@@ -848,7 +856,7 @@ mod tests {
         );
         assert_eq!(legacy.dashboard.herdr.mode, "headless");
 
-        // 저장 경로에서도 막히지 않는다
+        // The save path must not reject it either
         assert!(validate_herdr_key("mode", &serde_json::json!("auto")).is_ok());
         assert!(validate_herdr_key("mode", &serde_json::json!("headless")).is_ok());
         assert!(validate_herdr_key("mode", &serde_json::json!("herdr")).is_ok());
@@ -1043,19 +1051,19 @@ mod tests {
                 "si.lunch": {"enabled": false, "time": "13:00"}}}}),
             true,
         );
-        // 정규 키가 있으면 그것
+        // Canonical key wins when present
         assert_eq!(
             v.schedule_override("si.lunch", "lunch").unwrap().time,
             "13:00"
         );
-        // 없으면 예전 루틴 키
+        // Otherwise the old routine key
         assert_eq!(
             v.schedule_override("si.morning", "morning").unwrap().time,
             "08:10"
         );
-        // 둘 다 없으면 팩 기본값을 쓰라는 뜻
+        // When neither exists, it means "use the pack default"
         assert!(v.schedule_override("si.evening", "evening").is_none());
-        // 기존 타입 계약도 유지
+        // The existing typed contract also still holds
         assert_eq!(v.dashboard.schedules.morning.time, "08:10");
     }
 

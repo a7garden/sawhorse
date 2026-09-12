@@ -22,7 +22,7 @@ export type PanelWidgetId =
   | "reading"
   | "checklist"
   | "journal";
-/** 목록형 패널 위젯과 낱개 지표 카드가 같은 보드 위에서 같은 자격으로 산다. */
+/** List-style panel widgets and individual metric cards live on the same board as equals. */
 export type DashboardWidgetId = PanelWidgetId | MetricWidgetId;
 export interface DashboardWidgetDefinition {
   id: DashboardWidgetId;
@@ -34,8 +34,8 @@ export interface DashboardWidgetDefinition {
 }
 export const DASHBOARD_BREAKPOINTS = { lg: 900, md: 620, sm: 0 };
 export const DASHBOARD_COLS = { lg: 12, md: 8, sm: 4 };
-// 카테고리는 사이드바 진입점과 같은 이름을 쓴다 — 개발(WorkItem) / 자동화(TaskDef) / 볼트.
-// 지표만은 어느 화면에도 속하지 않는 숫자 한 장이므로 자기 이름을 쓴다.
+// Categories reuse the sidebar entry names — work (WorkItem) / automation (TaskDef) / vault.
+// Metrics alone belong to no screen, being a single card of numbers, so they use their own name.
 const panelEntries: [PanelWidgetId, string, string, string, string][] = [
   ["projects", "프로젝트 현황", "프로젝트별 진행·검토·보류", "개발", "dev"],
   ["documents", "작업 문서", "워크플로우별 산출물과 문서 열기", "워크플로", "workflow"],
@@ -81,8 +81,9 @@ const metricEntries: [DashboardWidgetId, string, string, string, string][] =
 const entries = [...metricEntries, ...panelEntries];
 
 /**
- * 위젯의 고유 크기. 지표 카드는 숫자 한 장이라 작게 시작하고, 오늘 타임라인은
- * 가로로 길어야 읽히므로 폭을 통째로 쓰며 통계·할 일·목록이 겹쳐 있어 더 높다.
+ * Intrinsic widget sizes. A metric card is a single number so it starts small;
+ * the timeline needs a broad column, and project and calendar lists each get
+ * half a desktop row. Narrow screens preserve the same reading order.
  */
 function sizeOf(
   id: DashboardWidgetId,
@@ -96,23 +97,22 @@ function sizeOf(
       minW: 2,
       minH: 2,
     };
-  const full = id === "today";
-  const half = breakpoint === "lg" ? cols / 2 : cols;
   if (breakpoint === "lg")
     return {
-      w: full ? cols : half,
-      h: id === "today" ? 7 : 8,
+      w: id === "today" ? 8 : id === "jobs" ? 4 : 6,
+      h: ["projects", "events", "due", "schedules"].includes(id) ? 8 : 9,
       minW: 3,
       minH: 3,
     };
   if (breakpoint === "md")
-    return { w: cols, h: id === "today" ? 10 : 8, minW: 3, minH: 3 };
+    return { w: ["jobs", "projects", "events", "due"].includes(id) ? 4 : cols, h: id === "today" ? 10 : 8, minW: 3, minH: 3 };
   return { w: cols, h: id === "today" ? 11 : 8, minW: 2, minH: 3 };
 }
 
 /**
- * 기본 배치는 순서대로 채운다. 전체폭 위젯은 자기 줄을 혼자 쓰고, 나머지는 두 칸씩
- * 짝지어 놓는다. 한 번에 훑어 계산해야 겹치는 좌표가 생기지 않는다.
+ * The default layout fills in order. Full-width widgets take their own row;
+ * the rest are paired two columns at a time. Computing in one sweep avoids
+ * overlapping coordinates.
  */
 function packLayout(
   ids: DashboardWidgetId[],
@@ -155,7 +155,7 @@ export const WIDGET_REGISTRY: DashboardWidgetDefinition[] = entries.map(
     description,
     category,
     categoryKey,
-    // 카탈로그에서 다시 켤 때는 크기만 쓰고 위치는 보드 맨 아래로 붙는다.
+    // When re-enabled from the catalog only the size is used; position snaps to the bottom of the board.
     defaultLayout: {
       lg: { x: 0, y: 0, ...sizeOf(id, "lg") },
       md: { x: 0, y: 0, ...sizeOf(id, "md") },
@@ -166,17 +166,18 @@ export const WIDGET_REGISTRY: DashboardWidgetDefinition[] = entries.map(
 export const WIDGET_BY_ID = Object.fromEntries(
   WIDGET_REGISTRY.map((w) => [w.id, w]),
 ) as Record<DashboardWidgetId, DashboardWidgetDefinition>;
-/** 예전 '핵심 지표' 묶음이 채우던 네 장. 이관과 기본 배치가 같은 목록을 본다. */
+/** The four cards the old 'core metrics' bundle filled. Migration and the default layout read the same list. */
 export const DEFAULT_METRIC_WIDGET_IDS: MetricWidgetId[] =
   DEFAULT_METRIC_KEYS.map(metricWidgetId);
-/** Start with actionable work beside project context; extra widgets remain in the catalog. */
+/** Shared activity first, project and calendar context next, then upcoming work. */
 export const DEFAULT_WIDGET_IDS: DashboardWidgetId[] = [
-  ...DEFAULT_METRIC_WIDGET_IDS,
-  "next",
-  "projects",
+  "metric:jobs-live", "metric:jobs-failed", "metric:due-today", "metric:done-today",
   "today",
-  "due",
+  "jobs",
+  "projects",
   "events",
+  "due",
+  "schedules",
 ];
 export function createDefaultLayouts(ids: DashboardWidgetId[] = DEFAULT_WIDGET_IDS): ResponsiveLayouts<DashboardBreakpoint> {
   return Object.fromEntries(
@@ -187,10 +188,9 @@ export function createDefaultLayouts(ids: DashboardWidgetId[] = DEFAULT_WIDGET_I
   );
 }
 
-/** Project dashboards use process context instead of personal feeds and daily checklists. */
-export const PROJECT_WIDGET_IDS = WIDGET_REGISTRY.map((widget) => widget.id)
-  .filter((id) => !["projects", "reading", "checklist", "journal", "schedules"].includes(id));
-export const PROJECT_DEFAULT_WIDGET_IDS: DashboardWidgetId[] = [
-  "metric:running", "metric:review", "metric:blocked", "metric:overdue",
-  "stages", "next", "jobs", "documents", "due", "events",
-];
+/** The shared dashboard observes activity. Workflow decisions belong to project workbenches.
+ * Retain legacy definitions above so saved sizes can still be safely read during migration. */
+export const GLOBAL_WIDGET_IDS = WIDGET_REGISTRY.map((widget) => widget.id).filter((id) => ![
+  "stages", "issues", "metric:backlog", "metric:review", "metric:ready", "metric:running",
+  "metric:hold", "metric:assigned", "metric:needs-approval", "metric:blocked",
+].includes(id));

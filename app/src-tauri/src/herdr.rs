@@ -153,7 +153,7 @@ impl Herdr {
             let parsed: Value = serde_json::from_str(text.trim()).unwrap_or(Value::Null);
             return Ok(parsed.get("result").cloned().unwrap_or(parsed));
         }
-        // 실패 stderr 에는 herdr 의 JSON 이 아니라 cmd 의 CP949 메시지가 올 수 있다.
+        // On failure the stderr may carry cmd's CP949 message instead of herdr's JSON.
         let err_text = crate::spawn::decode_console(&out.stderr);
         let parsed: Value = serde_json::from_str(err_text.trim()).unwrap_or(Value::Null);
         let code = parsed
@@ -342,10 +342,10 @@ impl Herdr {
         self.call(&["agent", "focus", target]).await
     }
 
-    // ---------- 터미널 화면용 조회 ----------
+    // ---------- Queries for the terminal screen ----------
 
-    /// herdr 가 보는 세계 전체. 실패는 오류가 아니라 `available: false` 다 —
-    /// herdr 없이도 앱은 돌아가야 하고, 화면은 설치 안내로 바뀐다.
+    /// The whole world as herdr sees it. Failure is not an error but `available: false` —
+    /// the app must run without herdr, and the screen switches to install guidance.
     pub async fn snapshot(&self) -> HerdrSnapshot {
         let mut snap = HerdrSnapshot {
             session: self.cfg.session.clone(),
@@ -370,8 +370,8 @@ impl Herdr {
         snap
     }
 
-    /// 페인의 최근 터미널 출력. `--format text` 는 JSON 이 아니라 raw 텍스트를 낸다 —
-    /// 앱을 떠나지 않고 「승인 대기」 세션이 무엇을 묻는지 보기 위한 것이다.
+    /// A pane's recent terminal output. `--format text` yields raw text rather than JSON —
+    /// for seeing what a "waiting for approval" session is asking without leaving the app.
     pub async fn agent_read(&self, target: &str, lines: u32) -> HerdrResult<String> {
         let n = lines.clamp(5, 200).to_string();
         let args = [
@@ -409,7 +409,7 @@ impl Herdr {
             ));
         }
         let text = String::from_utf8_lossy(&out.stdout).to_string();
-        // 판(version)에 따라 JSON 으로 감싸 오기도 한다. 그때는 문자열 필드만 꺼낸다.
+        // Depending on the herdr version this may arrive wrapped in JSON; then only string fields are pulled out.
         if let Ok(v) = serde_json::from_str::<Value>(text.trim()) {
             let node = v.get("result").unwrap_or(&v);
             for key in ["text", "output", "content", "lines"] {
@@ -429,7 +429,7 @@ impl Herdr {
         self.call(&["pane", "focus", pane_id]).await
     }
 
-    /// 사람이 직접 쓸 빈 탭. 잡 탭과 달리 에이전트를 자동으로 띄우지 않는다.
+    /// An empty tab for direct human use. Unlike job tabs, no agent is launched automatically.
     pub async fn open_shell_tab(
         &self,
         workspace: &str,
@@ -488,10 +488,10 @@ impl Herdr {
     }
 }
 
-// ---------- 조회 결과 타입 ----------
+// ---------- Query result types ----------
 //
-// herdr 의 소켓 응답은 snake_case 이고 프론트엔드 계약은 camelCase 라, 한쪽만 rename 한다.
-// 모르는 필드는 무시하고 없는 필드는 기본값 — herdr 가 필드를 늘려도 화면이 깨지지 않는다.
+// herdr's socket responses are snake_case while the frontend contract is camelCase, so only one
+// side is renamed. Unknown fields are ignored, missing fields default — herdr can add fields without breaking the screen.
 
 #[derive(Serialize, serde::Deserialize, Clone, Debug, Default)]
 #[serde(default)]
@@ -701,7 +701,7 @@ mod tests {
         assert_eq!(ws[0].workspace_id, "w1");
         assert_eq!(ws[0].label, "sawhorse");
         assert_eq!(ws[0].agent_status, "working");
-        // 프론트엔드 계약은 camelCase
+        // The frontend contract is camelCase
         let json = serde_json::to_string(&ws[0]).unwrap();
         assert!(json.contains("\"workspaceId\""), "{json}");
 
@@ -714,7 +714,7 @@ mod tests {
         assert_eq!(agents[0].agent_status, "blocked");
         assert_eq!(agents[0].cwd, "/x");
 
-        // 모양이 다르면 빈 목록 (오류 아님)
+        // A differently shaped payload means an empty list (not an error)
         let none: Vec<HerdrTab> = parse_list(&serde_json::json!({"tabs": "nope"}), "tabs");
         assert!(none.is_empty());
     }

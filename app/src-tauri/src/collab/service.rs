@@ -1,8 +1,8 @@
-// 협업 서비스. 설계 815줄: 세션 서비스와 command 경계.
+// Collaboration service. Design line 815: session service and command boundary.
 //
-// 상태 전이·큐 진행·드라이버 조립·이벤트 방출을 한 곳에 모은다. tauri 커맨드는
-// 이 서비스의 메서드만 부른다. 승인 큐는 perChange 직렬 처리다(설계 355-357줄) —
-// 후보 하나가 verified/reverted 등으로 종결되기 전까지 다음 후보를 건드리지 않는다.
+// Gathers state transitions, queue progression, driver assembly, and event emission in one place. Tauri
+// commands call only this service's methods. The approval queue is perChange serial processing (design lines 355-357) —
+// the next candidate is not touched until the current one is finalized as verified/reverted, etc.
 
 use super::drivers::{AgentDriver, ClaudeManagedDriver, CodexManualDriver};
 use super::events;
@@ -21,20 +21,20 @@ pub struct CollabService {
     pub store: StoreHandle,
     pub claude: Arc<ClaudeManagedDriver>,
     pub codex: Arc<CodexManualDriver>,
-    /// 통합 워커의 논리적 직렬화. OS lock과 별개로 프로세스 안에서 큐를 하나로 묶는다.
+    /// Logical serialization of the integration worker. Besides the OS lock, it ties the queue into one within the process.
     queue_lock: parking_lot::Mutex<()>,
 }
 
-/// 세션 생성 입력. 사람이 대시보드에서 확인한 값들이다.
+/// Session creation input. Values confirmed by a human on the dashboard.
 #[derive(Deserialize, Clone, Debug, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct CreateSessionInput {
     pub project_id: String,
     pub goal: String,
     pub mode: String,
-    /// direct 모드에서 통합 대상 branch. 비어 있으면 등록된 integration.branch.
+    /// Integration target branch in direct mode. Empty means the registered integration.branch.
     pub branch: String,
-    /// 레인 목록. 각 레인은 에이전트 한 명의 branch + worktree + task.
+    /// Lane list. Each lane is one agent's branch + worktree + task.
     pub lanes: Vec<LaneInput>,
 }
 
@@ -43,7 +43,7 @@ pub struct CreateSessionInput {
 pub struct LaneInput {
     pub task_id: String,
     pub task_prompt: String,
-    /// claude | codex. codex는 수동 제출 전용이다.
+    /// claude | codex. codex is for manual submission only.
     pub driver: String,
 }
 
@@ -65,9 +65,9 @@ impl CollabService {
         }
     }
 
-    // ---------- 세션 ----------
+    // ---------- Sessions ----------
 
-    /// 세션 생성(설계 117-135줄). 대표 체크아웃 확인 → 정책 스냅샷 → 세션·레인 기록 → 실행.
+    /// Creates a session (design lines 117-135). Verify representative checkout → policy snapshot → record session and lanes → run.
     pub fn create_session(
         &self,
         view: &crate::config::ConfigView,
@@ -98,7 +98,7 @@ impl CollabService {
             return Err(format!("통합 체크아웃 경로가 없다: {integration_path}"));
         }
 
-        // 세션 시작 때 사람이 path, branch, HEAD를 확인한다(설계 134-135줄).
+        // A human confirms path, branch, and HEAD at session start (design lines 134-135).
         let identity = git::repo_identity(&repo)?;
         let head = git::head_info(&repo)?;
         if let Some(danger) = &head.dangerous_state {
@@ -116,7 +116,7 @@ impl CollabService {
                 head.branch
             ));
         }
-        // 같은 통합 체크아웃 lease를 두 세션에 동시에 줄 수 없다(설계 537-538줄).
+        // The same integration checkout lease cannot go to two sessions at once (design lines 537-538).
         let active = self.store.active_sessions_for_path(&integration_path)?;
         if !active.is_empty() {
             return Err(format!(
@@ -125,7 +125,7 @@ impl CollabService {
             ));
         }
 
-        // policy snapshot v1 — 시작 때 사람이 확인한 정책이 고정된다.
+        // policy snapshot v1 — the policy the human confirmed at start is fixed.
         let (policy_version, _policy) =
             policy::snapshot_for_new_session(&self.store, &input.project_id, view)?;
 
@@ -152,7 +152,7 @@ impl CollabService {
         };
         self.store.insert_session(&session)?;
 
-        // 레인: agent branch + 전용 worktree + 드라이버 시작.
+        // Lanes: agent branch + dedicated worktree + driver start.
         for lane in &input.lanes {
             self.start_lane(&session, lane)?;
         }
@@ -172,7 +172,7 @@ impl CollabService {
         Ok(session)
     }
 
-    /// 레인 하나를 만들고 실행한다. worktree는 코어가 만들어 registry에 정확히 기록한다(설계 495줄).
+    /// Creates and runs one lane. The core creates the worktree and records it exactly in the registry (design line 495).
     fn start_lane(&self, session: &Session, lane: &LaneInput) -> Result<AgentRun, String> {
         let branch = format!(
             "sawhorse/agent/{}/{}",
@@ -197,14 +197,14 @@ impl CollabService {
         Ok(reports)
     }
 
-    /// 직렬 큐 처리. 한 번에 후보 하나만 통합한다(불변식 1·5).
+    /// Serial queue processing. Integrates only one candidate at a time (invariants 1 and 5).
     pub fn run_queue(
         &self,
         view: &crate::config::ConfigView,
     ) -> Result<Option<AttemptPhase>, String> {
         let _guard = self.queue_lock.lock();
         let pending = self.store.pending_change_sets()?;
-        // 순서: queued(승인됨) → approved → review_pending은 큐에 못 들어온다.
+        // Order: queued (approved) → approved; review_pending cannot enter the queue.
         let candidate = match pending
             .into_iter()
             .find(|c| matches!(c.status, ChangeSetStatus::Queued))
@@ -234,12 +234,14 @@ impl CollabService {
             .cloned()
             .unwrap_or_default();
 
-        // 승인 유효성: digest·예상 HEAD 일치(불변식 3).
+        // Approval validity: digest and expected HEAD must match (invariant 3).
         let approval = self
             .store
             .latest_approval(&candidate.id)?
             .ok_or("승인 기록이 없다")?;
-        if policy::approval_is_stale(&approval, "", &candidate)? {
+        let repo = PathBuf::from(&session.integration_path);
+        let head = git::head_info(&repo)?.head;
+        if policy::approval_is_stale(&approval, &head, &candidate)? {
             return Ok(None);
         }
 
@@ -259,7 +261,7 @@ impl CollabService {
         match result {
             Ok(phase) => Ok(Some(phase)),
             Err(e) if e.starts_with("HEAD_DRIFT:") => {
-                // 승인 때 HEAD와 다르면 무조건 재승인(설계 378-380줄).
+                // Any difference from the HEAD at approval time forces re-approval (design lines 378-380).
                 self.store
                     .update_change_set_status(&candidate.id, ChangeSetStatus::ReviewPending)?;
                 self.store.insert_audit_event(&events::make_event(
@@ -274,9 +276,9 @@ impl CollabService {
         }
     }
 
-    // ---------- 검토 ----------
+    // ---------- Review ----------
 
-    /// 후보 수용: 승인 기록 + (정책에 따라) 큐 진입. expected_head는 현재 통합 HEAD.
+    /// Accepts a candidate: approval record + queue entry (per policy). expected_head is the current integration HEAD.
     pub fn approve_candidate(&self, candidate_id: &str, decided_by: &str) -> Result<(), String> {
         let candidate = self
             .store
@@ -344,7 +346,7 @@ impl CollabService {
         Ok(())
     }
 
-    /// 수정 요청 → working으로 되돌려 에이전트가 이어서 작업하게 한다(설계 328줄).
+    /// Changes requested → back to working so the agent can continue (design line 328).
     pub fn request_changes(&self, candidate_id: &str, reason: &str) -> Result<(), String> {
         let candidate = self
             .store
@@ -361,7 +363,7 @@ impl CollabService {
         Ok(())
     }
 
-    // ---------- 검증 확정 ----------
+    // ---------- Verification confirmation ----------
 
     pub fn confirm_manual_ok(&self, candidate_id: &str) -> Result<(), String> {
         let candidate = self
@@ -373,7 +375,7 @@ impl CollabService {
             .get_session(&candidate.session_id)?
             .ok_or("세션이 없다")?;
         integration::confirm_manual_ok(&self.store, &session, &candidate)?;
-        // 검증 완료 뒤 이슈 노트 intent를 코어가 한 번만 적용한다(설계 76-78줄).
+        // After verification succeeds, the core applies issue note intents once (design lines 76-78).
         inbox::apply_note_intents(&self.store, candidate_id)?;
         Ok(())
     }
@@ -386,9 +388,9 @@ impl CollabService {
         integration::confirm_manual_failed(&self.store, &candidate, reason)
     }
 
-    // ---------- 복구 ----------
+    // ---------- Recovery ----------
 
-    /// 수정 계속: 현재 통합 HEAD에서 repair lane을 만든다(설계 423-424줄).
+    /// Continue with repairs: create a repair lane from the current integration HEAD (design lines 423-424).
     pub fn create_repair_lane(
         &self,
         candidate_id: &str,
@@ -435,7 +437,7 @@ impl CollabService {
             .unwrap_or(Path::new("."))
             .join("worktrees")
             .join(&run_id);
-        // 현재 통합 HEAD에서 worktree+branch 생성(설계 423줄).
+        // Create worktree+branch from the current integration HEAD (design line 423).
         let out = crate::spawn::no_window(std::process::Command::new("git"))
             .arg("-C")
             .arg(&repo)
@@ -490,7 +492,7 @@ impl CollabService {
         Ok(run)
     }
 
-    /// 변경 제거 — 사람의 행위 자체가 승인이다(설계 428줄).
+    /// Remove the change — the human's action is itself the approval (design line 428).
     pub fn revert_candidate(&self, candidate_id: &str) -> Result<AttemptPhase, String> {
         let candidate = self
             .store
@@ -500,7 +502,7 @@ impl CollabService {
             .store
             .get_session(&candidate.session_id)?
             .ok_or("세션이 없다")?;
-        let profile = VerifyProfile::default(); // revert 뒤 smoke는 기본 프로필로.
+        let profile = VerifyProfile::default(); // post-revert smoke uses the default profile.
         let ctx = IntegrationCtx {
             store: &self.store,
             project_id: &session.project_id,
@@ -516,9 +518,9 @@ impl CollabService {
         Ok(phase)
     }
 
-    // ---------- 종료 ----------
+    // ---------- Finalization ----------
 
-    /// direct 모드의 finalized: 모든 후보가 종결 상태인지 확인하고 lease를 푼다(설계 139-141줄).
+    /// finalized in direct mode: confirm every candidate is terminal and release the lease (design lines 139-141).
     pub fn finalize_session(&self, session_id: &str) -> Result<Session, String> {
         let session = self.store.get_session(session_id)?.ok_or("세션이 없다")?;
         let candidates = self.store.list_change_sets(session_id)?;
@@ -557,7 +559,7 @@ impl CollabService {
         Ok(())
     }
 
-    // ---------- 조회 ----------
+    // ---------- Queries ----------
 
     pub fn session_view(&self, session_id: &str) -> Result<SessionView, String> {
         let session = self.store.get_session(session_id)?.ok_or("세션이 없다")?;
@@ -592,9 +594,9 @@ impl CollabService {
     }
 }
 
-/// autoAfterPreflight 정책의 자동 허가(설계 240-242줄). 사전검사 통과 후보만
-/// policy authorization으로 큐에 넣는다. semantic overlap 후보는 자동 허가에서
-/// 제외한다 — 재승인과 수동 smoke가 필요한 위험 경로다(설계 398-402줄).
+/// Automatic authorization of the autoAfterPreflight policy (design lines 240-242). Only candidates that pass
+/// preflight enter the queue as policy authorizations. Semantic overlap candidates are excluded from
+/// automatic authorization — risky paths requiring re-approval and a manual smoke test (design lines 398-402).
 pub fn auto_authorize_candidates(
     store: &Store,
     view: &crate::config::ConfigView,
@@ -613,7 +615,7 @@ pub fn auto_authorize_candidates(
             continue;
         }
         let repo = PathBuf::from(&session.integration_path);
-        // preflight: 대표 체크아웃이 안전하고 후보 base가 현재 HEAD의 조상이어야 한다.
+        // preflight: the representative checkout must be safe and the candidate base must be an ancestor of the current HEAD.
         let head = match git::head_info(&repo) {
             Ok(h)
                 if h.clean
@@ -626,9 +628,9 @@ pub fn auto_authorize_candidates(
         };
         match git::is_ancestor(&repo, &candidate.base_sha, &head.head) {
             Ok(true) => {}
-            _ => continue, // 뒤처진 후보는 재검토 대상
+            _ => continue, // a stale candidate goes back for re-review
         }
-        // 정상 baseline: 현재 HEAD에서 검증 프로필이 성공해야 한다.
+        // Healthy baseline: the verification profile must pass at the current HEAD.
         let project = match view.core_projects.get(&session.project_id) {
             Some(p) => p,
             None => continue,

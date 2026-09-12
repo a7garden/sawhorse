@@ -1,14 +1,14 @@
-// spawn.rs — 자식 프로세스가 Windows에서 콘솔 창을 새로 열지 않게 막는다.
+// spawn.rs — keeps child processes from opening a new console window on Windows.
 //
-// 앱 자체는 windows_subsystem="windows"(main.rs)로 콘솔 없이 뜨지만, cmd·git·gh
-// 같은 콘솔 프로그램을 자식으로 스폰하면 OS가 자식용 콘솔 창을 새로 연다. 백그라운드
-// 틱(collab 3초, SDLC 하니스 5초, 스케줄러 20초)이 프로세스를 계속 띄우는 이 제품에선
-// 까만 창이 깜빡거리는 증상으로 보인다. CREATE_NO_WINDOW(0x0800_0000)를 걸면 창 없이
-// 파이프로만 붙는다. 다른 플랫폼에서는 하는 일이 없다.
+// The app itself launches without a console via windows_subsystem="windows" (main.rs), but when
+// it spawns console programs like cmd, git, or gh as children, the OS opens a new console window
+// for the child. In a product where background ticks (collab 3s, SDLC harness 5s, scheduler 20s)
+// keep spawning processes, that shows up as flickering black windows. CREATE_NO_WINDOW(0x0800_0000)
+// attaches via pipes only, with no window. No-op on other platforms.
 
 use std::process::Command as StdCommand;
 
-/// std 자식 프로세스. 빌더 체인 시작을 감싸 쓴다: `no_window(Command::new(..)).arg(..)`
+/// std child process. Wraps the start of a builder chain: `no_window(Command::new(..)).arg(..)`
 pub fn no_window(mut command: StdCommand) -> StdCommand {
     #[cfg(windows)]
     {
@@ -23,7 +23,7 @@ pub fn no_window(mut command: StdCommand) -> StdCommand {
     command
 }
 
-/// tokio 자식 프로세스. `no_window_async(tokio::process::Command::new(..))`
+/// tokio child process. `no_window_async(tokio::process::Command::new(..))`
 pub fn no_window_async(mut command: tokio::process::Command) -> tokio::process::Command {
     #[cfg(windows)]
     {
@@ -37,7 +37,7 @@ pub fn no_window_async(mut command: tokio::process::Command) -> tokio::process::
     command
 }
 
-/// CreateProcess가 직접 실행할 수 있는 확장자인가.
+/// Whether the extension is one CreateProcess can execute directly.
 #[cfg(windows)]
 fn is_native_executable(path: &std::path::Path) -> bool {
     path.extension()
@@ -45,10 +45,10 @@ fn is_native_executable(path: &std::path::Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("exe") || ext.eq_ignore_ascii_case("com"))
 }
 
-/// `claude` 같은 맨 이름을 실제 실행 파일로 바꿔 둔다. 해석은 PATH 전체를 훑는
-/// 파일 조회라, 3~5초 틱마다 도는 스폰이 매번 다시 하지 않게 성공한 결과만 캐시한다.
-/// 캐시된 경로가 사라졌으면(CLI 업데이트로 버전 디렉토리가 바뀌는 herdr가 대표적)
-/// 버리고 다시 찾는다.
+/// Resolves a bare name like `claude` to a real executable. Resolution is a file lookup scanning
+/// the whole PATH, so spawns running on every 3-5s tick cache only successful results instead of
+/// redoing it each time. If a cached path disappears (herdr, whose version directory changes on
+/// CLI update, is the classic case), drop it and look again.
 #[cfg(windows)]
 fn resolve_native(bin: &std::ffi::OsStr) -> Option<std::path::PathBuf> {
     use std::collections::HashMap;
@@ -70,14 +70,14 @@ fn resolve_native(bin: &std::ffi::OsStr) -> Option<std::path::PathBuf> {
     Some(resolved)
 }
 
-/// 외부 CLI 스폰의 단일 문. Windows에서는 네이티브 실행 파일(.exe/.com)을 직접
-/// 실행하고, npm 셈 같은 스크립트만 `cmd /c`로 감싼다. 모든 명령을 cmd로 보내면
-/// 긴 에이전트 프롬프트가 cmd의 8,191자 제한에 걸린다. `claude`처럼 확장자 없는
-/// 이름도 PATH·설치 폴더에서 .exe 로 해석되면 직접 실행한다 — GUI로 뜬 앱은 셸보다
-/// 짧거나 낡은 PATH를 물려받아 cmd 폴백이 곧 "명령줄이 너무 깁니다"로 이어진다.
-/// CreateProcess가 직접 실행할 수 없는 스크립트에는 기존 셸 호환성을 유지한다.
-/// 다른 플랫폼에서는 창 억제만 적용한다. cwd·env·stdio는 반환값 빌더 체인으로
-/// 잇는다. 새 스폰 지점은 이 함수만 쓴다.
+/// The single gate for spawning external CLIs. On Windows, native executables (.exe/.com) run
+/// directly and only scripts such as npm shims get wrapped in `cmd /c`. Sending every command
+/// through cmd would trip the 8,191-char cmd limit on long agent prompts. Extension-less names
+/// like `claude` also run directly when they resolve to a .exe on PATH or install folders —
+/// GUI-launched apps inherit a shorter or stale PATH, so the cmd fallback leads straight to
+/// "명령줄이 너무 깁니다" (the command line is too long). Scripts CreateProcess cannot run
+/// directly keep the existing shell compatibility. Other platforms only get window suppression.
+/// cwd, env, and stdio are chained onto the returned builder. New spawn sites must use this function.
 pub fn platform_command(bin: impl AsRef<std::ffi::OsStr>, args: &[&str]) -> StdCommand {
     #[cfg(windows)]
     {
@@ -102,10 +102,9 @@ pub fn platform_command(bin: impl AsRef<std::ffi::OsStr>, args: &[&str]) -> StdC
     }
 }
 
-/// 자식 프로세스의 콘솔 출력 한 덩어리를 사람 글로 옮긴다. UTF-8이 아니면(한국어
-/// Windows에서 cmd·시스템 메시지는 CP949) ANSI 코드페이지로 다시 읽고, 그래도
-/// 안 되면 손실 변환으로 떨어진다. 줄마다 인코딩이 다를 수 있는 로그는
-/// `decode_console_lines`를 쓴다.
+/// Translates a chunk of a child process's console output into human-readable text. If it is not
+/// UTF-8 (on Korean Windows, cmd and system messages are CP949), re-read it as the ANSI code page,
+/// falling back to lossy conversion. Logs whose lines may differ in encoding use `decode_console_lines`.
 pub fn decode_console(bytes: &[u8]) -> String {
     match std::str::from_utf8(bytes) {
         Ok(text) => text.to_string(),
@@ -119,8 +118,8 @@ pub fn decode_console(bytes: &[u8]) -> String {
     }
 }
 
-/// 에이전트 stdout(UTF-8 JSON)과 cmd·도구 stderr(CP949)가 한 파일에 섞인다.
-/// 전체를 한 인코딩으로 읽으면 한쪽이 반드시 깨지므로 줄 단위로 판별한다.
+/// Agent stdout (UTF-8 JSON) and cmd/tool stderr (CP949) get mixed in one file.
+/// Reading the whole thing in one encoding corrupts one side or the other, so judge line by line.
 pub fn decode_console_lines(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len());
     for line in bytes.split_inclusive(|b| *b == b'\n') {
@@ -178,7 +177,7 @@ fn ansi_to_string(bytes: &[u8]) -> Option<String> {
     String::from_utf16(&wide[..written as usize]).ok()
 }
 
-/// tokio 변형. std 옵션(창 억제 포함)은 `From` 구현이 그대로 물려받는다.
+/// tokio variant. std options (including window suppression) are carried over by the `From` impl.
 pub fn platform_command_async(
     bin: impl AsRef<std::ffi::OsStr>,
     args: &[&str],
@@ -193,8 +192,8 @@ mod tests {
     #[test]
     fn decode_console_keeps_utf8_and_survives_ansi_bytes() {
         assert_eq!(decode_console("진행 로그".as_bytes()), "진행 로그");
-        // 한국어 Windows cmd 가 내는 CP949 "명령줄이". 코드페이지 949 PC 에서는 원문이
-        // 복원되고, 다른 코드페이지에서도 패닉 없이 문자열이 나와야 한다.
+        // CP949 "명령줄이" as emitted by cmd on Korean Windows. On a code page 949 PC the original
+        // text is restored; on other code pages a string must still come out without panicking.
         let cp949: &[u8] = &[0xb8, 0xed, 0xb7, 0xc9, 0xc1, 0xd9, 0xc0, 0xcc];
         let decoded = decode_console(cp949);
         assert!(!decoded.is_empty());
@@ -210,8 +209,8 @@ mod tests {
         }
     }
 
-    /// 에이전트의 UTF-8 JSON 과 cmd 의 CP949 오류가 한 로그에 섞여도, UTF-8 줄이
-    /// 통째 ANSI 로 오독되어 깨지면 안 된다.
+    /// Even when an agent's UTF-8 JSON and cmd's CP949 error mix in one log, a UTF-8 line
+    /// must not be misread as ANSI wholesale and get corrupted.
     #[test]
     fn decode_console_lines_judges_each_line_separately() {
         let mut bytes = "{\"result\":\"완료\"}\n".as_bytes().to_vec();
@@ -220,8 +219,8 @@ mod tests {
         assert!(decoded.contains("완료"), "{decoded}");
     }
 
-    /// 회귀: `claude` 같은 맨 이름이 PATH 의 .exe 로 해석되면 cmd /c 없이 직접
-    /// 실행해야 한다 — cmd 는 8,191자에서 "명령줄이 너무 깁니다"로 죽는다.
+    /// Regression: a bare name like `claude` that resolves to a .exe on PATH must run directly
+    /// without cmd /c — cmd dies at 8,191 chars with "명령줄이 너무 깁니다" (command line too long).
     #[cfg(windows)]
     #[test]
     fn bare_name_resolving_to_exe_skips_cmd_wrapper() {
@@ -245,9 +244,9 @@ mod tests {
         );
     }
 
-    /// 스폰 계약 스모크: 플랫폼별 셈 스크립트를 띄워 stdout이 파이프로 오는지 본다.
-    /// Windows CI에서는 .cmd 셈 해석 + CREATE_NO_WINDOW 경로가, 그 외에서는 직접
-    /// 스폰 경로가 매 푸시 검증된다.
+    /// Spawn-contract smoke test: launch a platform-appropriate sh/cmd script and check stdout
+    /// arrives via pipe. Windows CI exercises .cmd sh interpretation + the CREATE_NO_WINDOW path;
+    /// elsewhere the direct spawn path is verified on every push.
     #[tokio::test]
     async fn platform_command_captures_script_stdout() {
         let path = std::env::temp_dir().join(format!(
@@ -278,8 +277,8 @@ mod tests {
         );
     }
 
-    /// 회귀: Herdr에 보내는 설계 프롬프트는 cmd.exe의 8,191자보다 길 수 있다.
-    /// 네이티브 실행 파일을 직접 시작하면 Windows CreateProcess 한도 안에서 정상 전달된다.
+    /// Regression: the design prompt sent to Herdr can exceed cmd.exe's 8,191 chars.
+    /// Launching a native executable directly delivers it within the Windows CreateProcess limit.
     #[cfg(windows)]
     #[tokio::test]
     async fn native_executable_accepts_argument_longer_than_cmd_limit() {

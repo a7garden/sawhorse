@@ -178,6 +178,9 @@ fn transition(
         .cloned()
         .ok_or_else(|| "활성 workflow frame이 없습니다".to_string())?;
     let definition = definition(registry, &frame.workflow_id, &frame.workflow_version)?;
+    if definition_digest(definition)? != frame.workflow_digest {
+        return Err("워크플로 정의가 기록된 digest와 다릅니다. 다시 게시하세요".into());
+    }
     let candidates: Vec<_> = definition
         .edges
         .iter()
@@ -200,19 +203,17 @@ fn transition(
     let edge = candidates[0].clone();
     let mut iteration = 0;
     if let Some(loop_id) = &edge.loop_ref {
-        let frame_mut = instance.frames.last_mut().expect("checked frame");
-        let count = frame_mut
-            .loop_iterations
-            .entry(loop_id.clone())
-            .or_insert(0);
-        *count += 1;
-        iteration = *count;
         let loop_definition = definition
             .loops
             .iter()
             .find(|candidate| candidate.id == *loop_id)
             .expect("validated loop reference");
-        if *count > loop_definition.max_iterations {
+        let frame_mut = instance.frames.last_mut().expect("checked frame");
+        let count = frame_mut
+            .loop_iterations
+            .entry(loop_id.clone())
+            .or_insert(0);
+        if *count >= loop_definition.max_iterations {
             let timestamp = now();
             let current = run_mut(instance, &frame.node_run_id)?;
             current.status = NodeRunStatus::Failed;
@@ -227,6 +228,8 @@ fn transition(
             refresh_active_nodes(instance);
             return Ok(false);
         }
+        *count += 1;
+        iteration = *count;
     }
     let timestamp = now();
     let current = run_mut(instance, &frame.node_run_id)?;

@@ -1,23 +1,25 @@
 import { TaskBoard, IntentInbox, QuickDecision, type QuickAction } from "./TaskBoard";
-import { workArea, isTaskRecord, taskStage, taskStages, type WorkArea } from "./task-board";
+import { workArea, isTaskRecord, taskStage, taskStages, workflowKey, workWorkflowKey, usesLifecycleBoard, workflowBoardStage, workflowBoardLanes, type WorkArea } from "./task-board";
 import { MockupLibrary } from "@/features/mockups/MockupLibrary";
 import { LifecyclePanel } from "./LifecyclePanel";
 import { ResourceLibrary } from "./ResourceLibrary";
+import { ProjectResourcePicker } from "./ProjectResourcePicker";
 import { isLifecycleV2 } from "./lifecycle-v2";
 import { JournalWidget } from "@/features/journal/JournalPage";
+import { ShdocView } from "@/features/documents/ShdocView";
 import { MockupReview } from "@/features/mockups/MockupReview";
 import { GoalPanel } from "./GoalPanel";
 import { GOAL_WORKFLOW, type GoalBatchItem } from "./goals";
 import { DiagnosticsBanner } from "./DiagnosticsBanner";
-import { IntentComposer } from "./IntentComposer";
+import { WorkCreationDialog } from "./WorkCreationDialog";
+import { ProjectWorkOverview } from "./ProjectWorkOverview";
+import { creationWorkflow, projectWorkflowRefs, workflowIntake } from "./workflow-creation";
 import { IntentFlowPanel } from "./IntentFlowPanel";
 import { WorkCopilot } from "./WorkCopilot";
 import { INTENT_WORKFLOW } from "./intent";
 import {
   ChecklistWidget,
-  IssuesWidget,
   JobsWidget,
-  MiniAction,
   ReadingWidget,
   ScheduledTasksWidget,
   TodayActivity,
@@ -83,10 +85,10 @@ import { toast } from "@/components/ui/toast";
 import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/store";
 import { api as vaultApi } from "@/lib/api";
-import { sddApi, workflowApi } from "./api";
 import { workActions } from "./lifecycle";
-import { groupProcesses, jobsForProject, useProjectScope } from "./project-scope";
-import { latestWorkflowVersions } from "./workflow-version";
+import { sddApi, workflowApi, type HtmlDocumentView } from "./api";
+import { useProjectScope } from "./project-scope";
+import { latestWorkflowVersions, workflowChoices } from "./workflow-version";
 import {
   acceptWorkspaceSnapshot,
   ensureWorkspaceSnapshot,
@@ -132,7 +134,9 @@ import {
   type WorkflowEventRecord,
   type WorkflowInstance,
 } from "./types";
+import { MarkdownView } from "@/pages/common";
 import "./workbench.css";
+import "./document-search.css";
 import "./work-view.css";
 import "./dashboard.css";
 type Notice = {
@@ -150,7 +154,7 @@ type AgendaEntry =
       title: string;
       workId: string;
     };
-/** 아직 끝나지 않은 harness 실행 상태. 중복 실행 판정과 상태 갱신이 같은 목록을 본다. */
+/** Harness run statuses that are not finished yet. Duplicate-run detection and status refresh read the same list. */
 const ACTIVE_RUN_STATUS = ["starting", "running", "blocked", "unknown"];
 const ATTENTION_RUN_STATUS = ["failed", "stopped", "blocked", "unknown"];
 function attentionRuns(runs: HarnessRun[], work: WorkItem[]) {
@@ -175,6 +179,7 @@ const AGENT_ROLES: AgentRole[] = [
 const EVENT_KINDS = ["milestone", "review", "release", "meeting"] as const;
 const ISSUE_TYPE_KEYS: Record<IssueType, string> = {
   "버그": "bug",
+  "리팩토링": "refactor",
   "기능": "feature",
   "작업": "task",
   "질문": "question",
@@ -193,8 +198,8 @@ const PRIORITY_RANK: Record<Priority, number> = {
   low: 3,
 };
 /**
- * 작업 목록과 공정 보드가 함께 쓰는 정렬 축. 값은 그 축을 처음 골랐을 때의 방향으로,
- * 축마다 사람이 기대하는 쪽이 다르다 — 기한은 임박한 순, 수정은 최근 순이 먼저다.
+ * Sort axes shared by the work list and the flow board. Values are the direction from when each axis was first chosen;
+ * each axis has a different human expectation — due date is soonest-first, updated is most-recent-first.
  */
 const WORK_SORTS: Record<string, "asc" | "desc"> = {
   priority: "asc",
@@ -214,9 +219,9 @@ function readWorkSort(): WorkSort {
   return { key: "priority", direction: WORK_SORTS.priority };
 }
 /**
- * 정렬 비교기. ID 는 숫자 조각을 수로 견주므로 `ISS-9` 가 `ISS-10` 앞에 온다 —
- * 이슈 번호는 문자열 순서가 아니라 번호 순서로 읽힌다. 어떤 축을 고르든 같은 값끼리는
- * ID 오름차순으로 묶어 목록과 보드가 같은 자리를 지킨다.
+ * Sort comparator. IDs compare their numeric fragments as numbers so `ISS-9` comes before `ISS-10` —
+ * issue numbers read in numeric order, not string order. Whatever the axis, ties stay grouped by
+ * ID ascending so the list and the board keep the same order.
  */
 function workComparator({ key, direction }: WorkSort) {
   const text = new Intl.Collator(i18n.language, { numeric: true, sensitivity: "base" });
@@ -230,7 +235,7 @@ function workComparator({ key, direction }: WorkSort) {
   };
   const compare = axis[key] ?? axis.priority;
   return (a: WorkItem, b: WorkItem) => {
-    // 기한이 없는 항목은 방향과 무관하게 뒤에 둔다. 빈 값이 첫머리를 차지하면 안 된다.
+    // Items without a due date go last regardless of direction. Empty values must not take the top spot.
     if (key === "due" && !a.dueDate !== !b.dueDate) return a.dueDate ? -1 : 1;
     const primary = compare(a, b);
     return (direction === "desc" ? -primary : primary) || byId(a, b);
@@ -270,7 +275,7 @@ function dueChip(days: number) {
 function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
-/** 경로의 마지막 세그먼트. 끝의 구분자는 먼저 떼고 본다. */
+/** Last segment of a path. Trailing separators are stripped before looking. */
 function pathBasename(path: string) {
   const trimmed = path.replace(/[\\/]+$/, "");
   return trimmed.split(/[\\/]/).pop() ?? "";
@@ -390,7 +395,7 @@ function stageLabel(
   workflowId?: string,
   workflowVersion?: string,
 ) {
-  if (workflowId === "intent-flow" && workflowVersion === "2.0.0") return i18n.t(`workbench:lifecycle.stages.${stage}`);
+  if (workflowId === "intent-flow" && ["2.0.0", "2.0.1"].includes(workflowVersion ?? "")) return i18n.t(`workbench:lifecycle.stages.${stage}`);
   const selected = workflows.find(
     (definition) =>
       (!workflowId || definition.id === workflowId) &&
@@ -425,7 +430,7 @@ function transitionActionLabel(event: string, targetLabel: string) {
       });
   }
 }
-/** 단계별 기본 역할. 이슈 목록의 바로 실행과 상세의 실행 런처가 같은 값을 쓴다. */
+/** Default role per stage. The issue list's run-now and the detail's run launcher use the same values. */
 function defaultRoleForStage(stage: Stage): AgentRole {
   return stage === "plan"
     ? "research"
@@ -437,7 +442,7 @@ function defaultRoleForStage(stage: Stage): AgentRole {
           ? "verifier"
           : "reviewer";
 }
-/** 노드가 허용하는 역할 중 단계에 맞는 것을 고른다. 없으면 노드의 첫 역할이다. */
+/** Picks the stage-appropriate role among those the node allows. Falls back to the node's first role. */
 function roleForStageNode(stage: Stage, allowedRoles: AgentRole[]): AgentRole {
   const preferred = defaultRoleForStage(stage);
   if (!allowedRoles.length) return preferred;
@@ -532,9 +537,9 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
   const loading = useWorkspaceSnapshot((state) => state.loading);
   const error = useWorkspaceSnapshot((state) => state.error);
   const { t } = useTranslation("workbench");
-  // 새 프로젝트 초안의 기본 에이전트는 앱 설정의 기본 에이전트를 따른다.
+  // A new project draft's default agent follows the app settings' default agent.
   const defaultAgent = useApp((s) => s.defaultAgent);
-  // 알림은 화면 상단 토스트로 띄운다 — 페이지 레이아웃을 밀지 않는다.
+  // Notices surface as a top-of-screen toast — it does not push the page layout around.
   const setNotice = useCallback((next: Notice) => {
     if (next) toast(next);
   }, []);
@@ -558,7 +563,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     void ensureWorkspaceSnapshot();
     return watchWorkspaceSnapshot();
   }, []);
-  // 백그라운드 프로젝트 분석 완료. 스냅샷을 다시 읽고 결과를 토스트로 알린다.
+  // Background project analysis finished. Re-read the snapshot and report the result via a toast.
   useEffect(() => {
     if (!isTauri()) return;
     let disposed = false;
@@ -593,7 +598,8 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
   const selectedProjectId = useProjectScope((state) => state.projectId);
   const selectProject = useProjectScope((state) => state.selectProject);
   const selectedProject = snapshot?.projects.find((project) => project.id === selectedProjectId);
-  const scopeId = selectedProject?.id ?? "";
+  const globalView = view === "overview" || view === "calendar";
+  const scopeId = globalView ? "" : selectedProject?.id ?? "";
   const work = scopeId ? allWork.filter((item) => item.projectId === scopeId) : allWork;
   const events = scopeId ? (snapshot?.events ?? []).filter((event) =>
     event.projectId === scopeId || (!!event.workId && work.some((item) => item.id === event.workId))) : snapshot?.events ?? [];
@@ -609,6 +615,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
   ) => {
     const item = allWork.find((candidate) => candidate.id === workId);
     const definition = item ? workflowForWork(workflows, item) : undefined;
+    if (item && projects.some((project) => project.id === item.projectId)) selectProject(item.projectId);
     setSelectedWorkId(workId);
     setSelectedArtifact(artifact ?? (item?.workflowId === "mockup-review" ? "mockup" : definition?.artifacts[0]?.role ?? "intent"));
     setRevealText(snippet);
@@ -617,20 +624,27 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     await reload();
     setNotice({ tone: "success", text });
   };
-  // 커맨드 팔레트처럼 작업대 바깥에서 연 상세 열기 요청. 스냅샷이 준비되면 열고 지운다.
+  // Detail-open request raised from outside the workbench, like the command palette. Open and clear it once the snapshot is ready.
   const openWorkRequest = useApp((s) => s.openWorkRequest);
   const clearOpenWork = useApp((s) => s.clearOpenWork);
+  // selectDocument is re-created every render; pin the latest one so this effect
+  // re-runs only when the request, the snapshot, or the work list changes.
+  const selectDocumentRef = useRef(selectDocument);
+  useEffect(() => {
+    selectDocumentRef.current = selectDocument;
+  });
   useEffect(() => {
     if (!openWorkRequest || !snapshot) return;
     if (allWork.some((item) => item.id === openWorkRequest.workId)) {
-      selectDocument(
+      selectDocumentRef.current(
         openWorkRequest.workId,
         openWorkRequest.artifact,
         openWorkRequest.snippet ?? null,
       );
+      // Clear only when consumed, so an unmatched request can land after the next reload.
+      clearOpenWork();
     }
-    clearOpenWork();
-  }, [openWorkRequest, snapshot, allWork, selectDocument, clearOpenWork]);
+  }, [openWorkRequest, snapshot, allWork, clearOpenWork]);
   if (loading && !snapshot)
     return (
       <div className="wb-page">
@@ -662,7 +676,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
     projects,
     workflows,
     events,
-    project: selectedProject,
+    project: globalView ? undefined : selectedProject,
     setNotice,
     reload,
     onNewWork: () => setWorkModal({ ...blankWork(), projectId: scopeId }),
@@ -683,17 +697,29 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
           setNotice={setNotice}
         />
       )}
-      {selectedProject && ["calendar", "harness", "knowledge"].includes(view) && (
+      {selectedProject && view === "harness" && (
         <div className="wb-project-scope">
           <span>{t("scope.defaultWorkflow", { workflow: workflowForProject(workflows, selectedProject)?.label ?? selectedProject.workflowId })}</span>
         </div>
       )}
-      {view === "overview" && <OverviewView key={scopeId} {...shared} />}
-      {["work", "board", "issues"].includes(view) && (
+      {view === "overview" && <OverviewView work={allWork} projects={projects} workflows={workflows} events={snapshot.events}
+        onSelectWork={(id) => {
+          const item = allWork.find((entry) => entry.id === id);
+          if (item) selectProject(projects.some((entry) => entry.id === item.projectId) ? item.projectId : "");
+          useApp.getState().openWork({ workId: id });
+          useApp.getState().setPage("work");
+        }} /> }
+      {["work", "board", "issues"].includes(view) && !selectedProject && <ProjectWorkOverview
+        projects={projects} work={allWork} workflows={workflows} onProject={selectProject}
+        onWork={selectDocument} onNewProject={() => setProjectModal(null)}
+      />}
+      {["work", "board", "issues"].includes(view) && selectedProject && (
         <WorkView
           key={scopeId}
           work={work}
           projects={projects}
+          project={selectedProject}
+          onProjectSettings={() => setProjectModal(selectedProject)}
           workflows={workflows}
           events={events}
           reload={reload}
@@ -730,22 +756,25 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
           project={selectedProject}
           work={work}
           projects={selectedProject ? [selectedProject] : projects}
-          onSelectWork={setSelectedWorkId}
+          onSelectWork={selectDocument}
           onJump={selectDocument}
           onNotice={setNotice}
         />
       )}
+      {view === "project-library" && <ResourceLibrary projects={projects} />}
       {view === "projects" && (
         <ProjectsView
           projects={projects}
           work={allWork}
           workflows={workflows}
+          onReload={reload}
+          onNotice={setNotice}
           onNew={() => setProjectModal(null)}
           onEdit={(project) => setProjectModal(project)}
         />
       )}
-      <ProjectFormDialog
-        open={projectModal !== undefined}
+      {projectModal !== undefined && <ProjectFormDialog
+        open
         initial={projectModal ?? blankProject(defaultAgent)}
         projects={projects}
         workflows={workflows}
@@ -754,7 +783,7 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
           setProjectModal(undefined);
           void afterSave(t("toast.projectSaved"));
         }}
-      />
+      />}
       <EventFormDialog
         open={eventModal !== undefined}
         initial={eventModal ?? blankEvent()}
@@ -789,8 +818,8 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
             ...blankWork(),
             title: t("work.followUpTitle", { title: currentWork.title }),
             projectId: currentWork.projectId,
-            // 운영 관찰은 단계가 아니라 다음 항목의 입력이다. 끝나지 않는 일을
-            // 단계로 두면 항목이 닫히지 않으므로, 항목 사이의 연결로 잇는다.
+            // Operational observation is not a stage but input to the next item. Making it a
+            // stage would leave the item open, so it is wired as a link between items.
             dependsOn: [currentWork.id],
             description: t("work.followUpDescription", {
               title: currentWork.title,
@@ -799,12 +828,14 @@ export function WorkbenchPage({ view }: { view: WorkbenchView }) {
           })
         }
       />
-      {workModal !== undefined && !workModal?.id && <IntentComposer
+      {workModal !== undefined && !workModal?.id && <WorkCreationDialog
         initial={workModal ?? { ...blankWork(), projectId: scopeId }}
+        workflows={workflows}
         projects={projects}
         onClose={() => { setWorkModal(undefined); void reload(); }}
-        onSaved={(item) => {
-          setWorkModal(undefined); setSelectedWorkId(item.id); setSelectedArtifact("intent");
+        onSaved={(item, artifact) => {
+          selectProject(item.projectId);
+          setWorkModal(undefined); setSelectedWorkId(item.id); setSelectedArtifact(artifact ?? workflowForWork(workflows, item)?.artifacts[0]?.role ?? "intent");
           void afterSave(t("toast.workSaved"));
         }}
       />}
@@ -883,67 +914,34 @@ function PageHeader({
     </header>
   );
 }
-function OverviewView({
-  work,
-  project,
-  projects,
-  workflows,
-  events,
-  reload,
-  setNotice,
-  onNewWork,
-  onSelectWork,
-  onEditWork,
-}: {
+function OverviewView({ work, projects, workflows, events, onSelectWork }: {
   work: WorkItem[];
-  project?: Project;
   projects: Project[];
   workflows: WorkflowDefinition[];
   events: CalendarEvent[];
-  reload: () => Promise<void>;
-  setNotice: (notice: Notice) => void;
-  onNewWork: () => void;
   onSelectWork: (id: string) => void;
-  onEditWork: (item: WorkItem) => void;
 }) {
   const { t } = useTranslation("workbench");
   const [editing, setEditing] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
-  const [busyWork, setBusyWork] = useState<string | null>(null);
   const setPage = useApp((s) => s.setPage);
-  const allJobs = useApp((s) => s.jobs);
-  const jobs = jobsForProject(allJobs, project);
+  const jobs = useApp((s) => s.jobs);
   const selectProject = useProjectScope((state) => state.selectProject);
   const [runs, setRuns] = useState<HarnessRun[]>([]);
   const [runsError, setRunsError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     const load = () => sddApi.runs().then((next) => {
-      if (alive) { setRuns(next.filter((run) => !project || run.projectId === project.id)); setRunsError(null); }
+      if (alive) { setRuns(next); setRunsError(null); }
     }).catch((error) => { if (alive) setRunsError(errorText(error)); });
     void load();
     const timer = window.setInterval(load, 8000);
     return () => { alive = false; window.clearInterval(timer); };
-  }, [project?.id]);
-  // 다시 실행하지 않고 목록에서만 내린다. 기록은 남으므로 실행 상세에서 되돌릴 수 있다.
-  const dismissRun = async (run: HarnessRun) => {
-    // 8초 주기 갱신 사이에 실행이 다시 살아났을 수 있다. 그때는 아직 볼 것이 남아 있다.
-    if (["starting", "running"].includes(run.status)) {
-      setNotice({ tone: "error", text: t("harness.dismissRunning") });
-      return;
-    }
-    try {
-      const next = await sddApi.dismissRun(run.id, true);
-      setRuns((previous) => previous.map((run) => (run.id === next.id ? next : run)));
-      setNotice({ tone: "success", text: t("harness.dismissedToast") });
-    } catch (error) {
-      setNotice({ tone: "error", text: errorText(error) });
-    }
-  };
-  const processes = groupProcesses(work, workflows, project);
-  const latestVersion = latestWorkflowVersions(workflows);
+  }, []);
+  const openProject = (id: string) => { selectProject(id); setPage("work"); };
+  const projectName = (id: string) => projects.find((entry) => entry.id === id)?.name ?? t("row.noProject");
   const today = isoToday();
-  // 지표 위젯이 세는 재료. 어떤 카드를 켜 두었든 같은 스냅샷을 본다.
+  // Ingredients the metric widgets count. Every card sees the same snapshot regardless of which cards are enabled.
   const metricSource = { work, jobs, runs, today };
   const open = work.filter((w) => !isClosedStatus(w.status));
   const next = [...open]
@@ -969,24 +967,8 @@ function OverviewView({
       <span>{label}</span><ArrowRight size={13} aria-hidden />
     </button>
   );
-  // 위젯에서 바로 끝내는 한 줄짜리 변경. 상세 화면을 열지 않고 상태·기한만 움직인다.
-  async function patchWork(item: WorkItem, patch: Partial<WorkItem>) {
-    setBusyWork(item.id);
-    try {
-      await sddApi.saveWork({
-        ...item,
-        ...patch,
-        updatedAt: new Date().toISOString(),
-      });
-      await reload();
-    } catch {
-      // 실패하면 다음 스냅샷이 원래 값을 다시 그린다
-    } finally {
-      setBusyWork(null);
-    }
-  }
   function renderWidget(id: DashboardWidgetId) {
-    // 지표는 카드 한 장이 위젯 한 개다. 정의만 보고 그리므로 여기에 분기가 늘지 않는다.
+    // Each metric is one widget per card. Rendered from the definition alone, so no branching accumulates here.
     if (isMetricWidgetId(id)) {
       const metric = METRIC_BY_KEY[id.slice(METRIC_PREFIX.length) as MetricKey];
       const value = metric.count(metricSource);
@@ -998,7 +980,6 @@ function OverviewView({
           hint={t(`dashboard:metrics.${metric.key}.hint`)}
           icon={<metric.icon />}
           warn={metric.warnWhenPositive === true && value > 0}
-          onClick={() => setPage(metric.page === "jobs" && project ? "harness" : metric.page)}
         />
       );
     }
@@ -1011,12 +992,13 @@ function OverviewView({
             action={link("calendar", t("widgets.openCalendar"))}
           >
             <TodayActivity
+              projects={projects}
+              runs={runs}
               events={events}
               work={work}
-              project={project}
               onOpenWork={onSelectWork}
               onOpenEvent={() => setPage("calendar")}
-              onOpenJobs={() => setPage(project ? "harness" : "jobs")}
+              onOpenJobs={() => setPage("jobs")}
             />
           </SlotCard>
         );
@@ -1026,7 +1008,6 @@ function OverviewView({
             title={t("widgets.next")}
             count={next.length}
             description={t("widgets.nextDesc")}
-            action={link("board", t("widgets.openBoard"))}
           >
             {next.length ? (
               next.map((item) => (
@@ -1034,11 +1015,7 @@ function OverviewView({
                   key={item.id}
                   item={item}
                   project={projects.find((p) => p.id === item.projectId)}
-                  workflows={workflows}
-                  busy={busyWork === item.id}
                   onClick={() => onSelectWork(item.id)}
-                  onEdit={() => onEditWork(item)}
-                  onStatus={() => onSelectWork(item.id)}
                 />
               ))
             ) : (
@@ -1053,7 +1030,7 @@ function OverviewView({
           {projects.map((entry) => {
             const items = work.filter((item) => item.projectId === entry.id);
             const count = (status: string) => items.filter((item) => item.status === status).length;
-            return <button className="wb-project-summary wb-overview-project" key={entry.id} onClick={() => selectProject(entry.id)}>
+            return <button className="wb-project-summary wb-overview-project" key={entry.id} onClick={() => openProject(entry.id)}>
               <span className="wb-project-initial" aria-hidden>{entry.name.slice(0, 1).toUpperCase()}</span>
               <span className="wb-project-info">
                 <strong>{entry.name}</strong>
@@ -1065,7 +1042,7 @@ function OverviewView({
           {!projects.length && <div className="wb-slot-empty">{t("projects.emptyTitle")}</div>}
         </SlotCard>;
       case "documents":
-        return <SlotCard title={t("scope.documentsTitle")} action={link("knowledge", t("scope.searchDocuments"))}>
+        return <SlotCard title={t("scope.documentsTitle")} action={link("docs", t("scope.searchDocuments"))}>
           {work.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 8).map((item) => {
             const definition = workflowForWork(workflows, item);
             return <button key={item.id} className="wb-project-summary" onClick={() => onSelectWork(item.id)}>
@@ -1075,43 +1052,6 @@ function OverviewView({
             </button>;
           })}
           {!work.length && <div className="wb-slot-empty">{t("widgets.nextEmpty")}</div>}
-        </SlotCard>;
-      case "stages":
-        return <SlotCard title={t("widgets.stages")} description={t("scope.processHint")} action={link("board", t("widgets.openBoard"))}>
-          {processes.map(({ key, workflow, items }) => {
-            const openItems = items.filter((item) => !isClosedStatus(item.status));
-            const nodes = (workflow?.nodes ?? []).filter((node) => node.kind !== "end").map((node) => ({ id: node.id, label: node.label }));
-            for (const item of openItems) {
-              const id = activeNodeForWork(item);
-              if (!nodes.some((node) => node.id === id)) nodes.push({ id, label: id });
-            }
-            const versionLabel = workflow && latestVersion.get(workflow.id) !== workflow.version
-              ? t("work.legacyVersion", { version: workflow.version })
-              : workflow?.version;
-            return <section className="wb-workflow-summary" key={key} data-workflow={key}>
-              <h3>{workflow?.label ?? key} <small>{versionLabel}</small></h3>
-              <div className="wb-stage-tiles">
-                {nodes.map((node) => <button key={node.id} className="wb-stage-tile" onClick={() => setPage("board")}>
-                  <span>{node.label}</span><strong>{openItems.filter((item) => activeNodeForWork(item) === node.id).length}</strong>
-                </button>)}
-              </div>
-              {openItems.slice().sort((a, b) =>
-                Number(["review", "blocked"].includes(b.status)) - Number(["review", "blocked"].includes(a.status))
-              ).slice(0, 3).map((item) => {
-                const node = workflow?.nodes.find((node) => node.id === activeNodeForWork(item));
-                const outputs = node?.outputs.map((role) => artifactLabel(workflow, role)).join(" · ");
-                const parent = item.activeNodes?.[0]?.depth ? workflows.find((definition) =>
-                  definition.id === item.workflowId && definition.version === item.workflowVersion) : undefined;
-                return <button className="wb-project-summary" key={item.id} onClick={() => onSelectWork(item.id)}>
-                  <strong>{item.title}</strong>
-                  <span>{parent && `${parent.label} › `}{node?.label ?? activeNodeForWork(item)} · {statusText(item.status)}
-                    {outputs && <small className="block">{t("scope.stageDocuments", { documents: outputs })}</small>}
-                  </span>
-                </button>;
-              })}
-            </section>;
-          })}
-          {!processes.length && <div className="wb-slot-empty">{t("widgets.nextEmpty")}</div>}
         </SlotCard>;
       case "due":
         return (
@@ -1125,14 +1065,8 @@ function OverviewView({
                 <DueRow
                   key={item.id}
                   item={item}
-                  busy={busyWork === item.id}
+                  projectName={projectName(item.projectId)}
                   onClick={() => onSelectWork(item.id)}
-                  onDefer={() =>
-                    void patchWork(item, {
-                      dueDate: plusDays(item.dueDate!, 1),
-                    })
-                  }
-                  onDone={() => onSelectWork(item.id)}
                 />
               ))
             ) : (
@@ -1154,6 +1088,7 @@ function OverviewView({
                 <EventRow
                   key={event.id}
                   event={event}
+                  projectName={event.projectId ? projectName(event.projectId) : undefined}
                   onClick={() => setPage("calendar")}
                 />
               ))
@@ -1184,14 +1119,10 @@ function OverviewView({
         return (
           <SlotCard
             title={t("widgets.jobs")}
-            action={link(project ? "harness" : "jobs", t("widgets.openJobs"))}
+            description={t("overview.runsHint")}
           >
-            {(jobs.length > 0 || runs.length === 0) && <JobsWidget project={project} onOpen={() => setPage("jobs")} />}
-            {runsError && <div className="wb-inline-error">{runsError}</div>}
-            {runs.slice().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6).map((run) => <button className="wb-project-summary" key={run.id} onClick={() => onSelectWork(run.workId)}>
-              <strong>{work.find((item) => item.id === run.workId)?.title ?? run.workId}</strong>
-              <span>{roleText(run.role)} · {t(`runStatus.${run.status}`, { defaultValue: run.status })}</span>
-            </button>)}
+            <JobsWidget runs={runs} work={work} projects={projects} onOpen={() => setPage("jobs")} />
+
           </SlotCard>
         );
       case "schedules":
@@ -1223,19 +1154,7 @@ function OverviewView({
             <ReadingWidget onOpen={() => setPage("reading")} />
           </SlotCard>
         );
-      case "issues":
-        return (
-          <SlotCard
-            title={t("widgets.issues")}
-            description={t("widgets.issuesDesc")}
-            action={link("issues", t("widgets.openIssues"))}
-          >
-            <IssuesWidget
-              work={work}
-              onOpen={(id) => onSelectWork(id)}
-            />
-          </SlotCard>
-        );
+
     }
   }
   return (
@@ -1243,7 +1162,7 @@ function OverviewView({
       <header className="wb-header wb-overview-header">
         <div>
           <time className="wb-overview-date" dateTime={today}>{new Intl.DateTimeFormat(i18n.language, { month: "long", day: "numeric", weekday: "long" }).format(new Date(`${today}T12:00:00`))}</time>
-          <h1>{project ? t("scope.projectTitle", { project: project.name }) : t("overview.title")}</h1>
+          <div className="wb-dashboard-title"><h1>{t("overview.title")}</h1><span>{t("scope.all")}</span></div>
           <p>{t("overview.description")}</p>
         </div>
         <div className="wb-header-actions">
@@ -1251,41 +1170,15 @@ function OverviewView({
             <SlidersHorizontal />
             {editing ? t("overview.layoutDone") : t("overview.layoutEdit")}
           </Button>
-          <Button onClick={onNewWork}><Plus />{t("board.newWork")}</Button>
+          <Button onClick={() => setCatalogOpen(true)}><Plus />{t("overview.addWidgets")}</Button>
         </div>
       </header>
       {runsError && <div className="wb-inline-error" role="alert">{runsError}</div>}
-      {attentionRuns(runs, work).length > 0 && (
-        <section className="wb-run-attention" aria-label={t("harness.attention")}>
-          <h2>{t("harness.attention")} · {attentionRuns(runs, work).length}</h2>
-          <p>{t("harness.attentionHint")}</p>
-          {attentionRuns(runs, work).map((run) => (
-            <div className="wb-project-summary" key={run.id}>
-              <button className="wb-run-attention-open" onClick={() => useApp.getState().openRun(run.id, run.projectId)}>
-                <strong>{work.find((item) => item.id === run.workId)?.title ?? run.workId}</strong>
-                <span>{roleText(run.role)} · {t(`runStatus.${run.status}`)}</span>
-                <small>{run.error || t(`runStatus.${run.status}`)}</small>
-              </button>
-              <Button size="xs" variant="ghost" title={t("harness.dismissHint")} onClick={() => void dismissRun(run)}>
-                <X /> {t("harness.dismiss")}
-              </Button>
-            </div>
-          ))}
-        </section>
-      )}
       <div className="wb-overview-tools">
         <span>{t("overview.workspaceSummary")}</span>
-        <Button
-          size="xs"
-          variant="ghost"
-          onClick={() => setCatalogOpen(true)}
-        >
-          <Plus /> {t("overview.addWidgets")}
-        </Button>
+        <span>{t("overview.scopeHint")}</span>
       </div>
       <DashboardBoard
-        key={project?.id ?? "all"}
-        scope={project?.id}
         editing={editing}
         catalogOpen={catalogOpen}
         onCatalogClose={() => setCatalogOpen(false)}
@@ -1320,52 +1213,21 @@ function SlotCard({
     </section>
   );
 }
-function DueRow({
-  item,
-  busy,
-  onClick,
-  onDefer,
-  onDone,
-}: {
-  item: WorkItem;
-  busy: boolean;
-  onClick: () => void;
-  onDefer: () => void;
-  onDone: () => void;
-}) {
-  const { t } = useTranslation("workbench");
+function DueRow({ item, projectName, onClick }: { item: WorkItem; projectName?: string; onClick: () => void }) {
   const days = item.dueDate ? daysUntil(item.dueDate) : 0;
-  return (
-    <div className="wb-dense-row wb-due-row">
-      <button className="wb-dense-open" onClick={onClick} title={item.title}>
-        <span className={cx("wb-date-chip", days < 0 && "is-overdue")}>
-          {dueChip(days)}
-        </span>
-        <span className="wb-due-copy"><span className="wb-dense-title">{item.title}</span><time className="wb-dense-meta" dateTime={item.dueDate ?? undefined}>{formatDate(item.dueDate)}</time></span>
-      </button>
-      <div className="wb-action-buttons">
-        <MiniAction
-          label={t("row.deferOneDay")}
-          icon={<CalendarDays size={13} />}
-          busy={busy}
-          onClick={onDefer}
-        />
-        <MiniAction
-          label={t("work.review") }
-          primary
-          icon={<Check size={13} />}
-          busy={busy}
-          onClick={onDone}
-        />
-      </div>
-    </div>
-  );
+  return <button className="wb-dense-row wb-due-row" onClick={onClick} title={item.title}>
+    <span className={cx("wb-date-chip", days < 0 && "is-overdue")}>{dueChip(days)}</span>
+    <span className="wb-due-copy"><span className="wb-dense-title">{item.title}</span><span className="wb-dense-meta">{projectName && <>{projectName} · </>}<time dateTime={item.dueDate ?? undefined}>{formatDate(item.dueDate)}</time></span></span>
+    <ArrowRight size={13} aria-hidden />
+  </button>;
 }
 function EventRow({
   event,
+  projectName,
   onClick,
 }: {
   event: CalendarEvent;
+  projectName?: string;
   onClick: () => void;
 }) {
   const date = new Date(`${event.date}T12:00:00`);
@@ -1374,7 +1236,7 @@ function EventRow({
       <time className="wb-agenda-date" dateTime={event.date} aria-label={formatDate(event.date)}>
         <span>{date.toLocaleDateString(i18n.language, { month: "short" })}</span><strong>{date.getDate()}</strong>
       </time>
-      <span className="wb-agenda-copy"><span className="wb-dense-title">{event.title}</span><span className="wb-dense-meta">{eventKindText(event.kind)}{event.endDate && event.endDate !== event.date ? ` · ${formatDate(event.date)} – ${formatDate(event.endDate)}` : ""}</span></span>
+      <span className="wb-agenda-copy"><span className="wb-dense-title">{event.title}</span><span className="wb-dense-meta">{projectName && `${projectName} · `}{eventKindText(event.kind)}{event.endDate && event.endDate !== event.date ? ` · ${formatDate(event.date)} – ${formatDate(event.endDate)}` : ""}</span></span>
       <ArrowRight size={13} aria-hidden />
     </button>
   );
@@ -1404,7 +1266,7 @@ function Metric({
   hint: string;
   icon: React.ReactNode;
   warn?: boolean;
-  /** 대시보드에서 카드 한 장이 위젯 한 칸을 통째로 채울 때. */
+  /** When a single card fills an entire widget cell on the dashboard. */
   solo?: boolean;
   onClick?: () => void;
 }) {
@@ -1428,63 +1290,15 @@ function Metric({
     </button>
   );
 }
-function WorkRow({
-  item,
-  project,
-  workflows,
-  busy,
-  onClick,
-  onEdit,
-  onStatus,
-}: {
-  item: WorkItem;
-  project?: Project;
-  workflows: WorkflowDefinition[];
-  busy: boolean;
-  onClick: () => void;
-  onEdit: () => void;
-  onStatus: (status: WorkStatus) => void;
-}) {
+function WorkRow({ item, project, onClick }: { item: WorkItem; project?: Project; onClick: () => void }) {
   const { t } = useTranslation("workbench");
-  return (
-    <div className="wb-work-row">
-      <button className="wb-work-main" onClick={onClick} title={item.title}>
-        <span className="wb-work-state" data-status={item.status} title={statusText(item.status)}><span className="sr-only">{statusText(item.status)}</span></span>
-        <div>
-          <strong>{item.title}</strong>
-          <small>
-            {project?.name ?? t("row.noProject")} ·{" "}
-            {stageLabel(
-              workflows,
-              item.stage,
-              item.workflowId,
-              item.workflowVersion,
-            )}
-          </small>
-        </div>
-      </button>
-      <div className="wb-row-meta">
-        {item.dueDate && <time dateTime={item.dueDate} className={daysUntil(item.dueDate) < 0 ? "is-overdue" : undefined}>{formatDate(item.dueDate)}</time>}
-        {!isClosedStatus(item.status) && (
-          <MiniAction
-            label={t("work.review") }
-            primary
-            icon={<Check size={13} />}
-            busy={busy}
-            onClick={() => onStatus("done")}
-          />
-        )}
-        <button
-          className="wb-icon-button"
-          aria-label={t("row.editWork")}
-          title={t("row.editWork")}
-          onClick={onEdit}
-        >
-          <MoreHorizontal size={17} />
-        </button>
-      </div>
-    </div>
-  );
+  return <button className="wb-work-row" onClick={onClick} title={item.title}>
+    <span className="wb-work-main"><span className="wb-work-state" data-status={item.status} aria-hidden />
+      <span><strong>{item.title}</strong><small>{project?.name ?? t("row.noProject")} · {statusText(item.status)}</small></span>
+    </span>
+    {item.dueDate && <time className="wb-dense-meta" dateTime={item.dueDate}>{formatDate(item.dueDate)}</time>}
+    <ArrowRight size={13} aria-hidden />
+  </button>;
 }
 function CalendarView({
   work,
@@ -1710,14 +1524,13 @@ function CalendarView({
     </>
   );
 }
-function KnowledgeView({
-  work,
-  project,
-  projects,
-  onSelectWork,
-  onJump,
-  onNotice,
-}: {
+function SearchHighlight({ text, query }: { text: string; query: string }) {
+  const index = text.toLowerCase().indexOf(query.toLowerCase());
+  if (!query || index < 0) return <>{text}</>;
+  return <>{text.slice(0, index)}<mark>{text.slice(index, index + query.length)}</mark>{text.slice(index + query.length)}</>;
+}
+
+function KnowledgeView({ work, project, projects, onSelectWork, onJump, onNotice }: {
   work: WorkItem[];
   project?: Project;
   projects: Project[];
@@ -1727,207 +1540,105 @@ function KnowledgeView({
 }) {
   const { t } = useTranslation("workbench");
   const [query, setQuery] = useState("");
-  const [hits, setHits] = useState<SearchHit[]>([]);
-  const allJobs = useApp((s) => s.jobs);
-  const jobs = jobsForProject(allJobs, project);
   const [submittedQuery, setSubmittedQuery] = useState("");
-  const [taskMatches, setTaskMatches] = useState<
-    import("@/lib/types").TaskDef[]
-  >([]);
-  const matches = (text: string) =>
-    !!submittedQuery &&
-    text.toLowerCase().includes(submittedQuery.toLowerCase());
-  const workMatches = work.filter((w) =>
-    matches(`${w.title} ${w.description} ${w.tags.join(" ")}`),
-  );
-  const projectMatches = projects.filter((p) =>
-    matches(`${p.name} ${p.description}`),
-  );
-  const jobMatches = jobs.filter((j) => matches(`${j.label} ${j.error ?? ""}`));
+  const [hits, setHits] = useState<SearchHit[]>([]);
+  const [filter, setFilter] = useState("all");
   const [busy, setBusy] = useState(false);
-  const [searched, setSearched] = useState(false);
-  const [record, setRecord] = useState<{
-    path: string;
-    markdown: string;
-  } | null>(null);
-  const openHit = async (hit: SearchHit) => {
-    if (hit.workId && hit.artifact) {
-      onJump(hit.workId, hit.artifact, hit.snippet);
-      return;
-    }
-    try {
-      const note = await vaultApi.readVaultNote(hit.path);
-      setRecord({ path: hit.path, markdown: note.markdown });
-    } catch (error) {
-      onNotice({ tone: "error", text: errorText(error) });
-    }
+  const [error, setError] = useState("");
+  const [record, setRecord] = useState<{ path: string; title: string; markdown: string } | null>(null);
+  const [opening, setOpening] = useState("");
+  const request = useRef(0);
+  const noteRequest = useRef(0);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => () => { request.current++; noteRequest.current++; }, []);
+
+  const recentWork = [...work].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6);
+  const kinds = [...new Set(hits.map((hit) => hit.artifact ?? "document"))];
+  const filteredHits = hits.filter((hit) => filter === "all" || (hit.artifact ?? "document") === filter);
+  const kindLabel = (kind: string) => kind === "document" ? t("search.document") : artifactText(kind);
+  const clear = () => {
+    request.current++;
+    setQuery(""); setSubmittedQuery(""); setHits([]); setFilter("all"); setBusy(false); setError("");
+    input.current?.focus();
   };
   const search = async (event?: FormEvent) => {
     event?.preventDefault();
-    if (!query.trim()) {
-      setHits([]);
-      setSubmittedQuery("");
-      setTaskMatches([]);
-      setSearched(false);
-      return;
-    }
-    setBusy(true);
+    const term = query.trim();
+    if (!term) { clear(); return; }
+    const id = ++request.current;
+    setBusy(true); setError(""); setSubmittedQuery(term); setFilter("all"); setHits([]);
     try {
-      const [documents, tasks] = await Promise.all([
-        sddApi.search(query.trim()),
-        vaultApi.listTasks().catch(() => null),
-      ]);
+      const documents = await sddApi.search(term);
+      if (id !== request.current) return;
       setHits(project ? documents.filter((hit) => hit.workId && work.some((item) => item.id === hit.workId)) : documents);
-      setSubmittedQuery(query.trim());
-      setTaskMatches(
-        (tasks ? [...tasks.builtin, ...tasks.tasks] : [])
-          .map((r) => r.def)
-          .filter((task) => !project || task.project === project.id || task.project === project.name)
-          .filter((t) =>
-            `${t.title} ${t.prompt}`
-              .toLowerCase()
-              .includes(query.trim().toLowerCase()),
-          ),
-      );
-      setSearched(true);
     } catch (e) {
-      onNotice({ tone: "error", text: errorText(e) });
+      if (id === request.current) setError(errorText(e));
     } finally {
-      setBusy(false);
+      if (id === request.current) setBusy(false);
+    }
+  };
+  const openHit = async (hit: SearchHit) => {
+    if (hit.workId && hit.artifact) { onJump(hit.workId, hit.artifact, hit.snippet); return; }
+    const id = ++noteRequest.current;
+    setOpening(hit.path);
+    setRecord({ path: hit.path, title: hit.title, markdown: "" });
+    try {
+      const note = await vaultApi.readVaultNote(hit.path);
+      if (id === noteRequest.current) setRecord({ path: hit.path, title: hit.title, markdown: note.markdown });
+    } catch (e) {
+      if (id === noteRequest.current) { setRecord(null); onNotice({ tone: "error", text: errorText(e) }); }
+    } finally {
+      if (id === noteRequest.current) setOpening("");
     }
   };
   return (
-    <>
-      <PageHeader title={t("search.title")} />
-      <form className="wb-search-box" onSubmit={(event) => void search(event)}>
-        <Search size={20} />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder={t("search.placeholder")}
-          autoFocus
-        />
-        <Button type="submit" disabled={busy}>
-          {busy ? <Loader2 className="wb-spin" /> : t("search.submit")}
-        </Button>
+    <section className="doc-search" aria-label={t("search.pageTitle")}>
+      <header className="doc-search-header">
+        <div><h1>{t("search.pageTitle")}</h1><p>{t("search.description")}</p></div>
+        <span className="doc-search-scope"><Folder size={14} />{project?.name ?? t("search.allProjects")}</span>
+      </header>
+      <form className="doc-search-form" role="search" onSubmit={(event) => void search(event)}>
+        <Search size={19} aria-hidden="true" />
+        <input ref={input} value={query} onChange={(event) => { if (!event.target.value) clear(); else setQuery(event.target.value); }} aria-label={t("search.inputLabel")} placeholder={t("search.documentPlaceholder")} autoFocus />
+        {query && <button type="button" className="doc-search-clear" onClick={clear} aria-label={t("search.clear")}><X size={16} /></button>}
+        <Button type="submit" disabled={busy || !query.trim()}>{busy && <Loader2 size={14} className="wb-spin" />}{t("search.submit")}</Button>
       </form>
-      <div className="wb-search-results">
-        {!busy && (
-          <>
-            {workMatches.map((item) => (
-              <button
-                key={item.id}
-                className="wb-search-hit"
-                onClick={() => onSelectWork(item.id)}
-              >
-                <div>
-                  <span>{t("search.categoryWork")}</span>
-                  <strong>{item.title}</strong>
-                  <p>{item.description}</p>
-                </div>
-                <ChevronRight size={18} />
-              </button>
-            ))}
-            {projectMatches.map((project) => (
-              <button
-                key={project.id}
-                className="wb-search-hit"
-                onClick={() =>
-                  setRecord({
-                    path: project.name,
-                    markdown: `${project.description}\n\n${project.repoPath}`,
-                  })
-                }
-              >
-                <div>
-                  <span>{t("search.categoryProject")}</span>
-                  <strong>{project.name}</strong>
-                  <p>{project.description}</p>
-                </div>
-              </button>
-            ))}
-            {taskMatches.map((task) => (
-              <button
-                key={task.id}
-                className="wb-search-hit"
-                onClick={() =>
-                  setRecord({ path: task.title, markdown: task.prompt })
-                }
-              >
-                <div>
-                  <span>{t("search.categoryTask")}</span>
-                  <strong>{task.title}</strong>
-                  <p>{task.prompt.slice(0, 160)}</p>
-                </div>
-              </button>
-            ))}
-            {jobMatches.map((job) => (
-              <button
-                key={job.id}
-                className="wb-search-hit"
-                onClick={() =>
-                  setRecord({
-                    path: job.label,
-                    markdown: `${job.status}\n\n${job.error ?? ""}`,
-                  })
-                }
-              >
-                <div>
-                  <span>{t("search.categoryJob")}</span>
-                  <strong>{job.label}</strong>
-                  <p>{job.status}</p>
-                </div>
-              </button>
-            ))}
-          </>
-        )}
+      <p className="doc-search-hint">{t(project ? "search.projectHint" : "search.scopeHint")}</p>
 
-        {busy ? (
-          <LoadingState />
-        ) : searched &&
-          !hits.length &&
-          !workMatches.length &&
-          !projectMatches.length &&
-          !jobMatches.length &&
-          !taskMatches.length ? (
-          <EmptyState
-            icon={Search}
-            title={t("search.emptyTitle")}
-            description={t("search.emptyDescription")}
-          />
-        ) : (
-          hits.map((hit, index) => (
-            <button
-              key={`${hit.path}-${index}`}
-              className="wb-search-hit"
-              onClick={() => void openHit(hit)}
-            >
-              <div>
-                <span>
-                  {hit.artifact
-                    ? artifactText(hit.artifact)
-                    : t("search.document")}
-                </span>
-                <strong>{hit.title}</strong>
-                <p>{hit.snippet}</p>
-                <small>{hit.path}</small>
-              </div>
-              <ChevronRight size={18} />
-            </button>
-          ))
-        )}
-      </div>
-      <Dialog
-        open={record !== null}
-        onClose={() => setRecord(null)}
-        title={record?.path}
-        wide
-      >
-        <pre className="selectable whitespace-pre-wrap break-words text-xs leading-relaxed">
-          {record?.markdown}
-        </pre>
+      {!submittedQuery && !error && <div className="doc-search-start">
+        <div className="doc-search-guide"><FileText size={24} /><h2>{t("search.startTitle")}</h2><p>{t("search.startDescription")}</p></div>
+        {recentWork.length > 0 && <section className="doc-search-recent" aria-label={t("search.recentWork")}>
+          <div className="doc-search-section-heading"><h2>{t("search.recentWork")}</h2><span>{t("search.recentHint")}</span></div>
+          <div className="doc-search-recent-list">{recentWork.map((item) => <button key={item.id} onClick={() => onSelectWork(item.id)}>
+            <FileText size={17} /><span><strong>{item.title}</strong><small>{projects.find((p) => p.id === item.projectId)?.name ?? item.projectId} · {item.id}</small></span><ChevronRight size={15} />
+          </button>)}</div>
+        </section>}
+      </div>}
+
+      {error && <div className="doc-search-error" role="alert"><AlertCircle size={17} /><span>{error}</span><Button variant="outline" size="sm" onClick={() => void search()}>{t("search.retry")}</Button></div>}
+      {submittedQuery && !error && <section className="doc-search-results" aria-label={t("search.results")} aria-busy={busy}>
+        <div className="doc-search-section-heading"><h2>{t("search.results")}</h2><span role="status">{busy ? t("search.searching") : t("search.resultCount", { query: submittedQuery, count: filteredHits.length })}</span></div>
+        {!busy && hits.length > 0 && <div className="doc-search-filters" role="group" aria-label={t("search.filterLabel")}>
+          {["all", ...kinds].map((kind) => <button key={kind} aria-pressed={filter === kind} onClick={() => setFilter(kind)}>{kind === "all" ? t("search.allDocuments") : kindLabel(kind)}<span>{kind === "all" ? hits.length : hits.filter((hit) => (hit.artifact ?? "document") === kind).length}</span></button>)}
+        </div>}
+        {busy ? <LoadingState /> : hits.length === 0 ? <div className="doc-search-empty"><EmptyState icon={Search} title={t("search.emptyTitle")} description={t("search.emptyDescription")} /><Button variant="outline" onClick={clear}>{t("search.startOver")}</Button></div> : <div className="doc-search-list">{filteredHits.map((hit, index) => {
+          const item = work.find((item) => item.id === hit.workId);
+          const projectName = projects.find((p) => p.id === item?.projectId)?.name;
+          return <button key={`${hit.path}-${index}`} className="doc-search-hit" onClick={() => void openHit(hit)}>
+            <span className="doc-search-file"><FileText size={19} /></span>
+            <span className="doc-search-hit-content"><span className="doc-search-hit-meta"><span className="doc-search-kind">{kindLabel(hit.artifact ?? "document")}</span>{projectName && <span>{projectName}</span>}{item && <span>{item.id}</span>}</span>
+              <strong><SearchHighlight text={hit.title} query={submittedQuery} /></strong>
+              <span className="doc-search-snippet"><SearchHighlight text={hit.snippet.replace(/\s+/g, " ").trim()} query={submittedQuery} /></span>
+              <small>{hit.path}</small>
+            </span><ChevronRight size={17} />
+          </button>;
+        })}</div>}
+      </section>}
+      <Dialog open={record !== null} onClose={() => { noteRequest.current++; setRecord(null); setOpening(""); }} title={record?.title} wide>
+        <p className="doc-search-record-path">{record?.path}</p>
+        {opening ? <LoadingState /> : <MarkdownView src={record?.markdown ?? ""} notePath={record?.path} />}
       </Dialog>
-    </>
+    </section>
   );
 }
 function ProjectsView({
@@ -1936,17 +1647,35 @@ function ProjectsView({
   workflows,
   onNew,
   onEdit,
+  onReload,
+  onNotice,
 }: {
   projects: Project[];
   work: WorkItem[];
   workflows: WorkflowDefinition[];
   onNew: () => void;
   onEdit: (project: Project) => void;
+  onReload: () => Promise<void>;
+  onNotice: (message: Notice) => void;
 }) {
   const { t } = useTranslation("workbench");
   const selectProject = useProjectScope((state) => state.selectProject);
   const setPage = useApp((state) => state.setPage);
+  const [resourceProject, setResourceProject] = useState<Project | null>(null);
   const [documentProject, setDocumentProject] = useState<Project | null>(null);
+  const [addingSamples, setAddingSamples] = useState(false);
+  const addSamples = async () => {
+    setAddingSamples(true);
+    try {
+      const report = await sddApi.createSamples();
+      await onReload();
+      onNotice({ tone: "success", text: report.createdProjects.length ? t("projects.samplesAdded", { count: report.createdProjects.length }) : t("projects.samplesExist") });
+    } catch (error) {
+      onNotice({ tone: "error", text: errorText(error) });
+    } finally {
+      setAddingSamples(false);
+    }
+  };
   if (documentProject)
     return (
       <OnboardingPage
@@ -1957,6 +1686,9 @@ function ProjectsView({
   return (
     <>
       <PageHeader title={t("projects.title")}>
+        <Button variant="outline" disabled={addingSamples} onClick={() => void addSamples()}>
+          {t(addingSamples ? "projects.addingSamples" : "projects.addSamples")}
+        </Button>
         <Button onClick={onNew}>
           <Plus /> {t("projects.add")}
         </Button>
@@ -2001,7 +1733,8 @@ function ProjectsView({
                   {project.repoPath || t("projects.noRepoPath")}
                 </span>
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => { selectProject(project.id); setPage("overview"); }}>{t("scope.openWorkbench")}</Button>
+                  <Button size="sm" onClick={() => { selectProject(project.id); setPage("work"); }}>{t("scope.openWorkbench")}</Button>
+                  <Button size="sm" variant="outline" onClick={() => setResourceProject(project)}>{t("resources.selectLibrary")}</Button>
                   <Button
                     size="sm"
                     variant="outline"
@@ -2032,11 +1765,13 @@ function ProjectsView({
           }
         />
       )}
-      <ResourceLibrary projects={projects} />
+      <Dialog open={!!resourceProject} onClose={() => setResourceProject(null)} title={resourceProject ? t("resources.projectSelection", { project: resourceProject.name }) : undefined}>
+        {resourceProject && <ProjectResourcePicker key={resourceProject.id} projectId={resourceProject.id} />}
+      </Dialog>
     </>
   );
 }
-/** 마일스톤에 넣을 개발 항목을 고른다. 소속은 항목의 `milestone` 필드에 적힌다. */
+/** Picks development items to put into a milestone. Membership is written in the item's `milestone` field. */
 function MilestoneWorkPicker({
   work,
   selected,
@@ -2100,6 +1835,8 @@ function MilestoneWorkPicker({
 function WorkView({
   work,
   projects,
+  project,
+  onProjectSettings,
   workflows,
   events,
   reload,
@@ -2110,6 +1847,8 @@ function WorkView({
 }: {
   work: WorkItem[];
   projects: Project[];
+  project: Project;
+  onProjectSettings: () => void;
   workflows: WorkflowDefinition[];
   events: CalendarEvent[];
   reload: () => Promise<void>;
@@ -2129,7 +1868,7 @@ function WorkView({
     setDisplay(next);
     try { localStorage.setItem("sawhorse.work-view.v2", next); } catch { /* Optional preference. */ }
   };
-  // 정렬은 보기와 함께 기억한다. 목록과 공정 보드가 같은 기준으로 줄을 선다.
+  // The sort is remembered together with the view. The list and the flow board line up by the same criterion.
   const [sort, setSort] = useState<WorkSort>(readWorkSort);
   const chooseSort = (next: WorkSort) => {
     setSort(next);
@@ -2142,16 +1881,59 @@ function WorkView({
   const milestonesId = useId();
   const [stageFilter, setStageFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
-  const stageOptions = [...taskStages, "discarding", "other"].map((stage) => [stage, t(`taskBoard.stages.${stage}`)]);
+  const projectId = project.id;
+  const projectWorkflowKey = workWorkflowKey(project);
+  const enabledWorkflowRefs = projectWorkflowRefs(project);
+  const enabledWorkflowKeys = new Set(enabledWorkflowRefs.map(workflowKey));
+  const availableWorkflowKeys = new Set([...enabledWorkflowKeys, ...work.map(workWorkflowKey)]);
+  const workflowViewStorage = `sawhorse.project-workflow-view.v1:${projectId}`;
+  const initialWorkflowView = availableWorkflowKeys.size > 1 ? "all" : projectWorkflowKey;
+  const [workflowFilter, setWorkflowFilter] = useState(() => {
+    try {
+      const saved = localStorage.getItem(workflowViewStorage);
+      return saved && (saved === "all" || availableWorkflowKeys.has(saved)) ? saved : initialWorkflowView;
+    } catch { return initialWorkflowView; }
+  });
+  const selectedWorkflow = workflows.find((workflow) => workflowKey(workflow) === workflowFilter);
+  const defaultWorkflow = creationWorkflow(workflows, project);
+  const newWorkflow = workflowFilter === "all" ? defaultWorkflow
+    : selectedWorkflow && creationWorkflow(workflows, project, { id: selectedWorkflow.id, version: selectedWorkflow.version });
+  const allWorkflows = workflowFilter === "all";
+  const boardDisplay = !allWorkflows && display === "board";
+  const intake = newWorkflow && workflowIntake(newWorkflow);
+  const unit = intake?.composer === "intent" ? t("artifact.intent") : intake?.composer === "goal" ? t("creation.goal")
+    : intake?.artifact ? (intake.artifact.label === intake.artifact.role ? t(`artifact.${intake.artifact.role}`, { defaultValue: intake.artifact.label }) : intake.artifact.label) : t("creation.item");
+  const createLabel = newWorkflow && !allWorkflows ? t("creation.newUnit", { unit }) : t("creation.newItem");
+  const createWork = () => {
+    if (newWorkflow) {
+      onNewWork({ ...blankWork(), projectId, workflowId: newWorkflow.id, workflowVersion: newWorkflow.version, stage: newWorkflow.entry });
+    }
+  };
+  const selectedStage = (item: WorkItem) => allWorkflows ? item.status : selectedWorkflow && !usesLifecycleBoard(selectedWorkflow)
+    ? workflowBoardStage(item, selectedWorkflow) : taskStage(item, workflows);
+  const stageOptions = allWorkflows ? (["backlog", "ready", "running", "review", "blocked", "done", "rejected", "cancelled"] as const).map((status) => [status, statusText(status)]) : selectedWorkflow && !usesLifecycleBoard(selectedWorkflow)
+    ? workflowBoardLanes(selectedWorkflow, work.filter((item) => workWorkflowKey(item) === workflowFilter)).map((node) => [node.id, node.id === "done" ? t("status.done") : node.label])
+    : [...taskStages, "discarding", "other"].map((stage) => [stage, t(`taskBoard.stages.${stage}`)]);
+  const changeWorkflow = (key: string) => {
+    setWorkflowFilter(key); setStageFilter("all"); setSelectedIds([]); setArea("flow");
+    try { localStorage.setItem(workflowViewStorage, key); } catch { /* Optional preference. */ }
+  };
+  const availableWorkflowSignature = [...availableWorkflowKeys].join("|");
+  const previousWorkflowCount = useRef(availableWorkflowKeys.size);
+  useEffect(() => {
+    if (previousWorkflowCount.current === 1 && availableWorkflowKeys.size > 1) changeWorkflow("all");
+    else if (workflowFilter !== "all" && !availableWorkflowKeys.has(workflowFilter)) changeWorkflow(initialWorkflowView);
+    else if (availableWorkflowKeys.size === 1 && workflowFilter === "all") changeWorkflow(projectWorkflowKey);
+    previousWorkflowCount.current = availableWorkflowKeys.size;
+  }, [availableWorkflowSignature, workflowFilter, projectWorkflowKey]);
   const [area, setArea] = useState<WorkArea>("flow");
   const changeArea = (next: WorkArea) => { setArea(next); setStageFilter("all"); setSelectedIds([]); };
-  const taskWork = work.filter(isTaskRecord);
-  const areaWork = work.filter((item) => workArea(item) === area);
-  const projectId = useProjectScope((state) => state.projectId);
-  const setProjectId = useProjectScope((state) => state.selectProject);
-  const projectFilter = projectId || "all";
-  const setProjectFilter = (id: string) => setProjectId(id === "all" ? "" : id);
+  const workflowWork = work.filter((item) => workflowFilter === "all" || workWorkflowKey(item) === workflowFilter);
+  const lifecycleAreas = !!selectedWorkflow && usesLifecycleBoard(selectedWorkflow);
+  const taskWork = lifecycleAreas ? workflowWork.filter(isTaskRecord) : workflowWork;
+  const areaWork = allWorkflows || !lifecycleAreas ? workflowWork : workflowWork.filter((item) => workArea(item) === area);
   const [executionFilter, setExecutionFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [milestoneFilter, setMilestoneFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("all");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -2178,17 +1960,17 @@ function WorkView({
     void loadLegacy();
   }, []);
 
-  // 이슈 축의 labels 와 개발 축의 tags 는 둘 다 문서에 적힌 분류다. 한 필터로 묶어 본다.
+  // The issue axis's labels and the development axis's tags are both classifications written on the document. View them under one filter.
   const tagsOf = (item: WorkItem) => [
     ...new Set([...(item.labels ?? []), ...(item.tags ?? [])]),
   ];
-  // 태그 후보는 태그를 뺀 나머지 조건까지 걸린 범위에서 뽑는다 — 고른 태그로 목록이 비지 않게.
+  // Tag candidates are drawn from the range already narrowed by every condition except the tag — so choosing a tag never empties the list.
   const tagPool = areaWork.filter(
     (item) =>
-      (stageFilter === "all" || taskStage(item, workflows) === stageFilter) &&
+      (stageFilter === "all" || selectedStage(item) === stageFilter) &&
       (priorityFilter === "all" || item.priority === priorityFilter) &&
-      (projectFilter === "all" || item.projectId === projectFilter) &&
       (executionFilter === "all" || item.executionType === executionFilter) &&
+      (typeFilter === "all" || item.issueType === typeFilter) &&
       (milestoneFilter === "all" ||
         (milestoneFilter === "none"
           ? !item.milestone
@@ -2202,14 +1984,14 @@ function WorkView({
       ...item.assignees, ...tagsOf(item)].join(" ").toLocaleLowerCase().includes(search))
     .sort(workComparator(sort));
 
-  // 고른 태그가 다른 필터 때문에 사라지면 태그 필터를 풀어 준다.
+  // If the chosen tag disappears because of other filters, release the tag filter.
   const tagKey = tagOptions.join("\n");
   useEffect(() => {
     if (tagFilter !== "all" && !tagKey.split("\n").includes(tagFilter))
       setTagFilter("all");
   }, [tagFilter, tagKey]);
 
-  // 선택은 언제나 지금 보이는 행에만 걸린다. 필터를 좁히면 가려진 선택은 버린다.
+  // Selection always applies only to the rows currently visible. Narrowing a filter discards hidden selections.
   const visibleKey = rows.map((item) => item.id).join("\n");
   useEffect(() => {
     const visible = new Set(visibleKey.split("\n"));
@@ -2239,14 +2021,15 @@ function WorkView({
     appDefaultAgent;
   const agentName = (id: string) =>
     knownAgents.find((candidate) => candidate.id === id)?.name ?? id;
-  // 끝난 항목에는 더 밟을 단계가 없다.
+  // Finished items have no further stage to advance to.
   const runnable = (item: WorkItem) => item.workflowId !== GOAL_WORKFLOW && workArea(item) === "flow" && (!isLifecycleV2(item) || item.stage === "queued") && !isClosedStatus(item.status) && !["blocked", "review"].includes(item.status);
   const toggleSelection = (id: string, checked: boolean) => setSelectedIds((prev) => checked ? [...new Set([...prev, id])] : prev.filter((item) => item !== id));
   const startGoals = async () => {
-    if (goalSubmitting.current || !selectedRows.length) return;
+    const goals = selectedRows.filter((item) => item.workflowId === GOAL_WORKFLOW);
+    if (goalSubmitting.current || !goals.length) return;
     goalSubmitting.current = true; setBusy("goals"); setGoalBatch(null);
     try {
-      const results = await sddApi.startSelectedGoals(selectedRows.map((w) => w.id));
+      const results = await sddApi.startSelectedGoals(goals.map((w) => w.id));
       setGoalBatch(results);
       const accepted = new Set(results.filter((r) => r.outcome !== "skipped").map((r) => r.workId));
       setSelectedIds((prev) => prev.filter((id) => !accepted.has(id)));
@@ -2338,23 +2121,23 @@ function WorkView({
     (!projectId || entry.project === projectId || entry.project === projects.find((project) => project.id === projectId)?.name));
   const movable = pending.filter((entry) => !entry.blocked);
 
-  const activeFilters = [stageFilter, priorityFilter, executionFilter, milestoneFilter, tagFilter]
+  const activeFilters = [stageFilter, priorityFilter, executionFilter, typeFilter, milestoneFilter, tagFilter]
     .filter((value) => value !== "all").length;
   const resetFilters = () => {
     setQuery("");
     setStageFilter("all");
     setPriorityFilter("all");
-    setExecutionFilter("all");
+    setExecutionFilter("all"); setTypeFilter("all");
     setMilestoneFilter("all");
     setTagFilter("all");
   };
-  const areaCounts = Object.fromEntries((["flow", "inbox", "archive", "mockups"] as WorkArea[]).map((entry) => [entry, work.filter((w) => workArea(w) === entry).length]));
-  const attention = (stage: "approval" | "unconfirmed") => work.filter((w) => workArea(w) === "flow" && taskStage(w, workflows) === stage).length;
+  const areaCounts = Object.fromEntries((["flow", "inbox", "archive", "mockups"] as WorkArea[]).map((entry) => [entry, workflowWork.filter((w) => workArea(w) === entry).length]));
+  const attention = (stage: "approval" | "unconfirmed") => workflowWork.filter((w) => workArea(w) === "flow" && taskStage(w, workflows) === stage).length;
   const showAttention = (stage: "approval" | "unconfirmed") => { resetFilters(); setArea("flow"); setStageFilter(stage); };
   const queueable = rows.filter((w) => isLifecycleV2(w) && w.stage === "queued");
 
-  // 우클릭 메뉴. 카드·목록 행·인박스 노트가 같은 빌더를 쓰고, 항목의 영역과
-  // 상태에 따라 실행·선택·우선순위 같은 액션이 붙거나 빠진다.
+  // Context menu. Cards, list rows, and inbox notes share one builder; actions such as run, select,
+  // or priority attach or drop out depending on the item's area and status.
   const workMenu = useContextMenu();
   const copyText = async (text: string) => {
     try {
@@ -2412,8 +2195,8 @@ function WorkView({
       { label: t("menu.copyTitle"), icon: <Copy />, onSelect: () => void copyText(item.title) },
     ]);
   };
-  // 목록에서 바로 내리는 결정. 상세를 열지 않고 승인·수정 요청·확인만 끝낸다.
-  // 승인은 구현 대기로만 옮긴다 — 큐에 넣기 전까지 에이전트는 시작하지 않는다.
+  // Decisions made straight from the list. Approve, request changes, or confirm without opening the detail.
+  // Approving only moves to awaiting-implementation — the agent does not start until it is queued.
   const [deciding, setDeciding] = useState<string | null>(null);
   const decisionLock = useRef(false);
   const decideNow = async (item: WorkItem, action: QuickAction) => {
@@ -2422,7 +2205,7 @@ function WorkView({
     try {
       if (action === "queue") await sddApi.queueImplementation([item.id]);
       else {
-        // revision·inputDigest 는 누르는 순간의 최신 값이어야 한다. 목록 스냅샷은 이미 오래됐을 수 있다.
+        // revision and inputDigest must be the latest values at the moment of the press. The list snapshot may already be stale.
         const [state, review] = await Promise.all([sddApi.lifecycle(item.id), sddApi.intentReview(item.id)]);
         await sddApi.lifecycleAction({
           workId: item.id, action, expectedStage: item.stage, revision: state.revision,
@@ -2432,7 +2215,7 @@ function WorkView({
       await reload();
       setNotice({ tone: "success", text: t(`taskBoard.decide.toast.${action}`) });
     } catch (error) {
-      // 다른 곳에서 먼저 바뀌었을 수 있다. 알리고 최신 목록을 다시 읽는다.
+      // Something may have changed elsewhere first. Notify and re-read the latest list.
       setNotice({ tone: "error", text: t("taskBoard.decide.failed", { error: errorText(error) }) });
       await reload();
     } finally {
@@ -2446,29 +2229,48 @@ function WorkView({
     <>
       <header className="wb-work-header">
         <div>
-          <div className="wb-work-heading"><h1>{t("work.title")}</h1><span>{taskWork.length}</span></div>
+          <div className="wb-work-heading"><h1>{t("scope.workbenchTitle", { project: project.name })}</h1><span>{allWorkflows ? work.length : taskWork.length}</span></div>
           <p>{t("taskBoard.description")}</p>
         </div>
         <div className="wb-lifecycle-actions">
           {area === "flow" && queueable.length > 0 && <Button variant="outline" disabled={!!busy} onClick={() => void launch(queueable)}><Play />{t("lifecycle.batch", { count: queueable.length })}</Button>}
-          <Button onClick={() => onNewWork()}><Plus /> {t("board.newWork")}</Button>
+          <Button disabled={!newWorkflow} onClick={createWork}><Plus /> {createLabel}</Button>
         </div>
       </header>
 
-      <section className="wb-task-overview" aria-label={t("taskBoard.attention")}>
+      <section className="wb-workflow-context" aria-label={t("scope.projectWorkflow")}>
+        <div><span>{t("scope.projectWorkflow")}</span><strong>{defaultWorkflow?.label ?? project.workflowId} · v{project.workflowVersion}</strong></div>
+        <p>{t("scope.inheritWorkflow")}</p>
+        <Button size="sm" variant="ghost" onClick={onProjectSettings}>{t("projects.settings")}</Button>
+      </section>
+      {availableWorkflowKeys.size > 1 && <section className="wb-workflow-views" aria-label={t("scope.workflowViews")}>
+        <label><span>{t("scope.workflowViews")}</span>
+          <Select aria-label={t("scope.workflowViews")} value={workflowFilter} onChange={changeWorkflow}
+            options={[{ value: "all", label: `${t("scope.allWork")} (${work.length})` }, ...[...availableWorkflowKeys].map((key) => {
+              const [id, version] = JSON.parse(key) as [string, string];
+              const definition = workflows.find((item) => workflowKey(item) === key);
+              const count = work.filter((item) => workWorkflowKey(item) === key).length;
+              return { value: key, label: `${definition?.label ?? id} · v${version} (${count})${enabledWorkflowKeys.has(key) ? "" : ` · ${t("scope.historyOnly")}`}` };
+            })]} />
+        </label>
+        <p>{t(allWorkflows ? "scope.allWorkHint" : "scope.flowWorkHint")}</p>
+      </section>}
+      {!newWorkflow && <p className="wb-inline-error" role="alert">{t(selectedWorkflow ? "scope.historyOnlyHint" : "creation.workflowUnavailable")}</p>}
+
+      {!allWorkflows && usesLifecycleBoard(selectedWorkflow) && <section className="wb-task-overview" aria-label={t("taskBoard.attention")}>
         <button aria-pressed={area === "inbox"} onClick={() => { resetFilters(); changeArea("inbox"); }}><span><strong>{t("taskBoard.inbox")}</strong><small>{t("taskBoard.notYetTask")}</small></span><b>{areaCounts.inbox}</b></button>
         <button aria-pressed={area === "flow" && stageFilter === "approval"} onClick={() => showAttention("approval")}><span><strong>{t("taskBoard.reviewDesign")}</strong><small>{t("taskBoard.reviewDesignHint")}</small></span><b>{attention("approval")}</b></button>
         <button aria-pressed={area === "flow" && stageFilter === "unconfirmed"} onClick={() => showAttention("unconfirmed")}><span><strong>{t("taskBoard.reviewResult")}</strong><small>{t("taskBoard.reviewResultHint")}</small></span><b>{attention("unconfirmed")}</b></button>
-      </section>
-      <div className="wb-work-navigation">
-        <div className="wb-work-area-tabs" role="group" aria-label={t("taskBoard.areas")}>
+      </section>}
+      {!allWorkflows && <div className="wb-work-navigation">
+        {lifecycleAreas && <div className="wb-work-area-tabs" role="group" aria-label={t("taskBoard.areas")}>
           {(["flow", "inbox", "archive", "mockups"] as WorkArea[]).map((entry) => <button key={entry} aria-pressed={area === entry} onClick={() => changeArea(entry)}>{t(`taskBoard.${entry}`)}<span>{areaCounts[entry]}</span></button>)}
-        </div>
+        </div>}
         {area === "flow" && <div className="wb-view-switch" role="group" aria-label={t("work.view")}>
           <Button variant="ghost" aria-pressed={display === "board"} onClick={() => chooseDisplay("board")}><Columns3 />{t("taskBoard.board")}</Button>
           <Button variant="ghost" aria-pressed={display === "list"} onClick={() => chooseDisplay("list")}><List />{t("work.list")}</Button>
         </div>}
-      </div>
+      </div>}
 
       <div className="wb-work-toolbar">
         <div className="wb-work-search">
@@ -2477,10 +2279,6 @@ function WorkView({
             value={query} onChange={(event) => setQuery(event.target.value)} />
           {query && <button type="button" aria-label={t("work.clearSearch")} onClick={() => setQuery("")}><X size={14} /></button>}
         </div>
-        <Select size="sm" className="wb-work-project-filter" value={projectFilter}
-          onChange={setProjectFilter} aria-label={t("board.filterProject")}
-          options={[{ value: "all", label: t("board.filterAllProjects") },
-            ...projects.map((project) => ({ value: project.id, label: project.name }))]} />
         <Button variant="outline" aria-expanded={showFilters} aria-controls={filtersId}
           onClick={() => setShowFilters((value) => !value)}>
           <SlidersHorizontal />{t("work.filters")}{activeFilters > 0 && <span className="wb-work-filter-count">{activeFilters}</span>}
@@ -2492,10 +2290,12 @@ function WorkView({
       </div>
 
       {showFilters && <section id={filtersId} className="wb-work-filters" aria-label={t("work.filters")}>
-        {area === "flow" && <label><span>{t("issues.colStageRun")}</span><Select size="sm" aria-label={t("board.filterStage")} value={stageFilter} onChange={setStageFilter}
+        {area === "flow" && <label><span>{t(allWorkflows ? "issues.colStatus" : "issues.colStageRun")}</span><Select size="sm" aria-label={t("board.filterStage")} value={stageFilter} onChange={setStageFilter}
           options={[{ value: "all", label: t("board.filterAllStages") }, ...stageOptions.map(([id, label]) => ({ value: id, label }))]} /></label>}
         <label><span>{t("issues.colPriority")}</span><Select size="sm" aria-label={t("board.filterWork")} value={priorityFilter} onChange={setPriorityFilter}
           options={[{ value: "all", label: t("board.filterAll") }, ...(["urgent", "high", "normal", "low"] as Priority[]).map((priority) => ({ value: priority, label: priorityText(priority) }))]} /></label>
+        <label><span>{t("workType.label")}</span><Select size="sm" aria-label={t("workType.filter")} value={typeFilter} onChange={setTypeFilter}
+          options={[{ value: "all", label: t("workType.all") }, ...ISSUE_TYPES.map((type) => ({ value: type, label: issueTypeText(type) }))]} /></label>
         <label><span>{t("issues.executionAria")}</span><Select size="sm" aria-label={t("issues.executionAria")} value={executionFilter} onChange={setExecutionFilter}
           options={[{ value: "all", label: t("issues.allExecutionTypes") }, ...EXECUTION_TYPES.map((type) => ({ value: type, label: executionTypeText(type) }))]} /></label>
         <label><span>{t("issues.tagAria")}</span><Select size="sm" value={tagFilter} onChange={setTagFilter} aria-label={t("issues.tagAria")}
@@ -2546,7 +2346,7 @@ function WorkView({
             const closed = members.filter(
               (item) => (item.state || "open") === "closed",
             ).length;
-            // 진행률은 구성 항목의 닫힘 비율이다. 손으로 적는 값이 아니다.
+            // Progress is the closed ratio of member items. Not a hand-written value.
             const percent = members.length
               ? Math.round((closed / members.length) * 100)
               : 0;
@@ -2583,7 +2383,7 @@ function WorkView({
       </div>}
 
       <div className="wb-work-results">
-        {area === "flow" && display === "board" && rows.length > 0 && <label className="wb-task-card-select"><input type="checkbox" aria-label={t("issues.selectAll")} checked={allChecked} disabled={busy !== null} ref={(el) => { if (el) el.indeterminate = !allChecked && selectedRows.length > 0; }} onChange={(e) => setSelectedIds(e.target.checked ? rows.map((w) => w.id) : [])} />{t("issues.selectAll")}</label>}
+        {area === "flow" && boardDisplay && rows.length > 0 && <label className="wb-task-card-select"><input type="checkbox" aria-label={t("issues.selectAll")} checked={allChecked} disabled={busy !== null} ref={(el) => { if (el) el.indeterminate = !allChecked && selectedRows.length > 0; }} onChange={(e) => setSelectedIds(e.target.checked ? rows.map((w) => w.id) : [])} />{t("issues.selectAll")}</label>}
         <p role="status">{t(area === "inbox" ? "taskBoard.intentResults" : area === "mockups" ? "taskBoard.mockupResults" : "work.results", { count: rows.length })}
           {milestoneFilter !== "all" && <span> · {milestoneFilter === "none" ? t("issues.noMilestone") : milestoneName(milestoneFilter)}</span>}
         </p>
@@ -2606,7 +2406,7 @@ function WorkView({
           {area === "flow" && selectedRows.length > 0 && (
             <div className="wb-bulk-bar">
               <strong>{t("issues.nSelected", { count: selectedRows.length })}</strong>
-              <Button size="sm" disabled={busy !== null || !selectedRows.some((w) => !isClosedStatus(w.status))} onClick={() => void startGoals()}><Play size={14} />{t(busy === "goals" ? "goal.batchStarting" : "goal.batchStart")}</Button>
+              {selectedRows.some((item) => item.workflowId === GOAL_WORKFLOW) && <Button size="sm" disabled={busy !== null || !selectedRows.some((w) => w.workflowId === GOAL_WORKFLOW && !isClosedStatus(w.status))} onClick={() => void startGoals()}><Play size={14} />{t(busy === "goals" ? "goal.batchStarting" : "goal.batchStart")}</Button>}
               <Button
                 size="sm"
                 variant="outline"
@@ -2625,16 +2425,21 @@ function WorkView({
               </Button>
             </div>
           )}
-          {area === "flow" && selectedRows.length > 0 && <p className="wb-goal-batch-hint">{t("goal.batchHint")}</p>}
           {area === "flow" && goalBatch && <div className="wb-goal-batch-results" role="status">
             <p>{t("goal.batchResult", { queued: goalBatch.filter((r) => r.outcome === "queued").length, existing: goalBatch.filter((r) => r.outcome === "already-queued").length, skipped: goalBatch.filter((r) => r.outcome === "skipped").length })}</p>
             {goalBatch.some((r) => r.outcome === "skipped") && <ul>{goalBatch.filter((r) => r.outcome === "skipped").map((r) => <li key={r.workId}>{work.find((w) => w.id === r.workId)?.title ?? r.workId}: {r.reason}</li>)}</ul>}
           </div>}
           {area === "archive" && <p className="wb-task-archive-hint">{t("taskBoard.archiveHint")}</p>}
-          {area === "inbox" ? <IntentInbox work={rows} projects={projects} onSelectWork={onSelectWork} onNewWork={() => onNewWork()} onWorkMenu={openWorkMenu} /> : area === "mockups" ? <MockupLibrary work={rows} projects={projects} onSelectWork={onSelectWork} /> : area === "flow" && display === "board" ? <>
+          {area === "inbox" ? <IntentInbox work={rows} projects={projects} onSelectWork={onSelectWork} onNewWork={createWork} createLabel={createLabel} onWorkMenu={openWorkMenu} /> : area === "mockups" ? <MockupLibrary work={rows} projects={projects} onSelectWork={onSelectWork} /> : area === "flow" && boardDisplay ? <>
             {(activeFilters > 0 || search) && !rows.length && <EmptyState title={t("issues.emptyTitle")} description={t("work.emptyFiltered")} action={<Button variant="outline" onClick={resetFilters}>{t("work.resetFilters")}</Button>} />}
-            <TaskBoard work={rows} projects={projects} workflows={workflows} onSelectWork={onSelectWork} selectedIds={selectedSet} onToggle={toggleSelection} selectionDisabled={busy !== null} onWorkMenu={openWorkMenu}
-              onDecide={(item, action) => void decideNow(item, action)} decidingId={deciding} decisionsDisabled={busy !== null} />
+            {[workflowFilter].map((key) => {
+              const definition = workflows.find((item) => workflowKey(item) === key);
+              const [id, version] = JSON.parse(key) as [string, string];
+              return <section className="wb-process-group" key={key} data-workflow={`${id}@${version}`}>
+                <TaskBoard workflow={definition} work={rows.filter((item) => workWorkflowKey(item) === key)} projects={projects} workflows={workflows} onSelectWork={onSelectWork} selectedIds={selectedSet} onToggle={toggleSelection} selectionDisabled={busy !== null} onWorkMenu={openWorkMenu}
+                  onDecide={(item, action) => void decideNow(item, action)} decidingId={deciding} decisionsDisabled={busy !== null} />
+              </section>;
+            })}
           </> : rows.length ? (
             <table className="wb-issue-table">
               <thead>
@@ -2659,7 +2464,8 @@ function WorkView({
                       aria-label={t("issues.selectAll")}
                     />
                   </th>
-                  <th className="wb-work-title-column">{t("work.title")}</th>
+                  <th className="wb-work-title-column">{t("work.itemTitle")}</th>
+                  {allWorkflows && <th>{t("creation.workflow")}</th>}
                   <th>{t("issues.colPriority")}</th>
                   <th>{t("issues.colStatus")}</th>
                   <th>{t("issues.colStageRun")}</th>
@@ -2701,6 +2507,7 @@ function WorkView({
                         {tagsOf(item).map((tag) => <span className="wb-work-tag" key={tag}>{tag}</span>)}
                       </div>
                     </td>
+                    {allWorkflows && <td className="wb-workflow-cell"><strong>{workflowForWork(item)?.label ?? item.workflowId}</strong><small>v{item.workflowVersion}</small></td>}
                     <td>
                       <span className={`wb-priority is-${item.priority}`}>
                         {priorityText(item.priority)}
@@ -2727,7 +2534,7 @@ function WorkView({
                         </Button>
                       ) : (
                         <>
-                          <span className="wb-muted">{area === "archive" ? stageNameOf(item) : t(`taskBoard.stages.${taskStage(item, workflows)}`)}</span>
+                          <span className="wb-muted">{stageNameOf(item)}</span>
                           {area === "flow" && quickDecision(item)}
                         </>
                       )}
@@ -2745,7 +2552,7 @@ function WorkView({
               action={activeFilters > 0 || search ? (
                 <Button variant="outline" onClick={resetFilters}>{t("work.resetFilters")}</Button>
               ) : (
-                <Button onClick={() => onNewWork()}><Plus /> {t("issues.register")}</Button>
+                <Button onClick={createWork}><Plus /> {createLabel}</Button>
               )}
             />
           )}
@@ -3080,8 +2887,8 @@ type AgentModelOption = {
   source: "catalog" | "recent";
 };
 /**
- * 에이전트 모델 후보를 읽어 온다. 최초 적재 때는 기존 값을 존중하고, 이후
- * 에이전트를 옮겨서 목록이 바뀌면 그 쪽에 없는 모델은 비운다.
+ * Reads agent model candidates. On first load it respects the existing value; later, if moving
+ * between agents changes the list, models absent from that agent's list are cleared.
  */
 function useAgentModelOptions(
   agent: string,
@@ -3120,8 +2927,8 @@ function useAgentModelOptions(
   return options;
 }
 /**
- * 자유 입력에 모델 후보 datalist 를 얹은 필드. 임의의 모델 이름도 그대로
- * 적을 수 있고, 에이전트별 카탈로그·최근 사용 항목을 고를 수 있다.
+ * A free-input field with a model-candidate datalist on top. Arbitrary model names can be typed
+ * as-is, and per-agent catalog and recent-use entries can be picked.
  */
 function ModelInput({
   agent,
@@ -3159,9 +2966,9 @@ function ModelInput({
   );
 }
 /**
- * 폴더 선택을 한 곳으로 모은다. 첫 폴더가 프로젝트 기본 폴더(에이전트 작업
- * 디렉터리)가 되고, 나머지는 함께 열리는 추가 폴더다. 폴더 찾기 버튼으로
- * 여러 개를 한 번에 고를 수 있고, 경로를 직접 붙여 넣을 수도 있다.
+ * Collects folder selection into one place. The first folder becomes the project's default folder
+ * (the agent's working directory); the rest are additional folders opened alongside. The browse
+ * button picks several at once, and paths can also be pasted directly.
  */
 function FolderPicker({
   repoPath,
@@ -3255,7 +3062,7 @@ function GithubReposPicker({
   const { t } = useTranslation("workbench");
   const [typed, setTyped] = useState("");
   const add = () => {
-    // github.com 주소를 그대로 붙여 넣어도 owner/repo로 정규화한다.
+    // A pasted github.com URL is normalized to owner/repo as-is.
     const value = typed
       .trim()
       .replace(/^https?:\/\/github\.com\//i, "")
@@ -3331,14 +3138,15 @@ function ProjectFormDialog({
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     if (open) {
-      setDraft(initial);
+      const version = !initial.id ? latestWorkflowVersions(workflows).get(initial.workflowId) : undefined;
+      setDraft(version ? { ...initial, workflowVersion: version } : initial);
       setError(null);
     }
   }, [open, initial]);
   const set = <K extends keyof Project>(key: K, value: Project[K]) =>
     setDraft((previous) => ({ ...previous, [key]: value }));
   const [analyzing, setAnalyzing] = useState(false);
-  // 다시 분석은 발사만 한다 — 완료는 `project-analyzed` 이벤트로 온다.
+  // Re-analysis only fires — completion arrives via the `project-analyzed` event.
   const reanalyze = async () => {
     if (!isTauri() || !draft.id) return;
     setAnalyzing(true);
@@ -3364,8 +3172,8 @@ function ProjectFormDialog({
         verifyCommands: draft.verifyCommands.filter(Boolean),
         githubRepos: (draft.githubRepos ?? []).map((repo) => repo.trim()).filter(Boolean),
       });
-      // 새 프로젝트는 저장과 동시에 분석을 발사한다. 설명·검증 명령을
-      // 에이전트가 채우고 완료는 `project-analyzed` 이벤트로 온다.
+      // A new project fires analysis at save time. The agent fills in the description and
+      // verify commands; completion arrives via the `project-analyzed` event.
       if (!draft.id && isTauri() && saved.id)
         void sddApi.analyzeProject(saved.id).catch(() => undefined);
       onSaved();
@@ -3417,7 +3225,7 @@ function ProjectFormDialog({
             />
           </div>
         ) : (
-          // 새 프로젝트는 설명을 직접 적지 않는다. 저장 뒤 분석이 채워 준다.
+          // A new project does not take a hand-written description. Analysis fills it in after saving.
           <div className="wb-field is-wide">
             <small className="wb-muted">{t("form.analyzeHint")}</small>
           </div>
@@ -3428,8 +3236,8 @@ function ProjectFormDialog({
           onChange={(repoPath, extraPaths) =>
             setDraft((previous) => {
               const next = { ...previous, repoPath, extraPaths };
-              // 이름이 비어 있거나 이전 경로의 basename을 그대로 미러링하는
-              // 동안은 따라간다. 사용자가 이름을 손대는 순간부터는 덮지 않는다.
+              // Follows along while the name is empty or still mirroring the previous
+              // path's basename. Once the user touches the name, it stops overriding.
               if (
                 !previous.name.trim() ||
                 previous.name === pathBasename(previous.repoPath)
@@ -3480,9 +3288,10 @@ function ProjectFormDialog({
                   ...previous,
                   workflowId: selected.id,
                   workflowVersion: selected.version,
+                  additionalWorkflows: projectWorkflowRefs(previous).filter((reference) => reference.id !== selected.id || reference.version !== selected.version),
                 }));
             }}
-            options={workflows.map((definition) => ({
+            options={workflowChoices(workflows, initial.id ? { id: initial.workflowId, version: initial.workflowVersion } : undefined).map((definition) => ({
               value: `${definition.id}@${definition.version}`,
               label: `${definition.label} · v${definition.version}`,
             }))}
@@ -3491,6 +3300,31 @@ function ProjectFormDialog({
             {t("form.workflowHint")}
           </small>
         </label>
+        <fieldset className="wb-check-field wb-project-workflows is-wide">
+          <legend>{t("form.additionalWorkflows")}</legend>
+          <p className="wb-muted">{t("form.additionalWorkflowsHint")}</p>
+          {(() => {
+            const references = projectWorkflowRefs(draft);
+            const choices = [...references, ...projectWorkflowRefs(initial), ...workflowChoices(workflows).map(({ id, version }) => ({ id, version }))]
+              .filter((reference, index, all) => all.findIndex((item) => item.id === reference.id && item.version === reference.version) === index);
+            return choices.map((reference) => {
+              const isDefault = reference.id === draft.workflowId && reference.version === draft.workflowVersion;
+              const definition = workflows.find((item) => item.id === reference.id && item.version === reference.version);
+              const checked = references.some((item) => item.id === reference.id && item.version === reference.version);
+              return <label key={workflowKey(reference)}>
+                <input type="checkbox" checked={checked} disabled={isDefault || busy} onChange={(event) => {
+                  const enabled = event.currentTarget.checked;
+                  setDraft((previous) => ({
+                    ...previous,
+                    additionalWorkflows: enabled ? [...(previous.additionalWorkflows ?? []), reference]
+                      : (previous.additionalWorkflows ?? []).filter((item) => item.id !== reference.id || item.version !== reference.version),
+                  }));
+                }} />
+                <span>{definition?.label ?? reference.id} · v{reference.version}{isDefault ? ` · ${t("form.defaultWorkflowBadge")}` : ""}</span>
+              </label>;
+            });
+          })()}
+        </fieldset>
         {draft.id && (
           <label className="wb-field is-wide">
             {t("form.verifyCommands")}
@@ -3565,8 +3399,8 @@ function EventFormDialog({
   onSaved: () => void;
   onDeleted: () => void;
 }) {
-  // 마일스톤 구성원은 개발 항목의 milestone 필드가 정본이다. 이슈 노트를 따로
-  // 뒤지지 않는다 — 두 곳에 소속이 적히던 것이 이 화면이 갈라져 보이던 이유였다.
+  // The development items' milestone field is the source of truth for milestone membership.
+  // Issue notes are not searched separately — membership written in two places was why this screen looked split.
   const { t } = useTranslation("workbench");
   const [memberIds, setMemberIds] = useState<string[]>([]);
   useEffect(() => {
@@ -3612,7 +3446,7 @@ function EventFormDialog({
       });
       setDraft(saved);
       if (draft.kind === "milestone") {
-        // 각 항목을 원자적으로 저장한다. 볼트 전체를 감싸는 트랜잭션은 아니다.
+        // Saves each item atomically. Not a transaction wrapping the whole vault.
         for (const item of work) {
           const belongs = memberIds.includes(item.id);
           if (belongs === (item.milestone === saved.id)) continue;
@@ -3758,7 +3592,7 @@ function EventFormDialog({
     </Dialog>
   );
 }
-/** 코파일럿 레일을 열어 두는지. 좁은 화면에서 접어 둔 선택이 다음 상세에도 남는다. */
+/** Whether the copilot rail stays open. A choice to collapse on a narrow screen carries into the next detail view. */
 const COPILOT_PANEL_KEY = "sawhorse.workbench.copilot";
 function WorkDetailDialog({
   work,
@@ -4230,6 +4064,7 @@ function ArtifactEditor({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [latestMarkdown, setLatestMarkdown] = useState<string | null>(null);
+  const [htmlView, setHtmlView] = useState<HtmlDocumentView | null>(null);
   const requestId = useRef(0);
   const markdownRef = useRef("");
   const setDraft = (value: string, baseline = document?.markdown ?? "") => {
@@ -4249,12 +4084,17 @@ function ArtifactEditor({
     setError(null);
     setLatestMarkdown(null);
     setDocument(null);
+    setHtmlView(null);
     setDraft("", "");
     try {
       const next = await sddApi.readDocument(work.id, selected);
+      const nextView = /\.html?$/i.test(next.path)
+        ? await sddApi.readHtmlDocument(work.id, selected)
+        : null;
       if (request === requestId.current) {
         setDocument(next);
         setDraft(next.markdown, next.markdown);
+        setHtmlView(nextView);
       }
     } catch (e) {
       if (request === requestId.current) setError(errorText(e));
@@ -4336,6 +4176,14 @@ function ArtifactEditor({
       if (markdownRef.current === submitted)
         setDraft(next.markdown, next.markdown);
       else setDirty(true);
+      // Re-run the shdoc validation read so banners reflect what was saved.
+      if (/\.html?$/i.test(next.path)) {
+        setHtmlView(
+          await sddApi
+            .readHtmlDocument(work.id, selected)
+            .catch(() => htmlView),
+        );
+      }
       onNotice({
         tone: "success",
         text: t("editor.savedToast", {
@@ -4438,6 +4286,15 @@ function ArtifactEditor({
             if (hasUnsavedChanges && !window.confirm(t("editor.confirmSwitch"))) return;
             useApp.getState().openWork({ workId, artifact });
           }} />
+        ) : document && htmlView ? (
+          <ShdocView
+            view={htmlView}
+            draft={markdown}
+            busy={busy}
+            dirty={dirty}
+            onDraftChange={(value) => setDraft(value)}
+            onSave={() => void save()}
+          />
         ) : document ? (
           <div className="wb-atomic-editor">
             <AtomicCodeMirrorEditor
@@ -4494,8 +4351,8 @@ function RunLauncher({
     setAgent(project?.defaultAgent || fallbackAgent);
     setModel(project?.defaultModel ?? "");
   }, [project?.id, project?.defaultAgent, project?.defaultModel, fallbackAgent, currentNodeId, workflow?.id, workflow?.version]);
-  // 역할에 관계없이 같은 작업을 점유한 실행. 호스트도 중복 실행을 거절하지만,
-  // 버튼이 먼저 알려 줘야 사람이 두 번 누르지 않는다.
+  // A run already holding the same work regardless of role. The host also rejects duplicate runs,
+  // but the button must warn first so a person does not press twice.
   const [active, setActive] = useState<HarnessRun | null>(null);
   const syncActive = useCallback(async () => {
     try {
@@ -4510,7 +4367,7 @@ function RunLauncher({
     } catch {
       setActive(null);
     }
-  }, [work.id, role]);
+  }, [work.id]);
   useEffect(() => {
     void syncActive();
     const timer = window.setInterval(() => void syncActive(), 10000);
@@ -4650,8 +4507,8 @@ function HarnessView({
   const [pollError, setPollError] = useState<string | null>(null);
   const [followUp, setFollowUp] = useState("");
   const [busy, setBusy] = useState(false);
-  // 「herdr로 보기」는 herdr 서버가 있어야 진행 로그를 띄울 수 있다. 프로브가 없거나
-  // 실패하면 열 수 있다고 보고 그대로 둔다 — 조용히 막는 것보다 실패 이유가 낫다.
+  // 「herdr로 보기」 (View in herdr) needs a herdr server to show progress logs. If the probe is missing
+  // or fails, assume it can open and leave it enabled — a visible failure reason beats silently blocking.
   const [viewerOk, setViewerOk] = useState(true);
   useEffect(() => {
     let alive = true;
@@ -4804,10 +4661,10 @@ function HarnessView({
     } catch (e) { onNotice({ tone: "error", text: errorText(e) }); }
     finally { setBusy(false); }
   };
-  /** 다시 실행하지 않고 확인 필요 목록에서만 내린다. 되돌리기는 같은 자리의 「다시 표시」다. */
+  /** Dismisses from the needs-attention list only, without re-running. To revert, use 「다시 표시」 (Show again) in the same spot. */
   const dismiss = async (dismissed: boolean) => {
     if (!selected) return;
-    // 5초 주기 갱신 사이에 실행이 다시 살아났을 수 있다. 그때는 아직 볼 것이 남아 있다.
+    // The run may have come back to life between 5-second refreshes. Then there is still something to see.
     if (dismissed && ["starting", "running"].includes(selected.status)) {
       onNotice({ tone: "error", text: t("harness.dismissRunning") });
       return;

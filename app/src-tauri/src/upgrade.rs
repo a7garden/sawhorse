@@ -592,8 +592,8 @@ fn install_agents(
             }
         }
     }
-    // 1.0의 업무방식 묶음은 기능 확장으로 분해됐다. 옛 override가 사용자 팩으로
-    // 다시 나타나 경계를 되돌리지 않도록 백업 가능한 retired 표식으로 치환한다.
+    // The 1.0 workflow bundles were decomposed into per-feature packs. Rewrite the old override as a
+    // backup-safe retired marker so it cannot reappear as a user pack and undo that boundary.
     for id in ["si", "starter"] {
         let target = home.join(".claude/sawhorse/packs").join(id);
         if target.exists() {

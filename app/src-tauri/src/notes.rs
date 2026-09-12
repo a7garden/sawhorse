@@ -1,11 +1,11 @@
-// notes.rs — 선언형 노트 질의 엔진. 팩의 뷰가 쓰는 유일한 데이터 소스.
+// notes.rs — declarative note query engine. The only data source pack views use.
 //
-// 호스트는 필드의 **의미를 모른다**. 프론트매터를 그대로 실어 보내고, 무엇을 어떤 라벨로
-// 보여줄지는 뷰가 정한다. 이 무지가 팩 아키텍처의 조건이다 — 호스트가 `status` 나 `프로젝트` 를
-// 알기 시작하면 그 순간 다시 SI 전용 앱이 된다.
+// The host does **not know what the fields mean**. It ships frontmatter verbatim, and the view decides
+// what to show under which label. This ignorance is a condition of the pack architecture — the moment
+// the host starts understanding `status` or `프로젝트` (project), it becomes an SI-only app again.
 //
-// 글로브는 `*` 한 단계만 지원한다. `**` 를 허용하면 큰 볼트에서 UI 가 멈추고, 그 비용을
-// 팩 저자가 예측할 수 없다.
+// Globs support a single `*` level. Allowing `**` freezes the UI on large vaults, and pack authors
+// cannot predict that cost.
 
 use std::path::{Path, PathBuf};
 
@@ -16,7 +16,7 @@ use crate::vault::{mtime_ms, split_frontmatter, yaml_to_json};
 
 const MAX_ROWS: usize = 2000;
 
-// ---------- 질의 ----------
+// ---------- query ----------
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
@@ -44,9 +44,9 @@ pub struct Sort {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct NoteQuery {
-    /// 작업공간 기준 폴더 글로브. 예: "일지", "프로젝트/*/이슈"
+    /// Workspace-relative folder globs. e.g. "일지" (journal), "프로젝트/*/이슈" (projects/*/issues)
     pub folders: Vec<String>,
-    /// 제외할 파일명 글로브. 예: "*목록.md"
+    /// File-name globs to exclude. e.g. "*목록.md" (*list.md)
     pub exclude: Vec<String>,
     #[serde(rename = "where")]
     pub predicates: Vec<Predicate>,
@@ -60,19 +60,19 @@ impl NoteQuery {
     }
 }
 
-// ---------- 결과 ----------
+// ---------- results ----------
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct NoteRow {
-    /// 절대 경로 (노트 열기·승인에 쓴다)
+    /// Absolute path (used to open and approve the note)
     pub path: String,
-    /// 작업공간 기준 상대 경로
+    /// Workspace-relative path
     pub rel: String,
-    /// `# 제목` 첫 헤딩, 없으면 파일명
+    /// First `# title` heading, else the file name
     pub title: String,
     pub mtime_ms: u64,
-    /// 프론트매터 원본
+    /// Raw frontmatter
     pub fields: Map<String, Value>,
 }
 
@@ -80,28 +80,28 @@ pub struct NoteRow {
 #[serde(rename_all = "camelCase")]
 pub struct QueryResult {
     pub rows: Vec<NoteRow>,
-    /// 실제로 걸린 폴더들 (뷰가 "폴더가 아직 없습니다" 를 구분하기 위해)
+    /// Folders that actually matched (so views can tell "folder doesn't exist yet" apart)
     pub folders: Vec<String>,
     pub truncated: bool,
 }
 
-// ---------- 글로브 ----------
+// ---------- glob ----------
 
-/// `*` 는 세그먼트 안에서만 임의 문자열. `/` 는 넘지 않는다.
+/// `*` matches any string within a segment. It never crosses `/`.
 pub fn wildcard_match(pattern: &str, text: &str) -> bool {
     let parts: Vec<&str> = pattern.split('*').collect();
     if parts.len() == 1 {
         return pattern == text;
     }
     let mut rest = text;
-    // 첫 조각은 접두사로 고정
+    // the first piece is anchored as a prefix
     if let Some(first) = parts.first() {
         if !rest.starts_with(first) {
             return false;
         }
         rest = &rest[first.len()..];
     }
-    // 마지막 조각은 접미사로 고정
+    // the last piece is anchored as a suffix
     let last = parts[parts.len() - 1];
     let middles = &parts[1..parts.len() - 1];
     for m in middles {
@@ -116,7 +116,7 @@ pub fn wildcard_match(pattern: &str, text: &str) -> bool {
     rest.len() >= last.len() && rest.ends_with(last)
 }
 
-/// 패턴을 작업공간 아래 실제 디렉터리 목록으로 펼친다.
+/// Expands a pattern into the actual directories under the workspace.
 fn expand_folders(root: &Path, pattern: &str) -> Vec<PathBuf> {
     let pattern = pattern.trim().trim_matches('/');
     if pattern.is_empty() {
@@ -125,7 +125,7 @@ fn expand_folders(root: &Path, pattern: &str) -> Vec<PathBuf> {
     let mut current = vec![root.to_path_buf()];
     for seg in pattern.split('/') {
         if seg == "." || seg == ".." {
-            return Vec::new(); // 작업공간 탈출 시도는 조용히 빈 결과
+            return Vec::new(); // workspace escape attempts silently yield no results
         }
         let mut next = Vec::new();
         for dir in &current {
@@ -160,7 +160,7 @@ fn expand_folders(root: &Path, pattern: &str) -> Vec<PathBuf> {
     current
 }
 
-// ---------- 술어 ----------
+// ---------- predicates ----------
 
 fn as_strings(v: &Value) -> Vec<String> {
     match v {
@@ -208,11 +208,11 @@ pub fn matches(fields: &Map<String, Value>, p: &Predicate) -> bool {
                 .to_lowercase()
                 .contains(&needle)
         }
-        _ => true, // 모르는 연산자는 거르지 않는다 (팩 오타로 화면이 비지 않게)
+        _ => true, // unknown operators don't filter (a pack typo must not blank the screen)
     }
 }
 
-// ---------- 실행 ----------
+// ---------- execution ----------
 
 fn first_heading(body: &str) -> Option<String> {
     body.lines()
@@ -315,7 +315,7 @@ pub fn query(root: &Path, q: &NoteQuery) -> QueryResult {
                 continue;
             }
             rows.push(row);
-            if rows.len() >= MAX_ROWS {
+            if q.sort.is_none() && rows.len() >= MAX_ROWS {
                 truncated = true;
                 break 'outer;
             }
@@ -326,6 +326,12 @@ pub fn query(root: &Path, q: &NoteQuery) -> QueryResult {
         rows.sort_by_key(|r| sort_key(r, sort));
         if sort.desc {
             rows.reverse();
+        }
+        // Sorted queries collect unbounded matches above; cap here so top-N
+        // is computed over the full result set, not the first folder.
+        if rows.len() > MAX_ROWS {
+            rows.truncate(MAX_ROWS);
+            truncated = true;
         }
     }
     if let Some(limit) = q.limit {

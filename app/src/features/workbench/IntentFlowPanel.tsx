@@ -41,8 +41,8 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
   const activeRun = runs.find(occupied);
   const active = !!activeRun;
   const currentRun = activeRun ?? runs.filter((run) => run.stage === work.stage).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
-  // 폴링이 같은 문서를 다시 넣으면 마크다운 뷰가 새로 그려져 화면이 튄다.
-  // 직전 응답을 문자열로 기억해 두고 달라졌을 때만 바꾸며, 입력 중이면 그때까지 미룬다.
+  // When polling re-feeds the same document, the markdown view re-renders and the screen jumps.
+  // Remember the previous response as a string and change it only when it differs; while typing, defer until then.
   const seen = useRef({ review: "", runs: "" });
   const holdingInput = editing || !!feedback.trim();
   const holding = useRef(holdingInput); holding.current = holdingInput;
@@ -79,7 +79,7 @@ export function IntentFlowPanel({ work, project, onReload, onDirtyChange }: {
         if (!alive) return;
         const runKey = JSON.stringify(next);
         if (runKey !== seen.current.runs) { seen.current.runs = runKey; setRuns(next); }
-        setLoadedRuns(true);
+        setLoadedRuns(true); setError("");
         const signature = next.map((run) => `${run.id}:${run.status}:${run.updatedAt}`).join("|");
         if (previous && previous !== signature) { await refresh(); await onReload(); }
         previous = signature;

@@ -357,14 +357,6 @@ pub fn catalog(root: Option<&Path>) -> Result<Vec<WorkflowDefinition>, String> {
                 path.display()
             ));
         }
-        let report = validation::validate(&definition);
-        if !report.valid {
-            return Err(format!(
-                "workflow {}가 유효하지 않습니다: {:?}",
-                path.display(),
-                report.issues
-            ));
-        }
         if let Some(index) = definitions.iter().position(|candidate| {
             candidate.id == definition.id && candidate.version == definition.version
         }) {

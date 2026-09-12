@@ -3,3 +3,4 @@ node_modules/
 worktrees/
 .playwright-mcp/
 /toast-light.png
+.zvec-grep/

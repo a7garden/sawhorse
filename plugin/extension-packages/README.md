@@ -1,27 +1,29 @@
 # Sawhorse extension packages
 
-각 하위 폴더는 `manifestVersion: 2`인 `extension.json`과 digest로 고정된 payload를 가진다.
-앱의 확장 화면은 로컬 폴더·portable JSON 파일·정확한 Git commit·HTTPS에서 패키지를 설치하고,
-의존성과 엔진 API 범위를 해석한 뒤 프로젝트별 권한과 정확한 digest를
-`.sawhorse/extensions.lock.json`에 기록한다.
+Each subfolder carries an `extension.json` with `manifestVersion: 2` and a payload pinned by
+digest. The app's extensions screen installs packages from local folders, portable JSON files,
+exact Git commits, or HTTPS, resolves dependencies and the engine API range, then records
+per-project permissions and exact digests in `.sawhorse/extensions.lock.json`.
 
 ```bash
 node plugin/extension-packages/validate.mjs
 ```
 
-CI도 같은 명령으로 번들 패키지의 전체 파일 목록, SHA-256, contribution 경로를 검사한다.
-앱에서 내보낸 `*.sawhorse-package.json`은 payload를 base64로 보존하므로 텍스트와 바이너리를
-같은 방식으로 다시 설치할 수 있다. 설치는 스킬이나 액션을 실행하지 않는다.
+CI runs the same command to check each bundled package's full file list, SHA-256 hashes, and
+contribution paths. A `*.sawhorse-package.json` exported from the app preserves the payload as
+base64, so text and binaries reinstall the same way. Installation never executes skills or actions.
 
-워크플로우 기여의 파일 순서는 자유롭다. 호스트가 활성화할 모든 정의를 함께 검사하고
-참조되는 하위 워크플로우부터 발행한다. 하위 흐름은 정확한 ID·버전으로 참조해야 하며,
-누락된 버전·순환 참조·동일 버전의 내용 충돌은 활성화 전에 오류로 반환한다.
+File order within a workflow contribution is free. The host inspects every definition being
+activated together and publishes referenced sub-workflows first. Sub-flows must be referenced by
+exact ID and version; missing versions, circular references, and content conflicts for the same
+version return errors before activation.
 
-기능별 런타임 의존성도 워크플로우가 선언한다. `requirements`의 `extension` 항목은 프로젝트
-lock의 semver를, `program` 항목은 이식 가능한 실행 파일 후보를 가리킨다. `required`는 실행
-전에 강제하고 `recommended`·`optional`은 환경 안내로 사용한다. 예를 들어 XLSX 산출물이 있는
-흐름은 `xlsx-export`를, DOCX 원문을 읽는 흐름은 해당 reader 확장이나 `pandoc`을 선언한다.
-이 요구사항을 앱 공통 설치 목록이나 관계없는 팩에 올리지 않는다.
+Workflows also declare per-feature runtime dependencies. In `requirements`, an `extension` entry
+points at the project lock's semver and a `program` entry at portable executable candidates.
+`required` is enforced before a run, while `recommended` and `optional` serve as environment
+guidance. For example, a flow with XLSX artifacts declares `xlsx-export`, and a flow reading DOCX
+source documents declares the matching reader extension or `pandoc`. Never push these requirements
+into the app-wide install list or unrelated packs.
 
 ```json
 "requirements": [
@@ -41,20 +43,23 @@ lock의 semver를, `program` 항목은 이식 가능한 실행 파일 후보를 
 ]
 ```
 
-필수 의존성은 설치된 버전 중 함께 사용할 수 있는 조합을 찾는다. 최신 버전이 다른
-요구 범위와 충돌하면 이전 후보로 되돌아가며, 선택 의존성은 자동 활성화하지 않는다.
-같은 ID·버전에 서로 다른 digest를 배포하지 말고 내용이 바뀌면 새 버전을 사용한다.
-활성화할 조합이 기존 프로젝트 확장의 의존성을 깨뜨리거나 고정된 digest가 누락되면
-기존 lock과 profile을 유지한 채 필요한 패키지·버전을 안내한다.
+Required dependencies search the installed versions for a combination that works together. When the
+newest version conflicts with another required range the search falls back to older candidates;
+optional dependencies are never auto-activated. Never publish different digests for the same ID and
+version — when content changes, use a new version. If the combination to activate would break
+existing project extension dependencies or a pinned digest is missing, the app keeps the existing
+lock and profile and guides you to the required packages and versions.
 
-현재 `xlsx-export`는 기본 코어와 다른 기능 확장에서 분리된 선택 확장이다. 활성화하지 않은 프로젝트에는
-XLSX 액션과 화면이 나타나지 않으며, 활성화할 때 `adapter:xlsx-export`와 볼트 권한을 명시적으로
-승인해야 한다.
+Today `xlsx-export` is an optional extension kept separate from the default core and other feature
+extensions. Projects that have not activated it show no XLSX actions or screens; activation
+requires explicitly approving `adapter:xlsx-export` and vault permissions.
 
-`ui-mockup`은 이슈 목록에서 체크한 항목만 대상으로 현행 UI를 조사하고, 화면 맥락별 A/B 목업을
-만드는 선택 확장이다. 전부 선택해도 서로 다른 화면을 한 목업에 합치지 않는다. 결과는
-`mockup-review` 작업과 HTML·미리보기 산출물로 등록되어 작업대와 「목업 산출물」 화면에서 검토한다.
-거친 백로그도 화면별 문제·제안·수용 기준으로 구체화하며, 검토 의견은 원본 화면에 연결된 새 백로그와
-덮어쓰지 않는 목업 revision으로 순환한다. 작업대는 승인과 수정 요청을 서로 다른 전환으로 보여 준다.
-선택형 액션을 제공하는 선언형 뷰는 `selection: "multiple"`을 선언해야 하며, 호스트는 체크한 행의
-ID와 전체 선택 여부를 액션 파라미터로 전달한다.
+`ui-mockup` is an optional extension that surveys the current UI for exactly the items checked in
+the issue list and produces A/B mockups per screen context. Even a full selection never merges
+different screens into one mockup. Results are registered as a `mockup-review` work item plus HTML
+and preview artifacts, reviewed in the workbench and the 「목업 산출물」 (mockup artifacts) screen.
+Even a rough backlog is elaborated into per-screen problems, proposals, and acceptance criteria;
+review comments circulate into a new backlog linked to the original screen and mockup revisions
+that are never overwritten. The workbench presents approval and change requests as different
+transitions. A declarative view offering a selection action must declare `selection: "multiple"`,
+and the host passes the checked row IDs and the select-all flag as action parameters.

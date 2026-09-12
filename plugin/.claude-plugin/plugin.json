@@ -1,6 +1,6 @@
 {
   "name": "sawhorse",
-  "description": "Sawhorse 작업대의 워크플로우 산출물, 자동화, 일지·지식 문서를 위한 에이전트 스킬과 훅.",
+  "description": "Agent skills and hooks for Sawhorse's workflow artifacts, automation, and journal/knowledge documents.",
   "version": "1.0.0",
   "skills": [
     "./skills",
@@ -25,8 +25,8 @@
   "userConfig": {
     "vault_path": {
       "type": "string",
-      "title": "작업공간 절대 경로",
-      "description": "Sawhorse에서 기록을 저장할 로컬 Markdown 작업공간 경로"
+      "title": "Absolute workspace path",
+      "description": "Local Markdown workspace path where Sawhorse stores records"
     }
   }
 }

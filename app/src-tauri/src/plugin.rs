@@ -63,12 +63,12 @@ fn resolve_from(candidates: &[PathBuf]) -> Result<PathBuf, String> {
     ))
 }
 
-/// 번들된 앱에는 저장소가 없다. 실행 시점에 리소스 디렉터리를 한 번 등록해 두면
-/// 그 뒤의 모든 조회(팩 레지스트리 포함)가 거기서 플러그인 루트를 찾는다.
+/// Bundled apps have no repository. Register the resource directory once at startup, and every
+/// later lookup (pack registry included) finds the plugin root there.
 static ROOT_OVERRIDE: OnceLock<PathBuf> = OnceLock::new();
 
-/// 마커(`.claude-plugin/plugin.json`)가 실제로 있는 경로만 등록한다 — 개발 실행에서는
-/// 리소스 디렉터리가 target/debug 라 마커가 없고, 그때는 아래 탐색이 그대로 쓰인다.
+/// Registers only paths that actually contain the marker (`.claude-plugin/plugin.json`) — in a dev
+/// run the resource directory is target/debug with no marker, so the search below still applies.
 pub fn set_root_override(dir: PathBuf) -> bool {
     if walk_up(&dir).is_none() {
         return false;
@@ -76,8 +76,8 @@ pub fn set_root_override(dir: PathBuf) -> bool {
     ROOT_OVERRIDE.set(dir).is_ok()
 }
 
-/// 리소스 디렉터리(`plugin/` 번들) → exe 디렉터리 상위 탐색 → 개발 머신 저장소 플러그인
-/// 폴더. 설정 키 불필요.
+/// Resource directory (bundled `plugin/`) → walk up from the exe directory → the dev machine's
+/// repository plugin folder. No config key needed.
 pub fn resolve_root() -> Result<PathBuf, String> {
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Some(dir) = ROOT_OVERRIDE.get() {
@@ -111,8 +111,8 @@ fn parse_frontmatter(text: &str) -> Option<(String, String)> {
     Some((name, desc))
 }
 
-/// plugin.json 의 `skills` 배열(플러그인 루트 기준 상대경로)이 가리키는 디렉터리들을 모두
-/// 훑어 스킬 목록을 모은다. 배열이 없으면 루트 `skills/` 하나로 떨어진다(구버전 호환).
+/// Walks every directory named by plugin.json's `skills` array (paths relative to the plugin root)
+/// to collect the skill list. Without the array, falls back to the single root `skills/` (legacy compat).
 pub fn list_skills(root: &Path) -> Vec<SkillInfo> {
     let mut out: Vec<SkillInfo> = Vec::new();
     for dir in skill_dirs(root) {
@@ -158,8 +158,8 @@ pub fn list_skills(root: &Path) -> Vec<SkillInfo> {
     out
 }
 
-/// plugin.json 의 `skills` 선언을 루트 기준 경로로 푼 것. 선언은 `./packs/journal/skills`
-/// 처럼 `./` 를 붙일 수 있다.
+/// Resolves plugin.json's `skills` declaration into root-based paths. A declaration may carry
+/// a `./` prefix, as in `./packs/journal/skills`.
 fn skill_dirs(root: &Path) -> Vec<PathBuf> {
     let declared: Option<Vec<String>> = std::fs::read_to_string(root.join(MARKER))
         .ok()
@@ -221,8 +221,8 @@ pub fn plugin_info() -> Result<PluginBundle, String> {
     })
 }
 
-/// 스킬 본문을 스킬 폴더에서 직접 읽는다. 팩마다 `skills/` 위치가 달라(내장 팩은 플러그인
-/// 루트, 사용자 팩은 팩 폴더) 호출자가 디렉터리를 정한다.
+/// Reads the skill body directly from its skill folder. Each pack keeps `skills/` in a different
+/// place (built-in packs: plugin root; user packs: the pack folder), so the caller picks the directory.
 pub fn read_skill_at(skills_dir: &Path, name: &str) -> Result<String, String> {
     if name.is_empty() || name.contains('/') || name.contains('\\') || name.contains("..") {
         return Err("잘못된 스킬 이름".into());
@@ -231,7 +231,7 @@ pub fn read_skill_at(skills_dir: &Path, name: &str) -> Result<String, String> {
     std::fs::read_to_string(&p).map_err(|e| format!("SKILL.md 읽기 실패: {e}"))
 }
 
-/// plugin.json 의 `name` — 설치된 플러그인 감지(`agents::plugin_installs`)의 키.
+/// plugin.json's `name` — the key for detecting installed plugins (`agents::plugin_installs`).
 pub fn plugin_name() -> Result<String, String> {
     let root = resolve_root()?;
     let raw = std::fs::read_to_string(root.join(MARKER))
@@ -350,7 +350,7 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    /// 동봉된 plugin.json 의 skills 배열(팩 디렉터리 포함)을 모두 훑는지.
+    /// Whether listing walks the whole skills array of the bundled plugin.json (pack dirs included).
     #[test]
     fn list_skills_follows_plugin_json_skills_array() {
         let root = tempdir("decl");
@@ -377,7 +377,7 @@ mod tests {
             "---\nname: morning\ndescription: first\n---\n",
         )
         .unwrap();
-        // 같은 이름이 두 선언에 있으면 하나만 남는다
+        // A name declared twice keeps only one entry
         fs::create_dir_all(root.join("packs/si/skills/dup")).unwrap();
         fs::write(
             root.join("packs/si/skills/dup/SKILL.md"),

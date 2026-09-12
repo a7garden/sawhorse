@@ -6,7 +6,7 @@ const nav = (page: Page, name: string) =>
 async function openPreview(page: Page) {
   await page.goto("/?preview=1");
   await expect(
-    page.getByRole("heading", { name: "작업대", exact: true }),
+    page.getByRole("heading", { name: "대시보드", exact: true }),
   ).toBeVisible();
 }
 

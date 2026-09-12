@@ -1,18 +1,18 @@
-// detect.rs — 이 PC에 무엇이 깔려 있는지 본다.
+// detect.rs — inspects what is installed on this PC.
 //
-// 마법사 첫 화면이 여기에 기대는 것은 두 가지다. (1) 이 PC의 터미널 에이전트 목록,
-// (2) 모든 워크플로우에 공통인 기본 환경이 갖춰졌는지. 둘 다 "없으면 어디서 받는지"까지
-// 함께 돌려줘야 사용자가 화면을 떠나 검색하지 않는다.
+// The wizard's first screen leans on two things here: (1) the list of terminal agents on this PC,
+// (2) whether the baseline environment shared by all workflows is in place. Both must come back
+// with "where to get it if missing" so the user never leaves the screen to search.
 //
-// Git, Node.js, pandoc 같은 도구는 여기에 두지 않는다. 그런 의존성은 그것을 실제로
-// 사용하는 workflow revision의 `requirements`가 선언하고 실행 직전에 검사한다.
+// Tools like Git, Node.js, and pandoc do not live here. Those dependencies are declared by the
+// `requirements` of the workflow revision that actually uses them and are checked right before execution.
 //
-// 감지 판정은 `--version` 성공이 아니라 **실행 파일의 존재**다. 버전 플래그가 없거나
-// 로그인을 먼저 요구하는 CLI 가 흔해서, 버전 조회 실패를 미설치로 읽으면 오탐이 난다.
-// 버전 문자열은 있으면 덧붙이는 부가 정보일 뿐이다.
+// Detection means the **existence of an executable**, not `--version` success. CLIs without a version
+// flag or that demand a login first are common, so reading a failed version probe as "not installed"
+// produces false positives. The version string is just extra info appended when available.
 //
-// PATH 만 보지 않는 이유: GUI 로 띄운 앱은 로그인 셸의 PATH 를 물려받지 못하는 일이
-// 잦다(맥에서 Dock 실행이 대표적). 그래서 흔한 설치 디렉토리를 함께 훑는다.
+// Why not PATH alone: GUI-launched apps often fail to inherit the login shell's PATH
+// (Dock launches on macOS are the classic case), so common install directories are scanned too.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -25,9 +25,9 @@ fn home() -> PathBuf {
     dirs::home_dir().unwrap_or_else(|| PathBuf::from("."))
 }
 
-// ---------- 실행 파일 찾기 ----------
+// ---------- Executable lookup ----------
 
-/// PATH 밖에 CLI 가 흔히 깔리는 곳들.
+/// Directories outside PATH where CLIs are commonly installed.
 fn extra_bin_dirs() -> Vec<PathBuf> {
     let h = home();
     #[allow(unused_mut)]
@@ -63,9 +63,9 @@ fn extra_bin_dirs() -> Vec<PathBuf> {
         if let Some(d) = dirs::data_dir() {
             v.push(d.join("npm"));
         }
-        // herdr 는 버전이 박힌 릴리스 디렉토리에 깔리고 자가 업데이트로 그 경로가
-        // 바뀐다. 오래 떠 있는 앱의 PATH 는 지워진 옛 버전을 가리키게 되므로 설치
-        // 폴더를 직접 훑는다. 최근에 깔린 것부터 본다.
+        // herdr installs into a version-stamped release directory and self-updates change that
+        // path. A long-running app's PATH ends up pointing at a deleted old version, so scan
+        // the install folder directly. Most recently installed first.
         let releases = h
             .join(".herdr")
             .join("packages")
@@ -90,10 +90,10 @@ fn extra_bin_dirs() -> Vec<PathBuf> {
     v
 }
 
-/// 윈도우에서 `foo` 는 `foo.exe`·`foo.cmd` 일 수 있다. PATHEXT 가 비어 있는 환경도 있어
-/// 기본값을 둔다. 확장자 붙은 후보를 맨 이름보다 먼저 본다 — npm 이 .cmd 와 나란히
-/// 두는 확장자 없는 sh 스크립트는 CreateProcess 가 실행하지 못하는데, 그것이 먼저
-/// 잡히면 실행 가능한 셈을 두고도 못 찾은 셈이 된다.
+/// On Windows, `foo` may be `foo.exe` or `foo.cmd`. Some environments leave PATHEXT empty, so
+/// fall back to defaults. Extension-bearing candidates are tried before the bare name — npm ships
+/// an extension-less sh script alongside the .cmd, and CreateProcess cannot run it; if it were
+/// found first we would miss the runnable sibling.
 #[cfg(windows)]
 fn candidate_names(name: &str) -> Vec<String> {
     let exts = std::env::var("PATHEXT").unwrap_or_else(|_| ".COM;.EXE;.BAT;.CMD".into());
@@ -126,8 +126,8 @@ fn is_exec(p: &Path) -> bool {
     }
 }
 
-/// `~/…` 와 `$VAR/…` 를 푼다. 카탈로그의 경로 템플릿과 사용자가 적은 실행 파일 경로가
-/// 같은 규칙을 쓰도록 한 곳에 둔다.
+/// Resolves `~/…` and `$VAR/…`. Kept in one place so catalog path templates and user-typed
+/// executable paths follow the same rules.
 pub fn expand_path(raw: &str) -> Option<PathBuf> {
     let raw = raw.trim();
     if raw.is_empty() {
@@ -151,8 +151,8 @@ pub fn expand_path(raw: &str) -> Option<PathBuf> {
     Some(PathBuf::from(raw))
 }
 
-/// 이름 하나를 실제 실행 파일 경로로 바꾼다. 경로 구분자가 있으면 그 경로를 그대로 본다
-/// (사용자 정의 에이전트가 절대경로를 적는 경우).
+/// Maps a single name to a real executable path. If it contains path separators, use it as given
+/// (custom agents may specify an absolute path).
 pub fn resolve_bin(name: &str) -> Option<PathBuf> {
     let name = name.trim();
     if name.is_empty() {
@@ -177,12 +177,12 @@ pub fn resolve_bin(name: &str) -> Option<PathBuf> {
     None
 }
 
-/// 후보 이름들 중 처음 찾히는 실행 파일.
+/// The first executable found among candidate names.
 pub fn resolve_any(names: &[&str]) -> Option<PathBuf> {
     names.iter().find_map(|n| resolve_bin(n))
 }
 
-// ---------- 버전 조회 ----------
+// ---------- Version probes ----------
 
 fn truncate_chars(s: &str, max: usize) -> String {
     if s.chars().count() <= max {
@@ -195,7 +195,7 @@ fn build_command(path: &Path, args: &[&str]) -> tokio::process::Command {
     crate::spawn::platform_command_async(path, args)
 }
 
-/// 있으면 좋고 없어도 그만인 한 줄. 타임아웃을 짧게 잡아 마법사가 멈추지 않게 한다.
+/// A nice-to-have one-liner: taken when present, fine when absent. The timeout is kept short so the wizard never stalls.
 pub async fn version_of(path: &Path, args: &[&str]) -> Option<String> {
     if args.is_empty() {
         return None;
@@ -204,8 +204,8 @@ pub async fn version_of(path: &Path, args: &[&str]) -> Option<String> {
     c.stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
-        // `--version` 을 모르고 대화형으로 뜨는 CLI 가 있다. 타임아웃으로 기다리기를
-        // 그만두는 것만으로는 그 프로세스가 남는다 — 검사할 때마다 좀비가 쌓이지 않게 죽인다.
+        // Some CLIs do not know `--version` and open interactively. Merely giving up on the
+        // wait via timeout leaves the process behind — kill it so zombies do not pile up per check.
         .kill_on_drop(true);
     let out = tokio::time::timeout(PROBE_TIMEOUT, c.output())
         .await
@@ -214,7 +214,7 @@ pub async fn version_of(path: &Path, args: &[&str]) -> Option<String> {
     if !out.status.success() {
         return None;
     }
-    // 버전을 stderr 로 내는 도구가 있다 (java 가 유명하다).
+    // Some tools print their version to stderr (java is famous for it).
     let raw = if out.stdout.iter().any(|b| !b.is_ascii_whitespace()) {
         String::from_utf8_lossy(&out.stdout).into_owned()
     } else {
@@ -264,8 +264,8 @@ pub fn version_of_sync(path: &Path, args: &[String]) -> Option<String> {
     }
 }
 
-/// 여러 대상의 버전을 동시에 조회한다. 결과 순서는 입력 순서를 지킨다 — 호출한 쪽이
-/// 카탈로그 순서와 짝지어 읽기 때문이다.
+/// Probes versions of several targets concurrently. Result order preserves input order — the
+/// caller reads results paired with the catalog order.
 pub async fn versions_of(targets: Vec<(PathBuf, &'static [&'static str])>) -> Vec<Option<String>> {
     let mut out = vec![None; targets.len()];
     let mut set = tokio::task::JoinSet::new();
@@ -280,7 +280,7 @@ pub async fn versions_of(targets: Vec<(PathBuf, &'static [&'static str])>) -> Ve
     out
 }
 
-/// "v24.18.0", "git version 2.39.5" 처럼 섞여 오는 문자열에서 메이저 숫자만 뽑는다.
+/// Extracts just the major number from strings that arrive mixed like "v24.18.0" or "git version 2.39.5".
 pub fn major_of(version: &str) -> Option<u32> {
     let mut digits = String::new();
     for ch in version.chars() {
@@ -293,16 +293,16 @@ pub fn major_of(version: &str) -> Option<u32> {
     digits.parse().ok()
 }
 
-// ---------- 앱 공통 기본 환경 카탈로그 ----------
+// ---------- App shared baseline-environment catalog ----------
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum Need {
-    /// 없으면 제품의 모든 워크플로우가 막힌다
+    /// Without it, every product workflow is blocked
     Required,
-    /// 없어도 돌지만 기능이 줄거나 폴백으로 떨어진다
+    /// Runs without it, but features shrink or fall back
     Recommended,
-    /// 특정 작업에서만 쓴다
+    /// Used only for specific jobs
     Optional,
 }
 
@@ -310,17 +310,17 @@ pub struct RequirementSpec {
     pub id: &'static str,
     pub name: &'static str,
     pub need: Need,
-    /// 왜 필요한가 — 사용자가 설치 여부를 스스로 판단할 수 있게 한 줄로 적는다.
+    /// Why it is needed — one line, so users can judge whether to install it themselves.
     pub why: &'static str,
     pub bins: &'static [&'static str],
     pub version_args: &'static [&'static str],
-    /// CLI 가 아닌 GUI 앱을 잡기 위한 경로 템플릿 (`~`, `$VAR` 지원)
+    /// Path templates for catching GUI apps rather than CLIs (`~` and `$VAR` supported)
     pub paths: &'static [&'static str],
-    /// 빈 문자열이면 "설치 위치를 모른다" — 화면에 설치 버튼을 내지 않는다. 모르는 곳을
-    /// 아는 척 가리키느니 아무것도 가리키지 않는 편이 낫다.
+    /// An empty string means "install location unknown" — the UI shows no install button. Pointing
+    /// at nothing beats pretending to know an unknown location.
     pub install_url: &'static str,
     pub install_hint: &'static str,
-    /// 이 메이저 버전 이상이어야 한다. 0 이면 확인하지 않는다.
+    /// Must be at least this major version. 0 skips the check.
     pub min_major: u32,
 }
 
@@ -369,23 +369,23 @@ pub struct RequirementStatus {
     pub why: String,
     pub detected: bool,
     pub version: Option<String>,
-    /// 찾은 실행 파일 또는 앱 번들 경로 (없으면 빈 문자열)
+    /// Found executable or app bundle path (empty string when absent)
     pub path: String,
-    /// 깔려는 있는데 최소 버전에 못 미친다
+    /// Installed but below the minimum version
     pub outdated: bool,
     pub min_major: u32,
     pub install_url: String,
     pub install_hint: String,
 }
 
-/// 두 번째 값은 "실행 파일로 찾았는가" — GUI 앱 번들은 버전을 물어볼 수 없다.
+/// The second value is "found as an executable" — GUI app bundles cannot be asked for a version.
 ///
-/// 설치 경로를 PATH 보다 **먼저** 본다. 같은 이름의 CLI 패키지가 PATH 에 있으면
-/// (`obsidian-cli` 가 대표적) 앱이 없는데도 있다고 답하게 되기 때문이다.
+/// Install paths are checked **before** PATH. If a CLI package with the same name exists on PATH
+/// (`obsidian-cli` is the classic case), we would otherwise report present even without the app.
 fn locate(spec: &RequirementSpec) -> Option<(PathBuf, bool)> {
     for t in spec.paths {
         if let Some(p) = expand_path(t) {
-            // GUI 앱은 실행 가능 여부가 아니라 존재 여부로 본다 (맥의 .app 은 디렉토리다).
+            // GUI apps are judged by existence, not executability (a macOS .app is a directory).
             if p.exists() {
                 return Some((p, false));
             }
@@ -416,7 +416,7 @@ pub async fn check_requirements() -> Vec<RequirementStatus> {
                 Some((p, b)) => (p.display().to_string(), *b),
                 None => (String::new(), false),
             };
-            // `versions` 는 조회한 것들만 순서대로 들어 있으므로, 조회한 항목에서만 당긴다.
+            // `versions` holds only the probed entries in order, so pull only for probed ones.
             let version = if is_bin && !spec.version_args.is_empty() {
                 versions.next().flatten()
             } else {
@@ -476,7 +476,7 @@ mod tests {
         assert_eq!(expand_path("   "), None);
     }
 
-    /// 확장자 없는 npm sh 스크립트가 실행 가능한 .exe·.cmd 를 가리면 안 된다.
+    /// An extension-less npm sh script must not shadow a runnable .exe or .cmd.
     #[cfg(windows)]
     #[test]
     fn candidates_prefer_executable_extensions_over_bare_name() {
@@ -525,8 +525,8 @@ mod tests {
 
     #[test]
     fn install_paths_win_over_a_same_named_cli_on_path() {
-        // `obsidian` 이라는 npm CLI 가 PATH 에 있는 PC 가 실제로 있다. 앱 번들이 있으면
-        // 그쪽을 답으로 삼아야 "앱이 깔려 있나" 라는 질문에 바르게 답한다.
+        // A PC with an npm CLI named `obsidian` on PATH really exists. When the app bundle is
+        // present it must be the answer, so "is the app installed" gets the right reply.
         let dir = tempdir("order");
         let app = dir.join("Fake.app");
         fs::create_dir_all(&app).unwrap();
@@ -545,7 +545,7 @@ mod tests {
         };
         assert_eq!(locate(&spec), Some((app, false)));
 
-        // 경로가 없으면 실행 파일로 떨어진다 (Windows 에서는 sh.exe 로 해석된다)
+        // With no paths, fall back to the executable (interpreted as sh.exe on Windows)
         let only_bin = RequirementSpec { paths: &[], ..spec };
         let (p, is_bin) = locate(&only_bin).expect("sh 를 찾지 못했습니다");
         assert!(is_bin && p.file_stem().is_some_and(|s| s == "sh"), "{p:?}");
@@ -589,7 +589,7 @@ mod tests {
             vec!["obsidian", "herdr"],
             "기능별 도구는 workflow requirements로 이동해야 한다"
         );
-        // 감지되지 않은 항목은 경로도 버전도 비어 있어야 한다
+        // Undetected entries must have an empty path and no version
         for r in rows.iter().filter(|r| !r.detected) {
             assert!(r.path.is_empty() && r.version.is_none(), "{}", r.id);
         }

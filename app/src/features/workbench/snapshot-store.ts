@@ -5,11 +5,11 @@ import type { WorkspaceSnapshot } from "./types";
 import { sddApi } from "./api";
 
 /**
- * 탭의 로컬 UI 상태보다 오래 사는 작업공간 read model.
+ * A workspace read model that outlives the tab's local UI state.
  *
- * WorkbenchPage는 화면마다 새로 마운트될 수 있지만, 동일한 볼트를 읽는 스냅샷은
- * 공유한다. 파일 watcher가 변경을 알리고, 재진입 시에는 오래된 캐시만 백그라운드로
- * 갱신한다. 진행 중 요청은 하나로 합쳐 개발 모드 StrictMode의 이중 effect도 막는다.
+ * WorkbenchPage may mount fresh per screen, but snapshots reading the same vault are shared.
+ * A file watcher announces changes, and on re-entry only a stale cache is refreshed in the
+ * background. In-flight requests are coalesced, which also blocks dev-mode StrictMode's double effects.
  */
 interface WorkspaceSnapshotState {
   snapshot: WorkspaceSnapshot | null;
@@ -32,7 +32,7 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** 요청을 강제로 시작하되, 이미 진행 중인 요청이 있으면 같은 결과를 기다린다. */
+/** Force-starts a request, but if one is already in flight, awaits the same result. */
 export function refreshWorkspaceSnapshot(): Promise<WorkspaceSnapshot | null> {
   if (inFlight) return inFlight;
   const current = useWorkspaceSnapshot.getState();
@@ -43,8 +43,8 @@ export function refreshWorkspaceSnapshot(): Promise<WorkspaceSnapshot | null> {
   inFlight = sddApi
     .snapshot()
     .then((snapshot) => {
-      // 내용이 같으면 이전 객체를 그대로 둔다. 새 객체를 넣으면 볼트 watcher 가 울릴 때마다
-      // 구독 화면 전체가 다시 그려져 문서 뷰와 목록이 튄다.
+      // If the content is identical, keep the previous object. Supplying a new object makes the whole
+      // subscribed screen re-render every time the vault watcher fires, jolting the document view and lists.
       const previous = useWorkspaceSnapshot.getState().snapshot;
       const next =
         previous && JSON.stringify(previous) === JSON.stringify(snapshot)
@@ -71,7 +71,7 @@ export function refreshWorkspaceSnapshot(): Promise<WorkspaceSnapshot | null> {
   return inFlight;
 }
 
-/** 캐시를 즉시 보여 주고, 없거나 오래됐을 때만 다시 읽는다. */
+/** Shows the cache immediately, re-reading only when it is missing or stale. */
 export function ensureWorkspaceSnapshot(): Promise<WorkspaceSnapshot | null> {
   const current = useWorkspaceSnapshot.getState();
   if (
@@ -82,7 +82,7 @@ export function ensureWorkspaceSnapshot(): Promise<WorkspaceSnapshot | null> {
   return refreshWorkspaceSnapshot();
 }
 
-/** 초기화 명령처럼 이미 완성된 스냅샷을 받은 경우 별도 재조회 없이 채택한다. */
+/** When a command like initialize already produced a complete snapshot, adopt it without a separate re-fetch. */
 export function acceptWorkspaceSnapshot(snapshot: WorkspaceSnapshot) {
   useWorkspaceSnapshot.setState({
     snapshot,
@@ -93,8 +93,8 @@ export function acceptWorkspaceSnapshot(snapshot: WorkspaceSnapshot) {
 }
 
 /**
- * Workbench가 보이는 동안만 볼트 변경을 구독한다. 화면을 떠났다가 돌아오면 캐시를
- * 먼저 그리고 ensureWorkspaceSnapshot이 필요한 재검증을 시작한다.
+ * Subscribes to vault changes only while the Workbench is visible. Returning to the screen renders
+ * the cache first, and ensureWorkspaceSnapshot starts revalidation as needed.
  */
 export function watchWorkspaceSnapshot(): () => void {
   if (!("__TAURI_INTERNALS__" in window)) return () => undefined;

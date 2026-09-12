@@ -1,6 +1,6 @@
-// 검증 프로필 실행. 설계 824줄: command·health·manual 검증.
-// 실제 명령은 사람이 저장한 프로필에서만 가져온다(설계 290-291줄) — 후보·에이전트가
-// 검증 명령을 주입하는 경로는 존재하지 않는다.
+// Verification profile execution. Design line 824: command, health, and manual checks.
+// Actual commands come only from profiles saved by a human (design lines 290-291) — there is no path
+// for candidates or agents to inject verification commands.
 
 use super::model::{CheckRun, VerifyCheck, VerifyProfile};
 use super::{new_id, now_ts, workbench_root};
@@ -8,7 +8,7 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Duration;
 
-/// 검사 결과. 로그 본문은 DB 대신 content-hash artifact 파일로 남긴다(설계 511줄).
+/// Check result. The log body is stored as a content-hash artifact file instead of in the DB (design line 511).
 #[derive(Clone, Debug)]
 pub struct CheckOutcome {
     pub name: String,
@@ -17,7 +17,7 @@ pub struct CheckOutcome {
     pub detail: String,
 }
 
-/// artifact 로그 저장. sha256 파일명, `projects/<project-id>/artifacts/` 아래.
+/// Save an artifact log. sha256 file name, under `projects/<project-id>/artifacts/`.
 pub fn save_artifact(project_id: &str, label: &str, content: &str) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
@@ -34,12 +34,12 @@ pub fn save_artifact(project_id: &str, label: &str, content: &str) -> String {
             return name;
         }
     }
-    // 저장 실패는 치명적이지 않다 — log_ref 없이 진행한다.
+    // A save failure is not fatal — continue without a log_ref.
     let _ = label;
     String::new()
 }
 
-/// command 검사. argv는 프로필에 저장된 값 그대로, cwd는 통합 체크아웃 기준 상대경로.
+/// Command check. argv is used exactly as saved in the profile; cwd is relative to the integration checkout.
 pub fn run_command_check(
     cwd_root: &Path,
     cwd: &str,
@@ -68,10 +68,51 @@ pub fn run_command_check(
             detail: format!("cwd 없음: {}", dir.display()),
         };
     }
-    let out = crate::spawn::no_window(Command::new(&argv[0]))
+    let mut child = match crate::spawn::no_window(Command::new(&argv[0]))
         .args(&argv[1..])
         .current_dir(&dir)
-        .output();
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return CheckOutcome {
+                name,
+                passed: false,
+                log_ref: String::new(),
+                detail: format!("실행 실패: {e}"),
+            };
+        }
+    };
+    // timeout_secs를 실제로 강제한다 — try_wait 폴링 후 시간 초과면 kill해 hung 프로세스가
+    // 통합 워커를 영구 점유하지 않게 한다 (detect.rs version_of_sync와 같은 패턴).
+    let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs);
+    let finished = loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break true,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            _ => break false,
+        }
+    };
+    if !finished {
+        let _ = child.kill();
+        let _ = child.wait();
+        return CheckOutcome {
+            name,
+            passed: false,
+            log_ref: String::new(),
+            detail: format!("시간 초과: {timeout_secs}초 안에 끝나지 않았다"),
+        }
+        .with_log(format!(
+            "argv: {argv:?}\ncwd: {}\ntimeout: {timeout_secs}s",
+            dir.display()
+        ));
+    }
+    let out = child.wait_with_output();
     match out {
         Ok(o) => {
             let log = format!(
@@ -85,7 +126,7 @@ pub fn run_command_check(
             CheckOutcome {
                 name,
                 passed: o.status.success(),
-                log_ref: String::new(), // 호출자가 project_id로 채워 저장한다
+                log_ref: String::new(), // caller fills this in with project_id and saves it
                 detail: if o.status.success() {
                     "exit 0".into()
                 } else {
@@ -110,7 +151,7 @@ impl CheckOutcome {
     }
 }
 
-/// http health probe. 응답이 오고 2xx면 통과. 타임아웃·크기 상한을 둔다.
+/// HTTP health probe. Passes when a response arrives with a 2xx status. Enforces timeout and size caps.
 pub async fn run_http_check(url: &str) -> CheckOutcome {
     let name = format!("http:{url}");
     let client = match reqwest::Client::builder()
@@ -130,7 +171,7 @@ pub async fn run_http_check(url: &str) -> CheckOutcome {
     match client.get(url).send().await {
         Ok(resp) => {
             let status = resp.status().as_u16();
-            // 상한: health probe는 본문을 모두 읽지 않고 앞부분만 채운다.
+            // Cap: the health probe does not read the whole body, only the leading part.
             let body = resp.bytes().await.map(|b| {
                 let take = b.len().min(16 * 1024);
                 String::from_utf8_lossy(&b[..take]).to_string()
@@ -151,7 +192,7 @@ pub async fn run_http_check(url: &str) -> CheckOutcome {
     }
 }
 
-/// 프로필의 자동 검사 전체를 실행한다. baseline이면 병합 전 상태에서 실행한다.
+/// Run every automated check in the profile. For baseline, runs against the pre-merge state.
 pub async fn run_profile_checks(
     cwd_root: &Path,
     project_id: &str,
@@ -203,8 +244,8 @@ pub async fn run_profile_checks(
     }
     results
 }
-/// 통합 워커용 blocking 실행. 워커는 spawn_blocking 스레드에서 동작하므로
-/// 비동기 http 검사는 현재 런타임이 있을 때만 block_on으로 돌린다.
+/// Blocking execution for the integration worker. Workers run on spawn_blocking threads, so
+/// the async http check only runs via block_on when a current runtime exists.
 pub fn run_profile_checks_blocking(
     cwd_root: &Path,
     project_id: &str,
@@ -245,8 +286,8 @@ pub fn run_profile_checks_blocking(
     results
 }
 
-/// health probe의 blocking 버전. MVP 프로필은 localhost 개발 서버를 전제로 하므로
-/// raw HTTP/1.0 GET으로 판정한다. https는 런타임이 있을 때만 지원한다.
+/// Blocking version of the health probe. MVP profiles assume localhost dev servers, so
+/// it decides with a raw HTTP/1.0 GET. https is supported only when a runtime is available.
 fn blocking_http_check(url: &str) -> CheckOutcome {
     let name = format!("http:{url}");
     let rest = url
@@ -273,15 +314,27 @@ fn blocking_http_check(url: &str) -> CheckOutcome {
         };
     }
     use std::io::{Read, Write};
-    let outcome = std::net::TcpStream::connect((host.as_str(), port)).and_then(|mut stream| {
-        use std::net::ToSocketAddrs;
-        let _ = (host.as_str(), port).to_socket_addrs()?;
-        let req = format!("GET {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n");
-        stream.write_all(req.as_bytes())?;
-        let mut buf = Vec::new();
-        stream.take(16 * 1024).read_to_end(&mut buf)?;
-        Ok(buf)
-    });
+    use std::net::ToSocketAddrs;
+    // 연결·읽기에 모두 시간 제한을 둔다 — 응답 없는 서버가 워커를 붙잡지 않게 한다.
+    let outcome = (host.as_str(), port)
+        .to_socket_addrs()
+        .and_then(|mut addrs| {
+            addrs
+                .next()
+                .ok_or_else(|| {
+                    std::io::Error::new(std::io::ErrorKind::InvalidInput, "주소 해석 결과가 없다")
+                })
+                .and_then(|addr| std::net::TcpStream::connect_timeout(&addr, Duration::from_secs(5)))
+        })
+        .and_then(|mut stream| {
+            stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+            stream.set_write_timeout(Some(Duration::from_secs(5)))?;
+            let req = format!("GET {path} HTTP/1.0\r\nHost: {host}\r\nConnection: close\r\n\r\n");
+            stream.write_all(req.as_bytes())?;
+            let mut buf = Vec::new();
+            stream.take(16 * 1024).read_to_end(&mut buf)?;
+            Ok(buf)
+        });
     match outcome {
         Ok(bytes) => {
             let head = String::from_utf8_lossy(&bytes);
@@ -319,6 +372,24 @@ mod tests {
         assert!(!bad.passed);
         let missing = run_command_check(&root, "", &["definitely-not-a-bin-xyz".into()], 10);
         assert!(!missing.passed);
+    }
+
+    #[test]
+    fn command_check_timeout_kills_hung_process() {
+        let root = std::env::temp_dir();
+        let started = std::time::Instant::now();
+        let out = run_command_check(&root, "", &["sleep".into(), "30".into()], 1);
+        assert!(!out.passed);
+        assert!(
+            out.detail.contains("시간 초과"),
+            "시간 초과로 실패해야 한다: {}",
+            out.detail
+        );
+        assert!(
+            started.elapsed() < std::time::Duration::from_secs(20),
+            "시간 초과 후 즉시 돌아와야 한다: {:?}",
+            started.elapsed()
+        );
     }
 
     #[test]

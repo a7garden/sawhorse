@@ -4,7 +4,7 @@ const previewKey = "sawhorse.workflow.preview.v2";
 
 test("board and list share selection and queue selected tasks in goal mode with partial results", async ({ page }) => {
   await page.goto("/?preview=1&lifecycle=1");
-  await page.locator("aside nav").getByRole("button", { name: "작업", exact: true }).click();
+  await page.locator("aside nav").getByRole("button", { name: "작업대", exact: true }).click();
   const original = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!).snapshot.work.find((w: { id: string }) => w.id === "work-editor"), previewKey);
   await page.getByRole("checkbox", { name: /^work-editor / }).check();
   await page.getByRole("checkbox", { name: /^work-session / }).check();
@@ -32,7 +32,7 @@ test("board and list share selection and queue selected tasks in goal mode with 
 
 test("filtering removes hidden selections from goal bulk execution", async ({ page }) => {
   await page.goto("/?preview=1");
-  await page.locator("aside nav").getByRole("button", { name: "작업", exact: true }).click();
+  await page.locator("aside nav").getByRole("button", { name: "작업대", exact: true }).click();
   await page.getByRole("checkbox", { name: "전체 선택", exact: true }).check();
   await page.getByPlaceholder("작업 이름, ID, 담당자, 태그 검색…").fill("work-editor");
   await expect(page.locator(".wb-bulk-bar")).toContainText("1건 선택");
@@ -44,8 +44,11 @@ test("filtering removes hidden selections from goal bulk execution", async ({ pa
 
 test("goal creation preserves autonomous settings and exposes controls without approval steps", async ({ page }) => {
   await page.goto("/?preview=1");
-  await page.locator("aside nav").getByRole("button", { name: "작업", exact: true }).click();
-  await page.getByRole("button", { name: "새 의도", exact: true }).click();
+  await page.locator("aside nav").getByRole("button", { name: "작업대", exact: true }).click();
+  await page.getByRole("button", { name: "새 항목", exact: true }).click();
+  await page.getByRole("combobox", { name: "시작할 워크플로", exact: true }).click();
+  await page.getByRole("option", { name: "SDD · 의도에서 완료까지", exact: true }).click();
+  await page.getByRole("button", { name: "계속", exact: true }).click();
   await page.getByRole("button", { name: "골 모드", exact: true }).click();
   await expect(page.getByRole("heading", { name: "도달할 목표를 정해 주세요" })).toBeVisible();
   await page.getByLabel("목표와 완료 기준").fill("플레이 가능한 게임\n10개 웨이브와 점수, 재시작을 구현하고 검증한다.");

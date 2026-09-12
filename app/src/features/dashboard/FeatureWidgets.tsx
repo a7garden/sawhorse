@@ -1,6 +1,6 @@
 import "@/features/journal/journal.css";
 import { jobsForProject } from "@/features/workbench/project-scope";
-import type { Project } from "@/features/workbench/types";
+import { isClosedStatus, type HarnessRun, type Project } from "@/features/workbench/types";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -36,7 +36,7 @@ function cx(...names: Array<string | false | null | undefined>) {
   return names.filter(Boolean).join(" ");
 }
 
-/** 주기적으로 다시 그린다. null 이면 멈춘다 — 경과 시간·현재 시각 표시용. */
+/** Redraws periodically. Stops when null — used for elapsed-time and current-time display. */
 function useTicker(periodMs: number | null) {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -66,7 +66,7 @@ function durText(ms: number, t: TFunction) {
   });
 }
 
-/** 자정부터 흐른 비율. 타임라인 좌표의 단일 출처. */
+/** Fraction of the day elapsed since midnight. Single source of truth for timeline coordinates. */
 function dayFraction(ms: number, dayStart: number) {
   return Math.min(1, Math.max(0, (ms - dayStart) / 86_400_000));
 }
@@ -78,7 +78,7 @@ export interface DistSegment {
   tone: string;
 }
 
-/** 누적 막대 + 범례. 범례를 누르면 아래 목록이 그 구간으로 좁혀진다. */
+/** Stacked bar + legend. Clicking a legend segment narrows the list below to that bucket. */
 export function DistBar({
   segments,
   active,
@@ -140,7 +140,7 @@ export function DistBar({
   );
 }
 
-/** 행 안에서 바로 누르는 작은 버튼. 위젯이 열람이 아니라 처리 장소가 되게 한다. */
+/** Small button pressed inline within a row. Makes the widget a place to act, not just to view. */
 export function MiniAction({
   label,
   icon,
@@ -174,11 +174,12 @@ export function MiniAction({
   );
 }
 
-/* ---------------------------------------------------------------- 이슈 */
+/* ---------------------------------------------------------------- issues */
 
 /**
- * 상태 어휘는 개발 항목 하나뿐이다. 이슈 노트의 제안·승인대기·… 는 더 이상
- * 별도 축이 아니라 아래 묶음으로 읽힌다.
+ * The status vocabulary is a single work-item axis. The issue note's
+ * proposal/pending-approval/… stages are no longer a separate axis; they read
+ * through the groups below.
  */
 const ISSUE_GROUPS: {
   key: string;
@@ -192,8 +193,8 @@ const ISSUE_GROUPS: {
   { key: "running", label: "진행", tone: "run", statuses: ["running"] },
   { key: "done", label: "완료", tone: "done", statuses: ["done"] },
   { key: "blocked", label: "보류", tone: "hold", statuses: ["blocked"] },
-  // 보류는 아직 열린 항목이고 반려·취소는 닫힌 항목이다. 한 묶음에 섞으면
-  // 「보류 3건」이 실제로는 손댈 수 없는 건수를 뜻하게 된다.
+  // On hold items are still open; rejected/cancelled are closed. Mixing them
+  // into one bucket would make "3 on hold" count items that cannot be touched.
   {
     key: "dropped",
     label: "반려·취소",
@@ -295,7 +296,7 @@ export function IssuesWidget({ work, onOpen }: {
   );
 }
 
-/* ------------------------------------------------------------- 실행 현황 */
+/* ------------------------------------------------------------- run status */
 
 const JOB_TONE: Record<string, string> = {
   queued: "wait",
@@ -314,113 +315,64 @@ const JOB_LABEL: Record<string, string> = {
   interrupted: "중단됨",
 };
 
-/** 렌더 시점에 상태 라벨을 번들에서 꺼낸다. 모르는 상태는 원문 그대로. */
+/** Reads the status label from the bundle at render time. Unknown statuses fall back to the raw value. */
 function jobStatusLabel(status: string, t: TFunction) {
   return JOB_LABEL[status] ? t(`jobs.status.${status}`) : status;
 }
 
-export function JobsWidget({ onOpen, project }: { onOpen: () => void; project?: Project }) {
+/** One feed interleaves project runs and automation jobs, with live work first. */
+export function JobsWidget({ onOpen, project, runs = [], work = [], projects = [] }: {
+  onOpen: () => void; project?: Project; runs?: HarnessRun[]; work?: WorkItem[]; projects?: Project[];
+}) {
   const { t } = useTranslation("dashboard");
   const allJobs = useApp((s) => s.jobs);
   const jobs = jobsForProject(allJobs, project);
   const refreshJobs = useApp((s) => s.refreshJobs);
   const [busy, setBusy] = useState<string | null>(null);
-  const live = jobs.filter(
-    (job) => job.status === "running" || job.status === "queued",
-  );
-  useTicker(live.length ? 1000 : null);
+  const isLive = (status: string) => ["starting", "running", "queued"].includes(status);
+  useTicker(jobs.some((job) => isLive(job.status)) || runs.some((run) => isLive(run.status)) ? 1000 : null);
   useEffect(() => {
-    refreshJobs().catch(() => {});
+    void refreshJobs().catch(() => {});
+    const timer = window.setInterval(() => void refreshJobs().catch(() => {}), 8000);
+    return () => window.clearInterval(timer);
   }, [refreshJobs]);
-
-  const segments = (
-    ["running", "queued", "success", "failed", "cancelled"] as const
-  )
-    .map((status) => ({
-      key: status,
-      label: jobStatusLabel(status, t),
-      tone: JOB_TONE[status],
-      value: jobs.filter((job) => job.status === status).length,
-    }))
-    .filter((segment) => segment.value > 0 || segment.key === "success");
-
+  const projectName = (id?: string | null) => projects.find((entry) => entry.id === id || entry.name === id)?.name ?? id ?? t("jobs.shared");
+  const rows = [
+    ...jobs.map((job) => ({ id: `job:${job.id}`, status: job.status, title: job.label,
+      project: projectName(job.project), time: job.startedAtMs ?? job.createdAtMs,
+      label: jobStatusLabel(job.status, t), open: onOpen, job })),
+    ...runs.filter((run) => !run.dismissedAt).map((run) => ({ id: `run:${run.id}`, status: run.status,
+      title: work.find((item) => item.id === run.workId)?.title ?? run.workId,
+      project: projectName(run.projectId), time: new Date(run.updatedAt).getTime(),
+      label: t(`workbench:runStatus.${run.status}`, { defaultValue: run.status }),
+      open: () => useApp.getState().openRun(run.id, run.projectId), job: undefined })),
+  ].sort((a, b) => Number(isLive(b.status)) - Number(isLive(a.status)) || b.time - a.time);
+  const liveCount = rows.filter((row) => isLive(row.status)).length;
+  const failedCount = rows.filter((row) => row.status === "failed").length;
   async function stop(job: Job) {
     setBusy(job.id);
-    try {
-      await api.cancelJob(job.id);
-      await refreshJobs();
-    } catch {
-      // 취소 실패는 다음 새로고침에서 드러난다
-    } finally {
-      setBusy(null);
-    }
+    try { await api.cancelJob(job.id); await refreshJobs(); }
+    finally { setBusy(null); }
   }
-
-  if (!jobs.length)
-    return <div className="wb-slot-empty">{t("jobs.empty")}</div>;
-
-  const rows = [...live, ...jobs.filter((job) => !live.includes(job))].slice(
-    0,
-    7,
-  );
-  return (
-    <div className="wb-widget-body">
-      <DistBar label={t("jobs.distribution")} segments={segments} />
-      <div className="wb-action-list">
-        {rows.map((job) => {
-          const running = job.status === "running" || job.status === "queued";
-          const from = job.startedAtMs ?? job.createdAtMs;
-          const elapsed = running
-            ? Date.now() - from
-            : (job.finishedAtMs ?? from) - from;
-          return (
-            <div key={job.id} className="wb-action-row">
-              <button
-                type="button"
-                className="wb-action-main"
-                onClick={onOpen}
-                title={job.label}
-              >
-                <span
-                  className={`wb-dot is-${JOB_TONE[job.status] ?? "run"}`}
-                />
-                <span className="wb-action-text">
-                  <strong>{job.label}</strong>
-                  <small>
-                    {jobStatusLabel(job.status, t)} ·{" "}
-                    {running
-                      ? t("jobs.elapsed", { time: durText(elapsed, t) })
-                      : durText(elapsed, t)}
-                    {job.finishedAtMs
-                      ? ` · ${clockText(job.finishedAtMs)}`
-                      : ""}
-                  </small>
-                </span>
-              </button>
-              <div className="wb-action-buttons">
-                {running && (
-                  <MiniAction
-                    label={t("jobs.actions.stop")}
-                    icon={<Square size={13} />}
-                    busy={busy === job.id}
-                    onClick={() => void stop(job)}
-                  />
-                )}
-                <MiniAction
-                  label={t("jobs.actions.log")}
-                  icon={<ChevronRight size={13} />}
-                  onClick={onOpen}
-                />
-              </div>
-            </div>
-          );
-        })}
+  if (!rows.length) return <div className="wb-slot-empty">{t("jobs.empty")}</div>;
+  return <div className="wb-widget-body">
+    <div className="wb-run-feed-summary"><span><i aria-hidden />{t("jobs.liveCount", { count: liveCount })}</span><span>{t("jobs.failedCount", { count: failedCount })}</span></div>
+    <div className="wb-action-list">{rows.slice(0, 10).map((row) => <div key={row.id} className="wb-action-row">
+      <button type="button" className="wb-action-main" onClick={row.open} title={row.title}>
+        <span className={`wb-dot is-${isLive(row.status) ? "run" : row.status === "failed" ? "fail" : "wait"}`} aria-hidden />
+        <span className="wb-action-text"><span className="wb-feed-project">{row.project}</span><strong>{row.title}</strong>
+          <small>{row.label}{row.job && isLive(row.status) ? ` · ${t("jobs.elapsed", { time: durText(Date.now() - row.time, t) })}` : ""}</small>
+        </span>
+      </button>
+      <div className="wb-action-buttons">
+        {row.job && isLive(row.status) && <MiniAction label={t("jobs.actions.stop")} icon={<Square size={13} />} busy={busy === row.job.id} onClick={() => void stop(row.job!).catch(() => {})} />}
+        <MiniAction label={t("jobs.actions.log")} icon={<ChevronRight size={13} />} onClick={row.open} />
       </div>
-    </div>
-  );
+    </div>)}</div>
+  </div>;
 }
 
-/* ------------------------------------------------------------ 예약과 반복 */
+/* ------------------------------------------------------------ schedules */
 
 function scheduleText(row: TaskRow, t: TFunction) {
   const schedule = row.def.schedule;
@@ -430,6 +382,8 @@ function scheduleText(row: TaskRow, t: TFunction) {
       ? (schedule.date ?? t("schedules.onDate"))
       : schedule.kind === "weekdays"
         ? t("schedules.weekdays")
+        : schedule.kind === "weekly"
+          ? (schedule.days ?? []).map((day) => t(`settings:tasks.days.${day}`)).join("·")
         : t("schedules.everyday");
   return `${kind} ${schedule.time}`;
 }
@@ -487,7 +441,7 @@ export function ScheduledTasksWidget() {
     }
   }
 
-  /** 돌고 있는 같은 작업을 멈춘다 — 버튼 하나가 실행과 중단을 겸한다. */
+  /** Stops the same task if it is running — one button both runs and stops it. */
   async function stopRun(row: TaskRow, job: Job) {
     setBusy(`${row.def.id}:run`);
     setMessage(null);
@@ -589,9 +543,9 @@ export function ScheduledTasksWidget() {
   );
 }
 
-/* ------------------------------------------------------------------ 할 일 */
+/* ------------------------------------------------------------------ todos */
 
-/** 오늘 일지의 체크리스트. 개발 항목이나 자동화 작업가 아니라 일지 문서의 한 줄이다. */
+/** Checklist from today's journal. A line in the journal document, not a work item or automation task. */
 export function ChecklistWidget({ onOpen }: { onOpen: () => void }) {
   const { t } = useTranslation("dashboard");
   const todos = useApp((s) => s.todos);
@@ -638,7 +592,7 @@ export function ChecklistWidget({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-/* -------------------------------------------------------------- 읽을거리 */
+/* -------------------------------------------------------------- reading */
 
 export function ReadingWidget({ onOpen }: { onOpen: () => void }) {
   const { t } = useTranslation("dashboard");
@@ -685,7 +639,7 @@ export function ReadingWidget({ onOpen }: { onOpen: () => void }) {
       await api.articleSetState({ articleId: article.id, read: true });
       setArticles((prev) => prev.filter((row) => row.id !== article.id));
     } catch {
-      // 목록은 30초마다 다시 채워진다
+      // The list refills every 30 seconds
     } finally {
       setBusy(null);
     }
@@ -741,15 +695,18 @@ export function ReadingWidget({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-/* ------------------------------------------------------------- 오늘 활동 */
+/* ------------------------------------------------------------- today activity */
 
 /**
- * 오늘 하루를 24시간 타임라인 한 줄로 그린다. 실행은 시작·종료 시각 그대로 놓이고
- * 지금 시각에는 세로선이 선다 — "오늘 무슨 일이 있었나"를 목록이 아니라 위치로
- * 읽히게 하는 것이 이 위젯의 존재 이유다. 캘린더 화면 머리에서도 같은 것을 쓴다.
+ * Draws today as a single 24-hour timeline row. Jobs sit at their start/end
+ * times and a vertical line marks the current moment — this widget exists to
+ * make "what happened today" readable by position, not by list. The calendar
+ * screen header reuses the same thing.
  */
 export function TodayActivity({
   project,
+  projects = [],
+  runs = [],
   events,
   work,
   onOpenWork,
@@ -758,6 +715,8 @@ export function TodayActivity({
   compact,
 }: {
   project?: Project;
+  projects?: Project[];
+  runs?: HarnessRun[];
   events: CalendarEvent[];
   work: WorkItem[];
   onOpenWork: (id: string) => void;
@@ -773,41 +732,43 @@ export function TodayActivity({
   const refreshJobs = useApp((s) => s.refreshJobs);
   const refreshTodos = useApp((s) => s.refreshTodos);
   const [busyTodo, setBusyTodo] = useState<number | null>(null);
+  const nameOfProject = (id: string | null) => projects.find((entry) => entry.id === id)?.name;
   const today = localDate();
   const dayStart = new Date(`${today}T00:00:00`).getTime();
   const dayEnd = dayStart + 86_400_000;
-  const anyLive = jobs.some(
-    (job) => job.status === "running" || job.status === "queued",
-  );
-  // 실행이 없어도 "지금" 표시선은 움직여야 하므로 느리게라도 계속 돈다.
+  const isLive = (status: string) => ["running", "queued", "starting"].includes(status);
+  const activity = [
+    ...jobs.map((job) => ({ id: `job:${job.id}`, label: job.label, status: job.status,
+      from: job.startedAtMs ?? job.createdAtMs, to: job.finishedAtMs ?? Date.now(),
+      statusLabel: jobStatusLabel(job.status, t), open: onOpenJobs })),
+    ...runs.filter((run) => !project || run.projectId === project.id).map((run) => ({
+      id: `run:${run.id}`, label: `${nameOfProject(run.projectId) ?? run.projectId} · ${work.find((item) => item.id === run.workId)?.title ?? run.workId}`,
+      status: run.status, from: new Date(run.createdAt).getTime(),
+      to: isLive(run.status) ? Date.now() : new Date(run.updatedAt).getTime(),
+      statusLabel: t(`workbench:runStatus.${run.status}`, { defaultValue: run.status }),
+      open: () => useApp.getState().openRun(run.id, run.projectId),
+    })),
+  ].filter((entry) => entry.from < dayEnd && (isLive(entry.status) || entry.to >= dayStart));
+  const anyLive = activity.some((entry) => isLive(entry.status));
   useTicker(anyLive ? 1000 : 30000);
-
   useEffect(() => {
     if (!project && !todos) refreshTodos().catch(() => {});
   }, [project, todos, refreshTodos]);
-  useEffect(() => {
-    refreshJobs().catch(() => {});
-  }, [refreshJobs]);
+  useEffect(() => { refreshJobs().catch(() => {}); }, [refreshJobs]);
 
-  const todayJobs = jobs.filter((job) => {
-    const from = job.startedAtMs ?? job.createdAtMs;
-    return from >= dayStart && from < dayEnd;
-  });
   const todayEvents = events.filter(
     (event) => event.date <= today && (event.endDate ?? event.date) >= today,
   );
   const dueToday = work.filter(
-    (item) => item.dueDate === today && item.status !== "done",
+    (item) => item.dueDate === today && !isClosedStatus(item.status),
   );
   const doneToday = work.filter(
     (item) => item.status === "done" && item.updatedAt.slice(0, 10) === today,
   );
   const counts = {
-    live: todayJobs.filter(
-      (job) => job.status === "running" || job.status === "queued",
-    ).length,
-    success: todayJobs.filter((job) => job.status === "success").length,
-    failed: todayJobs.filter((job) => job.status === "failed").length,
+    live: activity.filter((entry) => isLive(entry.status)).length,
+    success: activity.filter((entry) => entry.status === "success").length,
+    failed: activity.filter((entry) => entry.status === "failed").length,
   };
   const todoDone = todos?.today.filter((todo) => todo.checked).length ?? 0;
   const todoTotal = todos?.today.length ?? 0;
@@ -819,7 +780,7 @@ export function TodayActivity({
       await api.toggleTodo("today", index, checked);
       await refreshTodos();
     } catch {
-      // 일지 문서가 없으면 토글은 조용히 실패한다
+      // If the journal document is missing, the toggle fails silently
     } finally {
       setBusyTodo(null);
     }
@@ -828,22 +789,18 @@ export function TodayActivity({
   return (
     <div className={cx("wb-today", compact && "is-compact")}>
       <div className="wb-today-stats">
-        <button type="button" className="wb-today-stat" onClick={onOpenJobs}>
+        <div className="wb-today-stat is-static">
           <strong>{counts.live}</strong>
           <span>{t("today.live")}</span>
-        </button>
-        <button type="button" className="wb-today-stat" onClick={onOpenJobs}>
+        </div>
+        <div className="wb-today-stat is-static">
           <strong>{counts.success}</strong>
           <span>{t("today.successRuns")}</span>
-        </button>
-        <button
-          type="button"
-          className={cx("wb-today-stat", counts.failed > 0 && "is-warn")}
-          onClick={onOpenJobs}
-        >
+        </div>
+        <div className={cx("wb-today-stat is-static", counts.failed > 0 && "is-warn")}>
           <strong>{counts.failed}</strong>
           <span>{t("today.failed")}</span>
-        </button>
+        </div>
         {!project && <div className="wb-today-stat is-static">
           <strong>
             {todoDone}
@@ -863,9 +820,9 @@ export function TodayActivity({
               style={{ left: `${(hour / 24) * 100}%` }}
             />
           ))}
-          {todayJobs.map((job) => {
-            const from = job.startedAtMs ?? job.createdAtMs;
-            const to = Math.max(job.finishedAtMs ?? Date.now(), from + 120_000);
+          {activity.map((job) => {
+            const from = Math.max(job.from, dayStart);
+            const to = Math.max(job.to, from + 120_000);
             const left = dayFraction(from, dayStart) * 100;
             const width = Math.min(
               100 - left,
@@ -874,19 +831,16 @@ export function TodayActivity({
                 (dayFraction(to, dayStart) - dayFraction(from, dayStart)) * 100,
               ),
             );
-            const text = `${clockText(from)} ${job.label} · ${jobStatusLabel(
-              job.status,
-              t,
-            )}`;
+            const text = `${clockText(from)} ${job.label} · ${job.statusLabel}`;
             return (
               <button
                 key={job.id}
                 type="button"
-                className={`wb-today-bar is-${JOB_TONE[job.status] ?? "run"}`}
+                className={`wb-today-bar is-${JOB_TONE[job.status] ?? (isLive(job.status) ? "run" : "wait")}`}
                 style={{ left: `${left}%`, width: `${width}%` }}
                 title={text}
                 aria-label={text}
-                onClick={onOpenJobs}
+                onClick={job.open}
               />
             );
           })}
@@ -901,7 +855,7 @@ export function TodayActivity({
             <span key={h}>{t("today.hour", { h })}</span>
           ))}
         </div>
-        {!todayJobs.length && (
+        {!activity.length && (
           <p className="wb-today-hint">{t("today.noRuns")}</p>
         )}
       </div>
@@ -943,7 +897,7 @@ export function TodayActivity({
               <span className="wb-dot is-ready" />
               <span className="wb-action-text">
                 <strong>{event.title}</strong>
-                <small>{t("today.eventTag")}</small>
+                <small>{nameOfProject(event.projectId) && `${nameOfProject(event.projectId)} · `}{t("today.eventTag")}</small>
               </span>
             </button>
           ))}
@@ -957,7 +911,7 @@ export function TodayActivity({
               <span className="wb-dot is-wait" />
               <span className="wb-action-text">
                 <strong>{item.title}</strong>
-                <small>{t("today.dueTag")}</small>
+                <small>{nameOfProject(item.projectId) && `${nameOfProject(item.projectId)} · `}{t("today.dueTag")}</small>
               </span>
             </button>
           ))}
@@ -971,7 +925,7 @@ export function TodayActivity({
               <CircleCheck size={13} className="wb-done-check" />
               <span className="wb-action-text">
                 <strong>{item.title}</strong>
-                <small>{t("today.doneTag")}</small>
+                <small>{nameOfProject(item.projectId) && `${nameOfProject(item.projectId)} · `}{t("today.doneTag")}</small>
               </span>
             </button>
           ))}

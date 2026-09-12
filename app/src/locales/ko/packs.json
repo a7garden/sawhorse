@@ -4,7 +4,8 @@
       "installed": "설치됨",
       "marketplace": "마켓플레이스",
       "skill": "스킬",
-      "workflow": "워크플로"
+      "workflow": "워크플로",
+      "feature": "기능"
     }
   },
   "packages": {
@@ -22,7 +23,9 @@
     "openStudio": "워크플로 스튜디오",
     "nodes": "노드 {{n}}개"
   },
-  "header": { "title": "확장 관리" },
+  "header": {
+    "title": "확장 관리"
+  },
   "actions": {
     "applyWorkspace": "작업공간에 반영",
     "refresh": "새로고침",
@@ -35,12 +38,19 @@
     "requiredParamsTitle": "필수 입력이 있는 액션은 해당 화면에서 실행하세요",
     "cancel": "취소"
   },
-  "broken": { "count": "읽지 못한 확장 {{n}}건" },
+  "broken": {
+    "count": "읽지 못한 확장 {{n}}건"
+  },
   "core": {
     "title": "연결된 기능",
     "subtitle": "기능별 화면과 연결 상태를 관리합니다.",
-    "feeds": { "name": "읽을거리", "desc": "RSS 구독 · 읽기 목록 · 기사 보관" },
-    "github": { "desc": "저장소 탐색 · 프로젝트 가져오기 · 이슈 동기화" },
+    "feeds": {
+      "name": "읽을거리",
+      "desc": "RSS 구독 · 읽기 목록 · 기사 보관"
+    },
+    "github": {
+      "desc": "저장소 탐색 · 프로젝트 가져오기 · 이슈 동기화"
+    },
     "coreExtension": "코어 확장",
     "installed": "설치됨",
     "available": "설치 가능",
@@ -138,9 +148,17 @@
     "native": "내장 화면",
     "declarative": "선언형"
   },
-  "actionsList": { "count": "액션 {{n}}개" },
-  "schedule": { "weekdays": "평일", "daily": "매일" },
-  "source": { "builtin": "내장", "user": "사용자" },
+  "actionsList": {
+    "count": "액션 {{n}}개"
+  },
+  "schedule": {
+    "weekdays": "평일",
+    "daily": "매일"
+  },
+  "source": {
+    "builtin": "내장",
+    "user": "사용자"
+  },
   "packAgents": {
     "label": "에이전트",
     "detected": "감지됨",
@@ -154,8 +172,14 @@
     "explain2": "으로 표시합니다 — 덮어쓰려면 「업데이트」를 쓰세요.",
     "marketplaceExists": "마켓플레이스 플러그인이 이미 설치되어 있습니다 ({{plugins}}). 같은 내용이므로 앱은 사본을 만들지 않습니다 — 스킬은 그 플러그인이 제공합니다."
   },
-  "settings": { "title": "확장 설정", "deleteRow": "삭제", "addRow": "줄 추가" },
-  "workspace": { "creates": "작업공간에 만드는 것" },
+  "settings": {
+    "title": "확장 설정",
+    "deleteRow": "삭제",
+    "addRow": "줄 추가"
+  },
+  "workspace": {
+    "creates": "작업공간에 만드는 것"
+  },
   "report": {
     "processed": "처리 {{n}}건",
     "skipped": "건너뜀 {{n}}건",
@@ -185,7 +209,9 @@
     "open": "열기",
     "loadingDoc": "문서를 읽는 중…"
   },
-  "select": { "project": "프로젝트 선택" },
+  "select": {
+    "project": "프로젝트 선택"
+  },
   "steps": {
     "intro": "시작",
     "programs": "기본 환경",
@@ -197,7 +223,7 @@
   },
   "defaultBadge": "기본",
   "wizard": {
-    "title": "sawhorse 워크벤치 시작",
+    "title": "Sawhorse 시작",
     "intro": {
       "lead": "워크플로가 일하는 방식을 정의합니다.",
       "rest": "Sawhorse는 단계·산출물·승인·확장을 결정론적으로 이식하는 플랫폼입니다. 특정 산출물 형식이나 개발 방식은 코어가 아니라 선택한 워크플로에 속합니다.",
@@ -274,7 +300,11 @@
     "minVersion": "{{version}} 이상 필요",
     "get": "받기",
     "blocking": "필수 항목이 빠져 있습니다 ({{list}}). 지금은 그냥 넘어가도 되고, 설치한 뒤 설정 → 진단에서 다시 검사하면 됩니다.",
-    "need": { "required": "필수", "recommended": "권장", "optional": "선택" }
+    "need": {
+      "required": "필수",
+      "recommended": "권장",
+      "optional": "선택"
+    }
   },
   "agentStep": {
     "introA": "이 PC에서 찾은 에이전트입니다. 하나를 눌러",
@@ -370,5 +400,47 @@
     "conflict": "사용자 수정 충돌",
     "draftMeta": "근거 {{provenance}}개 · {{chars}}자",
     "viewDraft": "초안 보기"
+  },
+  "marketplace": {
+    "title": "필요한 만큼, 작업 공간을 넓히세요",
+    "subtitle": "에이전트의 스킬부터 작업 흐름, 앱의 새로운 기능까지. 필요한 확장을 한곳에서 찾아보세요.",
+    "typeFilter": "확장 유형",
+    "all": "전체 둘러보기",
+    "multiType": "하나의 확장은 여러 종류의 기능을 함께 제공할 수 있습니다.",
+    "types": {
+      "skill": {
+        "title": "스킬 확장",
+        "desc": "에이전트가 활용하는 지식과 작업 지침"
+      },
+      "workflow": {
+        "title": "워크플로 확장",
+        "desc": "작업 단계, 산출물과 승인 흐름"
+      },
+      "feature": {
+        "title": "기능 확장",
+        "desc": "화면, 액션과 외부 서비스 연결"
+      }
+    },
+    "defaultSource": "기본 제공",
+    "skillsSourceDesc": "별도 연결 없이 공개 스킬을 검색하고 npx skills로 설치하세요.",
+    "searchPlaceholder": "어떤 스킬이 필요한가요? 예: react, design, testing",
+    "explore": "주제로 탐색",
+    "globalScope": "전역 설치 · 선택한 에이전트의 모든 프로젝트에서 사용",
+    "startSearch": "에이전트에게 필요한 스킬을 찾아보세요",
+    "startSearchDesc": "검색어를 입력하거나 위 주제를 선택하면 skills.sh의 검색 결과를 보여줍니다.",
+    "searching": "skills.sh에서 스킬을 찾고 있습니다…",
+    "results": "“{{query}}” 검색 결과 {{count}}개",
+    "retrySearch": "검색 다시 시도",
+    "installSuccess": "{{name}}을 선택한 에이전트에 설치했습니다.",
+    "workflowSourceDesc": "확장에 포함된 작업 흐름을 확인하고, 라이브러리에서 프로젝트에 적용하세요.",
+    "manageWorkflows": "워크플로 관리",
+    "viewWorkflows": "워크플로 보기",
+    "workflowEmpty": "아직 워크플로를 제공하는 패키지가 없습니다. 워크플로 관리에서 라이브러리를 열거나 아래에서 외부 패키지를 연결하세요.",
+    "featureSourceDesc": "Sawhorse의 기능과 설치된 패키지를 둘러보고 사용 여부를 관리하세요.",
+    "connectionsDesc": "저장소와 이슈를 연결하고 RSS 구독과 읽기 목록을 관리합니다.",
+    "additionalSource": "외부 확장 카탈로그 연결",
+    "additionalSourceDesc": "팀이나 배포자가 제공하는 Sawhorse 카탈로그 주소를 추가하세요. skills.sh는 주소 설정 없이 기본으로 사용할 수 있습니다.",
+    "invalidCatalog": "올바른 Sawhorse 확장 카탈로그가 아닙니다.",
+    "package": "확장 패키지"
   }
 }

@@ -23,12 +23,14 @@ import type {
   VaultNode,
 } from "./types";
 
-// vault-changed 마다 볼트 전체 스캔을 하지 않도록 어텐션 갱신을 모은다.
+// Batches attention refreshes so vault-changed does not trigger a full vault scan each time.
 let attentionTimer: number | undefined;
+// Batches the cheap list re-reads (improvements/todos/tree) the same way as the attention probe.
+let refreshTimer: number | undefined;
 
 /**
- * 코어 페이지는 호스트가 항상 들고 있고, 그 사이의 화면은 팩이 기여한다.
- * 팩 화면의 id 는 `view:<packId>:<viewId>`.
+ * Core pages are always held by the host; the screens between them are contributed by packs.
+ * A pack screen's id is `view:<packId>:<viewId>`.
  */
 export const CORE_PAGES = [
   "work",
@@ -45,6 +47,7 @@ export const CORE_PAGES = [
   "harness",
   "knowledge",
   "projects",
+  "project-library",
   "workflows",
   "schemas",
   "onboarding",
@@ -61,7 +64,7 @@ export const CORE_PAGES = [
 export type CorePage = (typeof CORE_PAGES)[number];
 export type PageId = CorePage | `view:${string}:${string}`;
 
-/** 팩 이전 코드가 부르던 화면 이름 → 그 화면을 가진 네이티브 뷰. */
+/** Screen names that pre-pack code used → the native view owning that screen. */
 const LEGACY_PAGE_ALIASES = ["improve", "issues"] as const;
 
 function isCore(id: string): id is CorePage {
@@ -80,7 +83,7 @@ export function parseViewPage(
   return packId && viewId ? { packId, viewId } : null;
 }
 
-/** 작업대 바깥(커맨드 팔레트 등)에서 특정 작업 상세를 열어 달라는 요청. WorkbenchPage 가 소비하고 지운다. */
+/** Request to open a specific work item from outside the workbench (command palette etc.). WorkbenchPage consumes and clears it. */
 export type OpenWorkRequest = {
   workId: string;
   artifact?: string;
@@ -91,7 +94,7 @@ interface AppState {
   workflowToEdit: WorkflowDefinition | null;
   page: PageId;
   setPage: (p: string) => void;
-  /** 커맨드 팔레트가 작업 상세 열기를 요청하는 통로. */
+  /** Channel through which the command palette requests opening a work item. */
   openWorkRequest: OpenWorkRequest | null;
   openWork: (request: OpenWorkRequest) => void;
   clearOpenWork: () => void;
@@ -102,11 +105,11 @@ interface AppState {
   nav: NavEntry[];
   packs: PackRegistryView | null;
   agents: AgentPresence[];
-  /** 설정값을 정상화한 기본 에이전트 id */
+  /** Default agent id with the setting value normalized */
   defaultAgent: string;
   requirements: RequirementStatus[];
   schedules: ScheduleView[];
-  /** 협업 세션 목록 — collab-changed 이벤트마다 다시 읽는다. */
+  /** Collaboration session list — re-read on every collab-changed event. */
   collabSessions: CollabSession[];
 
   config: ConfigView | null;
@@ -150,8 +153,8 @@ export const useApp = create<AppState>((set, get) => ({
   page: "overview",
 
   /**
-   * 팩 화면 id 를 그대로 받고, 예전 이름(`improve`·`todos`…)은 그 화면을 가진 뷰로 옮긴다.
-   * 팩이 꺼져 화면이 사라졌으면 홈으로 — 존재하지 않는 페이지에 갇히지 않게.
+   * Accepts pack screen ids as-is; legacy names (`improve`·`todos`…) map to the view owning that screen.
+   * If the pack is disabled and the screen is gone, go home — so the user is never stuck on a nonexistent page.
    */
   setPage: (p) => {
     if (["board", "issues", "improve"].includes(p)) return set({ page: "work" });
@@ -212,8 +215,8 @@ export const useApp = create<AppState>((set, get) => ({
     initialized = true;
     if (!("__TAURI_INTERNALS__" in window)) {
       if (new URLSearchParams(window.location.search).get("preview") === "1") {
-        // 프리뷰 핸들러가 없는 커맨드는 던진다. 브라우저 체험은 위젯이 비는 것보다
-        // 화면 전체가 죽는 쪽이 훨씬 나쁘므로 개별 실패를 삼킨다.
+        // Commands without a preview handler throw. In the browser demo, the whole screen
+        // dying is far worse than an empty widget, so individual failures are swallowed.
         await Promise.all(
           [
             get().refreshConfig(),
@@ -245,10 +248,14 @@ export const useApp = create<AppState>((set, get) => ({
     );
     unlisteners.push(
       await listen<{ areas: string[] }>(EVENTS.vaultChanged, () => {
-        void get().refreshImprovements();
-        void get().refreshTodos();
-        void get().refreshTree();
-        // 어텐션 프로브는 볼트 전체를 읽는다. 워처 이벤트가 몰려도 스캔은 한 번만.
+        // Watcher bursts fire many events at once; collapse them into one batched re-read.
+        clearTimeout(refreshTimer);
+        refreshTimer = window.setTimeout(() => {
+          void get().refreshImprovements();
+          void get().refreshTodos();
+          void get().refreshTree();
+        }, 500);
+        // The attention probe reads the whole vault. Even if watcher events pile up, scan only once.
         clearTimeout(attentionTimer);
         attentionTimer = window.setTimeout(
           () => void get().refreshAttention(),
@@ -297,7 +304,7 @@ export const useApp = create<AppState>((set, get) => ({
       api.listNav().catch(() => [] as NavEntry[]),
     ]);
     set({ packs, nav });
-    // 보고 있던 화면이 팩과 함께 사라졌으면 홈으로
+    // If the screen being viewed vanished along with its pack, go home
     const page = get().page;
     const parsed = parseViewPage(page);
     if (
@@ -324,11 +331,26 @@ export const useApp = create<AppState>((set, get) => ({
       inboxCount: await api.inboxCount().catch(() => 0),
     });
   },
-  refreshTodos: async () => set({ todos: await api.listTodos() }),
-  refreshJobs: async () => set({ jobs: await api.listJobs() }),
-  refreshMissed: async () => set({ missed: await api.listMissed() }),
-  refreshDiagnostics: async () => set({ diag: await api.diagnostics() }),
-  refreshTree: async () => set({ vaultTree: await api.listVaultTree() }),
+  refreshTodos: async () => {
+    const v = await api.listTodos().catch(() => null);
+    if (v) set({ todos: v });
+  },
+  refreshJobs: async () => {
+    const v = await api.listJobs().catch(() => null);
+    if (v) set({ jobs: v });
+  },
+  refreshMissed: async () => {
+    const v = await api.listMissed().catch(() => null);
+    if (v) set({ missed: v });
+  },
+  refreshDiagnostics: async () => {
+    const v = await api.diagnostics().catch(() => null);
+    if (v) set({ diag: v });
+  },
+  refreshTree: async () => {
+    const v = await api.listVaultTree().catch(() => null);
+    if (v) set({ vaultTree: v });
+  },
   refreshAudit: async () => {
     const [audit, unpromoted] = await Promise.all([
       api.auditVault(),

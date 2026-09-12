@@ -8,6 +8,7 @@ test("intent-first creation, refinement, persistence and immutable publishing", 
     .locator("aside nav")
     .getByRole("button", { name: "워크플로", exact: true })
     .click();
+  await page.getByRole("button", { name: "새 워크플로", exact: true }).first().click();
   await expect(
     page.getByRole("button", { name: "초안 만들어 줘", exact: true }),
   ).toBeDisabled();
@@ -73,6 +74,7 @@ test("intent-first creation, refinement, persistence and immutable publishing", 
 test("generated workflow drafts survive leaving before manual save", async ({page}) => {
   await page.goto("/?preview=1");
   await page.locator("aside nav").getByRole("button",{name:"워크플로",exact:true}).click();
+  await page.getByRole("button",{name:"새 워크플로",exact:true}).first().click();
   await page.getByRole("button",{name:/기능 개발 요청 정리/}).click();
   await page.getByRole("button",{name:"초안 만들어 줘",exact:true}).click();
   await expect(page.getByRole("status")).toContainText("체험용 예시 초안");

@@ -39,7 +39,7 @@ test("dashboard retains interrupted tasks and opens their execution details", as
   await page.locator(".wb-run-list > button").filter({ hasText: "실행 중" }).click();
   await expect(page.getByRole("button", { name: "herdr로 보기", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "다시 실행", exact: true })).toHaveCount(0);
-  // 다시 실행하지 않고도 목록에서 내릴 수 있고, 되돌리는 길이 같은 자리에 남는다.
+  // The run can be dismissed from the list without re-running, and undo stays in the same place.
   await page.locator(".wb-run-list > button").filter({ hasText: "조기 종료" }).click();
   const detail = page.locator(".wb-run-detail");
   await detail.getByRole("button", { name: "닫기", exact: true }).click();

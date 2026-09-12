@@ -1,9 +1,9 @@
-// 예약 실행기. 하드코딩된 루틴 3개가 아니라 **활성 팩이 선언한 예약 가능 액션**을 돌린다.
-// 놓친 예약은 절대 자동 보상 실행하지 않는다 — 알림 카드를 띄우고 사용자 확인을 기다린다
-// (제품 결정).
+// Scheduled-run executor. It runs the **schedulable actions declared by active packs**, not three
+// hardcoded routines. Missed schedules are never auto-compensated — a notification card is shown
+// and user confirmation awaited (product decision).
 //
-// `decide()` 는 순수 함수로 그대로 둔다: 형제 작업(에이전트가 만드는 예약)이 같은 함수에
-// 엔트리를 더 넣을 예정이라, 판정 규칙은 한 곳에 남아 있어야 한다.
+// `decide()` stays a pure function: sibling work (agent-created schedules) will add more entries
+// to the same function, so the decision rules must remain in one place.
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, Timelike, Weekday};
 use std::sync::Arc;
 
@@ -52,17 +52,23 @@ pub fn decide(
     }
 }
 
-/// `weekdays` 예약은 주말에 아예 대상이 아니다 — `decide()` 를 건드리지 않고 앞에서 거른다.
+/// `weekdays` schedules are not due at all on weekends — filtered out up front, without touching `decide()`.
 pub fn due_today(kind: &str, now: DateTime<Local>) -> bool {
     kind != "weekdays" || !matches!(now.weekday(), Weekday::Sat | Weekday::Sun)
 }
 
-/// 팩 이전 시절의 루틴 3종. 팩 레지스트리를 못 읽는 환경(플러그인 루트 미발견)에서
-/// 예약이 조용히 멈추지 않도록 남겨 둔 안전망이다.
+fn due_on_day(entry: &ScheduledEntry, now: DateTime<Local>) -> bool {
+    due_today(&entry.kind, now)
+        && (entry.kind != "weekly" || entry.days.contains(&now.weekday().num_days_from_monday()))
+}
+
+/// The three pre-pack-era routines. A safety net kept so scheduling does not silently stop in
+/// environments that cannot read the pack registry (plugin root not found).
 pub const LEGACY_ROUTINES: [&str; 3] = ["morning", "lunch", "evening"];
 
-/// 호스트 내장 작업 엔트리의 pack_id. 팩이 선언한 예약과 구분하는 표식이다 —
-/// 이 값이 붙은 엔트리는 예약 정본이 config 가 아니라 작업 정의 파일이다.
+/// The pack_id of host built-in task entries. A marker distinguishing them from pack-declared
+/// schedules — entries carrying this value take their schedule truth from the task definition
+/// file, not config.
 pub const TASKS_PACK_ID: &str = "tasks";
 
 fn legacy_entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
@@ -83,12 +89,13 @@ fn legacy_entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
                 time: s.time.clone(),
                 enabled: s.enabled,
                 date: None,
+                days: vec![],
             }
         })
         .collect()
 }
 
-/// 호스트 내장 작업(사람이 승인한 에이전트 예약)을 팩 엔트리와 같은 모양으로.
+/// Host built-in tasks (human-approved agent schedules) shaped like pack entries.
 fn tasks_entries() -> Vec<ScheduledEntry> {
     let root = crate::tasks::workbench_root();
     crate::tasks::list_tasks(&root)
@@ -99,6 +106,7 @@ fn tasks_entries() -> Vec<ScheduledEntry> {
             let kind = match s.kind {
                 crate::tasks::ScheduleKind::Daily => "daily",
                 crate::tasks::ScheduleKind::Weekdays => "weekdays",
+                crate::tasks::ScheduleKind::Weekly => "weekly",
                 crate::tasks::ScheduleKind::Once => "once",
             };
             Some(ScheduledEntry {
@@ -110,28 +118,62 @@ fn tasks_entries() -> Vec<ScheduledEntry> {
                 time: s.time,
                 enabled: t.enabled,
                 date: s.date,
+                days: s.days,
             })
         })
         .collect()
 }
 
-/// 이번 틱이 볼 예약 목록.
+/// The schedule list this tick examines.
 pub fn entries(view: &config::ConfigView) -> Vec<ScheduledEntry> {
     let reg = packs::load_registry(&view.packs.enabled);
     let from_packs = packs::scheduled_entries(&reg, view);
-    let mut all = if from_packs.is_empty() {
+    let all = if from_packs.is_empty() {
         legacy_entries(view)
     } else {
         from_packs
     };
-    all.extend(tasks_entries());
+    let saved = crate::tasks::list_tasks(&crate::tasks::workbench_root());
+    // Even an override with no schedule must suppress the pack's default schedule.
+    let saved_entries = tasks_entries()
+        .into_iter()
+        .filter(|entry| {
+            let Some(action) = saved
+                .iter()
+                .find(|task| task.id == entry.key)
+                .and_then(|task| task.action.as_ref())
+            else {
+                return true;
+            };
+            if action.id == "core.promote" || LEGACY_ROUTINES.contains(&action.id.as_str()) {
+                return true;
+            }
+            action.id.split_once('.').is_some_and(|(pack, action)| {
+                reg.enabled().any(|p| p.manifest.id == pack) && reg.action(pack, action).is_some()
+            })
+        })
+        .collect();
+    apply_saved_entries(all, &saved, saved_entries)
+}
+
+fn apply_saved_entries(
+    mut all: Vec<ScheduledEntry>,
+    saved: &[crate::tasks::TaskDef],
+    entries: Vec<ScheduledEntry>,
+) -> Vec<ScheduledEntry> {
+    all.retain(|entry| !saved.iter().any(|task| task.id == entry.key));
+    all.extend(entries);
     all
 }
 
-/// 예약 하나를 잡 요청으로. 팩 액션이면 `action`, 안전망 엔트리면 예전 `routine` 잡.
+/// One schedule as a job request. Pack actions become `action` jobs; safety-net entries become the legacy `routine` job.
 fn request_for(entry: &ScheduledEntry) -> JobRequest {
     if entry.pack_id == TASKS_PACK_ID {
-        // 호스트 내장 작업 — 작업 정의 파일의 프롬프트를 그대로 돌린다.
+        if let Ok(task) = crate::tasks::get_task(&crate::tasks::workbench_root(), &entry.action_id)
+        {
+            return request_for_task(&task);
+        }
+        // Host built-in task — runs the prompt from the task definition file as is.
         JobRequest {
             kind: "task".into(),
             task_id: Some(entry.action_id.clone()),
@@ -153,7 +195,7 @@ fn request_for(entry: &ScheduledEntry) -> JobRequest {
     }
 }
 
-/// `once` 예약 판정. 지정 날짜에 단 한 번; 그 날짜에 돌렸으면 끝난다.
+/// `once` schedule decision. Runs exactly once on the given date; once run on that date, it is done.
 fn decide_once(
     now: DateTime<Local>,
     entry: &ScheduledEntry,
@@ -187,8 +229,8 @@ fn decide_once(
     }
 }
 
-/// 예전 state.json 은 `last_run["morning"]` 을 갖고 있다. 정규 키가 없으면 그 키를 본다 —
-/// 업그레이드한 날 아침 루틴이 한 번 더 도는 것을 막는다.
+/// The old state.json carries `last_run["morning"]`. When the canonical key is absent, look at that
+/// key — it prevents the morning routine from running twice on the day of the upgrade.
 fn last_run_of(state: &AppState, entry: &ScheduledEntry) -> Option<String> {
     let st = state.state.lock();
     st.last_run
@@ -205,7 +247,7 @@ fn mark_ran(state: &AppState, entry: &ScheduledEntry, today: &str) {
             .retain(|m| !(m.routine == entry.key && m.date == today));
     }
     if entry.kind == "once" && entry.pack_id == TASKS_PACK_ID {
-        // 1회 작업은 소화 후 조용히 꺼진다 — 다음 날 같은 카드가 다시 생기지 않게.
+        // One-shot tasks switch themselves off after firing — so the same card does not reappear the next day.
         let _ = crate::tasks::set_enabled(&crate::tasks::workbench_root(), &entry.action_id, false);
     }
 }
@@ -267,7 +309,7 @@ pub fn tick_once(
             }
             continue;
         }
-        if !due_today(&entry.kind, now) {
+        if !due_on_day(&entry, now) {
             continue;
         }
         match decide(now, time, entry.enabled, last.as_deref(), &today, booted_at) {
@@ -327,7 +369,7 @@ fn enqueue_entry(
     Ok(job)
 }
 
-/// 예약 키(`si.morning`) 또는 예전 루틴 이름(`morning`)으로 지금 실행.
+/// Runs now by schedule key (`si.morning`) or legacy routine name (`morning`).
 pub fn run_scheduled_now(
     mgr: &JobManager,
     state: &AppState,
@@ -349,7 +391,7 @@ pub fn run_scheduled_now(
         return Ok(job);
     }
     if LEGACY_ROUTINES.contains(&key) {
-        // 팩이 꺼져 있어도 트레이 메뉴는 동작해야 한다
+        // The tray menu must work even when packs are disabled
         return mgr.enqueue(JobRequest {
             kind: "routine".into(),
             routine: Some(key.into()),
@@ -359,8 +401,9 @@ pub fn run_scheduled_now(
     Err(format!("알 수 없는 예약: {key}"))
 }
 
-/// 이 키로 "지금 실행"하면 만들어질 잡 요청. 화면이 중복 판정 키를 계산할 때 쓴다 —
-/// `run_scheduled_now` 과 같은 순서로 찾아야 버튼 상태와 실제 실행이 어긋나지 않는다.
+/// The job request that "run now" with this key would create. Used by the UI to compute the
+/// dedup key — it must look up in the same order as `run_scheduled_now` or button state and
+/// actual execution drift apart.
 pub fn request_for_key(key: &str) -> Option<JobRequest> {
     let view = config::load_view();
     if let Some(entry) = entries(&view)
@@ -380,12 +423,33 @@ pub fn request_for_key(key: &str) -> Option<JobRequest> {
 }
 
 fn manual_task_request(root: &std::path::Path, id: &str) -> Result<JobRequest, String> {
-    crate::tasks::get_task(root, id)?;
-    Ok(JobRequest {
+    Ok(request_for_task(&crate::tasks::get_task(root, id)?))
+}
+
+pub fn request_for_task(task: &crate::tasks::TaskDef) -> JobRequest {
+    if let Some(action) = &task.action {
+        let mut request = JobRequest {
+            project: task.project.clone(),
+            params: action.params.clone(),
+            ..Default::default()
+        };
+        if action.id == "core.promote" {
+            request.kind = "promote".into();
+        } else if LEGACY_ROUTINES.contains(&action.id.as_str()) {
+            request.kind = "routine".into();
+            request.routine = Some(action.id.clone());
+        } else if let Some((pack, action)) = action.id.split_once('.') {
+            request.kind = "action".into();
+            request.pack_id = Some(pack.into());
+            request.action_id = Some(action.into());
+        }
+        return request;
+    }
+    JobRequest {
         kind: "task".into(),
-        task_id: Some(id.into()),
+        task_id: Some(task.id.clone()),
         ..Default::default()
-    })
+    }
 }
 
 /// Missed-card dismissal. `run=true` also enqueues the entry immediately.
@@ -423,7 +487,7 @@ pub fn list_missed(state: &AppState) -> Vec<MissedEntry> {
     state.state.lock().missed.clone()
 }
 
-/// 설정·홈 화면이 보여주는 예약 현황.
+/// Schedule status shown by the settings and home screens.
 #[derive(serde::Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ScheduleView {
@@ -435,20 +499,21 @@ pub struct ScheduleView {
     pub time: String,
     pub enabled: bool,
     pub last_run: Option<String>,
-    /// 지금 실행했을 때 생길 잡의 중복 판정 키 — 화면이 "실행 중" 버튼을 찾는 데 쓴다.
+    /// Dedup key of the job a "run now" would create — the UI uses it to find the "running" button.
     pub job_key: String,
 }
 
-/// 설정 화면의 예약 편집기가 실제로 바꿀 수 있는 엔트리인가.
+/// Whether the settings-screen schedule editor can actually change this entry.
 ///
-/// 호스트 내장 작업은 예약 정본이 작업 정의 파일이고, 설정이 쓰는 `set_schedule` 은
-/// config 에만 쓴다 — 목록에 두면 켜고 꺼도 아무 일이 없는 먹통 스위치가 된다.
-/// 그쪽은 예약 페이지가 `set_task_enabled`·`save_task` 로 따로 다룬다.
+/// Host built-in tasks take their schedule truth from the task definition file, while the
+/// settings' `set_schedule` writes only config — listed together they would become dead
+/// switches that do nothing when toggled. The schedule page handles those separately via
+/// `set_task_enabled` and `save_task`.
 fn editable_in_settings(entry: &ScheduledEntry) -> bool {
     entry.pack_id != TASKS_PACK_ID
 }
 
-/// 설정 화면이 보여줄 예약 목록. 편집이 닿지 않는 엔트리는 애초에 내보내지 않는다.
+/// Schedule list for the settings screen. Entries the editor cannot touch are not exported at all.
 pub fn list_schedules(state: &AppState) -> Vec<ScheduleView> {
     let view = config::load_view();
     entries(&view)
@@ -588,7 +653,7 @@ mod tests {
         let lunch = list.iter().find(|e| e.key == "lunch").unwrap();
         assert_eq!(lunch.time, "13:00");
         assert!(!lunch.enabled);
-        // 안전망 엔트리는 예전 routine 잡을 만든다
+        // Safety-net entries create the legacy routine job
         assert_eq!(request_for(lunch).kind, "routine");
         assert_eq!(request_for(lunch).routine.as_deref(), Some("lunch"));
     }
@@ -604,6 +669,7 @@ mod tests {
             time: "09:00".into(),
             enabled: true,
             date: None,
+            days: vec![],
         };
         let req = request_for(&entry);
         assert_eq!(req.kind, "action");
@@ -621,11 +687,12 @@ mod tests {
             time: "09:00".into(),
             enabled: true,
             date: None,
+            days: vec![],
         }
     }
 
-    /// 스케줄러는 내장 작업까지 돌리지만 설정 화면은 그걸 편집할 수 없다.
-    /// 목록에 새어 나가면 사용자는 반응 없는 스위치를 만난다.
+    /// The scheduler runs built-in tasks too, but the settings screen cannot edit them.
+    /// If they leaked into the list, users would meet switches that do nothing.
     #[test]
     fn settings_list_hides_builtin_tasks() {
         assert!(editable_in_settings(&entry("journal", "journal.morning")));
@@ -633,11 +700,70 @@ mod tests {
         assert!(!editable_in_settings(&entry(TASKS_PACK_ID, "t-abc123")));
     }
 
-    /// 내장 작업 엔트리는 config 가 아니라 작업 정의를 도는 `task` 잡이 되어야 한다.
+    /// Built-in task entries must become `task` jobs running the task definition, not config.
     #[test]
     fn builtin_task_entries_produce_task_jobs() {
         let req = request_for(&entry(TASKS_PACK_ID, "t-abc123"));
         assert_eq!(req.kind, "task");
         assert_eq!(req.task_id.as_deref(), Some("t-abc123"));
+    }
+    #[test]
+    fn selected_weekdays_use_monday_based_days() {
+        let mut scheduled = entry(TASKS_PACK_ID, "weekly");
+        scheduled.kind = "weekly".into();
+        scheduled.days = vec![0, 2, 6];
+        assert!(due_on_day(&scheduled, at(2026, 9, 7, 10, 0)));
+        assert!(!due_on_day(&scheduled, at(2026, 9, 8, 10, 0)));
+        assert!(due_on_day(&scheduled, at(2026, 9, 9, 10, 0)));
+        assert!(due_on_day(&scheduled, at(2026, 9, 13, 10, 0)));
+        scheduled.days.clear();
+        assert!(!due_on_day(&scheduled, at(2026, 9, 7, 10, 0)));
+    }
+
+    #[test]
+    fn saved_tool_invocation_retains_action_parameters_and_project() {
+        let root = std::env::temp_dir().join(format!("sawhorse-action-{}", uuid::Uuid::new_v4()));
+        let mut task = crate::tasks::TaskDef {
+            id: "si.milestone".into(),
+            builtin: true,
+            project: Some("Demo".into()),
+            action: Some(crate::tasks::TaskAction {
+                id: "si.milestone".into(),
+                params: serde_json::from_value(json!({"goal": "Release", "ids": ["one", "two"]}))
+                    .unwrap(),
+            }),
+            ..Default::default()
+        };
+        crate::tasks::save_task(&root, &task).unwrap();
+        let req = manual_task_request(&root, &task.id).unwrap();
+        assert_eq!(req.kind, "action");
+        assert_eq!(req.pack_id.as_deref(), Some("si"));
+        assert_eq!(req.action_id.as_deref(), Some("milestone"));
+        assert_eq!(req.project.as_deref(), Some("Demo"));
+        assert_eq!(req.params["ids"], json!(["one", "two"]));
+        task.action.as_mut().unwrap().id = "core.promote".into();
+        assert_eq!(request_for_task(&task).kind, "promote");
+        task.action.as_mut().unwrap().id = "morning".into();
+        assert_eq!(request_for_task(&task).routine.as_deref(), Some("morning"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn saved_schedule_replaces_default_and_removal_does_not_restore_it() {
+        let task = crate::tasks::TaskDef {
+            id: "journal.morning".into(),
+            builtin: true,
+            ..Default::default()
+        };
+        let mut custom = entry(TASKS_PACK_ID, &task.id);
+        custom.time = "11:30".into();
+        let merged = apply_saved_entries(
+            vec![entry("journal", &task.id)],
+            &[task.clone()],
+            vec![custom],
+        );
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].time, "11:30");
+        assert!(apply_saved_entries(vec![entry("journal", &task.id)], &[task], vec![]).is_empty());
     }
 }

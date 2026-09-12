@@ -1,7 +1,7 @@
-// 확장 계층. 설계 577-679줄: pack(기존 선언형)과 connector(권한 기반 외부 어댑터)를
-// 분리한다. 사용자에게는 둘 다 「확장」으로 보인다.
+// Extension layer. Design lines 577-679: separates packs (existing declarative) from
+// connectors (permission-gated external adapters). Both appear to users as 「확장」 (Extensions).
 //
-// 불변식 7: connector는 Git·볼트·DB를 직접 쓰지 않고 코어에 intent만 제출한다.
+// Invariant 7: connectors submit only intents to the core and never write Git, vault, or DB directly.
 
 pub mod broker;
 pub mod feeds;

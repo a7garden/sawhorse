@@ -55,9 +55,10 @@ type PaletteItem = {
 
 
 /**
- * 전역 커맨드 팔레트. 입력 즉시 로컬 항목(작업·프로젝트·잡)을 걸러 보여 주고,
- * 문서·자동화 작업은 원격 검색을 디바운스해서 붙인다. 작업 항목은 작업대 상세로
- * 점프하고, 나머지는 팔레트 안에서 미리 보기로 열린다.
+ * Global command palette. Filters and shows local items (work items, projects,
+ * jobs) as you type; documents and automation tasks come from debounced remote
+ * search. Work items jump to the workbench detail; the rest open as previews
+ * inside the palette.
  */
 export function CommandPalette({
   open,
@@ -69,6 +70,8 @@ export function CommandPalette({
   const { t } = useTranslation("common");
   const listId = useId();
   const listRef = useRef<HTMLDivElement | null>(null);
+  // Guards preview responses: only the most recent selection may paint a preview.
+  const previewRequest = useRef(0);
   const setPage = useApp((s) => s.setPage);
   const openWork = useApp((s) => s.openWork);
   const jobs = useApp((s) => s.jobs);
@@ -85,7 +88,7 @@ export function CommandPalette({
   } | null>(null);
   const [active, setActive] = useState(0);
 
-  // 열릴 때마다 깨끗한 상태로 시작한다.
+  // Start from a clean state every time it opens.
   useEffect(() => {
     if (open) {
       setQuery("");
@@ -97,7 +100,7 @@ export function CommandPalette({
 
   const term = query.trim();
 
-  // 원격 검색은 타이핑마다 다시 날리지 않게 짧게 모은다. 응답이 어긋나면 버린다.
+  // Remote search is gathered briefly so it does not fire on every keystroke. Mismatched responses are discarded.
   useEffect(() => {
     if (!open || !term) {
       setSearching(false);
@@ -146,7 +149,7 @@ export function CommandPalette({
 
   const items: PaletteItem[] = [];
   if (!q) {
-    // 비어 있을 때는 최근 작업을 빠른 점프 목록으로 내준다.
+    // When empty, surface recent work items as a quick-jump list.
     for (const item of [...(snapshot?.work ?? [])]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
       .slice(0, 8)) {
@@ -191,8 +194,10 @@ export function CommandPalette({
         key: `task:${task.id}`,
         group: "tasks",
         title: task.title,
-        subtitle: task.prompt.slice(0, 160),
-        run: () => setPreview({ title: task.title, markdown: task.prompt }),
+        run: () => {
+          previewRequest.current++;
+          setPreview({ title: task.title, markdown: task.prompt });
+        },
       });
     }
     for (const job of jobs) {
@@ -201,12 +206,13 @@ export function CommandPalette({
         key: `job:${job.id}`,
         group: "jobs",
         title: job.label,
-        subtitle: job.status,
-        run: () =>
+        run: () => {
+          previewRequest.current++;
           setPreview({
             title: job.label,
             markdown: `${job.status}\n\n${job.error ?? ""}`,
-          }),
+          });
+        },
       });
     }
     remote.hits.slice(0, 20).forEach((hit, index) => {
@@ -225,11 +231,14 @@ export function CommandPalette({
             });
             return;
           }
+          // A newer selection invalidates an older response; only the latest may paint.
+          const requestId = ++previewRequest.current;
           void api
             .readVaultNote(hit.path)
-            .then((note) =>
-              setPreview({ title: hit.title, markdown: note.markdown }),
-            )
+            .then((note) => {
+              if (previewRequest.current === requestId)
+                setPreview({ title: hit.title, markdown: note.markdown });
+            })
             .catch((error: unknown) =>
               toast({
                 tone: "error",
@@ -251,7 +260,7 @@ export function CommandPalette({
   const flat = groups.flatMap((group) => group.items);
   const current = flat[Math.min(active, flat.length - 1)] ?? null;
 
-  // 질의·미리 보기가 바뀌면 선택을 처음으로 되돌린다.
+  // Reset the selection to the first item when the query or preview changes.
   useEffect(() => {
     setActive(0);
   }, [q, preview]);
@@ -264,7 +273,7 @@ export function CommandPalette({
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
-      // 미리 보기에서는 뒤로 가고, 창 핸들러로 새지 않게 막는다.
+      // Go back from a preview and keep the event from leaking to window handlers.
       event.stopPropagation();
       if (preview) setPreview(null);
       else onClose();

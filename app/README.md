@@ -1,9 +1,11 @@
-# Sawhorse 데스크톱
+# Sawhorse Desktop
 
-React + TypeScript + Tauri 2. 코어는 특정 방법론이 아니라 결정론적 워크플로 실행을 제공한다.
-SDD와 intent 흐름은 같은 공개 계약으로 제공되는 번들 예시이며 기존 팩과 협업 기능도 유지한다.
+React + TypeScript + Tauri 2. The core provides deterministic workflow execution, not a specific
+methodology. SDD and the intent flow are bundled examples served over the same public contracts,
+and the existing packs and collaboration features are retained.
 
-작업대 위젯·작업과 예약·확장·전체 검색의 역할과 데이터 호환성은 [작업 중심 앱 구조](../docs/architecture/product-organization.md)를 참고한다.
+For the roles and data compatibility of workbench widgets, work items, schedules, extensions, and
+global search, see [the work-centric app structure](../docs/architecture/product-organization.md).
 
 ```bash
 bun install
@@ -15,66 +17,75 @@ bun run test:e2e
 bun run tauri build
 ```
 
-프론트엔드만 실행할 때 `bun run dev` 후 `?preview=1`로 브라우저 체험을 연다.
-체험 데이터는 브라우저의 localStorage에만 저장된다. 데스크톱 오류를 예제로 숨기지 않는다.
+To run the frontend alone, start `bun run dev` and open the browser preview with `?preview=1`.
+Preview data is stored only in the browser's localStorage. Desktop errors are not hidden behind
+sample data.
 
-README 촬영용 영문 데모는 `bun run dev --port 1430` 후
-`http://127.0.0.1:1430/showcase/?preview=1`에서 연다.
-[샘플 데이터와 이미지 재생성 안내](../docs/images/README.md)를 참고한다.
+For the English demo used for README screenshots, run `bun run dev --port 1430` and open
+`http://127.0.0.1:1430/showcase/?preview=1`. See the
+[sample data and image regeneration guide](../docs/images/README.md).
 
-| 위치 | 역할 |
+| Location | Role |
 |---|---|
-| src/features/workbench | 작업대·산출물 편집·동적 workflow UI·runtime ledger·SDD 호환 IPC |
-| src/features/workflow-studio | 노드/산출물/하위 workflow/요구 확장·프로그램 편집·검증·시뮬레이션·발행 |
-| src/features/schema-studio | 문서 타입/필드/경로/템플릿 편집과 migration preview/apply |
-| src/pages/OnboardingPage.tsx | snapshot 기반 프로젝트 가져오기·재개·근거·충돌 검토 |
-| src-tauri/src/sdlc.rs | Markdown 스키마·CRUD·검토 결정·의존성·문서 충돌·검색 |
-| src-tauri/src/sdlc_harness.rs | Herdr 실행·복구·출력 기록·제어·하위 실행 요청 |
-| src-tauri/src/workflow | 정의·검증·중첩 실행 엔진·SQLite instance/node/event 장부 |
-| src-tauri/src/schemas | schema draft/publish/activate와 필드·경로·링크 migration |
-| src-tauri/src/changes | hash/CAS 기반 preview·journal·apply·rollback·recovery |
-| src-tauri/src/extensions/package.rs | package v2 설치·resolve·lock·권한·portable export |
-| src-tauri/src/ingestion.rs | 입력 snapshot·evidence·checkpoint·문서 초안·merge base |
-| src-tauri/src/herdr.rs | Herdr CLI 어댑터 |
-| src-tauri/src/collab | 기존 협업 세션·검토·통합 |
-| src-tauri/src/packs.rs | 선택적 워크플로 팩 |
-| ../plugin/skills/sdd | 하네스 에이전트의 산출물 규약 |
-| tests | 브라우저 사용자 흐름 검증 |
+| src/features/workbench | Workbench, artifact editing, dynamic workflow UI, runtime ledger, SDD-compatible IPC |
+| src/features/workflow-studio | Node/artifact/subflow/required extension·program editing, validation, simulation, publishing |
+| src/features/schema-studio | Document type/field/path/template editing and migration preview/apply |
+| src/pages/OnboardingPage.tsx | Snapshot-based project import, resume, evidence drafts, conflict review |
+| src-tauri/src/sdlc.rs | Markdown schemas, CRUD, review decisions, dependencies, document conflicts, search |
+| src-tauri/src/sdlc_harness.rs | Herdr runs, recovery, output logging, control, subrun requests |
+| src-tauri/src/workflow | Definition and validation, nested execution engine, SQLite instance/node/event ledger |
+| src-tauri/src/schemas | Schema draft/publish/activate and field, path, and link migrations |
+| src-tauri/src/changes | Hash/CAS-based preview, journal, apply, rollback, and recovery |
+| src-tauri/src/extensions/package.rs | Package v2 install, resolve, lock, permissions, portable export |
+| src-tauri/src/ingestion.rs | Input snapshots, evidence, checkpoints, document drafts, merge base |
+| src-tauri/src/herdr.rs | Herdr CLI adapter |
+| src-tauri/src/collab | Legacy collaboration sessions, reviews, and integration |
+| src-tauri/src/packs.rs | Optional workflow packs |
+| ../plugin/skills/sdd | Artifact conventions for harness agents |
+| tests | Browser-level user flow verification |
 
-코어 스키마의 정본은 vault의 `.sawhorse/schema.json`, 발행 schema/workflow JSON과 Markdown이다.
-실행·가져오기 상태는 `.sawhorse/runtime.sqlite`, package 선택은 `.sawhorse/extensions.lock.json`이 정본이다.
-사용자 환경 설정은 기존 `~/.claude/sawhorse/config.json`을 사용한다.
-테스트는 임시 폴더와 명시적 브라우저 체험을 사용하며 실제 사용자 볼트를 변경하지 않는다.
+The source of truth for core schemas is the vault's `.sawhorse/schema.json` plus the published
+schema/workflow JSON and Markdown. Run and import state lives in `.sawhorse/runtime.sqlite`, and
+package selection in `.sawhorse/extensions.lock.json`. User preferences use the existing
+`~/.claude/sawhorse/config.json`. Tests use temporary folders and an explicit browser preview and
+never modify a real user vault.
 
-## GitHub OAuth 설정
+## GitHub OAuth setup
 
-GitHub 확장의 계정 연결은 OAuth Device Flow를 사용한다. 기본 빌드에는 등록된 SawHorse
-OAuth App의 공개 Client ID가 포함되어 있어 별도 설정 없이 로그인할 수 있다. Client Secret은
-사용하지 않는다. 앱 등록에서 `Enable Device Flow`와 토큰 만료를 활성화했으며, 만료된 토큰은
-refresh token으로 갱신한다. 등록된 리디렉션 URI `http://127.0.0.1`은 Device Flow에서 사용하지 않는다.
+The GitHub extension links accounts through the OAuth Device Flow. Default builds embed the public
+Client ID of the registered SawHorse OAuth App, so sign-in works without extra configuration. No
+Client Secret is used. The app registration enables `Enable Device Flow` and token expiration, and
+expired tokens are refreshed with a refresh token. The registered redirect URI `http://127.0.0.1`
+is not used by the Device Flow.
 
-별도 OAuth App을 사용하려면 해당 앱의 `Enable Device Flow`를 켜고 Client ID를 다음처럼 지정한다.
+To use a separate OAuth App, enable `Enable Device Flow` on that app and provide the Client ID as
+follows.
 
 ```bash
 SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID bun run tauri dev
 SAWHORSE_GITHUB_CLIENT_ID=YOUR_CLIENT_ID bun run tauri build
 ```
 
-환경변수는 실행 시 값, 빌드 시 값, 기본 Client ID 순서로 적용된다. 비공개 저장소
-탐색·가져오기를 위해 `read:user repo` 범위를 요청하며, 실제 확장 동작은 호스트 브로커가 허용한
-읽기 요청과 Git clone으로 제한한다. 기존 버전에서 저장한 PAT는 연결 해제 전까지 읽을 수 있지만,
-새 로그인 화면에서는 PAT 입력을 제공하지 않는다.
+Environment variables apply in the order run-time value, build-time value, then the default Client
+ID. The `read:user repo` scopes are requested for browsing and importing private repositories,
+while actual extension behavior is limited to read requests allowed by the host broker and Git
+clones. A PAT saved by an older version stays readable until disconnect, but the new sign-in screen
+offers no PAT input.
 
-GitHub 자격 증명은 OS 보안 저장소에 보관하고, 한 번 읽은 값은 앱 프로세스 메모리에서
-재사용한다. 화면 재진입·저장소 페이지 이동·동시 요청은 키체인을 반복해서 열지 않는다.
-로그인과 토큰 갱신은 저장에 성공한 뒤 메모리 값을 교체하고, 연결 해제는 메모리 값을
-지운 뒤 보안 저장소에서도 삭제한다. 접근 거부나 삭제 실패는 연결 해제로 숨기지 않고 오류로 표시한다.
+GitHub credentials are stored in the OS secure store, and a value read once is reused from app
+process memory. Re-entering the screen, moving between repository pages, and concurrent requests
+do not reopen the keychain repeatedly. Sign-in and token refresh replace the in-memory value only
+after a successful save; disconnect clears the in-memory value and then deletes it from the secure
+store. Access denial or deletion failure is surfaced as an error, never hidden by disconnecting.
 
-macOS 개발 실행은 `src-tauri/scripts/dev-codesign.sh`로 같은 코드 서명 식별자를 유지한다.
-앱을 다시 빌드할 때마다 키체인 승인을 요구하면 개발 터미널의 `dev-codesign` 오류를 확인한다.
-`unable to build chain to self-signed root`가 나오면 발급자 인증서 설치 여부와 개발자 인증서의
-신뢰 설정을 확인한다. Apple 코드 서명 인증서는 `항상 신뢰`를 지정하지 않고 시스템 기본값을
-사용해야 한다. [Apple 문제 해결 안내](https://developer.apple.com/forums/thread/712043)를 참고한다.
-기존 임시 서명에서 정상 서명으로 처음 전환하면 키체인 접근을 한 번 더 승인해야 할 수 있다.
+macOS development runs keep the same code-signing identity through
+`src-tauri/scripts/dev-codesign.sh`. If rebuilding the app demands keychain approval every time,
+check the `dev-codesign` errors in the development terminal. On
+`unable to build chain to self-signed root`, check whether the issuer certificate is installed and
+how the developer certificate's trust is configured. For the Apple code-signing certificate, do not
+set `항상 신뢰` (Always Trust); use the system default. See
+[Apple's troubleshooting notes](https://developer.apple.com/forums/thread/712043). Switching from
+the old ad-hoc signature to a real signature for the first time may require approving keychain
+access once more.
 
-[전체 설계](../docs/architecture/sdd-workbench.md) · [API 계약](../docs/architecture/sdd-contract.md)
+[Full design](../docs/architecture/sdd-workbench.md) · [API contract](../docs/architecture/sdd-contract.md)

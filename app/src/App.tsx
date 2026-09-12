@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getVersion } from "@tauri-apps/api/app";
 import {
@@ -19,16 +19,14 @@ import {
   Github,
   Repeat,
   Workflow,
-  PanelLeftClose,
-  PanelLeftOpen,
   FlaskConical,
   FolderSearch,
+  Library,
 } from "lucide-react";
 import { useApp, parseViewPage, viewPageId, type PageId } from "@/lib/store";
 import { icon as packIcon, type IconComponent } from "@/lib/icons";
 import { useTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
-import appIcon from "../src-tauri/icons/icon.svg";
 import WorkbenchPage from "@/features/workbench/WorkbenchPage";
 import { useProjectScope } from "@/features/workbench/project-scope";
 import { ensureWorkspaceSnapshot, useWorkspaceSnapshot } from "@/features/workbench/snapshot-store";
@@ -57,11 +55,12 @@ import OnboardingPage from "@/pages/OnboardingPage";
 import GitHubExtensionPage from "@/pages/GitHubExtensionPage";
 import { DetailNavigation } from "@/components/DetailNavigation";
 import { Toaster } from "@/components/ui/toast";
-import { Select } from "@/components/ui/select";
 import SetupWizard from "@/pages/SetupWizard";
+import { Select } from "@/components/ui/select";
 
-/** 사이드바 섹션 — 호스트가 섹션 목록·순서를 소유하고, 팩 뷰는 group 태그로 섹션을 고른다. */
+/** Sidebar sections — the host owns the section list and order; pack views pick a section via the group tag. */
 const SECTIONS: { id: string; labelKey: string }[] = [
+  { id: "overview", labelKey: "nav.section.overview" },
   { id: "project-scope", labelKey: "nav.section.project" },
   { id: "work", labelKey: "nav.section.work" },
   { id: "vault", labelKey: "nav.section.vault" },
@@ -73,18 +72,19 @@ const TOP_NAV: {
   icon: IconComponent;
   group: string;
 }[] = [
-  { id: "overview", labelKey: "nav.overview", icon: LayoutDashboard, group: "project-scope" },
-  // 작업은 하나의 생명주기를 목록과 공정 보드로 본다. 자동화 정의는 별도다.
+  { id: "overview", labelKey: "nav.overview", icon: LayoutDashboard, group: "overview" },
+  // Work is one lifecycle viewed as a list and a process board. Automation definitions are separate.
   { id: "work", labelKey: "nav.work", icon: KanbanSquare, group: "project-scope" },
   { id: "task-library", labelKey: "nav.taskLibrary", icon: Repeat, group: "work" },
-  { id: "calendar", labelKey: "nav.calendar", icon: CalendarDays, group: "project-scope" },
+  { id: "calendar", labelKey: "nav.calendar", icon: CalendarDays, group: "overview" },
   { id: "harness", labelKey: "nav.runs", icon: Bot, group: "project-scope" },
   { id: "knowledge", labelKey: "nav.workDocuments", icon: Search, group: "project-scope" },
   { id: "projects", labelKey: "nav.projects", icon: FolderGit2, group: "work" },
-  // 워크플로우는 확장의 부속이 아니라 제품의 주인 객체다. 작업 섹션의 1급 진입점.
+  { id: "project-library", labelKey: "nav.projectLibrary", icon: Library, group: "work" },
+  // Workflows are a first-class product object, not an extension attachment. Primary entry in the work section.
   { id: "workflows", labelKey: "nav.workflows", icon: Workflow, group: "work" },
-  // `실행` 은 잡·하네스 런 한 가지만 가리킨다. 진입점 이름까지 실행이면 여섯 개가
-  // 같은 낱말을 쓴다.
+  // `실행` (runs) refers only to job and harness runs. If entry points were also named "runs",
+  // six of them would share the same word.
   { id: "terminal", labelKey: "nav.terminal", icon: Terminal, group: "work" },
   { id: "docs", labelKey: "nav.docs", icon: FileText, group: "vault" },
   { id: "vault", labelKey: "nav.vault", icon: FolderSearch, group: "vault" },
@@ -94,17 +94,11 @@ const TOP_NAV: {
 ];
 const PAGE_GROUPS = [
   {
-    root: "harness",
-    tabs: [
-      { id: "harness", labelKey: "nav.tab.harness" },
-      { id: "jobs", labelKey: "nav.tab.jobs" },
-    ],
-  },
-  {
     root: "task-library",
     tabs: [
       { id: "task-library", labelKey: "nav.tab.taskLibrary" },
       { id: "tasks", labelKey: "nav.tab.tasks" },
+      { id: "jobs", labelKey: "nav.tab.jobs" },
     ],
   },
   {
@@ -121,7 +115,7 @@ const BOTTOM_NAV: { id: PageId; labelKey: string; icon: IconComponent }[] = [
   { id: "settings", labelKey: "nav.settings", icon: Settings },
 ];
 
-/** 기능 확장이 `type: native` 로 연결하는 호스트 내장 화면. */
+/** Host built-in screens that extensions attach to via `type: native`. */
 const NATIVE: Record<string, () => JSX.Element> = {
   issues: () => <WorkbenchPage view="work" />,
   todos: TodosPage,
@@ -134,8 +128,60 @@ const THEME_KEY: Record<Theme, string> = {
   system: "theme.system",
 };
 
+/**
+ * Module scope on purpose: a component defined inside App would remount the whole
+ * sidebar (losing focus) on every App render.
+ */
+function NavButton({
+  id,
+  label,
+  Icon,
+  badge,
+  active,
+}: {
+  id: PageId;
+  label: string;
+  Icon: IconComponent;
+  badge?: number;
+  active: boolean;
+}) {
+  const setPage = useApp((s) => s.setPage);
+  return (
+    <button
+      onClick={() => {
+        if (
+          window.dispatchEvent(
+            new Event("sawhorse:navigate", { cancelable: true }),
+          )
+        ) {
+          setPage(id);
+        }
+      }}
+      aria-current={active ? "page" : undefined}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "app-nav-item flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
+        active
+          ? "bg-secondary text-secondary-foreground"
+          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+      )}
+    >
+      <Icon className="size-3.5" />
+      <span className="app-nav-label min-w-0 truncate">{label}</span>
+      {badge != null && badge > 0 && (
+        <span className="ml-auto rounded-full bg-warning/20 px-1.5 text-[10px] font-semibold text-warning-foreground">
+          {badge}
+        </span>
+      )}
+    </button>
+  );
+}
+
 export default function App() {
+  const contentRef = useRef<HTMLDivElement>(null);
   const page = useApp((s) => s.page);
+  useEffect(() => { contentRef.current?.scrollTo({ top: 0, left: 0 }); }, [page]);
   const setPage = useApp((s) => s.setPage);
   const init = useApp((s) => s.init);
   const nav = useApp((s) => s.nav);
@@ -164,13 +210,19 @@ export default function App() {
   const pageLabelKey = group?.tabs.find((tab) => tab.id === page)?.labelKey
     ?? TOP_NAV.find((item) => item.id === navPage)?.labelKey
     ?? BOTTOM_NAV.find((item) => item.id === page)?.labelKey;
-  const pageLabel = pageLabelKey ? t(pageLabelKey) : nav.find((item) => viewPageId(item.packId, item.viewId) === page)?.label;
+  const pageLabel = navPage === "work" && !selectedProject ? t("nav.projectsOverview") : pageLabelKey ? t(pageLabelKey) : nav.find((item) => viewPageId(item.packId, item.viewId) === page)?.label;
   const projectScoped = TOP_NAV.some((item) => item.id === (group?.root ?? navPage) && item.group === "project-scope");
+  const changeProject = (id: string) => {
+    if (!window.dispatchEvent(new Event("sawhorse:navigate", { cancelable: true }))) return;
+    selectProject(id);
+    // The project switch changes only the section below it. Global screens keep their context.
+    if (!id && projectScoped) setPage("work");
+  };
 
   useEffect(() => {
     void init();
     void ensureWorkspaceSnapshot();
-    // 사이드바 버전은 tauri.conf.json 이 정본이다 — 손으로 적으면 반드시 어긋난다
+    // The sidebar version's source of truth is tauri.conf.json — hand-copying it always drifts
     getVersion()
       .then(setVersion)
       .catch(() => setVersion(""));
@@ -189,7 +241,8 @@ export default function App() {
       case "harness":
       case "knowledge":
       case "projects":
-      // 과거 진입점도 같은 작업 화면으로 연결한다.
+      case "project-library":
+      // Legacy entry points also route to the same work screen.
       case "issues":
         return <WorkbenchPage key={["board", "issues"].includes(page) ? "work" : page} view={page} />;
       case "github":
@@ -242,66 +295,17 @@ export default function App() {
     return <PackViewPage packId={entry.packId} viewId={entry.viewId} />;
   })();
 
-  function NavButton({
-    id,
-    label,
-    Icon,
-    badge,
-  }: {
-    id: PageId;
-    label: string;
-    Icon: IconComponent;
-    badge?: number;
-  }) {
-    const active = navPage === id || group?.root === id;
-    return (
-      <button
-        onClick={() => {
-          if (
-            window.dispatchEvent(
-              new Event("sawhorse:navigate", { cancelable: true }),
-            )
-          )
-            setPage(id);
-        }}
-        aria-current={active ? "page" : undefined}
-        aria-label={label}
-        title={label}
-        className={cn(
-          "app-nav-item flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px] font-medium transition-colors",
-          active
-            ? "bg-secondary text-secondary-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-        )}
-      >
-        <Icon className="size-3.5" />
-        <span className="app-nav-label min-w-0 truncate">{label}</span>
-        {badge != null && badge > 0 && (
-          <span className="ml-auto rounded-full bg-warning/20 px-1.5 text-[10px] font-semibold text-warning-foreground">
-            {badge}
-          </span>
-        )}
-      </button>
-    );
-  }
-
   return (
-    <div className={cn("app-shell flex h-screen w-screen overflow-hidden", sidebarCollapsed && "is-sidebar-collapsed")}>
+    <div className={cn("app-shell flex h-screen w-screen flex-col overflow-hidden", sidebarCollapsed && "is-sidebar-collapsed")}>
+      <AppToolbar contextLabel={projectScoped ? selectedProject?.name ?? t("workbench:scope.all") : t("nav.section.overview")} pageLabel={pageLabel}
+        sidebarCollapsed={sidebarCollapsed} onToggleSidebar={toggleSidebar} />
+      <div className="app-body flex min-h-0 flex-1 overflow-hidden">
       <aside className="app-sidebar">
-        <div className="app-brand">
-          <img src={appIcon} alt="" className="size-7 shrink-0" />
-          <div className="app-wordmark">
-            sawhorse
-          </div>
-          <button className="app-sidebar-toggle" onClick={toggleSidebar} aria-label={t(sidebarCollapsed ? "nav.expandSidebar" : "nav.collapseSidebar")} aria-expanded={!sidebarCollapsed} title={t(sidebarCollapsed ? "nav.expandSidebar" : "nav.collapseSidebar")}>
-            {sidebarCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
-          </button>
-        </div>
         <nav className="app-navigation">
-          {SECTIONS.map(({ id, labelKey }, index) => {
+          {SECTIONS.map(({ id, labelKey }) => {
             const core = TOP_NAV.filter(
               (n) =>
-                n.group === id &&
+                n.group === id && (id !== "project-scope" || !!selectedProject || n.id === "work") &&
                 (n.id !== "reading" || coreExtensions.feeds) &&
                 (n.id !== "github" || coreExtensions.githubInstalled),
             );
@@ -317,55 +321,48 @@ export default function App() {
                 ] ?? 50;
               packViews.sort((a, b) => order(a.label) - order(b.label));
             }
-            if (core.length === 0 && packViews.length === 0) return null;
+            if (core.length === 0 && packViews.length === 0 && id !== "project-scope") return null;
             return (
               <section
                 key={id}
                 aria-label={t(labelKey)}
                 data-nav-scope={id === "project-scope" ? "project" : "workspace"}
-                className={cn("app-nav-section", index === 1 && "app-workspace-section")}
+                className={cn("app-nav-section", id === "work" && "app-workspace-section", id === "project-scope" && "app-project-section")}
               >
                 <div className="app-section-caption">
                   <span>{t(labelKey)}</span>
                 </div>
-                {id === "project-scope" && (
-                  <div className="app-project-picker" title={selectedProject?.name ?? t("workbench:scope.all")}>
-                    <label htmlFor="sidebar-project" className="sr-only">{t("nav.scope.select")}</label>
-                    <Select
-                      id="sidebar-project"
-                      size="sm"
-                      variant="sidebar"
-                      leadingIcon={<FolderGit2 className="size-4" />}
-                      className="w-full min-w-0"
-                      disabled={!snapshot}
-                      aria-label={t("nav.scope.select")}
-                      value={selectedProject?.id ?? ""}
-                      options={[
-                        { value: "", label: t("workbench:scope.all") },
-                        ...(snapshot?.projects.map((project) => ({ value: project.id, label: project.name })) ?? []),
-                      ]}
-                      onChange={(next) => {
-                        if (window.dispatchEvent(new Event("sawhorse:navigate", { cancelable: true }))) selectProject(next);
-                      }}
-                    />
-                  </div>
-                )}
+                {id === "project-scope" && <div className="app-project-picker" title={selectedProject?.name ?? t("nav.scope.choose")}>
+                  <Select size="sm" variant="sidebar" leadingIcon={<FolderGit2 size={16} />} className="w-full min-w-0"
+                    aria-label={t("nav.scope.select")} value={selectedProject?.id ?? ""} disabled={!snapshot}
+                    options={[{ value: "", label: t("nav.scope.choose") }, ...(snapshot?.projects ?? []).map((project) => ({ value: project.id, label: project.name }))]}
+                    onChange={changeProject} />
+                  {selectedProject && <p className="app-project-workflow">{snapshot?.workflows.find((flow) => flow.id === selectedProject.workflowId && flow.version === selectedProject.workflowVersion)?.label ?? selectedProject.workflowId}</p>}
+                </div>}
+                {id === "project-scope" && !selectedProject && <>
+                  <p className="app-project-hint">{t("nav.scope.chooseHint")}</p>
+                </>}
                 {core.map((n) => (
                   <NavButton
                     key={n.id}
                     id={n.id}
-                    label={t(n.labelKey)}
+                    label={n.id === "work" && !selectedProject ? t("nav.projectsOverview") : t(n.labelKey)}
                     Icon={n.icon}
+                    active={navPage === n.id || group?.root === n.id}
                   />
                 ))}
-                {packViews.map((n) => (
-                  <NavButton
-                    key={`${n.packId}:${n.viewId}`}
-                    id={viewPageId(n.packId, n.viewId)}
-                    label={n.label}
-                    Icon={packIcon(n.icon)}
-                  />
-                ))}
+                {packViews.map((n) => {
+                  const id = viewPageId(n.packId, n.viewId);
+                  return (
+                    <NavButton
+                      key={`${n.packId}:${n.viewId}`}
+                      id={id}
+                      label={n.label}
+                      Icon={packIcon(n.icon)}
+                      active={navPage === id || group?.root === id}
+                    />
+                  );
+                })}
               </section>
             );
           })}
@@ -385,14 +382,18 @@ export default function App() {
                     !["issues", "docs"].includes(n.component) &&
                     !SECTIONS.some((s) => s.id !== "project-scope" && s.id === n.group),
                 )
-                .map((n) => (
-                  <NavButton
-                    key={`${n.packId}:${n.viewId}`}
-                    id={viewPageId(n.packId, n.viewId)}
-                    label={n.label}
-                    Icon={packIcon(n.icon)}
-                  />
-                ))}
+                .map((n) => {
+                  const id = viewPageId(n.packId, n.viewId);
+                  return (
+                    <NavButton
+                      key={`${n.packId}:${n.viewId}`}
+                      id={id}
+                      label={n.label}
+                      Icon={packIcon(n.icon)}
+                      active={navPage === id || group?.root === id}
+                    />
+                  );
+                })}
             </Fragment>
           )}
 
@@ -404,6 +405,7 @@ export default function App() {
               label={t(n.labelKey)}
               Icon={n.icon}
               badge={n.id === "packs" ? brokenCount : undefined}
+              active={navPage === n.id || group?.root === n.id}
             />
           ))}
           </div>
@@ -429,7 +431,6 @@ export default function App() {
         </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[var(--workspace)]">
-        <AppToolbar contextLabel={projectScoped ? selectedProject?.name ?? t("workbench:scope.all") : t("nav.section.work")} pageLabel={pageLabel} />
         <DetailNavigation />
         {group && (
           <div
@@ -461,7 +462,7 @@ export default function App() {
           </div>
         )}
         <AttentionStrip />
-        <div className="app-content min-h-0 flex-1 overflow-y-auto">
+        <div ref={contentRef} className="app-content min-h-0 flex-1 overflow-y-auto">
           {isWorkbenchPreview && (
             <div className="app-preview-notice">
               <FlaskConical size={13} aria-hidden />
@@ -471,6 +472,7 @@ export default function App() {
           {body}
         </div>
       </main>
+      </div>
       <SetupWizard />
       <Toaster />
     </div>

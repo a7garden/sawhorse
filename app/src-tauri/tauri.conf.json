@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Sawhorse 작업대",
+  "productName": "Sawhorse",
   "identifier": "com.a7garden.sawhorse",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -11,11 +11,17 @@
   "app": {
     "windows": [
       {
-        "title": "Sawhorse 작업대",
+        "title": "Sawhorse",
         "width": 1440,
         "height": 900,
         "minWidth": 960,
-        "minHeight": 620
+        "minHeight": 620,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": {
+          "x": 16,
+          "y": 18
+        }
       }
     ],
     "security": {

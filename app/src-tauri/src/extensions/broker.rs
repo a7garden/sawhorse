@@ -1,26 +1,32 @@
-// 확장 브로커. 설계 661-675줄의 권한 규칙과 778-786줄의 SSRF 방어.
+// Extension broker. Permission rules from design lines 661-675 and SSRF defenses from 778-786.
 //
-// - built-in handler도 raw DB·Git·HTTP client·token을 받지 않고 좁은 ExtensionContext만
-//   받는다. credential broker가 승인된 account/repository 요청에만 Authorization을
-//   붙이며 token 자체는 connector에 반환하지 않는다(설계 666-668줄).
-// - 사용자 URL을 host 권한으로 가져오는 기능이므로 SSRF 방어를 필수로 한다(778-786줄).
+// - Built-in handlers also receive only a narrow ExtensionContext, not raw DB, Git,
+//   HTTP client, or token. The credential broker attaches Authorization only to approved
+//   account/repository requests and never returns the token itself to the connector (design 666-668).
+// - Since this fetches user-supplied URLs with host-level authority, SSRF defenses are mandatory (778-786).
 
-use std::net::{IpAddr, ToSocketAddrs};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, ToSocketAddrs};
 use std::time::Duration;
 
-/// 도메인 grant 검사. 정확한 도메인 또는 `*.example.com` 와일드카드만 허용.
+/// Domain grant check. Only exact domains or `*.example.com` wildcards are allowed.
 pub fn domain_allowed(granted: &[String], host: &str) -> bool {
+    let host = host.to_ascii_lowercase();
     granted.iter().any(|g| {
-        let g = g.trim();
+        let g = g.trim().to_ascii_lowercase();
         if let Some(suffix) = g.strip_prefix("*.") {
-            host.ends_with(suffix) && host.len() > suffix.len()
+            // 와일드카드는 점 경계에서만 일치한다: suffix가 문자 중간에
+            // 붙는 "attackerexample.com" 같은 우회를 거부한다.
+            !suffix.is_empty()
+                && host.len() > suffix.len() + 1
+                && host.ends_with(suffix)
+                && host.as_bytes()[host.len() - suffix.len() - 1] == b'.'
         } else {
-            g.eq_ignore_ascii_case(host)
+            g == host
         }
     })
 }
 
-/// URL 사전 검사(설계 780-781줄): scheme은 http/https만, credential/userinfo 포함 URL 거부.
+/// URL pre-check (design 780-781): only http/https schemes; reject URLs with credentials/userinfo.
 pub fn validate_url_scheme(url: &str) -> Result<(String, String), String> {
     let (scheme, rest) = url
         .split_once("://")
@@ -39,9 +45,9 @@ pub fn validate_url_scheme(url: &str) -> Result<(String, String), String> {
     Ok((scheme.to_string(), host.to_string()))
 }
 
-/// DNS 해석 결과가 사설·루프백·링크로컬·멀티캐스트·클라우드 metadata 대역인지 차단
-/// (설계 781-782줄). 해석된 모든 주소를 검사한다 — 하나라도 안전하면 안전으로 보지 않고
-/// 하나라도 위험하면 거부한다.
+/// Blocks DNS resolution results that fall in private, loopback, link-local, multicast,
+/// or cloud metadata ranges (design 781-782). Every resolved address is checked —
+/// never treat as safe because one address is safe; reject if any one is dangerous.
 pub fn resolved_ips_blocked(ips: &[IpAddr]) -> bool {
     ips.iter().any(|ip| is_blocked_ip(ip))
 }
@@ -50,9 +56,9 @@ pub fn is_blocked_ip(ip: &IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             let o = v4.octets();
-            // loopback 127/8, 사설 10/8·172.16/12·192.168/16, link-local 169.254/16,
-            // 이렇듯 예약 대역 0.0.0.0/8·100.64/10·192.0.0/24·198.18/15·240/4,
-            // multicast 224/4, cloud metadata 169.254.169.254는 link-local에 포함.
+            // loopback 127/8, private 10/8, 172.16/12, 192.168/16, link-local 169.254/16,
+            // reserved ranges 0.0.0.0/8, 100.64/10, 192.0.0/24, 198.18/15, 240/4,
+            // multicast 224/4; cloud metadata 169.254.169.254 is covered by link-local.
             v4.is_loopback()
                 || v4.is_private()
                 || v4.is_link_local()
@@ -66,9 +72,23 @@ pub fn is_blocked_ip(ip: &IpAddr) -> bool {
                 || o[0] >= 240
         }
         IpAddr::V6(v6) => {
+            let s = v6.segments();
             v6.is_loopback()
                 || v6.is_multicast()
                 || v6.is_unspecified()
+                // ULA fc00::/7, link-local fe80::/10.
+                || (s[0] & 0xfe00) == 0xfc00
+                || (s[0] & 0xffc0) == 0xfe80
+                // NAT64 64:ff9b::/96 — 내장 IPv4를 같은 규칙으로 재검사한다.
+                || (s[0] == 0x0064
+                    && s[1] == 0xff9b
+                    && s[2..6].iter().all(|&seg| seg == 0)
+                    && is_blocked_ip(&IpAddr::V4(Ipv4Addr::new(
+                        (s[6] >> 8) as u8,
+                        (s[6] & 0xff) as u8,
+                        (s[7] >> 8) as u8,
+                        (s[7] & 0xff) as u8,
+                    ))))
                 || v6
                     .to_ipv4_mapped()
                     .map_or(false, |v4| is_blocked_ip(&IpAddr::V4(v4)))
@@ -76,13 +96,13 @@ pub fn is_blocked_ip(ip: &IpAddr) -> bool {
     }
 }
 
-/// URL을 host 해석까지 검사한 뒤 요청 가능한 상태인지 판정한다.
+/// Validates a URL through host resolution and decides whether the request may proceed.
 pub fn ssrf_guard(url: &str, granted_domains: &[String]) -> Result<Vec<IpAddr>, String> {
     let (_scheme, host) = validate_url_scheme(url)?;
     if !domain_allowed(granted_domains, &host) {
         return Err(format!("도메인이 grant에 없다: {host}"));
     }
-    // hostname literal(직접 IP)도 동일하게 차단한다.
+    // Hostname literals (direct IPs) are blocked the same way.
     if let Ok(ip) = host.parse::<IpAddr>() {
         if is_blocked_ip(&ip) {
             return Err(format!("차단 대상 주소: {ip}"));
@@ -103,7 +123,34 @@ pub fn ssrf_guard(url: &str, granted_domains: &[String]) -> Result<Vec<IpAddr>, 
     Ok(addrs)
 }
 
-/// extension이 받는 좁은 문맥. HTTP client·토큰·DB 핸들은 노출하지 않는다(설계 666줄).
+/// DNS rebinding 방지: ssrf_guard가 검증한 addrs를 URL의 host와 유효 port로
+/// 고정한 (host, SocketAddr 목록) 쌍으로 바꿔준다. 반환값은
+/// `reqwest::Client::builder().resolve_to_addrs()`와 짝으로 쓴다.
+pub fn dns_override(url: &str, addrs: &[IpAddr]) -> Result<(String, Vec<SocketAddr>), String> {
+    let (scheme, rest) = url
+        .split_once("://")
+        .ok_or_else(|| format!("scheme이 없는 URL: {url}"))?;
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let default_port = if scheme == "https" { 443 } else { 80 };
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((h, p)) if !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()) => {
+            let port: u16 = p.parse().map_err(|_| format!("잘못된 port: {p}"))?;
+            (h, port)
+        }
+        // "host:" 형태는 URL 규격상 기본 port다.
+        Some((h, "")) => (h, default_port),
+        _ => (authority, default_port),
+    };
+    if host.is_empty() {
+        return Err("host가 없다".into());
+    }
+    Ok((
+        host.to_string(),
+        addrs.iter().map(|ip| SocketAddr::new(*ip, port)).collect(),
+    ))
+}
+
+/// The narrow context handed to extensions. Exposes no HTTP client, token, or DB handles (design 666).
 #[derive(Clone, Debug)]
 pub struct ExtensionContext {
     pub instance_id: String,
@@ -112,7 +159,7 @@ pub struct ExtensionContext {
 }
 
 impl ExtensionContext {
-    /// 권한 검사. capability는 기본 거부다(설계 663줄).
+    /// Capability check. Capabilities are default-deny (design 663).
     pub fn require_capability(&self, capability: &str) -> Result<(), String> {
         if self.capabilities.iter().any(|c| c == capability) {
             Ok(())
@@ -121,23 +168,28 @@ impl ExtensionContext {
         }
     }
 
-    /// SSRF 방어가 적용된 GET. 리다이렉트는 reqwest가 자동 따라가지 않게 하고,
-    /// 각 hop에서 scheme·도메인 grant·해석 IP를 다시 검사한다(설계 782줄).
+    /// GET with SSRF defenses. Redirects are not followed automatically by reqwest;
+    /// scheme, domain grant, and resolved IPs are re-checked at each hop (design 782).
     pub async fn guarded_get(
         &self,
         url: &str,
         max_redirects: usize,
     ) -> Result<GuardedResponse, String> {
         let mut current = url.to_string();
-        let client = reqwest::Client::builder()
-            // 리다이렉트 자동 추적 금지 — 수동으로 재검사한다.
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|e| format!("http client 생성 실패: {e}"))?;
         for _hop in 0..=max_redirects {
-            ssrf_guard(&current, &self.granted_domains)?;
+            // hop마다 검증된 addrs로 DNS를 고정한다: 실제 요청이 재조회한 주소로
+            // 접속하는 DNS rebinding TOCTOU를 막는다.
+            let addrs = ssrf_guard(&current, &self.granted_domains)?;
+            let (host, pinned_addrs) = dns_override(&current, &addrs)?;
+            let client = reqwest::Client::builder()
+                // No automatic redirect following — re-checked manually.
+                .redirect(reqwest::redirect::Policy::none())
+                // ssrf_guard가 검증한 주소로만 접속한다.
+                .resolve_to_addrs(&host, &pinned_addrs)
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| format!("http client 생성 실패: {e}"))?;
             let resp = client
                 .get(&current)
                 .send()
@@ -157,7 +209,7 @@ impl ExtensionContext {
                 current = resolve_redirect(&current, &location)?;
                 continue;
             }
-            // wire 상한(설계 784줄): 본문은 최대 8MB까지만 읽는다.
+            // Wire limit (design 784): read at most 8MB of the body.
             let headers: Vec<(String, String)> = resp
                 .headers()
                 .iter()
@@ -180,7 +232,7 @@ impl ExtensionContext {
         Err(format!("redirect 상한({max_redirects})을 넘었다"))
     }
 
-    /// Authorization을 붙여 GET한다. 토큰은 이 경로에서만 사용되고 반환되지 않는다(설계 667-668줄).
+    /// GET with Authorization attached. The token is used only on this path and never returned (design 667-668).
     pub async fn guarded_get_authorized(
         &self,
         url: &str,
@@ -194,14 +246,19 @@ impl ExtensionContext {
             crate::extensions::broker::secrets::read(secret_name)?
         };
         let mut current = url.to_string();
-        let client = reqwest::Client::builder()
-            .redirect(reqwest::redirect::Policy::none())
-            .connect_timeout(Duration::from_secs(10))
-            .timeout(Duration::from_secs(30))
-            .build()
-            .map_err(|e| format!("http client 생성 실패: {e}"))?;
         for _hop in 0..=3 {
-            ssrf_guard(&current, &self.granted_domains)?;
+            // hop마다 검증된 addrs로 DNS를 고정한다: 실제 요청이 재조회한 주소로
+            // 접속하는 DNS rebinding TOCTOU를 막는다.
+            let addrs = ssrf_guard(&current, &self.granted_domains)?;
+            let (host, pinned_addrs) = dns_override(&current, &addrs)?;
+            let client = reqwest::Client::builder()
+                .redirect(reqwest::redirect::Policy::none())
+                // ssrf_guard가 검증한 주소로만 접속한다.
+                .resolve_to_addrs(&host, &pinned_addrs)
+                .connect_timeout(Duration::from_secs(10))
+                .timeout(Duration::from_secs(30))
+                .build()
+                .map_err(|e| format!("http client 생성 실패: {e}"))?;
             let resp = client
                 .get(&current)
                 .header("Authorization", format!("Bearer {token}"))
@@ -218,7 +275,14 @@ impl ExtensionContext {
                     .and_then(|v| v.to_str().ok())
                     .unwrap_or("")
                     .to_string();
+                if location.is_empty() {
+                    return Err("redirect에 Location이 없다".into());
+                }
                 current = resolve_redirect(&current, &location)?;
+                // https가 아닌 redirect 타깃은 Bearer를 재전송하지 않도록 거부한다.
+                if !current.starts_with("https://") {
+                    return Err("인증 요청의 redirect는 https만 허용한다".into());
+                }
                 continue;
             }
             let headers: Vec<(String, String)> = resp
@@ -261,7 +325,7 @@ impl GuardedResponse {
     }
 }
 
-/// redirect Location 해석. 새 위치도 scheme·grant 재검사 대상이 된다.
+/// Resolves a redirect Location. The new location is subject to scheme and grant re-checks.
 fn resolve_redirect(base: &str, location: &str) -> Result<String, String> {
     if location.starts_with("http://") || location.starts_with("https://") {
         Ok(location.to_string())
@@ -280,8 +344,8 @@ fn resolve_redirect(base: &str, location: &str) -> Result<String, String> {
     }
 }
 
-/// OS 보안 저장소(keyring 크레이트): macOS Keychain · Windows Credential Manager ·
-/// Linux Secret Service. DB에는 secret_ref 이름만 남긴다(설계 512줄).
+/// OS secure storage (keyring crate): macOS Keychain, Windows Credential Manager,
+/// Linux Secret Service. Only the secret_ref name is kept in the DB (design 512).
 pub mod secrets;
 
 #[cfg(test)]
@@ -297,6 +361,9 @@ mod tests {
         assert!(!domain_allowed(&grants, "evil.github.com.evil.io"));
         assert!(!domain_allowed(&grants, "github.com"));
         assert!(!domain_allowed(&grants, "example.com"));
+        assert!(!domain_allowed(&grants, "attackerexample.com")); // 점 경계 없는 와일드카드 우회
+        assert!(!domain_allowed(&grants, "notgithub.com"));
+        assert!(domain_allowed(&grants, "Feed.Example.COM")); // host 소문자 통일 후 일치
     }
 
     #[test]
@@ -322,11 +389,16 @@ mod tests {
         assert!(is_blocked_ip(&parse("::1")));
         assert!(!is_blocked_ip(&parse("93.184.216.34")));
         assert!(!is_blocked_ip(&parse("140.82.112.3"))); // github
+        assert!(is_blocked_ip(&parse("fd00::1"))); // ULA fc00::/7
+        assert!(is_blocked_ip(&parse("fe80::1"))); // link-local fe80::/10
+        assert!(is_blocked_ip(&parse("64:ff9b::169.254.169.254"))); // NAT64 내장 metadata
+        assert!(!is_blocked_ip(&parse("64:ff9b::93.184.216.34"))); // NAT64 공개 v4
+        assert!(!is_blocked_ip(&parse("2606:4700::1111"))); // 공개 v6
     }
 
     #[test]
     fn ssrf_guard_blocks_private_target_even_if_granted() {
-        // grant가 있어도 사설 대역은 차단된다.
+        // Private ranges are blocked even when granted.
         let err = ssrf_guard("http://127.0.0.1:1420/", &["127.0.0.1".to_string()]).unwrap_err();
         assert!(err.contains("차단"));
         let err2 = ssrf_guard("file:///etc/passwd", &["example.com".to_string()]).unwrap_err();

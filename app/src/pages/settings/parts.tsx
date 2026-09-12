@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-/** 카테고리 패널의 제목과 설명. */
+/** Title and description of a category panel. */
 export function SectionHeader({
   id,
   title,
@@ -24,7 +24,7 @@ export function SectionHeader({
   );
 }
 
-/** 제목·설명·액션과 입력 행을 묶는 설정 카드. */
+/** Settings card bundling title·description·actions and input rows. */
 export function SettingsGroup({
   title,
   desc,
@@ -62,8 +62,8 @@ export function SettingsGroup({
   );
 }
 
-/** 설정 행 한 줄. 기본은 라벨 왼쪽·컨트롤 오른쪽이고, 넓은 컨트롤(경로 입력, 긴
- *  선택지)은 stacked 로 라벨 위·컨트롤 아래로 쌓는다. 부모는 divide-y 로 줄을 나눈다. */
+/** One settings row. Default is label left·control right; wide controls (path inputs, long
+ *  choices) stack label above·control below via stacked. The parent divides rows with divide-y. */
 export function SettingRow({
   label,
   hint,
@@ -105,7 +105,7 @@ export function SettingRow({
   );
 }
 
-/** 저장·검사 결과 배너. 성공은 옅은 초록 판, 실패는 옅은 빨간 판에 아이콘을 얹는다. */
+/** Save·validation result banner. Success on a pale green panel, failure on a pale red panel with an icon. */
 export function Notice({ ok, text }: { ok: boolean; text: string }) {
   const Icon = ok ? CheckCircle2 : AlertCircle;
   return (

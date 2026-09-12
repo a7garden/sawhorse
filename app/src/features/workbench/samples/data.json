@@ -1,0 +1,3510 @@
+{
+  "version": 1,
+  "projects": [
+    {
+      "id": "sample-atlas",
+      "name": "Atlas Customer Portal · Sample",
+      "description": "A customer portal with accessible account management and reliable billing.\n\nThis fictional sample project contains editable example data. Connect a repository before running agents.",
+      "repoPath": "",
+      "extraPaths": [],
+      "githubRepos": [],
+      "dependsOn": [],
+      "verifyCommands": [],
+      "defaultAgent": "",
+      "defaultModel": "",
+      "workflowId": "sdd-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": ""
+    },
+    {
+      "id": "sample-relay",
+      "name": "Relay Team Onboarding · Sample",
+      "description": "An onboarding experience that turns team requests into reviewed product changes.\n\nThis fictional sample project contains editable example data. Connect a repository before running agents.",
+      "repoPath": "",
+      "extraPaths": [],
+      "githubRepos": [],
+      "dependsOn": [],
+      "verifyCommands": [],
+      "defaultAgent": "",
+      "defaultModel": "",
+      "workflowId": "intent-flow",
+      "workflowVersion": "2.0.0",
+      "workflowDigest": ""
+    },
+    {
+      "id": "sample-ledger",
+      "name": "Ledger Pricing Engine · Sample",
+      "description": "A pricing library developed through explicit failing tests and regression checks.\n\nThis fictional sample project contains editable example data. Connect a repository before running agents.",
+      "repoPath": "",
+      "extraPaths": [],
+      "githubRepos": [],
+      "dependsOn": [],
+      "verifyCommands": [],
+      "defaultAgent": "",
+      "defaultModel": "",
+      "workflowId": "tdd-cycle",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": ""
+    },
+    {
+      "id": "sample-beacon",
+      "name": "Beacon Product Analytics · Sample",
+      "description": "An analytics workspace that combines specification review with test-driven implementation.\n\nThis fictional sample project contains editable example data. Connect a repository before running agents.",
+      "repoPath": "",
+      "extraPaths": [],
+      "githubRepos": [],
+      "dependsOn": [],
+      "verifyCommands": [],
+      "defaultAgent": "",
+      "defaultModel": "",
+      "workflowId": "sdd-with-tdd",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": ""
+    },
+    {
+      "id": "sample-harbor",
+      "name": "Harbor Support Desk · Sample",
+      "description": "A support backlog with reproducible reports, reviewed solutions, and documented outcomes.\n\nThis fictional sample project contains editable example data. Connect a repository before running agents.",
+      "repoPath": "",
+      "extraPaths": [],
+      "githubRepos": [],
+      "dependsOn": [],
+      "verifyCommands": [],
+      "defaultAgent": "",
+      "defaultModel": "",
+      "workflowId": "issue-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": ""
+    },
+    {
+      "id": "sample-compass",
+      "name": "Compass Research Lab · Sample",
+      "description": "A research program with scoped goals, evidence notes, and paused plans ready to explore.\n\nThis fictional sample project contains editable example data. Connect a repository before running agents.",
+      "repoPath": "",
+      "extraPaths": [],
+      "githubRepos": [],
+      "dependsOn": [],
+      "verifyCommands": [],
+      "defaultAgent": "",
+      "defaultModel": "",
+      "workflowId": "goal-main",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": ""
+    }
+  ],
+  "work": [
+    {
+      "id": "sample-atlas-01",
+      "title": "Invite teammates by email",
+      "description": "Let account owners invite teammates with a role and a seven-day invitation expiry.\n\nSample scenario: A customer portal with accessible account management and reliable billing.",
+      "projectId": "sample-atlas",
+      "stage": "intent",
+      "status": "backlog",
+      "priority": "normal",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-7}}",
+      "dueDate": "{{day:2}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "atlas",
+        "discovery"
+      ],
+      "createdAt": "{{day:-10}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "intent",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Let account owners invite teammates with a role and a seven-day invitation expiry."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release"
+      ],
+      "workflowId": "sdd-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-atlas-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-atlas-02",
+      "title": "Manage organization roles",
+      "description": "Separate owner, administrator, and viewer permissions across account settings.\n\nSample scenario: A customer portal with accessible account management and reliable billing.",
+      "projectId": "sample-atlas",
+      "stage": "design",
+      "status": "running",
+      "priority": "high",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-6}}",
+      "dueDate": "{{day:3}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "atlas",
+        "design"
+      ],
+      "createdAt": "{{day:-9}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "design",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Separate owner, administrator, and viewer permissions across account settings."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release"
+      ],
+      "workflowId": "sdd-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-atlas-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-atlas-03",
+      "title": "Export monthly invoices",
+      "description": "Provide a downloadable PDF invoice with tax details and a clear billing period.\n\nSample scenario: A customer portal with accessible account management and reliable billing.",
+      "projectId": "sample-atlas",
+      "stage": "build",
+      "status": "running",
+      "priority": "high",
+      "owner": "Sam Rivera",
+      "startDate": "{{day:-5}}",
+      "dueDate": "{{day:4}}",
+      "dependsOn": [
+        "sample-atlas-01"
+      ],
+      "tags": [
+        "sample",
+        "atlas",
+        "implementation"
+      ],
+      "createdAt": "{{day:-8}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "build",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Provide a downloadable PDF invoice with tax details and a clear billing period."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release"
+      ],
+      "workflowId": "sdd-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Sam Rivera"
+      ],
+      "milestone": "sample-atlas-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-atlas-04",
+      "title": "Restore expired sessions",
+      "description": "Preserve unsaved form data when a session expires and sign-in resumes.\n\nSample scenario: A customer portal with accessible account management and reliable billing.",
+      "projectId": "sample-atlas",
+      "stage": "test",
+      "status": "blocked",
+      "priority": "urgent",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-4}}",
+      "dueDate": "{{day:0}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "atlas",
+        "quality"
+      ],
+      "createdAt": "{{day:-7}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "test",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Preserve unsaved form data when a session expires and sign-in resumes."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release"
+      ],
+      "workflowId": "sdd-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-atlas-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-atlas-05",
+      "title": "Launch accessible account settings",
+      "description": "Ship keyboard navigation, visible focus, and readable account preference controls.\n\nSample scenario: A customer portal with accessible account management and reliable billing.",
+      "projectId": "sample-atlas",
+      "stage": "deploy",
+      "status": "done",
+      "priority": "low",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-3}}",
+      "dueDate": "{{day:6}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "atlas",
+        "release"
+      ],
+      "createdAt": "{{day:-6}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "deploy",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Ship keyboard navigation, visible focus, and readable account preference controls."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release"
+      ],
+      "workflowId": "sdd-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-atlas-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "closed",
+      "closed": "{{day:0}}",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-relay-01",
+      "title": "Capture onboarding friction",
+      "description": "Collect the three most confusing moments in a new teammate onboarding session.\n\nSample scenario: An onboarding experience that turns team requests into reviewed product changes.",
+      "projectId": "sample-relay",
+      "stage": "inbox",
+      "status": "backlog",
+      "priority": "normal",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-7}}",
+      "dueDate": "{{day:2}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "relay",
+        "discovery"
+      ],
+      "createdAt": "{{day:-10}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "inbox",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Collect the three most confusing moments in a new teammate onboarding session."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "brief",
+        "rollback"
+      ],
+      "workflowId": "intent-flow",
+      "workflowVersion": "2.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-relay-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-relay-02",
+      "title": "Choose invitation delivery",
+      "description": "Decide whether an invitation should arrive by email or a shareable secure link.\n\nSample scenario: An onboarding experience that turns team requests into reviewed product changes.",
+      "projectId": "sample-relay",
+      "stage": "clarify",
+      "status": "blocked",
+      "priority": "high",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-6}}",
+      "dueDate": "{{day:3}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "relay",
+        "design"
+      ],
+      "createdAt": "{{day:-9}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "clarify",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Decide whether an invitation should arrive by email or a shareable secure link."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "brief",
+        "rollback"
+      ],
+      "workflowId": "intent-flow",
+      "workflowVersion": "2.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-relay-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-relay-03",
+      "title": "Design the welcome checklist",
+      "description": "Show role-specific onboarding steps with useful next actions and saved progress.\n\nSample scenario: An onboarding experience that turns team requests into reviewed product changes.",
+      "projectId": "sample-relay",
+      "stage": "design",
+      "status": "running",
+      "priority": "high",
+      "owner": "Sam Rivera",
+      "startDate": "{{day:-5}}",
+      "dueDate": "{{day:4}}",
+      "dependsOn": [
+        "sample-relay-01"
+      ],
+      "tags": [
+        "sample",
+        "relay",
+        "implementation"
+      ],
+      "createdAt": "{{day:-8}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "design",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Show role-specific onboarding steps with useful next actions and saved progress."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "brief",
+        "rollback"
+      ],
+      "workflowId": "intent-flow",
+      "workflowVersion": "2.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Sam Rivera"
+      ],
+      "milestone": "sample-relay-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-relay-04",
+      "title": "Review workspace templates",
+      "description": "Allow a team owner to choose a starter workspace before inviting colleagues.\n\nSample scenario: An onboarding experience that turns team requests into reviewed product changes.",
+      "projectId": "sample-relay",
+      "stage": "approval",
+      "status": "review",
+      "priority": "urgent",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-4}}",
+      "dueDate": "{{day:0}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "relay",
+        "quality"
+      ],
+      "createdAt": "{{day:-7}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "approval",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Allow a team owner to choose a starter workspace before inviting colleagues."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "brief",
+        "rollback"
+      ],
+      "workflowId": "intent-flow",
+      "workflowVersion": "2.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-relay-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-relay-05",
+      "title": "Verify onboarding progress recovery",
+      "description": "Restore completed onboarding steps after closing and reopening the browser.\n\nSample scenario: An onboarding experience that turns team requests into reviewed product changes.",
+      "projectId": "sample-relay",
+      "stage": "unconfirmed",
+      "status": "review",
+      "priority": "low",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-3}}",
+      "dueDate": "{{day:6}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "relay",
+        "release"
+      ],
+      "createdAt": "{{day:-6}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "unconfirmed",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Restore completed onboarding steps after closing and reopening the browser."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "brief",
+        "rollback"
+      ],
+      "workflowId": "intent-flow",
+      "workflowVersion": "2.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-relay-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-relay-06",
+      "title": "Publish the welcome guide",
+      "description": "Explain team setup, first project creation, and where to find help.\n\nSample scenario: An onboarding experience that turns team requests into reviewed product changes.",
+      "projectId": "sample-relay",
+      "stage": "done",
+      "status": "done",
+      "priority": "normal",
+      "owner": "Sam Rivera",
+      "startDate": "{{day:-2}}",
+      "dueDate": "{{day:7}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "relay",
+        "documentation"
+      ],
+      "createdAt": "{{day:-5}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "done",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Explain team setup, first project creation, and where to find help."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "brief",
+        "rollback"
+      ],
+      "workflowId": "intent-flow",
+      "workflowVersion": "2.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Sam Rivera"
+      ],
+      "milestone": "sample-relay-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "closed",
+      "closed": "{{day:0}}",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-ledger-01",
+      "title": "Specify prorated subscription charges",
+      "description": "Calculate a subscription change using the exact number of remaining billing days.\n\nSample scenario: A pricing library developed through explicit failing tests and regression checks.",
+      "projectId": "sample-ledger",
+      "stage": "test-intent",
+      "status": "backlog",
+      "priority": "normal",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-7}}",
+      "dueDate": "{{day:2}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "ledger",
+        "discovery"
+      ],
+      "createdAt": "{{day:-10}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "test-intent",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Calculate a subscription change using the exact number of remaining billing days."
+        }
+      ],
+      "artifacts": [
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "tdd-cycle",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-ledger-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-ledger-02",
+      "title": "Reproduce duplicate discount rounding",
+      "description": "Capture a one-cent discrepancy when a percentage discount is applied twice.\n\nSample scenario: A pricing library developed through explicit failing tests and regression checks.",
+      "projectId": "sample-ledger",
+      "stage": "red",
+      "status": "blocked",
+      "priority": "high",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-6}}",
+      "dueDate": "{{day:3}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "ledger",
+        "design"
+      ],
+      "createdAt": "{{day:-9}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "red",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Capture a one-cent discrepancy when a percentage discount is applied twice."
+        }
+      ],
+      "artifacts": [
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "tdd-cycle",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-ledger-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-ledger-03",
+      "title": "Implement currency-safe totals",
+      "description": "Use integer minor units for invoice line items and total calculations.\n\nSample scenario: A pricing library developed through explicit failing tests and regression checks.",
+      "projectId": "sample-ledger",
+      "stage": "green",
+      "status": "running",
+      "priority": "high",
+      "owner": "Sam Rivera",
+      "startDate": "{{day:-5}}",
+      "dueDate": "{{day:4}}",
+      "dependsOn": [
+        "sample-ledger-01"
+      ],
+      "tags": [
+        "sample",
+        "ledger",
+        "implementation"
+      ],
+      "createdAt": "{{day:-8}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "green",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Use integer minor units for invoice line items and total calculations."
+        }
+      ],
+      "artifacts": [
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "tdd-cycle",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Sam Rivera"
+      ],
+      "milestone": "sample-ledger-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-ledger-04",
+      "title": "Extract the tax calculation policy",
+      "description": "Move region-specific tax rules into a small policy module without changing totals.\n\nSample scenario: A pricing library developed through explicit failing tests and regression checks.",
+      "projectId": "sample-ledger",
+      "stage": "refactor",
+      "status": "running",
+      "priority": "urgent",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-4}}",
+      "dueDate": "{{day:0}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "ledger",
+        "quality"
+      ],
+      "createdAt": "{{day:-7}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "refactor",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Move region-specific tax rules into a small policy module without changing totals."
+        }
+      ],
+      "artifacts": [
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "tdd-cycle",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-ledger-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-ledger-05",
+      "title": "Complete yearly renewal regression",
+      "description": "Cover leap years, month boundaries, zero balances, and cancelled renewals.\n\nSample scenario: A pricing library developed through explicit failing tests and regression checks.",
+      "projectId": "sample-ledger",
+      "stage": "done",
+      "status": "done",
+      "priority": "low",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-3}}",
+      "dueDate": "{{day:6}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "ledger",
+        "release"
+      ],
+      "createdAt": "{{day:-6}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "done",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Cover leap years, month boundaries, zero balances, and cancelled renewals."
+        }
+      ],
+      "artifacts": [
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "tdd-cycle",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-ledger-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "closed",
+      "closed": "{{day:0}}",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-beacon-01",
+      "title": "Define the activation funnel",
+      "description": "Measure the path from a first visit to a completed team workspace setup.\n\nSample scenario: An analytics workspace that combines specification review with test-driven implementation.",
+      "projectId": "sample-beacon",
+      "stage": "intent",
+      "status": "backlog",
+      "priority": "normal",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-7}}",
+      "dueDate": "{{day:2}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "beacon",
+        "discovery"
+      ],
+      "createdAt": "{{day:-10}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "intent",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Measure the path from a first visit to a completed team workspace setup."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release",
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "sdd-with-tdd",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-beacon-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-beacon-02",
+      "title": "Design privacy-aware event storage",
+      "description": "Store aggregate events while excluding email addresses and free-text user content.\n\nSample scenario: An analytics workspace that combines specification review with test-driven implementation.",
+      "projectId": "sample-beacon",
+      "stage": "design",
+      "status": "running",
+      "priority": "high",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-6}}",
+      "dueDate": "{{day:3}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "beacon",
+        "design"
+      ],
+      "createdAt": "{{day:-9}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "design",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Store aggregate events while excluding email addresses and free-text user content."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release",
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "sdd-with-tdd",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-beacon-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-beacon-03",
+      "title": "Build the retention cohort calculator",
+      "description": "Compute weekly cohort retention with explicit fixtures for missing and late events.\n\nSample scenario: An analytics workspace that combines specification review with test-driven implementation.",
+      "projectId": "sample-beacon",
+      "stage": "build",
+      "status": "running",
+      "priority": "high",
+      "owner": "Sam Rivera",
+      "startDate": "{{day:-5}}",
+      "dueDate": "{{day:4}}",
+      "dependsOn": [
+        "sample-beacon-01"
+      ],
+      "tags": [
+        "sample",
+        "beacon",
+        "implementation"
+      ],
+      "createdAt": "{{day:-8}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "build",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Compute weekly cohort retention with explicit fixtures for missing and late events."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release",
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "sdd-with-tdd",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Sam Rivera"
+      ],
+      "milestone": "sample-beacon-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-beacon-04",
+      "title": "Validate timezone boundaries",
+      "description": "Group events by the workspace timezone at daylight-saving and midnight boundaries.\n\nSample scenario: An analytics workspace that combines specification review with test-driven implementation.",
+      "projectId": "sample-beacon",
+      "stage": "test",
+      "status": "blocked",
+      "priority": "urgent",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-4}}",
+      "dueDate": "{{day:0}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "beacon",
+        "quality"
+      ],
+      "createdAt": "{{day:-7}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "test",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Group events by the workspace timezone at daylight-saving and midnight boundaries."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release",
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "sdd-with-tdd",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-beacon-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-beacon-05",
+      "title": "Release the weekly engagement report",
+      "description": "Summarize active teams, returning contributors, and completed onboarding sessions.\n\nSample scenario: An analytics workspace that combines specification review with test-driven implementation.",
+      "projectId": "sample-beacon",
+      "stage": "deploy",
+      "status": "done",
+      "priority": "low",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-3}}",
+      "dueDate": "{{day:6}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "beacon",
+        "release"
+      ],
+      "createdAt": "{{day:-6}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "deploy",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Summarize active teams, returning contributors, and completed onboarding sessions."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "plan",
+        "verification",
+        "release",
+        "test-intent",
+        "red-evidence",
+        "implementation",
+        "green-evidence",
+        "refactor",
+        "regression"
+      ],
+      "workflowId": "sdd-with-tdd",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-beacon-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "closed",
+      "closed": "{{day:0}}",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-harbor-01",
+      "title": "Investigate delayed search results",
+      "description": "A freshly created support ticket should become searchable within five seconds.\n\nSample scenario: A support backlog with reproducible reports, reviewed solutions, and documented outcomes.",
+      "projectId": "sample-harbor",
+      "stage": "request",
+      "status": "backlog",
+      "priority": "normal",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-7}}",
+      "dueDate": "{{day:2}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "harbor",
+        "discovery"
+      ],
+      "createdAt": "{{day:-10}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "request",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: A freshly created support ticket should become searchable within five seconds."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "verification"
+      ],
+      "workflowId": "issue-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "bug",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-harbor-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-harbor-02",
+      "title": "Clarify attachment size limits",
+      "description": "Explain the maximum upload size before a customer selects an attachment.\n\nSample scenario: A support backlog with reproducible reports, reviewed solutions, and documented outcomes.",
+      "projectId": "sample-harbor",
+      "stage": "request",
+      "status": "backlog",
+      "priority": "high",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-6}}",
+      "dueDate": "{{day:3}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "harbor",
+        "design"
+      ],
+      "createdAt": "{{day:-9}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "request",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Explain the maximum upload size before a customer selects an attachment."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "verification"
+      ],
+      "workflowId": "issue-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-harbor-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-harbor-03",
+      "title": "Design an offline reply draft",
+      "description": "Keep a reply draft locally when the network disconnects and restore it on reconnect.\n\nSample scenario: A support backlog with reproducible reports, reviewed solutions, and documented outcomes.",
+      "projectId": "sample-harbor",
+      "stage": "design",
+      "status": "running",
+      "priority": "high",
+      "owner": "Sam Rivera",
+      "startDate": "{{day:-5}}",
+      "dueDate": "{{day:4}}",
+      "dependsOn": [
+        "sample-harbor-01"
+      ],
+      "tags": [
+        "sample",
+        "harbor",
+        "implementation"
+      ],
+      "createdAt": "{{day:-8}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "design",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Keep a reply draft locally when the network disconnects and restore it on reconnect."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "verification"
+      ],
+      "workflowId": "issue-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "bug",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Sam Rivera"
+      ],
+      "milestone": "sample-harbor-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-harbor-04",
+      "title": "Resolve duplicate notification emails",
+      "description": "Deduplicate ticket update notifications by recipient and event identifier.\n\nSample scenario: A support backlog with reproducible reports, reviewed solutions, and documented outcomes.",
+      "projectId": "sample-harbor",
+      "stage": "resolve",
+      "status": "blocked",
+      "priority": "urgent",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-4}}",
+      "dueDate": "{{day:0}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "harbor",
+        "quality"
+      ],
+      "createdAt": "{{day:-7}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "resolve",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Deduplicate ticket update notifications by recipient and event identifier."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "verification"
+      ],
+      "workflowId": "issue-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "bug",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-harbor-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-harbor-05",
+      "title": "Close the keyboard shortcut conflict",
+      "description": "Let the editor handle its own shortcuts while the ticket detail panel is focused.\n\nSample scenario: A support backlog with reproducible reports, reviewed solutions, and documented outcomes.",
+      "projectId": "sample-harbor",
+      "stage": "resolve",
+      "status": "done",
+      "priority": "low",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-3}}",
+      "dueDate": "{{day:6}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "harbor",
+        "release"
+      ],
+      "createdAt": "{{day:-6}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "resolve",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Let the editor handle its own shortcuts while the ticket detail panel is focused."
+        }
+      ],
+      "artifacts": [
+        "intent",
+        "spec",
+        "verification"
+      ],
+      "workflowId": "issue-main",
+      "workflowVersion": "1.1.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "bug",
+      "executionType": "code",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-harbor-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "closed",
+      "closed": "{{day:0}}",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-compass-01",
+      "title": "Compare local search strategies",
+      "description": "Compare lexical, semantic, and hybrid search on a documented sample query set.\n\nSample scenario: A research program with scoped goals, evidence notes, and paused plans ready to explore.",
+      "projectId": "sample-compass",
+      "stage": "pursue",
+      "status": "blocked",
+      "priority": "normal",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-7}}",
+      "dueDate": "{{day:2}}",
+      "dependsOn": [
+        "sample-compass-02"
+      ],
+      "tags": [
+        "sample",
+        "compass",
+        "discovery"
+      ],
+      "createdAt": "{{day:-10}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "pursue",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Compare lexical, semantic, and hybrid search on a documented sample query set."
+        }
+      ],
+      "artifacts": [
+        "evidence"
+      ],
+      "workflowId": "goal-main",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "research",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-compass-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-compass-02",
+      "title": "Create a representative query set",
+      "description": "Cover navigation, exact lookup, exploratory questions, and missing-result cases.\n\nSample scenario: A research program with scoped goals, evidence notes, and paused plans ready to explore.",
+      "projectId": "sample-compass",
+      "stage": "done",
+      "status": "done",
+      "priority": "high",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-6}}",
+      "dueDate": "{{day:3}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "compass",
+        "design"
+      ],
+      "createdAt": "{{day:-9}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "done",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Cover navigation, exact lookup, exploratory questions, and missing-result cases."
+        }
+      ],
+      "artifacts": [
+        "evidence"
+      ],
+      "workflowId": "goal-main",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "research",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-compass-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "closed",
+      "closed": "{{day:0}}",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-compass-03",
+      "title": "Summarize offline storage options",
+      "description": "Compare portability, migration effort, and recovery behavior for local storage formats.\n\nSample scenario: A research program with scoped goals, evidence notes, and paused plans ready to explore.",
+      "projectId": "sample-compass",
+      "stage": "pursue",
+      "status": "blocked",
+      "priority": "high",
+      "owner": "Sam Rivera",
+      "startDate": "{{day:-5}}",
+      "dueDate": "{{day:4}}",
+      "dependsOn": [
+        "sample-compass-01"
+      ],
+      "tags": [
+        "sample",
+        "compass",
+        "implementation"
+      ],
+      "createdAt": "{{day:-8}}T09:00:00+09:00",
+      "updatedAt": "{{day:-1}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "pursue",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Compare portability, migration effort, and recovery behavior for local storage formats."
+        }
+      ],
+      "artifacts": [
+        "evidence"
+      ],
+      "workflowId": "goal-main",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "research",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Sam Rivera"
+      ],
+      "milestone": "sample-compass-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-compass-04",
+      "title": "Assess document import quality",
+      "description": "Define a rubric for preserving headings, links, tables, and source attribution.\n\nSample scenario: A research program with scoped goals, evidence notes, and paused plans ready to explore.",
+      "projectId": "sample-compass",
+      "stage": "pursue",
+      "status": "blocked",
+      "priority": "urgent",
+      "owner": "Alex Morgan",
+      "startDate": "{{day:-4}}",
+      "dueDate": "{{day:0}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "compass",
+        "quality"
+      ],
+      "createdAt": "{{day:-7}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "pursue",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Define a rubric for preserving headings, links, tables, and source attribution."
+        }
+      ],
+      "artifacts": [
+        "evidence"
+      ],
+      "workflowId": "goal-main",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "research",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Alex Morgan"
+      ],
+      "milestone": "sample-compass-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "open",
+      "closed": "",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    },
+    {
+      "id": "sample-compass-05",
+      "title": "Publish the research reading guide",
+      "description": "Organize the research questions and explain how to interpret the sample evidence.\n\nSample scenario: A research program with scoped goals, evidence notes, and paused plans ready to explore.",
+      "projectId": "sample-compass",
+      "stage": "done",
+      "status": "done",
+      "priority": "low",
+      "owner": "Jordan Lee",
+      "startDate": "{{day:-3}}",
+      "dueDate": "{{day:6}}",
+      "dependsOn": [],
+      "tags": [
+        "sample",
+        "compass",
+        "release"
+      ],
+      "createdAt": "{{day:-6}}T09:00:00+09:00",
+      "updatedAt": "{{day:0}}T10:30:00+09:00",
+      "decisions": [
+        {
+          "stage": "done",
+          "at": "{{day:-1}}T14:00:00+09:00",
+          "note": "Sample checkpoint: Organize the research questions and explain how to interpret the sample evidence."
+        }
+      ],
+      "artifacts": [
+        "evidence"
+      ],
+      "workflowId": "goal-main",
+      "workflowVersion": "1.0.0",
+      "workflowDigest": "",
+      "workflowInstanceId": null,
+      "activeNodes": [],
+      "issueType": "task",
+      "executionType": "research",
+      "labels": [
+        "sample"
+      ],
+      "assignees": [
+        "Jordan Lee"
+      ],
+      "milestone": "sample-compass-milestone",
+      "approvalRequired": true,
+      "approve": false,
+      "approved": "",
+      "state": "closed",
+      "closed": "{{day:0}}",
+      "githubRepo": "",
+      "githubNumber": "",
+      "githubUrl": "",
+      "githubState": "",
+      "githubUpdated": ""
+    }
+  ],
+  "events": [
+    {
+      "id": "sample-atlas-review",
+      "title": "Atlas Customer Portal: Design review",
+      "date": "{{day:0}}",
+      "endDate": null,
+      "kind": "review",
+      "projectId": "sample-atlas",
+      "workId": "sample-atlas-04",
+      "notes": "Review the proposal, unresolved questions, and acceptance criteria."
+    },
+    {
+      "id": "sample-atlas-milestone",
+      "title": "Atlas Customer Portal: Pilot milestone",
+      "date": "{{day:5}}",
+      "endDate": null,
+      "kind": "milestone",
+      "projectId": "sample-atlas",
+      "workId": "sample-atlas-04",
+      "notes": "Check readiness across the sample work items and document remaining risks."
+    },
+    {
+      "id": "sample-atlas-release",
+      "title": "Atlas Customer Portal: Sample release planning",
+      "date": "{{day:9}}",
+      "endDate": null,
+      "kind": "release",
+      "projectId": "sample-atlas",
+      "workId": "sample-atlas-04",
+      "notes": "Plan communication, verification, and a reversible rollout."
+    },
+    {
+      "id": "sample-relay-review",
+      "title": "Relay Team Onboarding: Design review",
+      "date": "{{day:0}}",
+      "endDate": null,
+      "kind": "review",
+      "projectId": "sample-relay",
+      "workId": "sample-relay-04",
+      "notes": "Review the proposal, unresolved questions, and acceptance criteria."
+    },
+    {
+      "id": "sample-relay-milestone",
+      "title": "Relay Team Onboarding: Pilot milestone",
+      "date": "{{day:5}}",
+      "endDate": null,
+      "kind": "milestone",
+      "projectId": "sample-relay",
+      "workId": "sample-relay-04",
+      "notes": "Check readiness across the sample work items and document remaining risks."
+    },
+    {
+      "id": "sample-relay-release",
+      "title": "Relay Team Onboarding: Sample release planning",
+      "date": "{{day:9}}",
+      "endDate": null,
+      "kind": "release",
+      "projectId": "sample-relay",
+      "workId": "sample-relay-04",
+      "notes": "Plan communication, verification, and a reversible rollout."
+    },
+    {
+      "id": "sample-ledger-review",
+      "title": "Ledger Pricing Engine: Design review",
+      "date": "{{day:0}}",
+      "endDate": null,
+      "kind": "review",
+      "projectId": "sample-ledger",
+      "workId": "sample-ledger-04",
+      "notes": "Review the proposal, unresolved questions, and acceptance criteria."
+    },
+    {
+      "id": "sample-ledger-milestone",
+      "title": "Ledger Pricing Engine: Pilot milestone",
+      "date": "{{day:5}}",
+      "endDate": null,
+      "kind": "milestone",
+      "projectId": "sample-ledger",
+      "workId": "sample-ledger-04",
+      "notes": "Check readiness across the sample work items and document remaining risks."
+    },
+    {
+      "id": "sample-ledger-release",
+      "title": "Ledger Pricing Engine: Sample release planning",
+      "date": "{{day:9}}",
+      "endDate": null,
+      "kind": "release",
+      "projectId": "sample-ledger",
+      "workId": "sample-ledger-04",
+      "notes": "Plan communication, verification, and a reversible rollout."
+    },
+    {
+      "id": "sample-beacon-review",
+      "title": "Beacon Product Analytics: Design review",
+      "date": "{{day:0}}",
+      "endDate": null,
+      "kind": "review",
+      "projectId": "sample-beacon",
+      "workId": "sample-beacon-04",
+      "notes": "Review the proposal, unresolved questions, and acceptance criteria."
+    },
+    {
+      "id": "sample-beacon-milestone",
+      "title": "Beacon Product Analytics: Pilot milestone",
+      "date": "{{day:5}}",
+      "endDate": null,
+      "kind": "milestone",
+      "projectId": "sample-beacon",
+      "workId": "sample-beacon-04",
+      "notes": "Check readiness across the sample work items and document remaining risks."
+    },
+    {
+      "id": "sample-beacon-release",
+      "title": "Beacon Product Analytics: Sample release planning",
+      "date": "{{day:9}}",
+      "endDate": null,
+      "kind": "release",
+      "projectId": "sample-beacon",
+      "workId": "sample-beacon-04",
+      "notes": "Plan communication, verification, and a reversible rollout."
+    },
+    {
+      "id": "sample-harbor-review",
+      "title": "Harbor Support Desk: Design review",
+      "date": "{{day:0}}",
+      "endDate": null,
+      "kind": "review",
+      "projectId": "sample-harbor",
+      "workId": "sample-harbor-04",
+      "notes": "Review the proposal, unresolved questions, and acceptance criteria."
+    },
+    {
+      "id": "sample-harbor-milestone",
+      "title": "Harbor Support Desk: Pilot milestone",
+      "date": "{{day:5}}",
+      "endDate": null,
+      "kind": "milestone",
+      "projectId": "sample-harbor",
+      "workId": "sample-harbor-04",
+      "notes": "Check readiness across the sample work items and document remaining risks."
+    },
+    {
+      "id": "sample-harbor-release",
+      "title": "Harbor Support Desk: Sample release planning",
+      "date": "{{day:9}}",
+      "endDate": null,
+      "kind": "release",
+      "projectId": "sample-harbor",
+      "workId": "sample-harbor-04",
+      "notes": "Plan communication, verification, and a reversible rollout."
+    },
+    {
+      "id": "sample-compass-review",
+      "title": "Compass Research Lab: Design review",
+      "date": "{{day:0}}",
+      "endDate": null,
+      "kind": "review",
+      "projectId": "sample-compass",
+      "workId": "sample-compass-04",
+      "notes": "Review the proposal, unresolved questions, and acceptance criteria."
+    },
+    {
+      "id": "sample-compass-milestone",
+      "title": "Compass Research Lab: Pilot milestone",
+      "date": "{{day:5}}",
+      "endDate": null,
+      "kind": "milestone",
+      "projectId": "sample-compass",
+      "workId": "sample-compass-04",
+      "notes": "Check readiness across the sample work items and document remaining risks."
+    },
+    {
+      "id": "sample-compass-release",
+      "title": "Compass Research Lab: Sample release planning",
+      "date": "{{day:9}}",
+      "endDate": null,
+      "kind": "release",
+      "projectId": "sample-compass",
+      "workId": "sample-compass-04",
+      "notes": "Plan communication, verification, and a reversible rollout."
+    }
+  ],
+  "documents": {
+    "sample-atlas-01/intent": {
+      "workId": "sample-atlas-01",
+      "artifact": "intent",
+      "path": "work/sample-atlas-01/intent.md",
+      "markdown": "# Invite teammates by email — Intent\n\n> Fictional sample content.\n\n## Problem\n\nLet account owners invite teammates with a role and a seven-day invitation expiry.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-01/spec": {
+      "workId": "sample-atlas-01",
+      "artifact": "spec",
+      "path": "work/sample-atlas-01/spec.md",
+      "markdown": "# Invite teammates by email — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nLet account owners invite teammates with a role and a seven-day invitation expiry.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-01/plan": {
+      "workId": "sample-atlas-01",
+      "artifact": "plan",
+      "path": "work/sample-atlas-01/plan.md",
+      "markdown": "# Invite teammates by email — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Invite teammates by email.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-01/verification": {
+      "workId": "sample-atlas-01",
+      "artifact": "verification",
+      "path": "work/sample-atlas-01/verification.md",
+      "markdown": "# Invite teammates by email — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Invite teammates by email.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-01/release": {
+      "workId": "sample-atlas-01",
+      "artifact": "release",
+      "path": "work/sample-atlas-01/release.md",
+      "markdown": "# Invite teammates by email — Release\n\n> Fictional sample content.\n\n## Release note\n\nLet account owners invite teammates with a role and a seven-day invitation expiry.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-02/intent": {
+      "workId": "sample-atlas-02",
+      "artifact": "intent",
+      "path": "work/sample-atlas-02/intent.md",
+      "markdown": "# Manage organization roles — Intent\n\n> Fictional sample content.\n\n## Problem\n\nSeparate owner, administrator, and viewer permissions across account settings.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-02/spec": {
+      "workId": "sample-atlas-02",
+      "artifact": "spec",
+      "path": "work/sample-atlas-02/spec.md",
+      "markdown": "# Manage organization roles — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nSeparate owner, administrator, and viewer permissions across account settings.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-02/plan": {
+      "workId": "sample-atlas-02",
+      "artifact": "plan",
+      "path": "work/sample-atlas-02/plan.md",
+      "markdown": "# Manage organization roles — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Manage organization roles.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-02/verification": {
+      "workId": "sample-atlas-02",
+      "artifact": "verification",
+      "path": "work/sample-atlas-02/verification.md",
+      "markdown": "# Manage organization roles — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Manage organization roles.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-02/release": {
+      "workId": "sample-atlas-02",
+      "artifact": "release",
+      "path": "work/sample-atlas-02/release.md",
+      "markdown": "# Manage organization roles — Release\n\n> Fictional sample content.\n\n## Release note\n\nSeparate owner, administrator, and viewer permissions across account settings.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-03/intent": {
+      "workId": "sample-atlas-03",
+      "artifact": "intent",
+      "path": "work/sample-atlas-03/intent.md",
+      "markdown": "# Export monthly invoices — Intent\n\n> Fictional sample content.\n\n## Problem\n\nProvide a downloadable PDF invoice with tax details and a clear billing period.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-03/spec": {
+      "workId": "sample-atlas-03",
+      "artifact": "spec",
+      "path": "work/sample-atlas-03/spec.md",
+      "markdown": "# Export monthly invoices — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nProvide a downloadable PDF invoice with tax details and a clear billing period.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-03/plan": {
+      "workId": "sample-atlas-03",
+      "artifact": "plan",
+      "path": "work/sample-atlas-03/plan.md",
+      "markdown": "# Export monthly invoices — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Export monthly invoices.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-03/verification": {
+      "workId": "sample-atlas-03",
+      "artifact": "verification",
+      "path": "work/sample-atlas-03/verification.md",
+      "markdown": "# Export monthly invoices — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Export monthly invoices.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-03/release": {
+      "workId": "sample-atlas-03",
+      "artifact": "release",
+      "path": "work/sample-atlas-03/release.md",
+      "markdown": "# Export monthly invoices — Release\n\n> Fictional sample content.\n\n## Release note\n\nProvide a downloadable PDF invoice with tax details and a clear billing period.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-04/intent": {
+      "workId": "sample-atlas-04",
+      "artifact": "intent",
+      "path": "work/sample-atlas-04/intent.md",
+      "markdown": "# Restore expired sessions — Intent\n\n> Fictional sample content.\n\n## Problem\n\nPreserve unsaved form data when a session expires and sign-in resumes.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-04/spec": {
+      "workId": "sample-atlas-04",
+      "artifact": "spec",
+      "path": "work/sample-atlas-04/spec.md",
+      "markdown": "# Restore expired sessions — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nPreserve unsaved form data when a session expires and sign-in resumes.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-04/plan": {
+      "workId": "sample-atlas-04",
+      "artifact": "plan",
+      "path": "work/sample-atlas-04/plan.md",
+      "markdown": "# Restore expired sessions — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Restore expired sessions.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-04/verification": {
+      "workId": "sample-atlas-04",
+      "artifact": "verification",
+      "path": "work/sample-atlas-04/verification.md",
+      "markdown": "# Restore expired sessions — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Restore expired sessions.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-04/release": {
+      "workId": "sample-atlas-04",
+      "artifact": "release",
+      "path": "work/sample-atlas-04/release.md",
+      "markdown": "# Restore expired sessions — Release\n\n> Fictional sample content.\n\n## Release note\n\nPreserve unsaved form data when a session expires and sign-in resumes.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-05/intent": {
+      "workId": "sample-atlas-05",
+      "artifact": "intent",
+      "path": "work/sample-atlas-05/intent.md",
+      "markdown": "# Launch accessible account settings — Intent\n\n> Fictional sample content.\n\n## Problem\n\nShip keyboard navigation, visible focus, and readable account preference controls.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-05/spec": {
+      "workId": "sample-atlas-05",
+      "artifact": "spec",
+      "path": "work/sample-atlas-05/spec.md",
+      "markdown": "# Launch accessible account settings — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nShip keyboard navigation, visible focus, and readable account preference controls.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-05/plan": {
+      "workId": "sample-atlas-05",
+      "artifact": "plan",
+      "path": "work/sample-atlas-05/plan.md",
+      "markdown": "# Launch accessible account settings — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Launch accessible account settings.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-05/verification": {
+      "workId": "sample-atlas-05",
+      "artifact": "verification",
+      "path": "work/sample-atlas-05/verification.md",
+      "markdown": "# Launch accessible account settings — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Launch accessible account settings.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-atlas-05/release": {
+      "workId": "sample-atlas-05",
+      "artifact": "release",
+      "path": "work/sample-atlas-05/release.md",
+      "markdown": "# Launch accessible account settings — Release\n\n> Fictional sample content.\n\n## Release note\n\nShip keyboard navigation, visible focus, and readable account preference controls.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-01/intent": {
+      "workId": "sample-relay-01",
+      "artifact": "intent",
+      "path": "work/sample-relay-01/intent.md",
+      "markdown": "# Capture onboarding friction — Intent\n\n> Fictional sample content.\n\n## Problem\n\nCollect the three most confusing moments in a new teammate onboarding session.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-01/spec": {
+      "workId": "sample-relay-01",
+      "artifact": "spec",
+      "path": "work/sample-relay-01/spec.md",
+      "markdown": "# Capture onboarding friction — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nCollect the three most confusing moments in a new teammate onboarding session.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-01/plan": {
+      "workId": "sample-relay-01",
+      "artifact": "plan",
+      "path": "work/sample-relay-01/plan.md",
+      "markdown": "# Capture onboarding friction — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Capture onboarding friction.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-01/verification": {
+      "workId": "sample-relay-01",
+      "artifact": "verification",
+      "path": "work/sample-relay-01/verification.md",
+      "markdown": "# Capture onboarding friction — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Capture onboarding friction.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-01/brief": {
+      "workId": "sample-relay-01",
+      "artifact": "brief",
+      "path": "work/sample-relay-01/brief.md",
+      "markdown": "# Capture onboarding friction — Brief\n\n> Fictional sample content.\n\n## Context\n\nAn onboarding experience that turns team requests into reviewed product changes.\n\n## Agreed scope\n\nCollect the three most confusing moments in a new teammate onboarding session.\n\n## Open question\n\nWhich recovery path should appear when the connection is unavailable?\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-01/rollback": {
+      "workId": "sample-relay-01",
+      "artifact": "rollback",
+      "path": "work/sample-relay-01/rollback.md",
+      "markdown": "# Capture onboarding friction — Rollback\n\n> Fictional sample content.\n\n## Recovery plan\n\nDisable the new behavior for capture onboarding friction and restore the previous saved state.\n\n## Verification\n\nConfirm that existing records remain readable and retries do not duplicate data.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-02/intent": {
+      "workId": "sample-relay-02",
+      "artifact": "intent",
+      "path": "work/sample-relay-02/intent.md",
+      "markdown": "# Choose invitation delivery — Intent\n\n> Fictional sample content.\n\n## Problem\n\nDecide whether an invitation should arrive by email or a shareable secure link.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-02/spec": {
+      "workId": "sample-relay-02",
+      "artifact": "spec",
+      "path": "work/sample-relay-02/spec.md",
+      "markdown": "# Choose invitation delivery — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nDecide whether an invitation should arrive by email or a shareable secure link.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-02/plan": {
+      "workId": "sample-relay-02",
+      "artifact": "plan",
+      "path": "work/sample-relay-02/plan.md",
+      "markdown": "# Choose invitation delivery — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Choose invitation delivery.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-02/verification": {
+      "workId": "sample-relay-02",
+      "artifact": "verification",
+      "path": "work/sample-relay-02/verification.md",
+      "markdown": "# Choose invitation delivery — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Choose invitation delivery.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-02/brief": {
+      "workId": "sample-relay-02",
+      "artifact": "brief",
+      "path": "work/sample-relay-02/brief.md",
+      "markdown": "# Choose invitation delivery — Brief\n\n> Fictional sample content.\n\n## Context\n\nAn onboarding experience that turns team requests into reviewed product changes.\n\n## Agreed scope\n\nDecide whether an invitation should arrive by email or a shareable secure link.\n\n## Open question\n\nWhich recovery path should appear when the connection is unavailable?\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-02/rollback": {
+      "workId": "sample-relay-02",
+      "artifact": "rollback",
+      "path": "work/sample-relay-02/rollback.md",
+      "markdown": "# Choose invitation delivery — Rollback\n\n> Fictional sample content.\n\n## Recovery plan\n\nDisable the new behavior for choose invitation delivery and restore the previous saved state.\n\n## Verification\n\nConfirm that existing records remain readable and retries do not duplicate data.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-03/intent": {
+      "workId": "sample-relay-03",
+      "artifact": "intent",
+      "path": "work/sample-relay-03/intent.md",
+      "markdown": "# Design the welcome checklist — Intent\n\n> Fictional sample content.\n\n## Problem\n\nShow role-specific onboarding steps with useful next actions and saved progress.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-03/spec": {
+      "workId": "sample-relay-03",
+      "artifact": "spec",
+      "path": "work/sample-relay-03/spec.md",
+      "markdown": "# Design the welcome checklist — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nShow role-specific onboarding steps with useful next actions and saved progress.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-03/plan": {
+      "workId": "sample-relay-03",
+      "artifact": "plan",
+      "path": "work/sample-relay-03/plan.md",
+      "markdown": "# Design the welcome checklist — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Design the welcome checklist.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-03/verification": {
+      "workId": "sample-relay-03",
+      "artifact": "verification",
+      "path": "work/sample-relay-03/verification.md",
+      "markdown": "# Design the welcome checklist — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Design the welcome checklist.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-03/brief": {
+      "workId": "sample-relay-03",
+      "artifact": "brief",
+      "path": "work/sample-relay-03/brief.md",
+      "markdown": "# Design the welcome checklist — Brief\n\n> Fictional sample content.\n\n## Context\n\nAn onboarding experience that turns team requests into reviewed product changes.\n\n## Agreed scope\n\nShow role-specific onboarding steps with useful next actions and saved progress.\n\n## Open question\n\nWhich recovery path should appear when the connection is unavailable?\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-03/rollback": {
+      "workId": "sample-relay-03",
+      "artifact": "rollback",
+      "path": "work/sample-relay-03/rollback.md",
+      "markdown": "# Design the welcome checklist — Rollback\n\n> Fictional sample content.\n\n## Recovery plan\n\nDisable the new behavior for design the welcome checklist and restore the previous saved state.\n\n## Verification\n\nConfirm that existing records remain readable and retries do not duplicate data.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-04/intent": {
+      "workId": "sample-relay-04",
+      "artifact": "intent",
+      "path": "work/sample-relay-04/intent.md",
+      "markdown": "# Review workspace templates — Intent\n\n> Fictional sample content.\n\n## Problem\n\nAllow a team owner to choose a starter workspace before inviting colleagues.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-04/spec": {
+      "workId": "sample-relay-04",
+      "artifact": "spec",
+      "path": "work/sample-relay-04/spec.md",
+      "markdown": "# Review workspace templates — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nAllow a team owner to choose a starter workspace before inviting colleagues.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-04/plan": {
+      "workId": "sample-relay-04",
+      "artifact": "plan",
+      "path": "work/sample-relay-04/plan.md",
+      "markdown": "# Review workspace templates — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Review workspace templates.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-04/verification": {
+      "workId": "sample-relay-04",
+      "artifact": "verification",
+      "path": "work/sample-relay-04/verification.md",
+      "markdown": "# Review workspace templates — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Review workspace templates.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-04/brief": {
+      "workId": "sample-relay-04",
+      "artifact": "brief",
+      "path": "work/sample-relay-04/brief.md",
+      "markdown": "# Review workspace templates — Brief\n\n> Fictional sample content.\n\n## Context\n\nAn onboarding experience that turns team requests into reviewed product changes.\n\n## Agreed scope\n\nAllow a team owner to choose a starter workspace before inviting colleagues.\n\n## Open question\n\nWhich recovery path should appear when the connection is unavailable?\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-04/rollback": {
+      "workId": "sample-relay-04",
+      "artifact": "rollback",
+      "path": "work/sample-relay-04/rollback.md",
+      "markdown": "# Review workspace templates — Rollback\n\n> Fictional sample content.\n\n## Recovery plan\n\nDisable the new behavior for review workspace templates and restore the previous saved state.\n\n## Verification\n\nConfirm that existing records remain readable and retries do not duplicate data.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-05/intent": {
+      "workId": "sample-relay-05",
+      "artifact": "intent",
+      "path": "work/sample-relay-05/intent.md",
+      "markdown": "# Verify onboarding progress recovery — Intent\n\n> Fictional sample content.\n\n## Problem\n\nRestore completed onboarding steps after closing and reopening the browser.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-05/spec": {
+      "workId": "sample-relay-05",
+      "artifact": "spec",
+      "path": "work/sample-relay-05/spec.md",
+      "markdown": "# Verify onboarding progress recovery — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nRestore completed onboarding steps after closing and reopening the browser.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-05/plan": {
+      "workId": "sample-relay-05",
+      "artifact": "plan",
+      "path": "work/sample-relay-05/plan.md",
+      "markdown": "# Verify onboarding progress recovery — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Verify onboarding progress recovery.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-05/verification": {
+      "workId": "sample-relay-05",
+      "artifact": "verification",
+      "path": "work/sample-relay-05/verification.md",
+      "markdown": "# Verify onboarding progress recovery — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Verify onboarding progress recovery.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-05/brief": {
+      "workId": "sample-relay-05",
+      "artifact": "brief",
+      "path": "work/sample-relay-05/brief.md",
+      "markdown": "# Verify onboarding progress recovery — Brief\n\n> Fictional sample content.\n\n## Context\n\nAn onboarding experience that turns team requests into reviewed product changes.\n\n## Agreed scope\n\nRestore completed onboarding steps after closing and reopening the browser.\n\n## Open question\n\nWhich recovery path should appear when the connection is unavailable?\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-05/rollback": {
+      "workId": "sample-relay-05",
+      "artifact": "rollback",
+      "path": "work/sample-relay-05/rollback.md",
+      "markdown": "# Verify onboarding progress recovery — Rollback\n\n> Fictional sample content.\n\n## Recovery plan\n\nDisable the new behavior for verify onboarding progress recovery and restore the previous saved state.\n\n## Verification\n\nConfirm that existing records remain readable and retries do not duplicate data.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-06/intent": {
+      "workId": "sample-relay-06",
+      "artifact": "intent",
+      "path": "work/sample-relay-06/intent.md",
+      "markdown": "# Publish the welcome guide — Intent\n\n> Fictional sample content.\n\n## Problem\n\nExplain team setup, first project creation, and where to find help.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-06/spec": {
+      "workId": "sample-relay-06",
+      "artifact": "spec",
+      "path": "work/sample-relay-06/spec.md",
+      "markdown": "# Publish the welcome guide — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nExplain team setup, first project creation, and where to find help.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-06/plan": {
+      "workId": "sample-relay-06",
+      "artifact": "plan",
+      "path": "work/sample-relay-06/plan.md",
+      "markdown": "# Publish the welcome guide — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Publish the welcome guide.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-06/verification": {
+      "workId": "sample-relay-06",
+      "artifact": "verification",
+      "path": "work/sample-relay-06/verification.md",
+      "markdown": "# Publish the welcome guide — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Publish the welcome guide.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-06/brief": {
+      "workId": "sample-relay-06",
+      "artifact": "brief",
+      "path": "work/sample-relay-06/brief.md",
+      "markdown": "# Publish the welcome guide — Brief\n\n> Fictional sample content.\n\n## Context\n\nAn onboarding experience that turns team requests into reviewed product changes.\n\n## Agreed scope\n\nExplain team setup, first project creation, and where to find help.\n\n## Open question\n\nWhich recovery path should appear when the connection is unavailable?\n",
+      "revision": "sample-v1"
+    },
+    "sample-relay-06/rollback": {
+      "workId": "sample-relay-06",
+      "artifact": "rollback",
+      "path": "work/sample-relay-06/rollback.md",
+      "markdown": "# Publish the welcome guide — Rollback\n\n> Fictional sample content.\n\n## Recovery plan\n\nDisable the new behavior for publish the welcome guide and restore the previous saved state.\n\n## Verification\n\nConfirm that existing records remain readable and retries do not duplicate data.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-01/test-intent": {
+      "workId": "sample-ledger-01",
+      "artifact": "test-intent",
+      "path": "work/sample-ledger-01/test-intent.md",
+      "markdown": "# Specify prorated subscription charges — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nCalculate a subscription change using the exact number of remaining billing days.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-01/red-evidence": {
+      "workId": "sample-ledger-01",
+      "artifact": "red-evidence",
+      "path": "work/sample-ledger-01/red-evidence.md",
+      "markdown": "# Specify prorated subscription charges — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nCalculate a subscription change using the exact number of remaining billing days.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-01/implementation": {
+      "workId": "sample-ledger-01",
+      "artifact": "implementation",
+      "path": "work/sample-ledger-01/implementation.md",
+      "markdown": "# Specify prorated subscription charges — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nCalculate a subscription change using the exact number of remaining billing days.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-01/green-evidence": {
+      "workId": "sample-ledger-01",
+      "artifact": "green-evidence",
+      "path": "work/sample-ledger-01/green-evidence.md",
+      "markdown": "# Specify prorated subscription charges — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nCalculate a subscription change using the exact number of remaining billing days.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-01/refactor": {
+      "workId": "sample-ledger-01",
+      "artifact": "refactor",
+      "path": "work/sample-ledger-01/refactor.md",
+      "markdown": "# Specify prorated subscription charges — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nCalculate a subscription change using the exact number of remaining billing days.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-01/regression": {
+      "workId": "sample-ledger-01",
+      "artifact": "regression",
+      "path": "work/sample-ledger-01/regression.md",
+      "markdown": "# Specify prorated subscription charges — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nCalculate a subscription change using the exact number of remaining billing days.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-02/test-intent": {
+      "workId": "sample-ledger-02",
+      "artifact": "test-intent",
+      "path": "work/sample-ledger-02/test-intent.md",
+      "markdown": "# Reproduce duplicate discount rounding — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nCapture a one-cent discrepancy when a percentage discount is applied twice.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-02/red-evidence": {
+      "workId": "sample-ledger-02",
+      "artifact": "red-evidence",
+      "path": "work/sample-ledger-02/red-evidence.md",
+      "markdown": "# Reproduce duplicate discount rounding — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nCapture a one-cent discrepancy when a percentage discount is applied twice.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-02/implementation": {
+      "workId": "sample-ledger-02",
+      "artifact": "implementation",
+      "path": "work/sample-ledger-02/implementation.md",
+      "markdown": "# Reproduce duplicate discount rounding — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nCapture a one-cent discrepancy when a percentage discount is applied twice.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-02/green-evidence": {
+      "workId": "sample-ledger-02",
+      "artifact": "green-evidence",
+      "path": "work/sample-ledger-02/green-evidence.md",
+      "markdown": "# Reproduce duplicate discount rounding — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nCapture a one-cent discrepancy when a percentage discount is applied twice.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-02/refactor": {
+      "workId": "sample-ledger-02",
+      "artifact": "refactor",
+      "path": "work/sample-ledger-02/refactor.md",
+      "markdown": "# Reproduce duplicate discount rounding — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nCapture a one-cent discrepancy when a percentage discount is applied twice.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-02/regression": {
+      "workId": "sample-ledger-02",
+      "artifact": "regression",
+      "path": "work/sample-ledger-02/regression.md",
+      "markdown": "# Reproduce duplicate discount rounding — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nCapture a one-cent discrepancy when a percentage discount is applied twice.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-03/test-intent": {
+      "workId": "sample-ledger-03",
+      "artifact": "test-intent",
+      "path": "work/sample-ledger-03/test-intent.md",
+      "markdown": "# Implement currency-safe totals — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nUse integer minor units for invoice line items and total calculations.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-03/red-evidence": {
+      "workId": "sample-ledger-03",
+      "artifact": "red-evidence",
+      "path": "work/sample-ledger-03/red-evidence.md",
+      "markdown": "# Implement currency-safe totals — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nUse integer minor units for invoice line items and total calculations.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-03/implementation": {
+      "workId": "sample-ledger-03",
+      "artifact": "implementation",
+      "path": "work/sample-ledger-03/implementation.md",
+      "markdown": "# Implement currency-safe totals — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nUse integer minor units for invoice line items and total calculations.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-03/green-evidence": {
+      "workId": "sample-ledger-03",
+      "artifact": "green-evidence",
+      "path": "work/sample-ledger-03/green-evidence.md",
+      "markdown": "# Implement currency-safe totals — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nUse integer minor units for invoice line items and total calculations.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-03/refactor": {
+      "workId": "sample-ledger-03",
+      "artifact": "refactor",
+      "path": "work/sample-ledger-03/refactor.md",
+      "markdown": "# Implement currency-safe totals — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nUse integer minor units for invoice line items and total calculations.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-03/regression": {
+      "workId": "sample-ledger-03",
+      "artifact": "regression",
+      "path": "work/sample-ledger-03/regression.md",
+      "markdown": "# Implement currency-safe totals — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nUse integer minor units for invoice line items and total calculations.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-04/test-intent": {
+      "workId": "sample-ledger-04",
+      "artifact": "test-intent",
+      "path": "work/sample-ledger-04/test-intent.md",
+      "markdown": "# Extract the tax calculation policy — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nMove region-specific tax rules into a small policy module without changing totals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-04/red-evidence": {
+      "workId": "sample-ledger-04",
+      "artifact": "red-evidence",
+      "path": "work/sample-ledger-04/red-evidence.md",
+      "markdown": "# Extract the tax calculation policy — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nMove region-specific tax rules into a small policy module without changing totals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-04/implementation": {
+      "workId": "sample-ledger-04",
+      "artifact": "implementation",
+      "path": "work/sample-ledger-04/implementation.md",
+      "markdown": "# Extract the tax calculation policy — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nMove region-specific tax rules into a small policy module without changing totals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-04/green-evidence": {
+      "workId": "sample-ledger-04",
+      "artifact": "green-evidence",
+      "path": "work/sample-ledger-04/green-evidence.md",
+      "markdown": "# Extract the tax calculation policy — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nMove region-specific tax rules into a small policy module without changing totals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-04/refactor": {
+      "workId": "sample-ledger-04",
+      "artifact": "refactor",
+      "path": "work/sample-ledger-04/refactor.md",
+      "markdown": "# Extract the tax calculation policy — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nMove region-specific tax rules into a small policy module without changing totals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-04/regression": {
+      "workId": "sample-ledger-04",
+      "artifact": "regression",
+      "path": "work/sample-ledger-04/regression.md",
+      "markdown": "# Extract the tax calculation policy — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nMove region-specific tax rules into a small policy module without changing totals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-05/test-intent": {
+      "workId": "sample-ledger-05",
+      "artifact": "test-intent",
+      "path": "work/sample-ledger-05/test-intent.md",
+      "markdown": "# Complete yearly renewal regression — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nCover leap years, month boundaries, zero balances, and cancelled renewals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-05/red-evidence": {
+      "workId": "sample-ledger-05",
+      "artifact": "red-evidence",
+      "path": "work/sample-ledger-05/red-evidence.md",
+      "markdown": "# Complete yearly renewal regression — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nCover leap years, month boundaries, zero balances, and cancelled renewals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-05/implementation": {
+      "workId": "sample-ledger-05",
+      "artifact": "implementation",
+      "path": "work/sample-ledger-05/implementation.md",
+      "markdown": "# Complete yearly renewal regression — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nCover leap years, month boundaries, zero balances, and cancelled renewals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-05/green-evidence": {
+      "workId": "sample-ledger-05",
+      "artifact": "green-evidence",
+      "path": "work/sample-ledger-05/green-evidence.md",
+      "markdown": "# Complete yearly renewal regression — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nCover leap years, month boundaries, zero balances, and cancelled renewals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-05/refactor": {
+      "workId": "sample-ledger-05",
+      "artifact": "refactor",
+      "path": "work/sample-ledger-05/refactor.md",
+      "markdown": "# Complete yearly renewal regression — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nCover leap years, month boundaries, zero balances, and cancelled renewals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-ledger-05/regression": {
+      "workId": "sample-ledger-05",
+      "artifact": "regression",
+      "path": "work/sample-ledger-05/regression.md",
+      "markdown": "# Complete yearly renewal regression — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nCover leap years, month boundaries, zero balances, and cancelled renewals.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/intent": {
+      "workId": "sample-beacon-01",
+      "artifact": "intent",
+      "path": "work/sample-beacon-01/intent.md",
+      "markdown": "# Define the activation funnel — Intent\n\n> Fictional sample content.\n\n## Problem\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/spec": {
+      "workId": "sample-beacon-01",
+      "artifact": "spec",
+      "path": "work/sample-beacon-01/spec.md",
+      "markdown": "# Define the activation funnel — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/plan": {
+      "workId": "sample-beacon-01",
+      "artifact": "plan",
+      "path": "work/sample-beacon-01/plan.md",
+      "markdown": "# Define the activation funnel — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Define the activation funnel.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/verification": {
+      "workId": "sample-beacon-01",
+      "artifact": "verification",
+      "path": "work/sample-beacon-01/verification.md",
+      "markdown": "# Define the activation funnel — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Define the activation funnel.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/release": {
+      "workId": "sample-beacon-01",
+      "artifact": "release",
+      "path": "work/sample-beacon-01/release.md",
+      "markdown": "# Define the activation funnel — Release\n\n> Fictional sample content.\n\n## Release note\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/test-intent": {
+      "workId": "sample-beacon-01",
+      "artifact": "test-intent",
+      "path": "work/sample-beacon-01/test-intent.md",
+      "markdown": "# Define the activation funnel — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/red-evidence": {
+      "workId": "sample-beacon-01",
+      "artifact": "red-evidence",
+      "path": "work/sample-beacon-01/red-evidence.md",
+      "markdown": "# Define the activation funnel — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/implementation": {
+      "workId": "sample-beacon-01",
+      "artifact": "implementation",
+      "path": "work/sample-beacon-01/implementation.md",
+      "markdown": "# Define the activation funnel — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/green-evidence": {
+      "workId": "sample-beacon-01",
+      "artifact": "green-evidence",
+      "path": "work/sample-beacon-01/green-evidence.md",
+      "markdown": "# Define the activation funnel — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/refactor": {
+      "workId": "sample-beacon-01",
+      "artifact": "refactor",
+      "path": "work/sample-beacon-01/refactor.md",
+      "markdown": "# Define the activation funnel — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-01/regression": {
+      "workId": "sample-beacon-01",
+      "artifact": "regression",
+      "path": "work/sample-beacon-01/regression.md",
+      "markdown": "# Define the activation funnel — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nMeasure the path from a first visit to a completed team workspace setup.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/intent": {
+      "workId": "sample-beacon-02",
+      "artifact": "intent",
+      "path": "work/sample-beacon-02/intent.md",
+      "markdown": "# Design privacy-aware event storage — Intent\n\n> Fictional sample content.\n\n## Problem\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/spec": {
+      "workId": "sample-beacon-02",
+      "artifact": "spec",
+      "path": "work/sample-beacon-02/spec.md",
+      "markdown": "# Design privacy-aware event storage — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/plan": {
+      "workId": "sample-beacon-02",
+      "artifact": "plan",
+      "path": "work/sample-beacon-02/plan.md",
+      "markdown": "# Design privacy-aware event storage — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Design privacy-aware event storage.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/verification": {
+      "workId": "sample-beacon-02",
+      "artifact": "verification",
+      "path": "work/sample-beacon-02/verification.md",
+      "markdown": "# Design privacy-aware event storage — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Design privacy-aware event storage.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/release": {
+      "workId": "sample-beacon-02",
+      "artifact": "release",
+      "path": "work/sample-beacon-02/release.md",
+      "markdown": "# Design privacy-aware event storage — Release\n\n> Fictional sample content.\n\n## Release note\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/test-intent": {
+      "workId": "sample-beacon-02",
+      "artifact": "test-intent",
+      "path": "work/sample-beacon-02/test-intent.md",
+      "markdown": "# Design privacy-aware event storage — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/red-evidence": {
+      "workId": "sample-beacon-02",
+      "artifact": "red-evidence",
+      "path": "work/sample-beacon-02/red-evidence.md",
+      "markdown": "# Design privacy-aware event storage — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/implementation": {
+      "workId": "sample-beacon-02",
+      "artifact": "implementation",
+      "path": "work/sample-beacon-02/implementation.md",
+      "markdown": "# Design privacy-aware event storage — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/green-evidence": {
+      "workId": "sample-beacon-02",
+      "artifact": "green-evidence",
+      "path": "work/sample-beacon-02/green-evidence.md",
+      "markdown": "# Design privacy-aware event storage — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/refactor": {
+      "workId": "sample-beacon-02",
+      "artifact": "refactor",
+      "path": "work/sample-beacon-02/refactor.md",
+      "markdown": "# Design privacy-aware event storage — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-02/regression": {
+      "workId": "sample-beacon-02",
+      "artifact": "regression",
+      "path": "work/sample-beacon-02/regression.md",
+      "markdown": "# Design privacy-aware event storage — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nStore aggregate events while excluding email addresses and free-text user content.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/intent": {
+      "workId": "sample-beacon-03",
+      "artifact": "intent",
+      "path": "work/sample-beacon-03/intent.md",
+      "markdown": "# Build the retention cohort calculator — Intent\n\n> Fictional sample content.\n\n## Problem\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/spec": {
+      "workId": "sample-beacon-03",
+      "artifact": "spec",
+      "path": "work/sample-beacon-03/spec.md",
+      "markdown": "# Build the retention cohort calculator — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/plan": {
+      "workId": "sample-beacon-03",
+      "artifact": "plan",
+      "path": "work/sample-beacon-03/plan.md",
+      "markdown": "# Build the retention cohort calculator — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Build the retention cohort calculator.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/verification": {
+      "workId": "sample-beacon-03",
+      "artifact": "verification",
+      "path": "work/sample-beacon-03/verification.md",
+      "markdown": "# Build the retention cohort calculator — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Build the retention cohort calculator.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/release": {
+      "workId": "sample-beacon-03",
+      "artifact": "release",
+      "path": "work/sample-beacon-03/release.md",
+      "markdown": "# Build the retention cohort calculator — Release\n\n> Fictional sample content.\n\n## Release note\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/test-intent": {
+      "workId": "sample-beacon-03",
+      "artifact": "test-intent",
+      "path": "work/sample-beacon-03/test-intent.md",
+      "markdown": "# Build the retention cohort calculator — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/red-evidence": {
+      "workId": "sample-beacon-03",
+      "artifact": "red-evidence",
+      "path": "work/sample-beacon-03/red-evidence.md",
+      "markdown": "# Build the retention cohort calculator — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/implementation": {
+      "workId": "sample-beacon-03",
+      "artifact": "implementation",
+      "path": "work/sample-beacon-03/implementation.md",
+      "markdown": "# Build the retention cohort calculator — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/green-evidence": {
+      "workId": "sample-beacon-03",
+      "artifact": "green-evidence",
+      "path": "work/sample-beacon-03/green-evidence.md",
+      "markdown": "# Build the retention cohort calculator — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/refactor": {
+      "workId": "sample-beacon-03",
+      "artifact": "refactor",
+      "path": "work/sample-beacon-03/refactor.md",
+      "markdown": "# Build the retention cohort calculator — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-03/regression": {
+      "workId": "sample-beacon-03",
+      "artifact": "regression",
+      "path": "work/sample-beacon-03/regression.md",
+      "markdown": "# Build the retention cohort calculator — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nCompute weekly cohort retention with explicit fixtures for missing and late events.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/intent": {
+      "workId": "sample-beacon-04",
+      "artifact": "intent",
+      "path": "work/sample-beacon-04/intent.md",
+      "markdown": "# Validate timezone boundaries — Intent\n\n> Fictional sample content.\n\n## Problem\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/spec": {
+      "workId": "sample-beacon-04",
+      "artifact": "spec",
+      "path": "work/sample-beacon-04/spec.md",
+      "markdown": "# Validate timezone boundaries — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/plan": {
+      "workId": "sample-beacon-04",
+      "artifact": "plan",
+      "path": "work/sample-beacon-04/plan.md",
+      "markdown": "# Validate timezone boundaries — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Validate timezone boundaries.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/verification": {
+      "workId": "sample-beacon-04",
+      "artifact": "verification",
+      "path": "work/sample-beacon-04/verification.md",
+      "markdown": "# Validate timezone boundaries — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Validate timezone boundaries.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/release": {
+      "workId": "sample-beacon-04",
+      "artifact": "release",
+      "path": "work/sample-beacon-04/release.md",
+      "markdown": "# Validate timezone boundaries — Release\n\n> Fictional sample content.\n\n## Release note\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/test-intent": {
+      "workId": "sample-beacon-04",
+      "artifact": "test-intent",
+      "path": "work/sample-beacon-04/test-intent.md",
+      "markdown": "# Validate timezone boundaries — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/red-evidence": {
+      "workId": "sample-beacon-04",
+      "artifact": "red-evidence",
+      "path": "work/sample-beacon-04/red-evidence.md",
+      "markdown": "# Validate timezone boundaries — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/implementation": {
+      "workId": "sample-beacon-04",
+      "artifact": "implementation",
+      "path": "work/sample-beacon-04/implementation.md",
+      "markdown": "# Validate timezone boundaries — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/green-evidence": {
+      "workId": "sample-beacon-04",
+      "artifact": "green-evidence",
+      "path": "work/sample-beacon-04/green-evidence.md",
+      "markdown": "# Validate timezone boundaries — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/refactor": {
+      "workId": "sample-beacon-04",
+      "artifact": "refactor",
+      "path": "work/sample-beacon-04/refactor.md",
+      "markdown": "# Validate timezone boundaries — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-04/regression": {
+      "workId": "sample-beacon-04",
+      "artifact": "regression",
+      "path": "work/sample-beacon-04/regression.md",
+      "markdown": "# Validate timezone boundaries — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nGroup events by the workspace timezone at daylight-saving and midnight boundaries.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/intent": {
+      "workId": "sample-beacon-05",
+      "artifact": "intent",
+      "path": "work/sample-beacon-05/intent.md",
+      "markdown": "# Release the weekly engagement report — Intent\n\n> Fictional sample content.\n\n## Problem\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/spec": {
+      "workId": "sample-beacon-05",
+      "artifact": "spec",
+      "path": "work/sample-beacon-05/spec.md",
+      "markdown": "# Release the weekly engagement report — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/plan": {
+      "workId": "sample-beacon-05",
+      "artifact": "plan",
+      "path": "work/sample-beacon-05/plan.md",
+      "markdown": "# Release the weekly engagement report — Plan\n\n> Fictional sample content.\n\n## Delivery plan\n\n1. Document the expected behavior for: Release the weekly engagement report.\n2. Implement the smallest change behind the existing interface.\n3. Verify boundary cases and recovery.\n4. Record the outcome and any follow-up work.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/verification": {
+      "workId": "sample-beacon-05",
+      "artifact": "verification",
+      "path": "work/sample-beacon-05/verification.md",
+      "markdown": "# Release the weekly engagement report — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Release the weekly engagement report.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/release": {
+      "workId": "sample-beacon-05",
+      "artifact": "release",
+      "path": "work/sample-beacon-05/release.md",
+      "markdown": "# Release the weekly engagement report — Release\n\n> Fictional sample content.\n\n## Release note\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Rollout checklist\n\n- [ ] Connect a real repository.\n- [ ] Complete the verification checklist.\n- [ ] Confirm the release owner and rollback plan.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/test-intent": {
+      "workId": "sample-beacon-05",
+      "artifact": "test-intent",
+      "path": "work/sample-beacon-05/test-intent.md",
+      "markdown": "# Release the weekly engagement report — Test Intent\n\n> Fictional sample content.\n\n## Scenario\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative test intent record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/red-evidence": {
+      "workId": "sample-beacon-05",
+      "artifact": "red-evidence",
+      "path": "work/sample-beacon-05/red-evidence.md",
+      "markdown": "# Release the weekly engagement report — Red Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative red evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/implementation": {
+      "workId": "sample-beacon-05",
+      "artifact": "implementation",
+      "path": "work/sample-beacon-05/implementation.md",
+      "markdown": "# Release the weekly engagement report — Implementation\n\n> Fictional sample content.\n\n## Scenario\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative implementation record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/green-evidence": {
+      "workId": "sample-beacon-05",
+      "artifact": "green-evidence",
+      "path": "work/sample-beacon-05/green-evidence.md",
+      "markdown": "# Release the weekly engagement report — Green Evidence\n\n> Fictional sample content.\n\n## Scenario\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative green evidence record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/refactor": {
+      "workId": "sample-beacon-05",
+      "artifact": "refactor",
+      "path": "work/sample-beacon-05/refactor.md",
+      "markdown": "# Release the weekly engagement report — Refactor\n\n> Fictional sample content.\n\n## Scenario\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative refactor record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-beacon-05/regression": {
+      "workId": "sample-beacon-05",
+      "artifact": "regression",
+      "path": "work/sample-beacon-05/regression.md",
+      "markdown": "# Release the weekly engagement report — Regression\n\n> Fictional sample content.\n\n## Scenario\n\nSummarize active teams, returning contributors, and completed onboarding sessions.\n\n## Test cases\n\n| Case | Expected behavior |\n| --- | --- |\n| Typical input | Return the documented result |\n| Empty input | Return a clear validation message |\n| Repeated request | Preserve a single consistent result |\n\n## Evidence\n\nThis is an illustrative regression record. Run actual checks in a connected repository before treating it as verified.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-01/intent": {
+      "workId": "sample-harbor-01",
+      "artifact": "intent",
+      "path": "work/sample-harbor-01/intent.md",
+      "markdown": "# Investigate delayed search results — Intent\n\n> Fictional sample content.\n\n## Problem\n\nA freshly created support ticket should become searchable within five seconds.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-01/spec": {
+      "workId": "sample-harbor-01",
+      "artifact": "spec",
+      "path": "work/sample-harbor-01/spec.md",
+      "markdown": "# Investigate delayed search results — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nA freshly created support ticket should become searchable within five seconds.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-01/verification": {
+      "workId": "sample-harbor-01",
+      "artifact": "verification",
+      "path": "work/sample-harbor-01/verification.md",
+      "markdown": "# Investigate delayed search results — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Investigate delayed search results.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-02/intent": {
+      "workId": "sample-harbor-02",
+      "artifact": "intent",
+      "path": "work/sample-harbor-02/intent.md",
+      "markdown": "# Clarify attachment size limits — Intent\n\n> Fictional sample content.\n\n## Problem\n\nExplain the maximum upload size before a customer selects an attachment.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-02/spec": {
+      "workId": "sample-harbor-02",
+      "artifact": "spec",
+      "path": "work/sample-harbor-02/spec.md",
+      "markdown": "# Clarify attachment size limits — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nExplain the maximum upload size before a customer selects an attachment.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-02/verification": {
+      "workId": "sample-harbor-02",
+      "artifact": "verification",
+      "path": "work/sample-harbor-02/verification.md",
+      "markdown": "# Clarify attachment size limits — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Clarify attachment size limits.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-03/intent": {
+      "workId": "sample-harbor-03",
+      "artifact": "intent",
+      "path": "work/sample-harbor-03/intent.md",
+      "markdown": "# Design an offline reply draft — Intent\n\n> Fictional sample content.\n\n## Problem\n\nKeep a reply draft locally when the network disconnects and restore it on reconnect.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-03/spec": {
+      "workId": "sample-harbor-03",
+      "artifact": "spec",
+      "path": "work/sample-harbor-03/spec.md",
+      "markdown": "# Design an offline reply draft — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nKeep a reply draft locally when the network disconnects and restore it on reconnect.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-03/verification": {
+      "workId": "sample-harbor-03",
+      "artifact": "verification",
+      "path": "work/sample-harbor-03/verification.md",
+      "markdown": "# Design an offline reply draft — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Design an offline reply draft.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-04/intent": {
+      "workId": "sample-harbor-04",
+      "artifact": "intent",
+      "path": "work/sample-harbor-04/intent.md",
+      "markdown": "# Resolve duplicate notification emails — Intent\n\n> Fictional sample content.\n\n## Problem\n\nDeduplicate ticket update notifications by recipient and event identifier.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-04/spec": {
+      "workId": "sample-harbor-04",
+      "artifact": "spec",
+      "path": "work/sample-harbor-04/spec.md",
+      "markdown": "# Resolve duplicate notification emails — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nDeduplicate ticket update notifications by recipient and event identifier.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-04/verification": {
+      "workId": "sample-harbor-04",
+      "artifact": "verification",
+      "path": "work/sample-harbor-04/verification.md",
+      "markdown": "# Resolve duplicate notification emails — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Resolve duplicate notification emails.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-05/intent": {
+      "workId": "sample-harbor-05",
+      "artifact": "intent",
+      "path": "work/sample-harbor-05/intent.md",
+      "markdown": "# Close the keyboard shortcut conflict — Intent\n\n> Fictional sample content.\n\n## Problem\n\nLet the editor handle its own shortcuts while the ticket detail panel is focused.\n\n## Desired outcome\n\nMake this capability predictable for a first-time user.\n\n## Acceptance criteria\n\n- Preserve existing data during retries.\n- Explain empty and error states in plain language.\n- Support keyboard-only navigation.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-05/spec": {
+      "workId": "sample-harbor-05",
+      "artifact": "spec",
+      "path": "work/sample-harbor-05/spec.md",
+      "markdown": "# Close the keyboard shortcut conflict — Spec\n\n> Fictional sample content.\n\n## Behavior\n\nLet the editor handle its own shortcuts while the ticket detail panel is focused.\n\n## Constraints\n\nUse an explicit loading state and keep the last successful result visible.\n\n## Edge cases\n\nCover empty input, repeated submission, missing permissions, and interrupted requests.\n",
+      "revision": "sample-v1"
+    },
+    "sample-harbor-05/verification": {
+      "workId": "sample-harbor-05",
+      "artifact": "verification",
+      "path": "work/sample-harbor-05/verification.md",
+      "markdown": "# Close the keyboard shortcut conflict — Verification\n\n> Fictional sample content.\n\n## Verification checklist\n\n- [x] Define the expected result for: Close the keyboard shortcut conflict.\n- [ ] Run the relevant checks in a connected repository.\n- [ ] Review empty, error, and recovery behavior.\n\n## Evidence\n\nThis is illustrative sample evidence; no command has been executed.\n",
+      "revision": "sample-v1"
+    },
+    "sample-compass-01/evidence": {
+      "workId": "sample-compass-01",
+      "artifact": "evidence",
+      "path": "work/sample-compass-01/evidence.md",
+      "markdown": "# Compare local search strategies — Evidence\n\n> Fictional sample content.\n\n## Research question\n\nCompare lexical, semantic, and hybrid search on a documented sample query set.\n\n## Working notes\n\nCompare the alternatives against reliability, clarity, and maintenance effort.\n\n## Next experiment\n\nCollect five representative examples and record where each approach fails.\n\nThese are fictional research notes, not measured results.\n",
+      "revision": "sample-v1"
+    },
+    "sample-compass-02/evidence": {
+      "workId": "sample-compass-02",
+      "artifact": "evidence",
+      "path": "work/sample-compass-02/evidence.md",
+      "markdown": "# Create a representative query set — Evidence\n\n> Fictional sample content.\n\n## Research question\n\nCover navigation, exact lookup, exploratory questions, and missing-result cases.\n\n## Working notes\n\nCompare the alternatives against reliability, clarity, and maintenance effort.\n\n## Next experiment\n\nCollect five representative examples and record where each approach fails.\n\nThese are fictional research notes, not measured results.\n",
+      "revision": "sample-v1"
+    },
+    "sample-compass-03/evidence": {
+      "workId": "sample-compass-03",
+      "artifact": "evidence",
+      "path": "work/sample-compass-03/evidence.md",
+      "markdown": "# Summarize offline storage options — Evidence\n\n> Fictional sample content.\n\n## Research question\n\nCompare portability, migration effort, and recovery behavior for local storage formats.\n\n## Working notes\n\nCompare the alternatives against reliability, clarity, and maintenance effort.\n\n## Next experiment\n\nCollect five representative examples and record where each approach fails.\n\nThese are fictional research notes, not measured results.\n",
+      "revision": "sample-v1"
+    },
+    "sample-compass-04/evidence": {
+      "workId": "sample-compass-04",
+      "artifact": "evidence",
+      "path": "work/sample-compass-04/evidence.md",
+      "markdown": "# Assess document import quality — Evidence\n\n> Fictional sample content.\n\n## Research question\n\nDefine a rubric for preserving headings, links, tables, and source attribution.\n\n## Working notes\n\nCompare the alternatives against reliability, clarity, and maintenance effort.\n\n## Next experiment\n\nCollect five representative examples and record where each approach fails.\n\nThese are fictional research notes, not measured results.\n",
+      "revision": "sample-v1"
+    },
+    "sample-compass-05/evidence": {
+      "workId": "sample-compass-05",
+      "artifact": "evidence",
+      "path": "work/sample-compass-05/evidence.md",
+      "markdown": "# Publish the research reading guide — Evidence\n\n> Fictional sample content.\n\n## Research question\n\nOrganize the research questions and explain how to interpret the sample evidence.\n\n## Working notes\n\nCompare the alternatives against reliability, clarity, and maintenance effort.\n\n## Next experiment\n\nCollect five representative examples and record where each approach fails.\n\nThese are fictional research notes, not measured results.\n",
+      "revision": "sample-v1"
+    }
+  },
+  "goals": {
+    "sample-compass-01": {
+      "workId": "sample-compass-01",
+      "parentId": null,
+      "objective": "Compare lexical, semantic, and hybrid search on a documented sample query set.",
+      "status": "paused",
+      "phase": "plan",
+      "maxParallel": 2,
+      "iteration": 0,
+      "runId": null,
+      "nextRetryAt": null,
+      "lastError": "",
+      "evidence": "",
+      "scope": [],
+      "tasks": [
+        {
+          "id": "sample-compass-02",
+          "title": "Create a representative query set",
+          "objective": "Cover navigation, exact lookup, exploratory questions, and missing-result cases.",
+          "scope": [],
+          "dependsOn": []
+        }
+      ]
+    },
+    "sample-compass-02": {
+      "workId": "sample-compass-02",
+      "parentId": "sample-compass-01",
+      "objective": "Cover navigation, exact lookup, exploratory questions, and missing-result cases.",
+      "status": "completed",
+      "phase": "verify",
+      "maxParallel": 2,
+      "iteration": 1,
+      "runId": null,
+      "nextRetryAt": null,
+      "lastError": "",
+      "evidence": "Sample research notes are recorded in evidence.md.",
+      "scope": [],
+      "tasks": []
+    },
+    "sample-compass-03": {
+      "workId": "sample-compass-03",
+      "parentId": null,
+      "objective": "Compare portability, migration effort, and recovery behavior for local storage formats.",
+      "status": "paused",
+      "phase": "plan",
+      "maxParallel": 2,
+      "iteration": 0,
+      "runId": null,
+      "nextRetryAt": null,
+      "lastError": "",
+      "evidence": "",
+      "scope": [],
+      "tasks": []
+    },
+    "sample-compass-04": {
+      "workId": "sample-compass-04",
+      "parentId": null,
+      "objective": "Define a rubric for preserving headings, links, tables, and source attribution.",
+      "status": "paused",
+      "phase": "plan",
+      "maxParallel": 2,
+      "iteration": 0,
+      "runId": null,
+      "nextRetryAt": null,
+      "lastError": "",
+      "evidence": "",
+      "scope": [],
+      "tasks": []
+    },
+    "sample-compass-05": {
+      "workId": "sample-compass-05",
+      "parentId": null,
+      "objective": "Organize the research questions and explain how to interpret the sample evidence.",
+      "status": "completed",
+      "phase": "verify",
+      "maxParallel": 2,
+      "iteration": 1,
+      "runId": null,
+      "nextRetryAt": null,
+      "lastError": "",
+      "evidence": "Sample research notes are recorded in evidence.md.",
+      "scope": [],
+      "tasks": []
+    }
+  },
+  "lifecycle": {
+    "sample-relay-01": {
+      "revision": 1,
+      "clarified": false,
+      "queued": false,
+      "error": "",
+      "scope": [],
+      "interviews": [],
+      "commits": [],
+      "revertCommits": [],
+      "runId": "",
+      "runRepo": "",
+      "baseCommit": "",
+      "processed": [],
+      "approvedInputs": [],
+      "integrationPending": false,
+      "messages": [
+        {
+          "from": "planner",
+          "to": "owner",
+          "text": "Please review the sample scope and recovery behavior before implementation.",
+          "at": "{{day:-1}}T14:30:00+09:00"
+        }
+      ]
+    },
+    "sample-relay-02": {
+      "revision": 1,
+      "clarified": false,
+      "queued": false,
+      "error": "",
+      "scope": [],
+      "interviews": [
+        {
+          "id": "delivery-channel",
+          "runId": "",
+          "stage": "clarify",
+          "question": "How should a teammate receive the invitation?",
+          "options": [
+            "Email invitation",
+            "Secure shareable link"
+          ],
+          "answer": "",
+          "answeredAt": ""
+        }
+      ],
+      "commits": [],
+      "revertCommits": [],
+      "runId": "",
+      "runRepo": "",
+      "baseCommit": "",
+      "processed": [],
+      "approvedInputs": [],
+      "integrationPending": false,
+      "messages": [
+        {
+          "from": "planner",
+          "to": "owner",
+          "text": "Please review the sample scope and recovery behavior before implementation.",
+          "at": "{{day:-1}}T14:30:00+09:00"
+        }
+      ]
+    },
+    "sample-relay-03": {
+      "revision": 1,
+      "clarified": true,
+      "queued": false,
+      "error": "",
+      "scope": [],
+      "interviews": [],
+      "commits": [],
+      "revertCommits": [],
+      "runId": "",
+      "runRepo": "",
+      "baseCommit": "",
+      "processed": [],
+      "approvedInputs": [],
+      "integrationPending": false,
+      "messages": [
+        {
+          "from": "planner",
+          "to": "owner",
+          "text": "Please review the sample scope and recovery behavior before implementation.",
+          "at": "{{day:-1}}T14:30:00+09:00"
+        }
+      ]
+    },
+    "sample-relay-04": {
+      "revision": 1,
+      "clarified": true,
+      "queued": false,
+      "error": "",
+      "scope": [],
+      "interviews": [],
+      "commits": [],
+      "revertCommits": [],
+      "runId": "",
+      "runRepo": "",
+      "baseCommit": "",
+      "processed": [],
+      "approvedInputs": [],
+      "integrationPending": false,
+      "messages": [
+        {
+          "from": "planner",
+          "to": "owner",
+          "text": "Please review the sample scope and recovery behavior before implementation.",
+          "at": "{{day:-1}}T14:30:00+09:00"
+        }
+      ]
+    },
+    "sample-relay-05": {
+      "revision": 1,
+      "clarified": true,
+      "queued": false,
+      "error": "",
+      "scope": [],
+      "interviews": [],
+      "commits": [],
+      "revertCommits": [],
+      "runId": "",
+      "runRepo": "",
+      "baseCommit": "",
+      "processed": [],
+      "approvedInputs": [],
+      "integrationPending": false,
+      "messages": [
+        {
+          "from": "planner",
+          "to": "owner",
+          "text": "Please review the sample scope and recovery behavior before implementation.",
+          "at": "{{day:-1}}T14:30:00+09:00"
+        }
+      ]
+    },
+    "sample-relay-06": {
+      "revision": 1,
+      "clarified": true,
+      "queued": false,
+      "error": "",
+      "scope": [],
+      "interviews": [],
+      "commits": [],
+      "revertCommits": [],
+      "runId": "",
+      "runRepo": "",
+      "baseCommit": "",
+      "processed": [],
+      "approvedInputs": [],
+      "integrationPending": false,
+      "messages": [
+        {
+          "from": "planner",
+          "to": "owner",
+          "text": "Please review the sample scope and recovery behavior before implementation.",
+          "at": "{{day:-1}}T14:30:00+09:00"
+        }
+      ]
+    }
+  }
+}

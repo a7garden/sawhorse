@@ -1,6 +1,6 @@
-// 터미널 화면 — herdr 를 1급 시민으로 올린 자리.
-// 잡 실행기 안에만 있던 herdr 를 사람이 직접 보고 다룰 수 있게 한다: 어느 워크스페이스에
-// 무엇이 돌고 있는지, 무엇이 사람 응답을 기다리는지(blocked), 어디서 새 탭을 여는지.
+// Terminal screen — the place that promotes herdr to a first-class citizen.
+// Makes herdr, previously confined to the job runner, directly visible and operable:
+// what is running in which workspace, what is waiting on a human (blocked), where to open a new tab.
 import { useCallback, useEffect, useState } from "react";
 import {
   ExternalLink,
@@ -50,7 +50,7 @@ function toneOf(status: string): Tone {
   return "idle";
 }
 
-/** 작은 호흡 점. working/blocked 만 호흡한다. */
+/** Small breathing dot. Only working/blocked breathe. */
 function StatusDot({ tone, pulse }: { tone: string; pulse?: boolean }) {
   const t: Tone = toneOf(tone);
   if (pulse && (t === "working" || t === "blocked")) {
@@ -153,7 +153,7 @@ export default function TerminalPage() {
 
   const blocked = snap?.agents.filter((a) => a.agentStatus === "blocked") ?? [];
 
-  /** 앱을 떠나지 않고 그 페인이 지금 무엇을 묻고 있는지 본다. */
+  /** Sees what that pane is currently asking, without leaving the app. */
   async function peek(paneId: string, title: string) {
     setPreview({ paneId, title, body: t("terminal.peeking") });
     try {

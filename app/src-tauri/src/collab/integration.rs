@@ -1,14 +1,14 @@
-// 통합 워커. 설계 369-498줄: 대표 체크아웃 병합 절차·검증 실패 복구·크래시 안전성.
+// Integration worker. Design lines 369-498: representative checkout merge procedure, verification-failure recovery, and crash safety.
 //
-// 불변식(908-917줄):
-// 1. 대표 체크아웃의 병합은 통합 워커 하나만 수행한다 — OS lock + 세션 lease.
-// 2. 승인 없는 후보는 이 모듈에 도달하지 않는다(호출자가 보장, 여기서도 재확인).
-// 3. 승인은 SHA·digest에 묶인다 — HEAD가 한 bit라도 다르면 무조건 재승인.
-// 4. dirty·stale·conflict는 사용자 변경을 건드리지 않고 큐를 멈춘다.
-// 5. 검증 실패가 해결되기 전까지 다음 후보를 병합하지 않는다.
+// Invariants (design lines 908-917):
+// 1. Only one integration worker merges into the representative checkout — OS lock + session lease.
+// 2. Unapproved candidates never reach this module (the caller guarantees it; re-checked here too).
+// 3. Approval is bound to the SHA and digest — any difference in HEAD forces re-approval.
+// 4. dirty, stale, and conflict states stop the queue without touching user changes.
+// 5. The next candidate is not merged until the verification failure is resolved.
 //
-// 모든 Git 변경은 장부(integration_attempt) 선기록 뒤에 일어난다. 앱이 죽어도
-// 장부와 실제 Git 상태의 조합으로 복구 규칙(479-486줄)을 적용할 수 있다.
+// Every Git change happens after the ledger (integration_attempt) is written first. Even if the app dies,
+// the recovery rules (design lines 479-486) can be applied from the combination of the ledger and the actual Git state.
 
 use super::checks;
 use super::git::{self, HeadInfo};
@@ -17,18 +17,18 @@ use super::store::Store;
 use super::{new_id, now_ts};
 use std::path::{Path, PathBuf};
 
-/// 통합 절차 수행에 필요한 문맥. 호출자(서비스)가 조립한다.
+/// Context needed to run the integration procedure. Assembled by the caller (service).
 pub struct IntegrationCtx<'a> {
     pub store: &'a Store,
     pub project_id: &'a str,
-    /// 사람이 저장한 검증 프로필. 후보가 주입하지 않는다.
+    /// Verification profile saved by a human. Never injected by the candidate.
     pub profile: &'a VerifyProfile,
 }
 
 // ---------- checkout lease ----------
 
-/// 통합 체크아웃 identity 잠금. 같은 경로를 다른 project alias로 등록해도
-/// canonical root 기준 lock 파일 하나를 우회할 수 없다(설계 373-374줄).
+/// Identity lock for the integration checkout. Even if the same path is registered under a different project alias,
+/// no one can bypass the single lock file keyed by the canonical root (design lines 373-374).
 pub struct CheckoutLease {
     _file: std::fs::File,
     lock_path: PathBuf,
@@ -68,8 +68,8 @@ pub fn acquire_lease(integration_path: &Path) -> Result<CheckoutLease, String> {
 
 // ---------- semantic overlap ----------
 
-/// 여러 기능을 조립하는 파일 패턴(설계 398-402줄). 두 후보가 같은 지점을 바꾸면
-/// 재승인 + 해당 화면 수동 smoke를 강제한다.
+/// File patterns that assemble multiple features (design lines 398-402). If two candidates touch the same spot,
+/// re-approval plus a manual smoke test of the affected screen is enforced.
 pub const ASSEMBLY_PATTERNS: &[&str] = &[
     "App.tsx",
     "main.tsx",
@@ -82,7 +82,7 @@ pub const ASSEMBLY_PATTERNS: &[&str] = &[
 
 pub fn is_assembly_path(path: &str) -> bool {
     let name = path.rsplit('/').next().unwrap_or(path);
-    // route/registry/설정 shell 계열도 조립 지점으로 본다.
+    // Treat route/registry/settings-shell files as assembly points too.
     let lower = path.to_lowercase();
     ASSEMBLY_PATTERNS.iter().any(|p| name == *p)
         || lower.contains("route")
@@ -99,10 +99,10 @@ pub fn overlap_paths(manifest_json: &str) -> Vec<String> {
         .collect()
 }
 
-// ---------- 병합 절차 ----------
+// ---------- Merge procedure ----------
 
-/// 후보 하나를 현재 통합 HEAD에 병합한다(설계 369-415줄 순서 그대로).
-/// 반환: 시도 결과 요약. 상태 전이는 모두 여기서 장부와 함께 수행한다.
+/// Merges one candidate into the current integration HEAD (design lines 369-415, in that order).
+/// Returns: a summary of the attempt outcome. All state transitions happen here, together with the ledger.
 #[allow(clippy::too_many_arguments)]
 pub fn attempt_merge(
     ctx: &IntegrationCtx,
@@ -112,10 +112,10 @@ pub fn attempt_merge(
 ) -> Result<AttemptPhase, String> {
     let repo = PathBuf::from(&session.integration_path);
 
-    // 1. OS lock + 세션 lease.
+    // 1. OS lock + session lease.
     let _lease = acquire_lease(&repo)?;
 
-    // 2. identity·branch·HEAD·clean 확인.
+    // 2. Verify identity, branch, HEAD, and cleanliness.
     let identity = git::repo_identity(&repo)?;
     if identity.repository_id() != candidate.repository_id {
         return Err(format!(
@@ -141,7 +141,7 @@ pub fn attempt_merge(
         ));
     }
 
-    // 3. protected ref·source SHA·digest·승인 상태 재확인.
+    // 3. Re-check protected ref, source SHA, digest, and approval state.
     match git::protected_ref_sha(&repo, &candidate.id)? {
         Some(sha) if sha == candidate.source_sha => {}
         Some(sha) => return Err(format!("protected ref가 승인 SHA와 다르다: {sha}")),
@@ -150,7 +150,7 @@ pub fn attempt_merge(
     if git::resolve_commit(&repo, &candidate.source_sha)? != candidate.source_sha {
         return Err("source SHA가 저장소에 없다".into());
     }
-    // 4. HEAD drift: 승인 때 HEAD와 한 bit라도 다르면 무조건 재승인.
+    // 4. HEAD drift: any difference from the HEAD seen at approval forces re-approval.
     if approval.expected_head != head.head {
         return Err(format!(
             "HEAD_DRIFT:{}:{}",
@@ -158,7 +158,7 @@ pub fn attempt_merge(
         ));
     }
 
-    // 5. merge simulation(읽기 전용).
+    // 5. Merge simulation (read-only).
     let planned = match git::three_way_simulation(&repo, &head.head, &candidate.source_sha, None)? {
         Ok((tree, _conflicts)) => tree,
         Err(conflicts) => {
@@ -169,15 +169,15 @@ pub fn attempt_merge(
         }
     };
 
-    // 이미 같은 내용이 들어있으면 빈 merge commit을 만들지 않는다(설계 413-415줄).
+    // If the same content is already present, do not create an empty merge commit (design lines 413-415).
     let current_tree = git_tree_of(&repo, &head.head)?;
     if current_tree == planned {
         ctx.store
             .update_change_set_status(candidate.id.clone(), ChangeSetStatus::Redundant)?;
-        return Ok(AttemptPhase::ConflictAborted); // 병합 없이 종결 — 전용 상태로 보고
+        return Ok(AttemptPhase::ConflictAborted); // finishes without merging — reported via a dedicated status
     }
 
-    // 6. 병합 전 baseline 검사 + pre_head 저장.
+    // 6. Pre-merge baseline checks + store pre_head.
     let attempt = IntegrationAttempt {
         id: new_id("ia"),
         candidate_id: candidate.id.clone(),
@@ -224,7 +224,7 @@ pub fn attempt_merge(
         return Ok(AttemptPhase::BaselineFailed);
     }
 
-    // 7. SHA 기준 비대화형 merge(설계 385-387줄).
+    // 7. Non-interactive merge by SHA (design lines 385-387).
     ctx.store
         .update_attempt_phase(&attempt.id, AttemptPhase::Merging, "", "", "")?;
     let merge_out = crate::spawn::no_window(std::process::Command::new("git"))
@@ -240,7 +240,7 @@ pub fn attempt_merge(
         .output()
         .map_err(|e| format!("git merge 실행 실패: {e}"))?;
     if !merge_out.status.success() {
-        // 8. 충돌 — abort하고 clean 복원 확인.
+        // 8. Conflict — abort and verify a clean restore.
         let aborted = abort_merge(&repo)?;
         let detail = format!(
             "merge 실패: {}{}",
@@ -269,7 +269,7 @@ pub fn attempt_merge(
         return Ok(phase);
     }
 
-    // 9. 실제 write-tree가 계획과 같은지 확인(설계 390줄).
+    // 9. Verify the actual write-tree matches the plan (design line 390).
     let staged_tree = staged_tree(&repo)?;
     if staged_tree != planned {
         let _ = abort_merge(&repo);
@@ -286,7 +286,7 @@ pub fn attempt_merge(
         return Ok(AttemptPhase::RecoveryRequired);
     }
 
-    // merge commit — 후보 하나당 하나(설계 390-392줄).
+    // merge commit — one per candidate (design lines 390-392).
     ctx.store
         .update_attempt_phase(&attempt.id, AttemptPhase::Merged, "", "", "")?;
     let msg = merge_commit_message(session, candidate, approval);
@@ -313,7 +313,7 @@ pub fn attempt_merge(
         return Ok(AttemptPhase::RecoveryRequired);
     }
     let merge_sha = git::head_info(&repo)?.head;
-    // commit 뒤 HEAD^{tree} 재대조.
+    // Re-compare HEAD^{tree} after the commit.
     let actual_tree = git_tree_of(&repo, "HEAD")?;
     if actual_tree != planned {
         let detail = format!("commit 뒤 tree 불일치: {actual_tree} != {planned}");
@@ -333,11 +333,11 @@ pub fn attempt_merge(
     ctx.store
         .update_change_set_status(candidate.id.clone(), ChangeSetStatus::Integrated)?;
 
-    // 10. 같은 대표 경로에서 검증(설계 393-394줄).
+    // 10. Verify in the same representative path (design lines 393-394).
     run_verification(ctx, &repo, &attempt.id, candidate, &merge_sha)
 }
 
-/// 통합 후 자동 검사 → manual 판정까지. merge 직후와 복구 재개 양쪽에서 쓴다.
+/// Post-integration automated checks through the manual verdict. Used both right after a merge and when resuming recovery.
 pub fn run_verification(
     ctx: &IntegrationCtx,
     repo: &Path,
@@ -362,7 +362,7 @@ pub fn run_verification(
             all_ok = false;
         }
     }
-    // 각 check 뒤 HEAD·index·tracked 불변 확인 — 어긋나면 멈춘다(설계 394줄).
+    // After each check, verify HEAD, index, and tracked files are unchanged — stop if they diverge (design line 394).
     if let Ok(before) = git::head_info(repo) {
         if git::verify_unchanged(repo, &before).is_err() {
             let detail = "검사가 저장소를 변경했다";
@@ -394,13 +394,13 @@ pub fn run_verification(
         return Ok(AttemptPhase::VerificationFailed);
     }
 
-    // manual checklist가 있으면 큐를 막는다(설계 359-362줄).
+    // If a manual checklist exists, block the queue (design lines 359-362).
     if !ctx.profile.manual.is_empty() || !overlap_paths(&candidate.manifest_json).is_empty() {
         ctx.store.update_change_set_status(
             candidate.id.clone(),
             ChangeSetStatus::ManualVerificationPending,
         )?;
-        return Ok(AttemptPhase::Verifying); // manual 확인은 시도를 종결시키지 않는다
+        return Ok(AttemptPhase::Verifying); // manual confirmation does not terminate the attempt
     }
     ctx.store
         .update_attempt_phase(attempt_id, AttemptPhase::Verified, merge_sha, "", "")?;
@@ -409,7 +409,7 @@ pub fn run_verification(
     Ok(AttemptPhase::Verified)
 }
 
-/// 사람이 「확인 완료」를 누른 순간의 재확인(설계 360-362줄).
+/// Re-verification at the moment a human presses "Confirm done" (design lines 360-362).
 pub fn confirm_manual_ok(
     store: &Store,
     session: &Session,
@@ -449,7 +449,7 @@ pub fn confirm_manual_ok(
     Ok(())
 }
 
-/// 화면에서 문제 발견 → verification_failed(설계 362줄).
+/// Problem found on screen → verification_failed (design line 362).
 pub fn confirm_manual_failed(
     store: &Store,
     candidate: &ChangeSet,
@@ -479,7 +479,7 @@ pub fn confirm_manual_failed(
     Ok(())
 }
 
-/// 병합 커밋을 되돌린다(설계 428-441줄). 사람의 「변경 제거」 행위 자체가 승인이다.
+/// Reverts the merge commit (design lines 428-441). The human's "remove change" action is itself the approval.
 pub fn attempt_revert(
     ctx: &IntegrationCtx,
     session: &Session,
@@ -505,7 +505,7 @@ pub fn attempt_revert(
         .ok_or("되돌릴 merge commit 기록이 없다")?;
     let merge_sha = merge_attempt.merge_sha.clone();
 
-    // revert WAL 선기록(설계 475-476줄).
+    // Revert WAL pre-write (design lines 475-476).
     let attempt = IntegrationAttempt {
         id: new_id("ia"),
         candidate_id: candidate.id.clone(),
@@ -524,7 +524,7 @@ pub fn attempt_revert(
     };
     ctx.store.insert_attempt(&attempt)?;
 
-    // revert simulation: ours=HEAD, theirs=<merge>^1, base=<merge>.
+    // Revert simulation: ours=HEAD, theirs=<merge>^1, base=<merge>.
     let first_parent = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
         .arg(&repo)
@@ -558,7 +558,7 @@ pub fn attempt_revert(
     ctx.store
         .update_attempt_phase(&attempt.id, AttemptPhase::Prepared, "", "", "")?;
 
-    // 실제 revert(설계 432-435줄).
+    // Actual revert (design lines 432-435).
     ctx.store
         .update_attempt_phase(&attempt.id, AttemptPhase::Reverting, "", "", "")?;
     ctx.store
@@ -582,7 +582,7 @@ pub fn attempt_revert(
             .update_change_set_status(candidate.id.clone(), ChangeSetStatus::RevertConflicted)?;
         return Ok(AttemptPhase::RevertConflicted);
     }
-    // tree 확인(설계 434줄).
+    // Tree check (design line 434).
     let staged = staged_tree(&repo)?;
     if staged != planned {
         let detail = format!("revert tree 불일치: {staged} != {planned}");
@@ -634,10 +634,10 @@ pub fn attempt_revert(
     Ok(AttemptPhase::Reverted)
 }
 
-// ---------- 재시작 복구 ----------
+// ---------- Restart recovery ----------
 
-/// 앱 재시작 복구(설계 479-490줄). 발견 상태별 표를 그대로 적용한다.
-/// 사용자가 conflict를 편집했을 수 있으므로 자동 abort하지 않는다.
+/// Recovery on app restart (design lines 479-490). Applies the per-discovered-state table as is.
+/// Does not abort automatically because the user may have edited the conflict.
 pub fn recover_on_startup(store: &Store) -> Result<Vec<String>, String> {
     let mut actions = Vec::new();
     for attempt in store.unfinished_attempts()? {
@@ -673,7 +673,7 @@ pub fn recover_on_startup(store: &Store) -> Result<Vec<String>, String> {
             && head.clean
             && head.dangerous_state.is_none()
         {
-            // 적용 전 중단 → 다시 queued(설계 483줄).
+            // Interrupted before applying → back to queued (design line 483).
             store.update_change_set_status(candidate.id.clone(), ChangeSetStatus::Queued)?;
             store.update_attempt_phase(
                 &attempt.id,
@@ -686,7 +686,7 @@ pub fn recover_on_startup(store: &Store) -> Result<Vec<String>, String> {
         } else if head.dangerous_state.is_some()
             && head.dangerous_state.as_deref() != Some("detached HEAD")
         {
-            // MERGE_HEAD/REVERT_HEAD 등 → 사람 확인(설계 484줄).
+            // MERGE_HEAD/REVERT_HEAD etc. → human check (design line 484).
             store.update_change_set_status(
                 candidate.id.clone(),
                 ChangeSetStatus::RecoveryRequired,
@@ -703,7 +703,7 @@ pub fn recover_on_startup(store: &Store) -> Result<Vec<String>, String> {
             && head.head == *expected_commit
             && commit_matches_attempt(&repo, &attempt)
         {
-            // 예상 commit이고 parent·tree 일치 → 상태 복원 후 검사 재개(설계 485줄).
+            // Expected commit with matching parent and tree → restore state and resume checks (design line 485).
             if is_revert {
                 store.update_attempt_phase(
                     &attempt.id,
@@ -729,7 +729,7 @@ pub fn recover_on_startup(store: &Store) -> Result<Vec<String>, String> {
             && head.head == *expected_commit
             && after_head_clean(&repo, expected_commit)
         {
-            // commit은 같으나 세부가 다르면 자동 복원하지 않는다(설계 489-490줄).
+            // Same commit but differing details → no automatic restore (design lines 489-490).
             store.update_change_set_status(
                 candidate.id.clone(),
                 ChangeSetStatus::RecoveryRequired,
@@ -743,7 +743,7 @@ pub fn recover_on_startup(store: &Store) -> Result<Vec<String>, String> {
             )?;
             "recovery_required — commit 세부 불일치"
         } else {
-            // 어느 기록과도 다름 → 자동 수정 없음(설계 486줄).
+            // Matches no record → no automatic fix (design line 486).
             store.update_change_set_status(
                 candidate.id.clone(),
                 ChangeSetStatus::RecoveryRequired,
@@ -763,7 +763,7 @@ pub fn recover_on_startup(store: &Store) -> Result<Vec<String>, String> {
 }
 
 fn commit_matches_attempt(repo: &Path, attempt: &IntegrationAttempt) -> bool {
-    // 1번 parent = pre_head, 2번 parent = source(merge만), tree = planned(설계 488줄).
+    // Parent 1 = pre_head, parent 2 = source (merges only), tree = planned (design line 488).
     let rev = |spec: &str| -> Option<String> {
         crate::spawn::no_window(std::process::Command::new("git"))
             .arg("-C")
@@ -791,7 +791,7 @@ fn commit_matches_attempt(repo: &Path, attempt: &IntegrationAttempt) -> bool {
     }
 }
 
-/// 예상 commit 뒤에 다른 commit이 하나라도 있으면 자동 복원 금지(설계 489줄).
+/// If any commit exists after the expected commit, automatic restore is forbidden (design line 489).
 fn after_head_clean(repo: &Path, expected: &str) -> bool {
     crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
@@ -805,9 +805,9 @@ fn after_head_clean(repo: &Path, expected: &str) -> bool {
         .unwrap_or(false)
 }
 
-// ---------- 내부 헬퍼 ----------
+// ---------- Internal helpers ----------
 
-/// 충돌 시 merge abort. 그 시점에만 abort하며(설계 388줄) 복원을 확인한다.
+/// Aborts the merge on conflict. Aborts only at that point (design line 388) and verifies the restore.
 fn abort_merge(repo: &Path) -> Result<bool, String> {
     crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
@@ -832,7 +832,7 @@ fn git_tree_of(repo: &Path, rev: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// 현재 index의 tree. `git write-tree`와 동일(설계 390줄).
+/// Tree of the current index. Identical to `git write-tree` (design line 390).
 fn staged_tree(repo: &Path) -> Result<String, String> {
     let out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
@@ -846,7 +846,7 @@ fn staged_tree(repo: &Path) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-/// 병합 커밋 메시지 + 복구용 trailer(설계 404-411줄).
+/// Merge commit message + recovery trailers (design lines 404-411).
 fn merge_commit_message(session: &Session, candidate: &ChangeSet, approval: &Approval) -> String {
     format!(
         "Merge candidate {cid}: {summary}\n\nSawhorse-Session: {sid}\nSawhorse-Candidate: {cid}\nSawhorse-Source: {src}\nSawhorse-Authorization: {auth}",
@@ -903,7 +903,7 @@ mod tests {
         run(path, &["rev-parse", "HEAD"]).trim().to_string()
     }
 
-    /// 세션+후보+승인이 있는 최소 문맥. profile은 true 커맨드 하나.
+    /// Minimal context with session + candidate + approval. The profile is a single `true` command.
     pub(super) struct Fixture {
         pub store: std::sync::Arc<Store>,
         pub repo: PathBuf,
@@ -957,7 +957,7 @@ mod tests {
         file: &str,
         content: &str,
     ) -> (ChangeSet, Approval, String) {
-        // worktree 브랜치에서 작업한 것처럼 side commit을 만든다.
+        // Create a side commit as if work was done on a worktree branch.
         run(&fx.repo, &["checkout", "-q", "-b", "side"]);
         let source = commit_file(&fx.repo, file, content, "side work");
         run(&fx.repo, &["checkout", "-q", "main"]);
@@ -1039,13 +1039,13 @@ mod tests {
             attempt_merge(&ctx(&fx, &profile), &fx.session, &candidate, &approval).unwrap();
         assert_eq!(result, AttemptPhase::Verified);
 
-        // HEAD는 merge commit(--no-ff)이고 trailer를 가진다.
+        // HEAD is a merge commit (--no-ff) and carries trailers.
         let msg = run(&fx.repo, &["log", "-1", "--format=%B"]);
         assert!(msg.contains(&format!("Sawhorse-Candidate: {}", candidate.id)));
         assert!(msg.contains(&format!("Sawhorse-Source: {}", candidate.source_sha)));
         let parents = run(&fx.repo, &["rev-parse", "HEAD^@"]).lines().count();
         assert_eq!(parents, 2, "--no-ff merge commit이어야 한다");
-        // 파일이 실제로 반영됐다.
+        // The file is actually reflected.
         assert_eq!(
             std::fs::read_to_string(fx.repo.join("feat.txt")).unwrap(),
             "v1"
@@ -1067,7 +1067,7 @@ mod tests {
         assert_eq!(result, AttemptPhase::Verifying);
         let cs = fx.store.get_change_set(&candidate.id).unwrap().unwrap();
         assert_eq!(cs.status, ChangeSetStatus::ManualVerificationPending);
-        // HEAD 불일치 상황을 만들고 확인하면 거부된다.
+        // Create a HEAD mismatch, then confirm it is rejected.
         commit_file(&fx.repo, "extra.txt", "x", "user commit");
         assert!(confirm_manual_ok(&fx.store, &fx.session, &cs).is_err());
         assert!(confirm_manual_failed(&fx.store, &cs, "화면 깨짐").is_ok());
@@ -1093,11 +1093,11 @@ mod tests {
     fn conflict_aborts_and_keeps_checkout_clean() {
         let (_t, fx) = fixture("conflict");
         let profile = VerifyProfile::default();
-        // 대표 체크아웃에서 같은 파일을 원래 base와 갈라지게 변경한다.
+        // Change the same file in the representative checkout so it diverges from the original base.
         std::fs::write(fx.repo.join("base.txt"), "user-edit").unwrap();
         run(&fx.repo, &["add", "."]);
         run(&fx.repo, &["commit", "-q", "-m", "user edit"]);
-        // side 브랜치는 세션의 시작 base(원래 init 커밋)에서 만들어 양쪽이 갈라지게 한다.
+        // Make the side branch from the session's start base (the original init commit) so both sides diverge.
         let base = fx.session.target_start_sha.clone();
         run(&fx.repo, &["checkout", "-q", "-b", "side2", &base]);
         let source = commit_file(&fx.repo, "base.txt", "agent-edit", "agent edit");
@@ -1162,7 +1162,7 @@ mod tests {
         let (_t, fx) = fixture("redundant");
         let profile = VerifyProfile::default();
         let (candidate, approval, _) = make_candidate(&fx, "feat.txt", "v1");
-        // 먼저 수동으로 같은 patch를 반영해 둔다(체리픽 등).
+        // First apply the same patch manually (e.g. cherry-pick).
         run(
             &fx.repo,
             &["merge", "--no-ff", "--no-edit", "-q", &candidate.source_sha],
@@ -1218,7 +1218,7 @@ mod tests {
         let (_t, fx) = fixture("recover");
         let profile = VerifyProfile::default();
         let (candidate, approval, _) = make_candidate(&fx, "feat.txt", "v1");
-        // prepared 단계에서 앱이 죽은 상황을 흉내낸다: 시도만 기록하고 merge는 없음.
+        // Simulate the app dying at the prepared phase: record only the attempt, no merge.
         let attempt = IntegrationAttempt {
             id: new_id("ia"),
             candidate_id: candidate.id.clone(),
@@ -1253,7 +1253,7 @@ mod tests {
         let result =
             attempt_merge(&ctx(&fx, &profile), &fx.session, &candidate, &approval).unwrap();
         assert_eq!(result, AttemptPhase::Verified);
-        // verified는 종결이라 복구 대상이 아니다 — 장부를 prepared로 되돌려 크래시 흉내.
+        // verified is terminal and not a recovery target — rewind the ledger to prepared to simulate a crash.
         let attempt = &fx.store.list_attempts(&candidate.id).unwrap()[0];
         fx.store
             .update_attempt_phase(&attempt.id, AttemptPhase::Merged, "", "", "")

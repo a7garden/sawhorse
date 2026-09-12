@@ -75,7 +75,7 @@ function persist(enabled: OverviewSlotId[]) {
       JSON.stringify({ version: STORAGE_VERSION, enabled }),
     );
   } catch {
-    // 저장 불가 환경(프라이빗 모드 등) — 세션 안에서만 유지된다.
+    // Storage-unavailable environment (private mode, etc.) — kept only for the session.
   }
 }
 

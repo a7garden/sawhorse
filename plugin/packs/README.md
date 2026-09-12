@@ -1,90 +1,98 @@
-# 문서·자동화 팩 만들기
+# Authoring document and automation packs
 
-팩은 사용자가 독립적으로 켜고 끌 수 있는 **기능 하나**와 그 기능의 문서·자동화 루틴을 묶는다. 업종·고객·업무방식 전체를 한 팩에 넣지 않는다. 작업의 단계·승인·산출물은 앱의 공통 워크플로우가 관리한다. 설치 권한·의존성을 가진 새 기능은 [확장 패키지 v2](../extension-packages/README.md)를 사용한다.
-**코드는 필요 없다** — 선언하면 앱이 렌더·검증·실행을 맡는다.
+A pack bundles **one feature** that users can toggle independently with that feature's
+documentation and automation routines. Never put an entire industry, customer, or way of working
+into a single pack. Work item stages, approvals, and artifacts are managed by the app's common
+workflow. New features that carry install permissions or dependencies use
+[extension packages v2](../extension-packages/README.md).
+**No code required** — declare it and the app takes care of rendering, validation, and execution.
 
-## 5분 만에 만들기
+## Build one in five minutes
 
 ```bash
 cp -R packs/journal ~/.claude/sawhorse/packs/my-feature
-# pack.json 의 "id" 를 "my-pack" 으로 바꾼다 (소문자·숫자·하이픈)
+# change the "id" in pack.json to "my-pack" (lowercase, digits, hyphens)
 ```
 
-앱의 **확장 관리**에서 새로고침하면 목록에 나타난다. `views`가 있는 팩만 업무 화면을 추가한다.
+Refresh in the app's **확장 관리** (extension manager) and the pack appears in the list. Only packs
+with `views` add work screens.
 
-같은 `id` 의 사용자 팩은 내장 팩을 **덮어쓴다**. 내장 기능 팩을 내 방식대로 고치고
-싶으면 해당 기능 폴더를 `~/.claude/sawhorse/packs/<기능-id>/` 로 복사해 고치면 된다.
+A user pack with the same `id` **overrides** the built-in pack. To reshape a built-in feature pack
+your way, copy that feature folder to `~/.claude/sawhorse/packs/<feature-id>/` and edit the copy.
 
-## 폴더
+## Folder layout
 
 ```
 <pack>/
-  pack.json               # 매니페스트 (필수)
-  skills/<name>/SKILL.md  # 에이전트에 설치될 스킬
-  templates/*.md          # 작업공간에 깔릴 템플릿
-  assets/**               # .base 등 부속 자산
+  pack.json               # manifest (required)
+  skills/<name>/SKILL.md  # skill installed into agents
+  templates/*.md          # templates laid into the workspace
+  assets/**               # auxiliary assets such as .base
 ```
 
-## 매니페스트
+## Manifest
 
-| 키 | 뜻 |
+| Key | Meaning |
 |---|---|
-| `id` | 소문자·숫자·하이픈. 설정 네임스페이스 키가 된다 |
-| `name` `version` `description` `author` `icon` | 확장 화면에 보이는 것. `icon` 은 lucide 이름(kebab-case) |
-| `skills` | 에이전트에 설치할 스킬 디렉터리 이름 |
-| `workspace` | `folders[]` 와 `files[{src,dest}]`. **기존 파일은 덮지 않는다** |
-| `settings` | 확장 화면이 폼을 자동 생성. 값은 `config.json` 의 `packs.settings.<id>` |
-| `actions` | 실행 단위. 잡 큐에 들어가고 예약 대상이 된다 |
-| `views` | 사이드바 카테고리 아래에 추가할 화면 |
+| `id` | Lowercase letters, digits, hyphens; becomes the settings namespace key |
+| `name` `version` `description` `author` `icon` | What the extensions screen shows; `icon` is a lucide name (kebab-case) |
+| `skills` | Skill directory names to install into agents |
+| `workspace` | `folders[]` and `files[{src,dest}]`. **Existing files are never overwritten** |
+| `settings` | The extensions screen generates the form; values live in `config.json` under `packs.settings.<id>` |
+| `actions` | Runnable units; they enter the job queue and can be scheduled |
+| `views` | Screens added under a sidebar category |
 
 ### actions
 
 ```jsonc
 { "id": "review", "label": "주간 회고", "description": "…",
-  "prompt": "/weekly-review {{week}}",       // {{key}} 가 파라미터 자리
-  "cwd": "workspace",                        // workspace | project | path:/절대/경로
+  "prompt": "/weekly-review {{week}}",       // {{key}} marks a parameter slot
+  "cwd": "workspace",                        // workspace | project | path:/absolute/path
   "featured": true,
   "params": [{ "key": "week", "type": "text", "label": "기준 날짜", "required": false }],
   "schedule": { "kind": "weekdays", "time": "17:30" } }   // daily | weekdays
 ```
 
-- 파라미터 타입: `text` `list`(공백으로 이어 붙음) `select`(`options[]`) `project`.
-- 치환값에서 개행·백틱은 지워진다(슬래시 커맨드가 한 줄로 전달되는 경로가 있다).
-  **템플릿 자체의 줄바꿈은 보존된다** — 여러 줄짜리 무인 실행 지시를 써도 된다.
-- 채워지지 않은 `{{key}}` 는 흔적 없이 사라진다.
-- `schedule` 이 있으면 앱의 예약 목록에 뜬다. 사용자가 시각을 바꾸면
-  `dashboard.schedules["<id>.<actionId>"]` 에 저장되고 매니페스트 값을 덮는다.
+- Parameter types: `text`, `list` (joined with spaces), `select` (`options[]`), `project`.
+- Newlines and backticks are stripped from substituted values (some paths pass slash commands as a
+  single line). **Line breaks in the template itself are preserved** — multi-line unattended run
+  instructions are fine.
+- Unfilled `{{key}}` placeholders vanish without a trace.
+- A `schedule` shows up in the app's schedule list. When the user changes the time it is saved to
+  `dashboard.schedules["<id>.<actionId>"]` and overrides the manifest value.
 
 ### views
 
 ```jsonc
 { "id": "logs", "label": "일지", "icon": "calendar-days", "group": "vault", "type": "notes",
   "query": {
-    "folders": ["일지", "문서"],        // 글로브는 `*` 한 단계만
+    "folders": ["일지", "문서"],        // globs span a single `*` level
     "exclude": ["*목록.md", "*.base"],
     "where": [{ "field": "type", "op": "eq", "value": "문서" }],
     "sort": { "source": "title", "desc": true },   // source: "" | "title" | "mtime"
     "limit": 120
   },
   "columns": [
-    { "source": "title", "label": "제목" },        // 노트에서 오는 값
+    { "source": "title", "label": "제목" },        // value coming from the note itself
     { "field": "status", "label": "상태", "type": "badge", "width": 90 },
     { "field": "tags", "label": "태그", "type": "list" }
   ],
-  "groupBy": "status",                        // 프론트매터 필드 → 상단 그룹 탭
-  "actions": ["review"],                      // 이 화면에서 실행할 액션 id
+  "groupBy": "status",                        // frontmatter field → top group tabs
+  "actions": ["review"],                      // action ids runnable from this screen
   "empty": "아직 없습니다. …" }
 ```
 
-- `group: "vault"`인 화면은 사이드바의 `볼트` 카테고리 아래에서 `모든 문서`와 함께
-  표시한다. 폴더 전체 탐색은 `모든 문서`, 유형별 목록은 선언형 `notes` 뷰를 쓴다.
-- 술어 연산자: `eq` `ne` `in` `contains` `exists` `truthy` `notEmpty`.
-  모르는 연산자는 거르지 않는다(오타로 화면이 비지 않게).
-- 컬럼 타입: `text` `badge` `list` `check` `date`.
-- `source` 는 프론트매터가 아니라 노트 자체에서 오는 값: `title`(첫 `# 헤딩`, 없으면 파일명)
-  `mtime` `path`.
-- `type: "native"` 는 앱이 이미 가진 업무 화면(`issues` `todos`)을 가리킨다.
-  네이티브 화면을 선택 기능으로 노출할 때만 쓴다. 점검처럼 항상 필요한 코어 기능은 팩에 넣지 않는다.
+- Screens with `group: "vault"` are shown under the sidebar's `볼트` (Vault) category alongside
+  `모든 문서` (All documents). Whole-folder browsing belongs to `모든 문서`; per-type listings use
+  the declarative `notes` view.
+- Predicate operators: `eq` `ne` `in` `contains` `exists` `truthy` `notEmpty`.
+  Unknown operators do not filter (so a typo never empties the screen).
+- Column types: `text` `badge` `list` `check` `date`.
+- `source` values come from the note itself, not frontmatter: `title` (first `#` heading, falling
+  back to the filename), `mtime`, `path`.
+- `type: "native"` points at work screens the app already ships (`issues`, `todos`). Use it only to
+  expose a native screen as an opt-in feature. Core features that are always needed, such as the
+  vault health check, never go into a pack.
 
 ### settings
 
@@ -93,34 +101,40 @@ cp -R packs/journal ~/.claude/sawhorse/packs/my-feature
   "description": "회고 문서에 적을 이름", "placeholder": "예: 김워크" }
 ```
 
-타입: `text` `path` `number` `bool` `select`(`options[{value,label}]`)
-`table`(`columns[{key,label}]`).
+Types: `text`, `path`, `number`, `bool`, `select` (`options[{value,label}]`),
+`table` (`columns[{key,label}]`).
 
-값은 `~/.claude/sawhorse/config.json` 의 `packs.settings.<packId>` 에 저장된다.
-**스킬이 그 값을 읽는다** — SKILL.md 에 어느 키를 읽는지 적어 두는 것이 계약이다.
+Values are stored in `~/.claude/sawhorse/config.json` under `packs.settings.<packId>`.
+**Skills read those values** — writing in SKILL.md which keys to read is the contract.
 
-## 규칙 세 가지
+## Three rules
 
-1. **호스트는 필드의 뜻을 모른다.** 프론트매터를 그대로 싣고, 의미는 매니페스트가 정한다.
-   그래서 어떤 스키마를 쓰든 상관없다.
-2. **기존 파일은 덮지 않는다.** `workspace.files` 는 없을 때만 복사하고, 스킬 설치는
-   내용이 다르면 `수정됨` 으로 표시만 한다.
-3. **꺼진 팩은 없는 팩이다.** 화면·예약·액션이 함께 사라진다(노트는 남는다). 따라서 서로 독립적으로 꺼야 하는 두 기능은 같은 팩에 넣지 않는다.
+1. **The host does not know what fields mean.** Frontmatter is carried as-is; the manifest decides
+   the meaning. That is why any schema works.
+2. **Existing files are never overwritten.** `workspace.files` copies only when missing, and a
+   skill install whose content differs is only flagged `수정됨` (modified).
+3. **A disabled pack is an absent pack.** Its screens, schedules, and actions disappear together
+   (notes remain). So two features that must toggle independently never share a pack.
 
-## 흔한 실수
+## Common mistakes
 
-| 증상 | 원인 |
+| Symptom | Cause |
 |---|---|
-| 목록에 안 뜬다 | `id` 가 소문자·숫자·하이픈이 아니거나 JSON 파싱 실패. 확장 화면 상단의 「읽지 못한 확장」에 사유가 나온다 |
-| 화면이 비어 있다 | `folders` 글로브가 실제 폴더와 안 맞거나 `where` 가 너무 좁다. 헤더의 "N개 폴더" 로 확인 |
-| 설치 버튼이 아무것도 안 한다 | `skills[]` 에 적은 이름의 `SKILL.md` 가 실제로 없다 (`본문 없음` 배지) |
-| 작업공간에 아무것도 안 생긴다 | 이미 다 있거나, `files[].src` 가 팩 폴더 기준이 아니다 |
-| 예약이 안 돈다 | 팩이 꺼져 있거나 작업공간 경로가 비어 있다. 놓친 예약은 홈 카드로만 뜬다(자동 실행 없음) |
+| Missing from the list | `id` is not lowercase/digits/hyphens, or JSON parsing failed. The reason shows in the extensions screen's top 「읽지 못한 확장」 (unreadable extensions) section |
+| Screen is empty | The `folders` globs do not match real folders, or `where` is too narrow. Check the "N개 폴더" (N folders) count in the header |
+| Install button does nothing | No `SKILL.md` actually exists under the names in `skills[]` (`본문 없음` (no body) badge) |
+| Nothing appears in the workspace | Everything is already there, or `files[].src` is not relative to the pack folder |
+| Schedule does not fire | The pack is disabled or the workspace path is empty. Missed schedules surface only as a home card (no automatic execution) |
 
-## 번들 정합성
+## Bundle consistency
 
-`pack.json`의 `skills`가 공개 스킬의 정본이다. 실제 스킬 폴더와 선언이 일치해야 하고, 액션은 선언된 스킬을 호출해야 한다. 폐지한 스킬은 선언과 폴더를 함께 제거한다.
+`pack.json`'s `skills` is the source of truth for published skills. The actual skill folders must
+match the declaration, and actions must call declared skills. Retire a skill by removing its
+declaration and folder together.
 
-다른 팩과 충돌할 수 있는 템플릿은 `템플릿/<pack-id>/`에 둔다. 기존 사용자 파일은 덮어쓰지 않는다. 코어 레코드나 과거 이슈·개선 템플릿을 팩 초기화로 다시 만들지 않는다.
+Templates that could collide with other packs live under `템플릿/<pack-id>/` (templates). Existing
+user files are never overwritten. Pack initialization never re-creates core records or the legacy
+issue and improvement templates.
 
-저장소 루트에서 `node plugin/validate.mjs`로 선언·시드·스킬 참조를 검사한다.
+From the repository root, `node plugin/validate.mjs` checks declarations, seeds, and skill
+references.

@@ -42,14 +42,14 @@ const rows = await page.$$eval('[role="alert"] > div', (els) =>
 );
 console.log("ROWS:", JSON.stringify(rows, null, 2));
 
-// CTA: 충돌 행(첫 행)의 스키마 스튜디오 버튼 → 페이지 이동 확인
+// CTA: the schema studio button on the conflict row (first row) → verify page navigation
 const firstCta = page.locator('[role="alert"] > div').first().getByRole("button").first();
 await firstCta.click();
 await page.waitForTimeout(1200);
 const nav = await page.locator('[aria-current="page"]').allInnerTexts();
 console.log("AFTER_CTA_NAV:", JSON.stringify(nav));
 
-// 해제: 마지막 행의 X(aria-label 있는 버튼) → 행 수 감소 확인
+// Dismiss: the X on the last row (button with aria-label) → verify the row count drops
 const beforeRows = await page.locator('[role="alert"] > div').count();
 const closeBtn = page.locator('[role="alert"] button[aria-label]').last();
 await closeBtn.click();

@@ -1,8 +1,6 @@
-// 확장 관리 → 스킬 탭.
-// ① skills.sh 마켓플레이스 검색·설치, ② 확장 팩 스킬의 에이전트별 설치/업데이트/제거,
-// ③ 에이전트 폴더에 실제로 설치된 스킬 열람 — 세 시야를 한 화면에 모은다.
+// Installed skill management. Discovery and npx installation live in SkillsMarketplace.
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Download, RefreshCw, Search, Trash2, X } from "lucide-react";
+import { Download, RefreshCw, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import i18n from "@/i18n";
 import { api } from "@/lib/api";
@@ -11,7 +9,6 @@ import type {
   AgentSkillEntry,
   AgentSkillGroup,
   InstallReport,
-  MarketSkill,
   PackAgentStatus,
   PackInfo,
   SkillState,
@@ -20,9 +17,7 @@ import type {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { Empty, MarkdownView } from "@/pages/common";
 
 export function skillVariant(s: SkillState) {
@@ -53,7 +48,7 @@ export function reportText(r: InstallReport): string {
   return parts.join(" · ") || i18n.t("packs:report.none");
 }
 
-/** 한 팩의 에이전트별 스킬 상태 + 상태에 맞는 버튼 하나(설치/업데이트)를 렌더한다. */
+/** Renders one pack's per-agent skill status plus a single status-appropriate button (install/update). */
 export function AgentInstallRows({
   agents,
   groups,
@@ -165,12 +160,12 @@ export default function SkillsTab({
     () => packs.filter((p) => p.skills.length > 0),
     [packs],
   );
-  const installTargets = useMemo(
-    () => agents.filter((a) => a.installable),
+  const browseTargets = useMemo(
+    () => agents.filter((a) => ["claude", "codex"].includes(a.id)),
     [agents],
   );
 
-  // ---------- 확장 팩 스킬 상태 ----------
+  // ---------- extension-pack skill status ----------
   const [statuses, setStatuses] = useState<Record<string, PackAgentStatus>>({});
   const loadStatuses = useCallback(async () => {
     const entries = await Promise.all(
@@ -192,7 +187,7 @@ export default function SkillsTab({
     void loadStatuses();
   }, [loadStatuses]);
 
-  // ---------- 에이전트에 설치된 스킬 열람 ----------
+  // ---------- skills installed in agents ----------
   const [browseAgent, setBrowseAgent] = useState("claude");
   const [entries, setEntries] = useState<AgentSkillEntry[]>([]);
   const loadEntries = useCallback(async () => {
@@ -206,79 +201,7 @@ export default function SkillsTab({
     void loadEntries();
   }, [loadEntries]);
 
-  // ---------- 마켓플레이스 ----------
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<MarketSkill[] | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [marketTargets, setMarketTargets] = useState<Set<string>>(new Set());
-  const [log, setLog] = useState<string | null>(null);
-  // 에이전트 목록이 늦게 도착하면 감지된 대상을 기본 선택으로 채운다.
-  useEffect(() => {
-    setMarketTargets((prev) =>
-      prev.size > 0
-        ? prev
-        : new Set(
-            installTargets.filter((a) => a.detected).map((a) => a.id),
-          ),
-    );
-  }, [installTargets]);
-
-  // ---------- 문서 열람 ----------
   const [doc, setDoc] = useState<{ title: string; body: string } | null>(null);
-
-  async function search() {
-    const q = query.trim();
-    if (q.length < 2) return;
-    setSearching(true);
-    setMsg(null);
-    try {
-      setResults(await api.skillsMarketSearch(q));
-    } catch (e) {
-      setMsg(String(e));
-    } finally {
-      setSearching(false);
-    }
-  }
-
-  async function marketInstall(row: MarketSkill) {
-    if (marketTargets.size === 0) {
-      setMsg(t("skillsTab.market.noTargets"));
-      return;
-    }
-    setBusy(true);
-    setMsg(null);
-    setLog(null);
-    try {
-      const out = await api.skillsMarketInstall(
-        row.source,
-        row.skillId || null,
-        [...marketTargets],
-      );
-      setLog(out);
-      setMsg(t("skillsTab.market.installed", { name: row.name }));
-      await loadEntries();
-    } catch (e) {
-      setMsg(String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function marketUpdate() {
-    setBusy(true);
-    setMsg(null);
-    setLog(null);
-    try {
-      const out = await api.skillsMarketUpdate();
-      setLog(out);
-      setMsg(t("skillsTab.market.updated"));
-      await loadEntries();
-    } catch (e) {
-      setMsg(String(e));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   async function packInstall(pack: PackInfo, agent: string, force: boolean) {
     setBusy(true);
@@ -330,128 +253,7 @@ export default function SkillsTab({
 
   return (
     <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
-      {/* ① 마켓플레이스 */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="flex flex-wrap items-center gap-2 text-[13px]">
-            {t("skillsTab.market.title")}
-            <Button
-              size="xs"
-              variant="outline"
-              className="ml-auto"
-              disabled={busy}
-              onClick={() => void marketUpdate()}
-            >
-              <RefreshCw className="size-3" /> {t("skillsTab.market.updateAll")}
-            </Button>
-          </CardTitle>
-          <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {t("skillsTab.market.subtitle")}
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void search();
-            }}
-          >
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={t("skillsTab.market.placeholder")}
-            />
-            <Button
-              type="submit"
-              size="sm"
-              disabled={searching || query.trim().length < 2}
-            >
-              <Search className="size-3" /> {t("skillsTab.market.search")}
-            </Button>
-          </form>
-          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span>{t("skillsTab.market.targets")}</span>
-            {installTargets.map((a) => {
-              const on = marketTargets.has(a.id);
-              return (
-                <button
-                  key={a.id}
-                  onClick={() =>
-                    setMarketTargets((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(a.id)) next.delete(a.id);
-                      else next.add(a.id);
-                      return next;
-                    })
-                  }
-                  className={cn(
-                    "rounded-md border px-1.5 py-0.5 transition-colors",
-                    on
-                      ? "border-success bg-success/10 text-foreground"
-                      : "hover:bg-accent",
-                  )}
-                >
-                  {a.name}
-                  {!a.detected && ` (${t("packAgents.undetected")})`}
-                </button>
-              );
-            })}
-          </div>
-          {results !== null && results.length === 0 && (
-            <Empty>{t("skillsTab.market.noResults")}</Empty>
-          )}
-          {results !== null && results.length > 0 && (
-            <div className="space-y-1">
-              {results.map((row) => (
-                <div
-                  key={row.id}
-                  className="flex items-center gap-2 rounded-md border px-2 py-1.5 text-xs"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">
-                      {row.name}
-                    </span>
-                    <span className="block truncate font-mono text-[10px] text-muted-foreground">
-                      {row.source}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[10px] text-muted-foreground">
-                    {t("skillsTab.market.installs", { n: row.installs })}
-                  </span>
-                  <Button
-                    size="xs"
-                    disabled={busy}
-                    onClick={() => void marketInstall(row)}
-                  >
-                    <Download className="size-3" /> {t("actions.install")}
-                  </Button>
-                </div>
-              ))}
-            </div>
-          )}
-          {log && (
-            <div className="rounded-md border bg-muted/40">
-              <div className="flex items-center px-2 pt-1.5 text-[10px] font-semibold text-muted-foreground">
-                {t("skillsTab.market.logTitle")}
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  className="ml-auto"
-                  onClick={() => setLog(null)}
-                >
-                  <X className="size-3" />
-                </Button>
-              </div>
-              <pre className="max-h-48 overflow-auto px-2 pb-2 text-[10px] leading-relaxed">
-                {log}
-              </pre>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ② 확장 팩 스킬 */}
+      {/* ② extension-pack skills */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-[13px]">
@@ -486,23 +288,25 @@ export default function SkillsTab({
         </CardContent>
       </Card>
 
-      {/* ③ 에이전트에 설치된 스킬 열람 */}
+      {/* ③ skills installed in agents */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="flex flex-wrap items-center gap-2 text-[13px]">
-            {t("skillsTab.browse.title")}
+            <span>{t("skillsTab.browse.title")}</span>
             <span className="ml-auto flex items-center gap-2">
               <Select
+                aria-label={t("skillsTab.browse.title")}
                 value={browseAgent}
                 onChange={setBrowseAgent}
-                options={(installTargets.length > 0
-                  ? installTargets
+                options={(browseTargets.length > 0
+                  ? browseTargets
                   : [{ id: "claude", name: "Claude Code" } as AgentPresence]
                 ).map((a) => ({ value: a.id, label: a.name }))}
               />
               <Button
                 size="xs"
                 variant="ghost"
+                aria-label={t("actions.refresh")}
                 onClick={() => void loadEntries()}
               >
                 <RefreshCw className="size-3" />
@@ -543,7 +347,7 @@ export default function SkillsTab({
         </CardContent>
       </Card>
 
-      {/* 문서 열람 */}
+      {/* doc browsing */}
       {doc && (
         <Card>
           <CardHeader className="pb-2">

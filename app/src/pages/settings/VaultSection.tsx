@@ -1,10 +1,12 @@
-// 설정 > 볼트 섹션. 문서와 작업 기록이 모이는 볼트 위치와, 볼트 안에서 작업을
-// 맡길 프로젝트 등록을 한 화면에 둔다 — 프로젝트는 볼트 아래에 살고 기본
-// 프로젝트도 프로젝트 목록을 따라 검증되므로 함께 봐야 관계가 보인다.
+// Settings > vault section. Places the vault location (where documents and work
+// notes collect) and project registration (work delegation within the vault) on one
+// screen — projects live under the vault and the default project is validated along
+// with the project list, so the relationship is only visible together.
 //
-// 프로젝트 등록의 기본 흐름은 폴더 선택이다: 여러 폴더를 한 번에 고르면 폴더명이
-// 프로젝트명으로 채워진 행이 된다(이미 등록된 경로는 건너뛴다). 이름·경로만 항상
-// 보이고, 개선 사이클이 쓰는 상세 필드(브랜치·ID 접두·portable·검증)는 고급 접기에 둔다.
+// The default flow for adding projects is folder selection: picking several folders
+// at once fills rows with the folder name as the project name (already-registered
+// paths are skipped). Only name·path are always visible; the detail fields used by
+// the improvement cycle (branch·ID prefix·portable·validation) go in the advanced fold.
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { ChevronRight, Plus, Trash2 } from "lucide-react";
@@ -18,7 +20,7 @@ import { useApp } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { SettingsGroup, SettingRow } from "./parts";
 
-/// 라벨 + 컨트롤 한 칸. 고급 접기 안의 모든 입력이 이 칸을 쓴다.
+/// One label + control cell. Every input inside the advanced fold uses this cell.
 function Field({
   id,
   label,
@@ -36,13 +38,13 @@ function Field({
   );
 }
 
-/// 경로 끝 조각을 폴더명으로. 윈도 구분자도 함께 자른다.
+/// Last path segment as the folder name. Also trims Windows separators.
 function folderName(path: string): string {
   const parts = path.split(/[\\/]/).filter(Boolean);
   return parts[parts.length - 1] ?? path;
 }
 
-/// 프로젝트 행 한 개. 이름·경로는 항상 보이고 상세는 고급 접기 뒤에 둔다.
+/// A single project row. Name·path always visible, details behind the advanced fold.
 function ProjectRow({
   index,
   project,
@@ -169,8 +171,8 @@ export default function VaultSection({
 }) {
   const { t } = useTranslation("settings");
 
-  // 폴더 여러 개를 한 번에 등록한다. 이미 있는 경로는 건너뛰고, 이름이 겹치면
-  // "(2)" 접미로 겹치지 않게 만든다 — 저장 때 이름 중복으로 되돌아오지 않게.
+  // Registers several folders at once. Skips existing paths; on name collisions adds
+  // a "(2)" suffix to deduplicate — so saving never bounces back with a duplicate-name error.
   function addFolders(picked: string[]) {
     patchDraft((d) => {
       const names = new Set(d.projects.map((p) => p.name));

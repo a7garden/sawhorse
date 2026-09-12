@@ -428,15 +428,14 @@ pub fn validate(schema: &VaultSchema) -> SchemaValidationReport {
 }
 
 fn frontmatter(markdown: &str) -> Result<serde_yaml::Mapping, String> {
-    let rest = markdown
-        .strip_prefix("---\n")
-        .or_else(|| markdown.strip_prefix("---\r\n"))
-        .ok_or_else(|| "YAML frontmatter가 없습니다".to_string())?;
-    let (yaml, _) = rest
-        .split_once("\n---\n")
-        .or_else(|| rest.split_once("\r\n---\r\n"))
-        .ok_or_else(|| "YAML frontmatter 끝 표식이 없습니다".to_string())?;
-    serde_yaml::from_str(yaml).map_err(|error| format!("frontmatter 파싱 실패: {error}"))
+    let split = crate::vault::split_frontmatter(markdown).ok_or_else(|| {
+        if markdown.starts_with("---") {
+            "YAML frontmatter 끝 표식이 없습니다".to_string()
+        } else {
+            "YAML frontmatter가 없습니다".to_string()
+        }
+    })?;
+    serde_yaml::from_str(&split.yaml).map_err(|error| format!("frontmatter 파싱 실패: {error}"))
 }
 
 fn yaml_string(mapping: &serde_yaml::Mapping, key: &str) -> Option<String> {
@@ -783,25 +782,12 @@ pub fn plan(scan: &SchemaScanResult) -> SchemaMigrationPlan {
     plan
 }
 
-fn frontmatter_parts(markdown: &str) -> Result<(serde_yaml::Mapping, &str), String> {
-    let (offset, rest) = if let Some(rest) = markdown.strip_prefix("---\n") {
-        (4, rest)
-    } else if let Some(rest) = markdown.strip_prefix("---\r\n") {
-        (5, rest)
-    } else {
-        return Err("YAML frontmatter가 없습니다".into());
-    };
-    let (yaml_len, delimiter_len) = if let Some(index) = rest.find("\n---\n") {
-        (index, 5)
-    } else if let Some(index) = rest.find("\r\n---\r\n") {
-        (index, 8)
-    } else {
-        return Err("YAML frontmatter 끝 표식이 없습니다".into());
-    };
-    let mapping = serde_yaml::from_str(&rest[..yaml_len])
+fn frontmatter_parts(markdown: &str) -> Result<(serde_yaml::Mapping, String), String> {
+    let split = crate::vault::split_frontmatter(markdown)
+        .ok_or_else(|| "YAML frontmatter가 없습니다".to_string())?;
+    let mapping = serde_yaml::from_str(&split.yaml)
         .map_err(|error| format!("frontmatter 파싱 실패: {error}"))?;
-    let body_start = offset + yaml_len + delimiter_len;
-    Ok((mapping, &markdown[body_start..]))
+    Ok((mapping, split.after_close))
 }
 
 fn migrate_frontmatter(
@@ -931,8 +917,19 @@ pub fn plan_at(
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");
-        let original = fs::read_to_string(&path)
-            .map_err(|error| format!("migration source 읽기 실패: {error}"))?;
+        let original = match fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(error) => {
+                diagnostic(
+                    &mut result.conflicts,
+                    Severity::Error,
+                    "migration-source-read",
+                    &relative,
+                    format!("migration source 읽기 실패: {error}"),
+                );
+                continue;
+            }
+        };
         let mut content = original.clone();
         let mut field_changes = 0;
         let artifact_id = managed
@@ -940,9 +937,22 @@ pub fn plan_at(
             .map(|artifact| artifact.id.clone());
         if let Some(artifact) = managed.get(relative.as_str()) {
             if let Some(artifact_type) = types.get(artifact.type_id.as_str()) {
-                let migrated = migrate_frontmatter(&content, artifact_type, schema.revision)?;
-                content = migrated.0;
-                field_changes = migrated.1;
+                match migrate_frontmatter(&content, artifact_type, schema.revision) {
+                    Ok(migrated) => {
+                        content = migrated.0;
+                        field_changes = migrated.1;
+                    }
+                    Err(error) => {
+                        diagnostic(
+                            &mut result.conflicts,
+                            Severity::Error,
+                            "migration-frontmatter",
+                            &relative,
+                            error,
+                        );
+                        continue;
+                    }
+                }
             }
         }
         let rewritten = rewrite_links(&content, &move_pairs);

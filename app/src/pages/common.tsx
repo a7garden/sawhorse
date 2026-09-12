@@ -87,7 +87,7 @@ export const JOB_RUNNER_KO: Record<JobRunner, string> = labelRecord(
   ["headless", "herdr"],
 );
 
-// A running herdr job says more than "실행중": the pane may be waiting on a human.
+// A running herdr job says more than "실행중" (running): the pane may be waiting on a human.
 export const AGENT_STATUS_KO: Record<AgentStatus, string> = labelRecord(
   "labels.agentStatus",
   ["idle", "working", "blocked", "done", "unknown"],
@@ -104,7 +104,7 @@ export function agentBadgeVariant(s: AgentStatus): BadgeVariant {
   }
 }
 
-/// 실행중 herdr 잡은 에이전트 상태를 우선 보여준다 (승인 대기가 가장 중요한 정보).
+/// A running herdr job shows the agent status first (awaiting approval is the most important info).
 export function jobStatusLabel(j: Job): string {
   if (j.status === "running" && j.agentStatus)
     return AGENT_STATUS_KO[j.agentStatus];
@@ -357,8 +357,8 @@ export function MarkdownView({
   notePath?: string;
   className?: string;
 }) {
-  // 폴링이 부모를 다시 그릴 때마다 img 렌더러가 새로 만들어지면 React 가 이미지를 다시 마운트해
-  // 로딩 자리표시자가 깜빡인다. notePath 가 바뀔 때만 새로 만든다.
+  // If the img renderer is recreated every time polling redraws the parent, React remounts the
+  // image and the loading placeholder flickers. Recreate it only when notePath changes.
   const components = useMemo(
     () => ({
       img: ({ src: imgSrc, alt, title }: { src?: unknown; alt?: unknown; title?: unknown }) => (

@@ -313,6 +313,7 @@ fn payload_files(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, String> {
         root: &Path,
         directory: &Path,
         output: &mut BTreeMap<String, Vec<u8>>,
+        total_bytes: &mut u64,
     ) -> Result<(), String> {
         for entry in
             fs::read_dir(directory).map_err(|error| format!("package 파일 목록 실패: {error}"))?
@@ -332,7 +333,7 @@ fn payload_files(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, String> {
                 ));
             }
             if file_type.is_dir() {
-                visit(root, &path, output)?;
+                visit(root, &path, output, total_bytes)?;
                 continue;
             }
             if !file_type.is_file() {
@@ -349,6 +350,15 @@ fn payload_files(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, String> {
             if !valid_relative(&relative) {
                 return Err(format!("안전하지 않은 package 경로입니다: {relative}"));
             }
+            // Abort before reading once the accumulated size or file count exceeds the caps.
+            let size = entry
+                .metadata()
+                .map_err(|error| format!("package 파일 크기 확인 실패: {error}"))?
+                .len();
+            if *total_bytes + size > MAX_PACKAGE_BYTES || output.len() >= MAX_PACKAGE_FILES {
+                return Err("package 크기 또는 파일 수 상한을 넘었습니다".into());
+            }
+            *total_bytes += size;
             let bytes =
                 fs::read(&path).map_err(|error| format!("package 파일 읽기 실패: {error}"))?;
             output.insert(relative, bytes);
@@ -356,7 +366,8 @@ fn payload_files(root: &Path) -> Result<BTreeMap<String, Vec<u8>>, String> {
         Ok(())
     }
     let mut output = BTreeMap::new();
-    visit(root, root, &mut output)?;
+    let mut total_bytes = 0u64;
+    visit(root, root, &mut output, &mut total_bytes)?;
     if output.len() > MAX_PACKAGE_FILES
         || output.values().map(|value| value.len() as u64).sum::<u64>() > MAX_PACKAGE_BYTES
     {
@@ -1012,6 +1023,19 @@ pub fn export_portable(
     Ok(PortablePackage { manifest, files })
 }
 
+/// Git command for package installation. The remote comes from untrusted input, so the
+/// ext/file transport protocols are disabled outright (defense in depth for the URL allowlist).
+fn install_git_command() -> Command {
+    let mut command = Command::new("git");
+    command.args([
+        "-c",
+        "protocol.ext.allow=never",
+        "-c",
+        "protocol.file.allow=never",
+    ]);
+    crate::spawn::no_window(command)
+}
+
 #[tauri::command]
 pub async fn extension_package_install(
     input: ExtensionInstallInput,
@@ -1060,6 +1084,9 @@ pub async fn extension_package_install(
             install_directory(temporary.path(), input.location.clone(), None)
         }
         "git" => {
+            if !input.location.starts_with("https://") && !input.location.starts_with("git://") {
+                return Err("git package 원격은 https:// 또는 git:// 만 허용합니다".into());
+            }
             let commit = input
                 .commit
                 .clone()
@@ -1069,7 +1096,7 @@ pub async fn extension_package_install(
                 .ok_or_else(|| "Git package는 정확한 40자리 commit이 필요합니다".to_string())?;
             fs::create_dir_all(temporary.path())
                 .map_err(|error| format!("Git package 임시 폴더 생성 실패: {error}"))?;
-            let status = crate::spawn::no_window(Command::new("git"))
+            let status = install_git_command()
                 .args(["init", "--quiet"])
                 .current_dir(temporary.path())
                 .status()
@@ -1089,7 +1116,7 @@ pub async fn extension_package_install(
                 ],
                 vec!["checkout", "--quiet", "--detach", "FETCH_HEAD"],
             ] {
-                let status = crate::spawn::no_window(Command::new("git"))
+                let status = install_git_command()
                     .args(args)
                     .current_dir(temporary.path())
                     .status()
@@ -1098,7 +1125,7 @@ pub async fn extension_package_install(
                     return Err("Git package 가져오기 실패".into());
                 }
             }
-            let output = crate::spawn::no_window(Command::new("git"))
+            let output = install_git_command()
                 .args(["rev-parse", "HEAD"])
                 .current_dir(temporary.path())
                 .output()
@@ -1127,7 +1154,7 @@ pub fn extension_package_list() -> Result<Vec<InstalledPackage>, String> {
     list_installed()
 }
 
-/// 확장 패키지가 기여하는 워크플로 한 편의 요약. 확장 관리의 워크플로 탭이 읽는다.
+/// Summary of one workflow contributed by an extension package. Read by the workflow tab of extension management.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageWorkflowEntry {
@@ -1138,7 +1165,7 @@ pub struct PackageWorkflowEntry {
     pub nodes: usize,
 }
 
-/// 설치된 확장 패키지별 워크플로 기여 목록.
+/// Workflow contribution list per installed extension package.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageWorkflowSummary {
@@ -1272,6 +1299,24 @@ mod tests {
         fs::write(root.join("workflows/tdd.json"), "tampered").unwrap();
         assert!(verify_directory(&root).is_err());
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn git_install_rejects_non_https_location() {
+        let input = ExtensionInstallInput {
+            kind: "git".into(),
+            location: "ext::sh -c id".into(),
+            commit: Some("0".repeat(40)),
+            ..Default::default()
+        };
+        let error = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(extension_package_install(input))
+            .unwrap_err();
+        assert!(
+            error.contains("https:// 또는 git://"),
+            "scheme 거부: {error}"
+        );
     }
 
     #[test]

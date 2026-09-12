@@ -42,7 +42,7 @@ export default function GitHubExtensionPage() {
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  // 액션 결과는 상단 토스트로 알린다.
+  // Action results are reported via a toast at the top.
   const setNotice = useCallback((text: string) => {
     if (text) toast({ tone: "info", text });
   }, []);
@@ -51,8 +51,8 @@ export default function GitHubExtensionPage() {
   const [parentPath, setParentPath] = useState("");
   const [imported, setImported] = useState<Project | null>(null);
   const [documents, setDocuments] = useState(false);
-  // 이슈 연결은 프로젝트를 전제로 한다. 동기화 인스턴스는 어떤 프로젝트로
-  // 가져올지 기억하고, 프로젝트는 어느 저장소와 묶였는지 저장소 쪽에도 기록한다.
+  // Issue linking presupposes a project. The sync instance remembers which project
+  // to import into, and the project also records on the repository side which repo it's bound to.
   const [projects, setProjects] = useState<Project[]>([]);
   const [linkedRepoIds, setLinkedRepoIds] = useState<Set<string>>(new Set());
   const [linkFor, setLinkFor] = useState<GitHubRepository | null>(null);
@@ -86,7 +86,7 @@ export default function GitHubExtensionPage() {
     setHasMore(result.hasMore);
   }
 
-  // 연결 대상 프로젝트 목록과 이미 동기화 중인 저장소를 읽어 둔다.
+  // Prefetch the list of projects available for linking and repos already syncing.
   useEffect(() => {
     if (!core.github) return;
     void sddApi
@@ -119,7 +119,7 @@ export default function GitHubExtensionPage() {
   function openLinkDialog(repo: GitHubRepository) {
     setError("");
     setLinkFor(repo);
-    // 이 저장소에 이미 묶인 프로젝트를 기본 선택으로 둔다.
+    // Default the selection to a project already bound to this repository.
     const bound = projects.find((project) =>
       (project.githubRepos ?? []).includes(repo.fullName),
     );
@@ -131,8 +131,8 @@ export default function GitHubExtensionPage() {
     const project = projects.find((item) => item.id === linkProjectId);
     if (!repo || !project || !account) return;
     await run(async () => {
-      // 프로젝트 쪽에도 저장소 바인딩을 남긴다. 이슈 가져오기 목적지가
-      // 여기서 결정되므로 양쪽이 항상 같은 사실을 가리킨다.
+      // Also leave the repository binding on the project side. The issue-import
+      // destination is decided here, so both sides always point at the same fact.
       if (!(project.githubRepos ?? []).includes(repo.fullName)) {
         const nextRepos = [...(project.githubRepos ?? []), repo.fullName];
         await sddApi.saveProject({ ...project, githubRepos: nextRepos });

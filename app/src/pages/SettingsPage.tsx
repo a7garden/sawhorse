@@ -98,14 +98,14 @@ export default function SettingsPage() {
     [config, draft],
   );
 
-  // 성공 배너는 스스로 사라진다. 실패는 사용자가 다음 동작을 결정할 때까지 남는다.
+  // The success banner dismisses itself. Failures stay until the user decides the next move.
   useEffect(() => {
     if (!msg?.ok) return;
     const id = window.setTimeout(() => setMsg(null), 3000);
     return () => window.clearTimeout(id);
   }, [msg]);
 
-  // 진단에 문제가 있으면 레일의 진단 항목에 점을 찍어 어디를 봐야 하는지 가리킨다.
+  // If diagnostics have problems, dot the rail's diagnostics entry to show where to look.
   const diagProblem =
     diag != null &&
     (!diag.configExists ||

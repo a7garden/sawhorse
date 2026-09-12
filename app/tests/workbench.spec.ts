@@ -20,7 +20,7 @@ test("workbench tabs reuse the shared snapshot without returning to a loading sc
     }).observe(document.body, { childList: true, subtree: true });
   });
 
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "공정 보드", exact: true }).click();
   await expect(page.locator(".wb-board")).toBeVisible();
   await nav(page, "캘린더");
@@ -59,7 +59,7 @@ test("project and work creation persist and decisions advance the process board"
   await expect(
     page.locator(".wb-project-card").filter({ hasText: "검증 프로젝트" }),
   ).toBeVisible();
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "공정 보드", exact: true }).click();
   await page.getByRole("button", { name: "새 작업", exact: true }).click();
   await page
@@ -87,7 +87,7 @@ test("project and work creation persist and decisions advance the process board"
   await page.locator(".wb-detail-dialog").getByRole("button", { name: "닫기", exact: true }).click();
   await expect(page.locator('.wb-board-column[data-stage="design"]').getByText("브라우저 흐름 검증", { exact: true })).toBeVisible();
   await page.reload();
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await expect(page.locator('.wb-board-column[data-stage="design"]').getByText("브라우저 흐름 검증", { exact: true })).toBeVisible();
 
 });
@@ -294,7 +294,7 @@ test("forward stage transitions require and retain a review decision", async ({
 test("project and stage filters combine and search opens an artifact", async ({
   page,
 }) => {
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "공정 보드", exact: true }).click();
   await page.getByLabel("프로젝트 필터").selectOption("herdr");
   await page.getByLabel("단계 필터").selectOption("sdd-main@1.1.0:build");
@@ -332,7 +332,7 @@ test("a project switches to TDD without changing existing SDD work", async ({
     page.locator(".wb-project-card").filter({ hasText: "Sawhorse" }),
   ).toContainText("TDD 사이클");
 
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "공정 보드", exact: true }).click();
   await page.getByRole("button", { name: "새 작업", exact: true }).click();
   await page.getByLabel("작업 이름").fill("TDD로 만든 새 항목");
@@ -346,7 +346,7 @@ test("a project switches to TDD without changing existing SDD work", async ({
     .locator(".wb-detail-dialog")
     .getByRole("button", { name: "닫기", exact: true })
     .click();
-  await nav(page, "작업대");
+  await nav(page, "대시보드");
   await expect(
     page.getByRole("button", {
       name: /의도에서 시작하는 개발 흐름 Sawhorse · 설계/,
@@ -401,7 +401,7 @@ test("workflow studio and resumable project ingestion are reachable", async ({
 
 
 test("final acceptance closes the work in both views and freezes further execution", async ({ page }) => {
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "새 작업", exact: true }).click();
   await page.getByLabel("작업 이름", { exact: true }).fill("결과 인수 검증");
   await page.getByRole("button", { name: "작업 만들기", exact: true }).click();
@@ -428,7 +428,7 @@ test("final acceptance closes the work in both views and freezes further executi
   await page.getByRole("button", { name: "목록", exact: true }).click();
   await expect(page.locator(".wb-issue-table tbody tr").filter({hasText: "결과 인수 검증"})).toContainText("완료");
   await page.reload();
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByLabel("열림 상태").selectOption("closed");
   await expect(page.locator(".wb-issue-table tbody tr").filter({hasText: "결과 인수 검증"})).toContainText("완료");
 });

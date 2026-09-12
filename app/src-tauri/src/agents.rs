@@ -1,15 +1,15 @@
-// agents.rs — 에이전트 브리지.
+// agents.rs — agent bridge.
 //
-// 주종 역전의 실체가 여기 있다: 앱이 에이전트를 **설치 대상으로** 다룬다. 예전에는
-// 플러그인이 먼저 깔려야 앱이 쓸모 있었지만, 이제 앱이 팩의 스킬을 에이전트에 넣어 준다.
+// Dependency inversion, in the flesh: the app treats agents as **installation targets**. It used to be
+// that plugins had to be installed before the app was any use; now the app puts the pack's skills into the agent.
 //
-// 설치 상태 판정은 파일 바이트 비교다. 해시 장부를 따로 두면 사용자가 손으로 고친 스킬을
-// 앱이 "내가 설치한 것"으로 착각해 조용히 덮어쓴다. 바이트가 다르면 `수정됨`이고,
-// 수정된 파일은 제거하지 않는다.
+// Install-state detection is a file byte comparison. Keeping a separate hash ledger would make the app
+// mistake a hand-edited skill for one it installed and quietly overwrite it. If the bytes differ the
+// state is `수정됨` (modified), and modified files are not removed.
 //
-// 감지 대상은 스킬을 넣을 수 있는 둘(Claude Code·Codex)보다 넓다. 사용자가 쓰는 CLI 를
-// 목록에 보여 주고 그중 기본을 고르게 하는 것이 마법사의 일이므로, 우리가 스킬을 못 넣는
-// 에이전트도 카탈로그에 둔다 — 대신 각 줄이 자기 범위를 문구로 밝힌다.
+// Detection covers more than the two agents that can receive skills (Claude Code, Codex). The wizard's job
+// is to list the CLIs the user runs and let them pick a default, so agents we cannot install skills into
+// also stay in the catalog — instead, each entry states its own scope in its note.
 
 use std::path::{Path, PathBuf};
 
@@ -17,18 +17,18 @@ use serde::Serialize;
 
 use crate::packs::Pack;
 
-// ---------- 대상 에이전트 ----------
+// ---------- Install-target agents ----------
 
 pub const CLAUDE: &str = "claude";
 pub const CODEX: &str = "codex";
 
-/// 스킬 설치 대상 에이전트의 정본 목록. 상태 조회·화면이 같은 순서로 읽는다 —
-/// 대상이 늘면 이 줄만 늘리면 되고, 스키마와 UI 는 그대로다.
+/// Canonical list of skill install-target agents. Status queries and the UI read it in this order —
+/// adding a target means growing this one line; the schema and UI stay unchanged.
 pub fn install_targets() -> &'static [&'static str] {
     &[CLAUDE, CODEX]
 }
 
-/// 스킬을 설치할 수 있는 에이전트인가. 카탈로그의 나머지는 감지 대상일 뿐이다.
+/// Can this agent receive skill installs? The rest of the catalog is detection-only.
 pub fn is_install_target(agent: &str) -> bool {
     install_targets().contains(&agent)
 }
@@ -48,11 +48,11 @@ pub fn agent_home(agent: &str) -> PathBuf {
     agent_home_in(&home(), agent)
 }
 
-/// 이 팩의 Claude Code skills-dir 플러그인이 materialize 되는 폴더.
-/// 내장 팩은 `sawhorse` 플러그인 하나를 공유하고, 사용자 팩은 `sawhorse-<id>` 를
-/// 각자 받는다 — 결정 1(팩 하나 = 플러그인 하나)의 물리적 실체다. 이 폴더에
-/// `.claude-plugin/plugin.json` 이 있으면 Claude Code 가 `sawhorse[@skills-dir]` 로
-/// 자동 적재하므로 마켓플레이스 설치 단계가 없다.
+/// The folder where this pack's Claude Code skills-dir plugin materializes.
+/// Builtin packs share one `sawhorse` plugin; user packs each get their own
+/// `sawhorse-<id>` — the physical embodiment of decision 1 (one pack = one plugin). With
+/// `.claude-plugin/plugin.json` in this folder, Claude Code loads it automatically as
+/// `sawhorse[@skills-dir]`, so there is no marketplace install step.
 fn claude_plugin_home_in(base: &Path, pack: &Pack) -> PathBuf {
     let name = match pack.source {
         crate::packs::PackSource::Builtin => "sawhorse".to_string(),
@@ -61,8 +61,8 @@ fn claude_plugin_home_in(base: &Path, pack: &Pack) -> PathBuf {
     agent_home_in(base, CLAUDE).join("skills").join(name)
 }
 
-/// 설치·치환의 기준이 되는 콘텐츠 루트. 내장 팩은 번들(또는 저장소)의 plugin/,
-/// 사용자 팩은 팩 폴더 자체가 루트다.
+/// The content root that installs and substitutions are based on. Builtin packs use the plugin/
+/// directory of the bundle (or repository); for user packs the pack folder itself is the root.
 fn content_root_of(pack: &Pack) -> PathBuf {
     match pack.source {
         crate::packs::PackSource::Builtin => crate::plugin::resolve_root().unwrap_or_else(|_| {
@@ -76,8 +76,8 @@ fn content_root_of(pack: &Pack) -> PathBuf {
     }
 }
 
-/// Codex 가 참조할 콘텐츠 루트 — 사용자 머신에 materialize 된 사본이 최선이고,
-/// 없으면 마켓플레이스 설치 경로, 그것도 없으면 번들 경로다.
+/// Content root for Codex to reference — the copy materialized on the user's machine is best;
+/// otherwise the marketplace install path, and failing that, the bundle path.
 fn codex_content_root(base: &Path, pack: &Pack) -> PathBuf {
     let materialized = claude_plugin_home_in(base, pack);
     if materialized.is_dir() {
@@ -94,9 +94,9 @@ fn codex_content_root(base: &Path, pack: &Pack) -> PathBuf {
     content_root_of(pack)
 }
 
-/// materialize 된 플러그인 트리 안에서 이 팩 스킬의 파일 경로.
-/// 내장 팩은 plugin 루트 기준 상대경로(packs/<id>/skills/…)를 그대로 미러링하고,
-/// 사용자 팩은 자기 플러그인 루트 바로 아래 skills/ 를 쓴다.
+/// File path of this pack's skill inside the materialized plugin tree.
+/// Builtin packs mirror their plugin-root-relative path (packs/<id>/skills/…) as is;
+/// user packs use skills/ directly under their own plugin root.
 fn claude_skill_target_in(base: &Path, pack: &Pack, name: &str) -> PathBuf {
     let src_root = content_root_of(pack);
     let rel = pack
@@ -111,10 +111,10 @@ fn claude_skill_target_in(base: &Path, pack: &Pack, name: &str) -> PathBuf {
         .join("SKILL.md")
 }
 
-/// Codex 는 플러그인·네임스페이스·`${CLAUDE_PLUGIN_ROOT}` 개념이 없다. 그래서만
-/// 파생본을 만든다: 프론트매터를 트리거 안내로 바꾸고, 스크립트 참조를 materialize 된
-/// 절대경로로 치환하며, `/sawhorse:skill` 참조를 네임스페이스 없는 `/skill` 로 고친다.
-/// Claude Code 는 원본 그대로다 — skills-dir 플러그인이 나머지를 알아서 채운다.
+/// Codex has no concept of plugins, namespaces, or `${CLAUDE_PLUGIN_ROOT}`. Only for it
+/// do we build a derivative: the frontmatter becomes a trigger hint, script references are replaced
+/// with materialized absolute paths, and `/sawhorse:skill` references are rewritten to namespace-free `/skill`.
+/// Claude Code gets the original as is — the skills-dir plugin fills in the rest.
 pub fn render_for(agent: &str, name: &str, source: &str, ns: &str, content_root: &Path) -> String {
     if agent != CODEX {
         return source.to_string();
@@ -129,23 +129,23 @@ pub fn render_for(agent: &str, name: &str, source: &str, ns: &str, content_root:
         .replace(&format!("/{ns}:"), "/");
     format!(
         "# {name}\n\n\
-         > sawhorse 워크벤치가 설치한 프롬프트입니다. `/{name}` 으로 실행하세요.\n\
+         > Sawhorse가 설치한 프롬프트입니다. `/{name}` 으로 실행하세요.\n\
          > 원본: `{ns}` 플러그인의 스킬 `{name}`.\n\n\
          {body}"
     )
 }
 
-// ---------- 상태 ----------
+// ---------- State ----------
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum SkillState {
-    /// 설치됨 + 내용 동일
+    /// Installed + content identical
     Installed,
-    /// 파일은 있는데 내용이 다르다 (사용자가 고쳤거나 팩이 갱신됨)
+    /// File exists but its content differs (user edited it, or the pack was updated)
     Modified,
     Missing,
-    /// 팩이 이름만 선언하고 SKILL.md 가 없다
+    /// Pack declares the name but ships no SKILL.md
     NoSource,
 }
 
@@ -200,7 +200,7 @@ pub fn skill_status_in(base: &Path, pack: &Pack, agent: &str, name: &str) -> Ski
     }
 }
 
-/// 에이전트에 실제로 써야 할 내용. Claude 는 원본, Codex 는 render_for 파생본.
+/// What should actually be written to the agent. Claude gets the original; Codex gets the render_for derivative.
 fn expected_content(base: &Path, pack: &Pack, agent: &str, name: &str, src: &str) -> String {
     match agent {
         CODEX => {
@@ -219,7 +219,7 @@ pub fn pack_skill_status(pack: &Pack, agent: &str) -> Vec<SkillStatus> {
         .collect()
 }
 
-// ---------- 설치 ----------
+// ---------- Install ----------
 
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -229,8 +229,8 @@ pub struct InstallReport {
     pub failed: Vec<String>,
 }
 
-/// `src` 트리를 `dest` 로 통째로 펼친다. 바이트가 같은 파일은 건드리지 않고(멱등),
-/// `force` 가 아니면 내용이 다른 파일(사용자 수정본)은 남긴다.
+/// Expands the whole `src` tree into `dest`. Files with identical bytes are left untouched (idempotent);
+/// unless `force` is set, files with different content (user modifications) are left alone.
 fn materialize_tree(
     src_root: &Path,
     dest_root: &Path,
@@ -297,8 +297,8 @@ fn copy_rec(
     Ok(())
 }
 
-/// 사용자 팩 폴더가 skills-dir 플러그인으로 로드되게 하는 최소 매니페스트.
-/// 앱이 소유한 파일이라 매 설치마다 정본으로 다시 쓴다. 바뀌었으면 true.
+/// Minimal manifest that makes a user pack folder load as a skills-dir plugin.
+/// The app owns this file, so it is rewritten to the canonical copy on every install. True if it changed.
 fn write_user_plugin_manifest(dest_root: &Path, id: &str) -> Result<bool, String> {
     let dir = dest_root.join(".claude-plugin");
     std::fs::create_dir_all(&dir).map_err(|e| format!("폴더 생성 실패: {e}"))?;
@@ -324,13 +324,13 @@ fn write_user_plugin_manifest(dest_root: &Path, id: &str) -> Result<bool, String
     Ok(true)
 }
 
-/// 팩의 스킬을 에이전트에 넣는다.
+/// Installs the pack's skills into an agent.
 ///
-/// * Claude Code — 개인 스킬 사본을 만들지 않고 **플러그인을 materialize** 한다.
-///   내장 팩은 플러그인 전체(~/.claude/skills/sawhorse)를, 사용자 팩은 자기 폴더를
-///   sawhorse-<id> 로 펼치고 최소 plugin.json 을 생성한다. 마켓플레이스 설치가
-///   감지되면 내장 팩의 사본은 만들지 않는다(중복 커맨드 방지).
-/// * Codex — 스킬마다 프롬프트 파일 하나(~/.codex/prompts/<name>.md).
+/// * Claude Code — **materializes the plugin** instead of making personal skill copies.
+///   Builtin packs expand the whole plugin (~/.claude/skills/sawhorse) and user packs expand their
+///   own folder as sawhorse-<id>, generating a minimal plugin.json. When a marketplace install is
+///   detected, no copy of the builtin pack is made (avoids duplicate commands).
+/// * Codex — one prompt file per skill (~/.codex/prompts/<name>.md).
 pub fn install_pack_skills(pack: &Pack, agent: &str, force: bool) -> Result<InstallReport, String> {
     install_pack_skills_in(&home(), pack, agent, force)
 }
@@ -365,7 +365,7 @@ pub fn install_pack_skills_in(
         return Ok(report);
     }
 
-    // Claude Code: skills-dir 플러그인 materialize
+    // Claude Code: materialize the skills-dir plugin
     if pack.source == crate::packs::PackSource::Builtin {
         let installs = plugin_installs(&crate::plugin::plugin_name().unwrap_or_default());
         if !installs.is_empty() {
@@ -424,8 +424,8 @@ fn write_if_needed(
     }
 }
 
-/// 우리가 넣은 그대로인 것만 지운다 — 사용자가 고친 것은 남긴다.
-/// Claude 는 내장 팩끼리 플러그인 하나를 공유하므로 이 팩의 skills/ 만 파낸다.
+/// Removes only files that are exactly what we wrote — user modifications stay.
+/// Claude shares one plugin across builtin packs, so this digs out only this pack's skills/.
 pub fn uninstall_pack_skills(pack: &Pack, agent: &str) -> Result<InstallReport, String> {
     uninstall_pack_skills_in(&home(), pack, agent)
 }
@@ -461,7 +461,7 @@ pub fn uninstall_pack_skills_in(
                 };
                 let removed = std::fs::remove_file(&target).is_ok();
                 if removed {
-                    // 빈 폴더를 남기지 않는다
+                    // Do not leave an empty folder behind
                     if let Some(parent) = target.parent() {
                         let _ = std::fs::remove_dir(parent);
                     }
@@ -477,24 +477,25 @@ pub fn uninstall_pack_skills_in(
     Ok(report)
 }
 
-// ---------- 에이전트에 설치된 스킬 열람 ----------
+// ---------- Browsing skills installed in an agent ----------
 
-/// 에이전트 폴더에서 실제로 발견한 스킬 하나. 팩 상태(`SkillStatus`)와 달리
-/// 출처를 가리지 않는다 — 사용자가 npx skills 나 손으로 넣은 것도 다 보인다.
+/// One skill actually found in an agent's folder. Unlike pack state (`SkillStatus`), it ignores
+/// provenance — skills added via npx skills or by hand all show up.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentSkillEntry {
     pub name: String,
     pub description: String,
     pub path: String,
-    /// 스킬이 속한 최상위 폴더(플러그인·모음) 이름. 홈 바로 아래 스킬이면 빈 값,
-    /// Codex 슬래시 프롬프트는 "prompts".
+    /// Name of the top-level folder (plugin/collection) the skill belongs to. Empty for skills
+    /// directly under home; Codex slash prompts use "prompts".
     pub group: String,
-    /// sawhorse 가 materialize 한 사본인가
+    /// Whether sawhorse materialized this copy
     pub managed: bool,
 }
 
-/// 프론트매터에서 `description:` 한 줄을 뽑는다. 열람 목록용이라 없는 것은 빈 값으로 둔다.
+/// Pulls the single `description:` line out of the frontmatter. For the browse list, a missing
+/// description stays an empty string.
 fn frontmatter_description(text: &str) -> String {
     let normalized = text.replace("\r\n", "\n");
     let mut lines = normalized.lines();
@@ -535,7 +536,7 @@ fn push_skill_md(entries: &mut Vec<AgentSkillEntry>, skill_md: &Path, group: &st
     });
 }
 
-/// `SKILL.md` 를 찾아 내려간다. 플러그인 트리는 깊을 수 있어 깊이만 제한한다.
+/// Walks down looking for `SKILL.md`. Plugin trees can get deep, so only the depth is limited.
 fn walk_skill_md(
     dir: &Path,
     group: &str,
@@ -564,8 +565,8 @@ fn walk_skill_md(
     }
 }
 
-/// `<dir>/*` 를 훑는다: 폴더에 SKILL.md 가 바로 있으면 스킬 하나, 아니면
-/// 플러그인·모음 폴더로 보고 안쪽의 SKILL.md 들을 걷는다.
+/// Scans `<dir>/*`: a folder with SKILL.md directly inside is one skill; otherwise it is treated
+/// as a plugin/collection folder and the SKILL.md files inside are gathered.
 fn scan_skills_dir(dir: &Path, entries: &mut Vec<AgentSkillEntry>) {
     let Ok(rd) = std::fs::read_dir(dir) else {
         return;
@@ -602,7 +603,7 @@ pub fn list_agent_skills_in(base: &Path, agent: &str) -> Result<Vec<AgentSkillEn
     let home = agent_home_in(base, agent);
     scan_skills_dir(&home.join("skills"), &mut entries);
     if agent == CODEX {
-        // 앱이 변환해 넣는 슬래시 프롬프트도 열람 대상이다.
+        // Slash prompts the app converted and installed are also part of the browse list.
         if let Ok(rd) = std::fs::read_dir(home.join("prompts")) {
             let mut files: Vec<PathBuf> = rd
                 .flatten()
@@ -620,7 +621,8 @@ pub fn list_agent_skills_in(base: &Path, agent: &str) -> Result<Vec<AgentSkillEn
                     description: frontmatter_description(&text),
                     path: f.display().to_string(),
                     group: "prompts".into(),
-                    managed: text.contains("sawhorse 워크벤치가 설치한 프롬프트"),
+                    managed: text.contains("sawhorse 워크벤치가 설치한 프롬프트")
+                        || text.contains("Sawhorse가 설치한 프롬프트"),
                 });
             }
         }
@@ -628,9 +630,9 @@ pub fn list_agent_skills_in(base: &Path, agent: &str) -> Result<Vec<AgentSkillEn
     Ok(entries)
 }
 
-/// 열람 UI 가 임의 파일을 읽지 못하게, 설치 대상 에이전트의 홈과 `npx skills` 의
-/// 공용 저장소(~/.agents) 아래만 허용한다. 에이전트 폴더의 스킬이 공용 저장소로 가는
-/// 심링크일 수 있어 canonicalize 결과 기준으로 본다.
+/// Keeps the browse UI from reading arbitrary files: only the install-target agents' homes and
+/// the `npx skills` shared store (~/.agents) are allowed. A skill in an agent folder may be a
+/// symlink into the shared store, so the check uses the canonicalized path.
 pub fn read_agent_skill(path: &str) -> Result<String, String> {
     let canon = PathBuf::from(path)
         .canonicalize()
@@ -651,26 +653,26 @@ pub fn read_agent_skill(path: &str) -> Result<String, String> {
     std::fs::read_to_string(&canon).map_err(|e| format!("읽기 실패: {e}"))
 }
 
-// ---------- 감지 ----------
+// ---------- Detection ----------
 
-/// 에이전트 하나에 대해 앱이 아는 것. 카탈로그는 코드에 두고, 여기 없는 CLI 는 사용자가
-/// 설정(`dashboard.customAgents`)에서 더한다 — 사내 도구나 직접 만든 에이전트를 위해.
+/// What the app knows about one agent. The catalog lives in code; CLIs not listed here are added
+/// by the user in settings (`dashboard.customAgents`) — for in-house tools and homegrown agents.
 pub struct AgentSpec {
     pub id: &'static str,
     pub name: &'static str,
-    /// 찾아볼 실행 파일 이름들. 먼저 잡히는 것을 쓴다.
+    /// Executable names to look for. The first one found wins.
     pub bins: &'static [&'static str],
-    /// 빈 문자열이면 설치 위치가 등록돼 있지 않다는 뜻이고, 화면에 설치 버튼을 내지 않는다.
-    /// 모르는 곳을 아는 척 가리키느니 아무것도 가리키지 않는 편이 낫다.
+    /// An empty string means no install location is registered, so the UI shows no install button.
+    /// Pointing at nothing beats pretending to know an unknown location.
     pub install_url: &'static str,
     pub install_hint: &'static str,
-    /// 앱이 이 에이전트로 잡을 **직접** 돌릴 수 있는가. SDD 실행은 Herdr의
-    /// 공통 agent protocol을 쓰므로 Herdr가 지원하는 kind라면 true다.
+    /// Whether the app can run jobs **directly** with this agent. SDD runs go through Herdr's
+    /// common agent protocol, so this is true for any kind Herdr supports.
     pub runs_jobs: bool,
     pub note: &'static str,
 }
 
-/// Herdr로 실행할 수 있지만 Sawhorse 스킬을 직접 설치하지는 못하는 에이전트 안내.
+/// Note for agents that can run via Herdr but cannot receive Sawhorse skill installs.
 const HERDR_ONLY: &str =
     "Herdr에서 작업을 실행할 수 있습니다. 전용 스킬 설치 형식은 아직 없습니다.";
 const DETECT_ONLY: &str = "감지까지만 합니다 — Herdr가 지원하는 에이전트 종류가 아닙니다.";
@@ -914,17 +916,17 @@ pub const AGENT_CATALOG: &[AgentSpec] = &[
     },
 ];
 
-// ---------- 모델 카탈로그 ----------
+// ---------- Model catalog ----------
 
-/// 카탈로그가 내보낼 모델 하나.
+/// One model exported by the catalog.
 pub struct ModelSpec {
     pub id: &'static str,
     pub label: &'static str,
 }
 
-/// 에이전트별 모델 정본. CLI 라인업은 앱 업데이트 때 바뀌는 값이므로 이 줄이
-/// 정본이다. 사용자가 최근에 실제로 쓴 모델은 실행 기록(runs/)에서 수집해
-/// 이 카탈로그 뒤에 붙인다 — 두 출처의 합이 화면의 선택지다.
+/// Per-agent model source of truth. CLI lineups change with app updates, so this list is
+/// canonical. Models the user has actually used recently are collected from run history (runs/)
+/// and appended after this catalog — the union of the two sources is what the UI offers.
 pub const MODEL_CATALOGS: &[(&str, &[ModelSpec])] = &[
     (
         CLAUDE,
@@ -972,7 +974,7 @@ pub const MODEL_CATALOGS: &[(&str, &[ModelSpec])] = &[
 
 pub fn normalize_id(id: &str) -> &str {
     match id.trim() {
-        // 0.1 계열 설정에서 쓴 id를 Herdr의 canonical kind로 읽는다.
+        // Read ids written by the 0.1-era settings as Herdr's canonical kind.
         "cursor-agent" => "cursor",
         other => other,
     }
@@ -994,23 +996,23 @@ pub struct AgentPresence {
     pub name: String,
     pub detected: bool,
     pub version: Option<String>,
-    /// 실제로 찾은 실행 파일 경로. 같은 이름이 여러 군데 깔린 PC 에서 어느 것을 잡았는지
-    /// 보여 줘야 "왜 옛날 버전이 뜨지" 를 사용자가 스스로 푼다.
+    /// The executable path actually found. Showing which copy was picked on a machine with several
+    /// same-named installs lets users sort out "why is an old version showing up" on their own.
     pub path: String,
     pub home: String,
-    /// 스킬 설치 대상인가
+    /// Whether this is a skill install target
     pub installable: bool,
-    /// 앱이 이 에이전트로 잡을 직접 돌릴 수 있는가
+    /// Whether the app can run jobs directly with this agent
     pub runs_jobs: bool,
     pub install_url: String,
     pub install_hint: String,
-    /// 설정에서 사용자가 더한 항목인가
+    /// Whether the user added this entry in settings
     pub custom: bool,
-    /// 사용자에게 보여 줄 한 줄
+    /// One-line note shown to the user
     pub note: String,
 }
 
-/// 카탈로그 항목과 사용자 항목을 같은 모양으로 눕힌 중간 형태.
+/// Intermediate shape that flattens catalog and user entries into the same form.
 struct Candidate {
     id: String,
     name: String,
@@ -1023,7 +1025,7 @@ struct Candidate {
 }
 
 fn candidates(dash: &crate::config::DashboardCfg) -> Vec<Candidate> {
-    // 설정의 claudeBin 은 카탈로그 이름보다 우선한다 — 그 값이 곧 잡 실행기가 부르는 명령이다.
+    // The settings' claudeBin outranks the catalog name — that value is the command the job runner invokes.
     let claude_bin = dash.claude_bin.trim();
     let mut out: Vec<Candidate> = AGENT_CATALOG
         .iter()
@@ -1055,7 +1057,7 @@ fn candidates(dash: &crate::config::DashboardCfg) -> Vec<Candidate> {
         } else {
             c.bin.trim()
         };
-        // 카탈로그가 이미 아는 id 면 실행 파일만 앞에 끼운다 — 잘못 잡히는 경로를 바로잡는 용도다.
+        // For an id the catalog already knows, just prepend the executable — this corrects a wrongly resolved path.
         if let Some(existing) = out.iter_mut().find(|x| x.id == id) {
             existing.bins.insert(0, bin.to_string());
             if !c.install_url.trim().is_empty() {
@@ -1090,7 +1092,7 @@ pub async fn detect_agents(dash: &crate::config::DashboardCfg) -> Vec<AgentPrese
             crate::detect::resolve_any(&refs)
         })
         .collect();
-    // 버전은 찾은 것만, 동시에 물어본다. 하나가 느려도 목록 전체가 멈추지 않는다.
+    // Probe versions only for found binaries, concurrently. One slow binary never stalls the whole list.
     let probes: Vec<(PathBuf, &'static [&'static str])> = found
         .iter()
         .flatten()
@@ -1128,14 +1130,14 @@ pub async fn detect_agents(dash: &crate::config::DashboardCfg) -> Vec<AgentPrese
             }
         })
         .collect();
-    // 깔린 것을 먼저 보여 준다. 같은 그룹 안의 순서는 카탈로그 순서 그대로다.
+    // Show installed ones first. Within a group, the order stays exactly as in the catalog.
     out.sort_by_key(|a| !a.detected);
     out
 }
 
-/// 설정의 기본 에이전트를 실제로 쓸 수 있는 값으로 바꾼다. 저장값이 현재 PC에 없으면
-/// 감지된 로컬 실행기를 고르고, 아무것도 감지되지 않았을 때만 안전한 레거시 값으로
-/// 떨어진다. 설정 파일은 손으로도 고쳐지므로 읽는 쪽이 항상 정상값을 받게 한다.
+/// Replaces the settings' default agent with a value that is actually usable. If the saved value is
+/// missing on this machine, pick a detected local runner and fall back to a safe legacy value only
+/// when nothing is detected. The settings file can also be hand-edited, so readers always get a sane value.
 pub fn effective_default(dash: &crate::config::DashboardCfg, detected: &[AgentPresence]) -> String {
     let want = normalize_id(&dash.default_agent);
     if let Some(saved) = detected
@@ -1145,8 +1147,8 @@ pub fn effective_default(dash: &crate::config::DashboardCfg, detected: &[AgentPr
         return saved.id.clone();
     }
 
-    // 앱 번들 안의 보조 CLI보다 사용자가 PATH에 설치한 에이전트를 먼저 쓴다.
-    // 예: ChatGPT.app이 제공하는 codex와 ~/.bun/bin/omp가 함께 있을 때는 omp.
+    // Prefer an agent the user installed on PATH over helper CLIs inside the app bundle.
+    // E.g. when the codex shipped in ChatGPT.app and ~/.bun/bin/omp are both present, pick omp.
     let runnable = detected
         .iter()
         .filter(|agent| agent.detected && agent.runs_jobs);
@@ -1160,14 +1162,14 @@ pub fn effective_default(dash: &crate::config::DashboardCfg, detected: &[AgentPr
         return first.id.clone();
     }
 
-    // 오프라인/초기 감지 실패 때도 저장값을 잃지는 않는다.
+    // Even when detection fails offline or on first run, the saved value is not lost.
     if can_run_jobs(want) {
         return want.to_string();
     }
     CLAUDE.to_string()
 }
 
-// ---------- Claude Code 플러그인 설치 감지 ----------
+// ---------- Claude Code plugin install detection ----------
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -1183,8 +1185,8 @@ fn installed_plugins_path() -> PathBuf {
         .join("installed_plugins.json")
 }
 
-/// 같은 스킬이 플러그인으로도 설치돼 있으면 개인 스킬 설치를 권하지 않는다
-/// (중복 등록은 슬래시 커맨드가 두 벌 뜨는 혼란을 만든다).
+/// Do not recommend personal-skill installs when the same skill is already installed as a plugin
+/// (duplicate registration makes two copies of the slash command show up).
 pub fn plugin_installs_at(path: &Path, plugin_name: &str) -> Vec<PluginInstall> {
     let Ok(text) = std::fs::read_to_string(path) else {
         return vec![];
@@ -1262,14 +1264,14 @@ mod tests {
         assert!(!out.contains("description:"), "프론트매터가 남으면 안 된다");
         assert!(out.starts_with("# morning"));
         assert!(out.contains("`/morning`"));
-        // 설계 7: ${CLAUDE_PLUGIN_ROOT} 는 materialize 된 절대경로로 치환된다
+        // Design 7: ${CLAUDE_PLUGIN_ROOT} is replaced with the materialized absolute path
         assert!(out.contains("/tmp/claude-root/scripts/x.mjs"), "{out}");
         assert!(!out.contains("CLAUDE_PLUGIN_ROOT"), "{out}");
-        // 설계 Codex 규칙: 네임스페이스가 없으므로 /sawhorse:morning → /morning
+        // Design Codex rule: there are no namespaces, so /sawhorse:morning → /morning
         assert!(out.contains("`/morning` 참고"), "{out}");
         assert!(!out.contains("sawhorse:morning"), "{out}");
         assert!(out.contains("실행"), "본문이 살아 있다");
-        // Claude 는 원본 그대로
+        // Claude gets the original as is
         assert_eq!(render_for(CLAUDE, "morning", src, "sawhorse", root), src);
     }
 
@@ -1279,7 +1281,7 @@ mod tests {
         let fakehome = tempdir("home");
         let pack = fake_pack(&packdir, &[("alpha", "---\nname: alpha\n---\n첫 판\n")]);
 
-        // 사용자 팩 → 자기 skills-dir 플러그인(sawhorse-demo) 으로 materialize
+        // User pack → materialized as its own skills-dir plugin (sawhorse-demo)
         let r = install_pack_skills_in(&fakehome, &pack, CLAUDE, false).unwrap();
         assert_eq!(r.installed.len(), 2, "SKILL.md + 생성된 plugin.json: {r:?}");
         let plugin_dir = fakehome.join(".claude/skills/sawhorse-demo");
@@ -1292,13 +1294,13 @@ mod tests {
             manifest.contains("sawhorse-demo"),
             "스킬 디렉터리 플러그인 이름: {manifest}"
         );
-        // 설치 상태는 materialize 된 파일을 본다
+        // Install state reads the materialized files
         assert_eq!(
             skill_status_in(&fakehome, &pack, CLAUDE, "alpha").state,
             SkillState::Installed
         );
 
-        // 소스를 고친 뒤 force 없이 → 수정본으로 남기고 건너뜀
+        // After editing the source without force → left as modified and skipped
         fs::write(
             packdir.join("skills/alpha/SKILL.md"),
             "---\nname: alpha\n---\n둘째 판\n",
@@ -1313,13 +1315,13 @@ mod tests {
             skill_status_in(&fakehome, &pack, CLAUDE, "alpha").state,
             SkillState::Modified
         );
-        // force 면 갱신한다
+        // With force, update it
         let r3 = install_pack_skills_in(&fakehome, &pack, CLAUDE, true).unwrap();
         assert!(r3.installed.iter().any(|s| s.contains("alpha")), "{r3:?}");
 
         let rc = install_pack_skills_in(&fakehome, &pack, CODEX, false).unwrap();
         assert_eq!(rc.installed, vec!["alpha"]);
-        // Codex 는 프롬프트 파일 하나 — 네임스페이스 제거 + 루트 치환이 적용된 본문
+        // Codex gets one prompt file — body with namespace removal + root substitution applied
         let codex = fs::read_to_string(fakehome.join(".codex/prompts/alpha.md")).unwrap();
         assert!(codex.starts_with("# alpha"));
         assert!(codex.contains("둘째 판"), "갱신된 본문이 반영된다: {codex}");
@@ -1328,7 +1330,7 @@ mod tests {
             SkillState::Installed
         );
 
-        // 소스가 없으면 NoSource
+        // No source → NoSource
         let empty = fake_pack(&tempdir("empty"), &[]);
         let mut p = empty.clone();
         p.manifest.skills = vec!["nope".into()];
@@ -1337,11 +1339,11 @@ mod tests {
             SkillState::NoSource
         );
 
-        // 설치 대상이 아닌 에이전트는 거절
+        // Non-install-target agents are rejected
         assert!(install_pack_skills(&pack, "opencode", false).is_err());
         assert!(uninstall_pack_skills(&pack, "opencode").is_err());
 
-        // 사용자 팩 제거는 플러그인 폴더째 — 남겨진 수정본도 같이 가진다(폴더 주인이 앱)
+        // Uninstalling a user pack removes the whole plugin folder — leftover modified copies go with it (the app owns the folder)
         let ru = uninstall_pack_skills_in(&fakehome, &pack, CLAUDE).unwrap();
         assert!(
             ru.installed.iter().any(|s| s.contains("sawhorse-demo")),
@@ -1358,13 +1360,13 @@ mod tests {
         let packdir = tempdir("pack");
         let fakehome = tempdir("home");
         let pack = fake_pack(&packdir, &[("alpha", "본문")]);
-        // 사용자 팩: ~/.claude/skills/sawhorse-<id>/ 바로 아래 skills/
+        // User pack: skills/ directly under ~/.claude/skills/sawhorse-<id>/
         let c = claude_skill_target_in(&fakehome, &pack, "alpha");
         assert!(
             c.ends_with(".claude/skills/sawhorse-demo/skills/alpha/SKILL.md"),
             "{c:?}"
         );
-        // Codex: 프롬프트 파일 하나
+        // Codex: one prompt file
         let x = agent_home_in(&fakehome, CODEX).join("prompts/alpha.md");
         assert!(x.ends_with(".codex/prompts/alpha.md"), "{x:?}");
         assert!(
@@ -1389,7 +1391,7 @@ mod tests {
                 "{} 의 설치 링크는 https 여야 한다 (open_external 이 https 만 연다)",
                 spec.id
             );
-            // 스킬 설치 대상이 아닌 항목은 실행 또는 감지 범위를 화면에 말해 줘야 한다.
+            // Non-install-target entries must state their run or detect scope on screen.
             if !is_install_target(spec.id) {
                 assert!(
                     spec.note.contains("Herdr"),
@@ -1469,13 +1471,13 @@ mod tests {
         assert_eq!(mine.name, "myagent", "이름을 비우면 id 를 쓴다");
         assert_eq!(mine.bins, vec!["/opt/my/agent"]);
 
-        // 아는 id 는 새 줄을 만들지 않고 실행 파일만 앞에 끼운다
+        // A known id gets only its executable prepended, no new row
         assert_eq!(list.iter().filter(|c| c.id == CODEX).count(), 1);
         let codex = list.iter().find(|c| c.id == CODEX).unwrap();
         assert_eq!(codex.bins.first().map(String::as_str), Some("/opt/codex"));
         assert!(!codex.custom);
 
-        // id 가 비면 조용히 버린다 (손으로 고친 설정 파일이 목록을 망가뜨리지 않게)
+        // Empty ids are silently dropped (so a hand-edited settings file cannot break the list)
         assert_eq!(
             candidates(&dash("claude", vec![custom("  ", "x")])).len(),
             AGENT_CATALOG.len()

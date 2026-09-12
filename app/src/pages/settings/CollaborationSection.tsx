@@ -1,6 +1,7 @@
-// CollaborationSection — 설정 > 협업 섹션. 승인 정책 선택, 등록 프로젝트의 통합
-// 대상 표시, 검증 프로필 편집, legacy 프로젝트 등록을 맡는다. 정책은 다른 draft
-// 값과 달리 즉시 커밋한다 — 활성 세션은 시작 때 찍은 snapshot을 따르므로 안전.
+// CollaborationSection — Settings > collaboration section. Handles approval policy
+// selection, showing integration targets of registered projects, validation profile
+// editing, and legacy project registration. Unlike other draft values, the policy
+// commits immediately — safe because active sessions follow the snapshot taken at start.
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -25,7 +26,7 @@ const APPROVAL_OPTIONS: { value: LocalIntegrationApproval; key: string }[] = [
 interface CheckDraft {
   kind: "command" | "http";
   cwd: string;
-  argv: string; // 쉼표 구분 입력
+  argv: string; // comma-separated input
   url: string;
 }
 
@@ -62,7 +63,7 @@ export default function CollaborationSection({
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // 검증 프로필 폼
+  // Validation profile form
   const [profileProject, setProfileProject] = useState("");
   const [profileName, setProfileName] = useState("");
   const [checks, setChecks] = useState<CheckDraft[]>([]);

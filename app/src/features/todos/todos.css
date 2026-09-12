@@ -1,0 +1,62 @@
+.todos-page { max-width: 1440px; margin: 0 auto; padding: 28px 32px 48px; color: var(--foreground); }
+.todos-header { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 30px; }
+.todos-eyebrow { font-size: 10px; letter-spacing: .13em; text-transform: uppercase; color: var(--muted-foreground); }
+.todos-header h1 { font-size: 25px; font-weight: 650; letter-spacing: -.04em; margin: 5px 0 7px; }
+.todos-header p { font-size: 13px; color: var(--muted-foreground); }
+.todos-header > button { flex-shrink: 0; }
+.todos-layout { display: grid; grid-template-columns: 195px minmax(0, 1fr); gap: 32px; }
+.todos-nav { display: flex; flex-direction: column; gap: 5px; align-self: start; }
+.todos-nav > button { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 8px; font-size: 13px; text-align: left; color: var(--muted-foreground); cursor: pointer; }
+.todos-nav > button > span { flex: 1; }
+.todos-nav b { font-size: 11px; font-variant-numeric: tabular-nums; font-weight: 500; }
+.todos-nav > button:hover { background: var(--muted); color: var(--foreground); }
+.todos-nav > button[aria-current] { background: var(--muted); color: var(--foreground); font-weight: 600; }
+.todos-nav > button.has-overdue b, .is-overdue { color: var(--destructive); }
+.todos-progress { margin-top: 24px; padding: 18px 12px; border-top: 1px solid var(--border); color: var(--muted-foreground); }
+.todos-progress > div { display: flex; justify-content: space-between; font-size: 11px; }
+.todos-progress progress { width: 100%; height: 4px; display: block; margin: 12px 0; border-radius: 4px; overflow: hidden; accent-color: var(--primary); }
+.todos-progress progress::-webkit-progress-bar { background: var(--muted); }
+.todos-progress progress::-webkit-progress-value { background: var(--primary); }
+.todos-progress p { font-size: 11px; line-height: 1.7; }
+.todos-content { min-width: 0; }
+.todos-list-heading { margin: 5px 0 20px; }
+.todos-list-heading > div { display: flex; align-items: center; gap: 10px; }
+.todos-list-heading h2 { font-size: 18px; font-weight: 600; letter-spacing: -.025em; }
+.todos-list-heading span { font-size: 11px; border-radius: 6px; padding: 2px 7px; background: var(--muted); color: var(--muted-foreground); }
+.todos-list-heading p { margin-top: 7px; font-size: 12px; color: var(--muted-foreground); }
+.todos-toolbar { display: grid; grid-template-columns: minmax(120px, 1fr) 140px 140px; gap: 8px; margin-bottom: 24px; }
+.todos-search { position: relative; min-width: 0; }
+.todos-search > svg { position: absolute; top: 11px; left: 11px; color: var(--muted-foreground); pointer-events: none; }
+.todos-search input { padding-left: 33px; }
+.todos-group { margin-bottom: 25px; }
+.todos-group h3 { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; font-size: 12px; font-weight: 600; }
+.todos-group h3 span { font-size: 10px; font-weight: 400; color: var(--muted-foreground); }
+.todos-group ul { border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
+.todos-row { display: flex; align-items: center; gap: 12px; padding: 14px; border-bottom: 1px solid var(--border); }
+.todos-row:last-child { border-bottom: none; }
+.todos-row:hover { background: color-mix(in srgb, var(--muted) 45%, transparent); }
+.todos-task-text { flex: 1; min-width: 0; text-align: left; cursor: pointer; }
+.todos-task-text > span { display: block; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.todos-task-text small { display: block; font-size: 10px; color: var(--muted-foreground); margin-top: 3px; overflow-wrap: anywhere; }
+.todos-row.is-completed .todos-task-text > span { text-decoration: line-through; color: var(--muted-foreground); }
+.todos-priority, .todos-due { display: flex; align-items: center; gap: 5px; font-size: 11px; flex-shrink: 0; color: var(--muted-foreground); }
+.todos-priority { min-width: 45px; }
+.todos-priority.is-high { color: var(--destructive); }
+.todos-due { min-width: 78px; }
+.todos-due.is-overdue { color: var(--destructive); }
+.todos-row-actions { display: flex; gap: 2px; }
+.todos-row-actions button { width: 27px; height: 27px; color: var(--muted-foreground); }
+.todos-row-actions button:hover { color: var(--foreground); }
+.todos-composer { padding: 18px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); margin-bottom: 24px; box-shadow: 0 4px 18px #00000005; }
+.todos-composer-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; font-size: 13px; }
+.todos-composer-heading > span { font-size: 11px; color: var(--muted-foreground); }
+.todos-composer-fields { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin-top: 12px; }
+.todos-composer-fields > label { display: grid; gap: 5px; width: 160px; font-size: 11px; color: var(--muted-foreground); }
+.todos-composer-actions { display: flex; gap: 5px; margin-left: auto; }
+.todos-error { display: flex; justify-content: space-between; gap: 12px; align-items: center; border: 1px solid var(--destructive); padding: 12px; margin-bottom: 18px; border-radius: 8px; color: var(--destructive); font-size: 12px; overflow-wrap: anywhere; }
+.todos-empty { padding: 60px 20px; display: flex; flex-direction: column; align-items: center; text-align: center; color: var(--muted-foreground); border: 1px dashed var(--border); border-radius: 12px; }
+.todos-empty h3 { margin: 16px 0 6px; font-size: 14px; color: var(--foreground); font-weight: 500; }
+.todos-empty p { font-size: 12px; margin-bottom: 18px; }
+.todos-page button:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (max-width: 1100px) { .todos-page { padding: 24px 20px; } .todos-layout { grid-template-columns: 160px minmax(0, 1fr); gap: 20px; } .todos-row { flex-wrap: wrap; gap: 8px; } .todos-task-text { flex-basis: calc(100% - 35px); } .todos-priority { margin-left: 23px; } .todos-row-actions { margin-left: auto; } }
+@media (max-width: 760px) { .todos-page { padding: 18px 14px; } .todos-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; } .todos-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; } .todos-nav > button { padding: 9px 7px; font-size: 12px; gap: 6px; } .todos-progress { display: none; } .todos-toolbar { grid-template-columns: 1fr 1fr; } .todos-search { grid-column: 1 / -1; } .todos-header { gap: 12px; margin-bottom: 22px; } .todos-header p { font-size: 12px; line-height: 1.6; } .todos-composer-fields > label { flex: 1; min-width: 130px; } }

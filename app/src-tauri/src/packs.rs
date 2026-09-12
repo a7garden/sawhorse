@@ -1,12 +1,12 @@
-// packs.rs — 기능 확장(pack) 레지스트리.
+// packs.rs — the feature-pack ("pack") registry.
 //
-// 팩 하나가 사용자가 독립적으로 켜고 끌 수 있는 기능 하나다: 작업공간 레이아웃 + 설정 스키마 + 실행 액션 +
-// 화면(뷰) + 에이전트 스킬. 팩은 선언만 하고 코드를 들고 오지 않는다 — 렌더·검증·실행은
-// 전부 호스트가 한다. 표현력의 상한은 의도한 것이고, 모자란 부분은 스킬이 채운다.
+// A pack is one feature a user can toggle independently: workspace layout + settings schema + run actions +
+// screens (views) + agent skills. A pack only declares; it carries no code — rendering, validation, and
+// execution are all done by the host. The cap on expressiveness is intentional; skills fill the gaps.
 //
-// 발견 순서: 사용자 팩(~/.claude/sawhorse/packs/<id>) > 내장 팩(<플러그인 루트>/packs/<id>).
-// 모든 팩이 자기 `skills/` 를 소유한다 — 폴백(플러그인 루트 skills/ 참조)은 없다. 내장 팩의
-// 스킬은 `plugin/.claude-plugin/plugin.json` 의 `skills` 배열이 선언한다.
+// Discovery order: user packs (~/.claude/sawhorse/packs/<id>) > builtin packs (<plugin root>/packs/<id>).
+// Every pack owns its own `skills/` — there is no fallback (no plugin-root skills/ lookup). A builtin pack's
+// skills are declared by the `skills` array in `plugin/.claude-plugin/plugin.json`.
 
 use std::path::{Path, PathBuf};
 
@@ -18,7 +18,7 @@ use crate::notes::NoteQuery;
 
 pub const MANIFEST: &str = "pack.json";
 
-// ---------- 매니페스트 ----------
+// ---------- manifest ----------
 
 fn default_icon() -> String {
     "package".into()
@@ -39,9 +39,9 @@ fn default_true() -> bool {
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct FileSeed {
-    /// 팩 폴더 기준 상대 경로
+    /// Path relative to the pack folder
     pub src: String,
-    /// 작업공간 기준 상대 경로
+    /// Path relative to the workspace
     pub dest: String,
 }
 
@@ -68,7 +68,7 @@ pub struct Column {
     pub kind: String,
 }
 
-/// 설정 화면이 폼을 자동 생성하는 근거. 값은 config.json 의 packs.<id>.settings 에 산다.
+/// Basis for the settings screen's auto-generated form. Values live in config.json under packs.<id>.settings.
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct SettingField {
@@ -98,8 +98,8 @@ pub const VIEW_KINDS: [&str; 10] = [
     "metrics",
 ];
 pub const VIEW_SELECTION_MODES: [&str; 2] = ["none", "multiple"];
-/// 사이드바 섹션 태그. 호스트가 섹션 목록과 순서를 소유하고, 팩 뷰는 이 중 하나를 고른다.
-/// 빈 값이면 사이드바 맨 아래 「기타」 섹션으로 밀린다.
+/// Sidebar section tags. The host owns the section list and its order; a pack view picks one of these.
+/// An empty value sinks the view into the "Other" section at the bottom of the sidebar.
 pub const VIEW_GROUPS: [&str; 5] = ["work", "execution", "vault", "reading", "automation"];
 pub const SCHEDULE_KINDS: [&str; 2] = ["daily", "weekdays"];
 
@@ -132,24 +132,24 @@ pub struct PackAction {
     pub id: String,
     pub label: String,
     pub description: String,
-    /// `{{key}}` 자리에 파라미터가 들어가는 프롬프트 템플릿
+    /// Prompt template with parameters substituted into `{{key}}` slots
     pub prompt: String,
-    /// workspace | project | path:<절대경로>
+    /// workspace | project | path:<absolute path>
     #[serde(default = "default_cwd")]
     pub cwd: String,
     pub params: Vec<ActionParam>,
     pub schedule: Option<ActionSchedule>,
-    /// 홈 화면 빠른 실행 카드로 올릴지
+    /// Whether to surface on the home screen's quick-run card
     pub featured: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ViewColumn {
-    /// 프론트매터 필드 이름
+    /// Frontmatter field name
     pub field: String,
     pub label: String,
-    /// "" | "title" | "path" — 프론트매터가 아니라 노트 자체에서 오는 값
+    /// "" | "title" | "path" — values taken from the note itself, not from frontmatter
     pub source: String,
     /// text | badge | list | check | date
     #[serde(rename = "type", default = "default_field_type")]
@@ -167,17 +167,17 @@ pub struct PackView {
     /// notes | native
     #[serde(rename = "type", alias = "kind", default = "default_view_kind")]
     pub kind: String,
-    /// kind=native 일 때 앱이 이미 들고 있는 화면 이름 (issues/todos/docs)
+    /// When kind=native, the name of a screen the app already ships (issues/todos/docs)
     pub component: String,
-    /// 사이드바 섹션 태그 — VIEW_GROUPS 중 하나. 빈 값은 「기타」.
+    /// Sidebar section tag — one of VIEW_GROUPS. Empty means "Other".
     #[serde(default)]
     pub group: String,
     pub query: NoteQuery,
     pub columns: Vec<ViewColumn>,
     pub group_by: String,
-    /// none | multiple. multiple은 table/review-queue에서 체크한 행만 액션에 전달한다.
+    /// none | multiple. multiple passes only the rows checked in table/review-queue to the action.
     pub selection: String,
-    /// 이 뷰에서 실행할 수 있는 액션 id 목록
+    /// Ids of the actions runnable from this view
     pub actions: Vec<String>,
     pub empty: String,
 }
@@ -216,7 +216,7 @@ pub fn validate_hhmm(s: &str) -> bool {
 }
 
 impl PackManifest {
-    /// 사람이 손으로 쓰는 파일이므로, 고칠 수 있는 것은 고치고 못 고치는 것만 거절한다.
+    /// A hand-written file, so fix what can be fixed and reject only what cannot.
     pub fn validate(&mut self) -> Result<(), String> {
         if !valid_id(&self.id) {
             return Err(format!(
@@ -332,14 +332,14 @@ impl PackManifest {
     }
 }
 
-// ---------- 발견 ----------
+// ---------- discovery ----------
 
 #[derive(Serialize, Clone, Copy, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub enum PackSource {
-    /// 앱/저장소에 동봉된 팩
+    /// Pack shipped with the app/repository
     Builtin,
-    /// ~/.claude/sawhorse/packs 아래 사용자가 넣은 팩
+    /// Pack placed by the user under ~/.claude/sawhorse/packs
     User,
 }
 
@@ -347,13 +347,13 @@ pub enum PackSource {
 pub struct Pack {
     pub manifest: PackManifest,
     pub dir: PathBuf,
-    /// 이 팩의 스킬 본문이 사는 곳
+    /// Where this pack's skill bodies live
     pub skills_dir: PathBuf,
     pub source: PackSource,
     pub enabled: bool,
 }
 
-/// 매니페스트를 읽지 못한 팩. 앱은 계속 뜨고 확장 화면이 사유를 보여준다.
+/// A pack whose manifest failed to load. The app still starts; the extensions screen shows the reason.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct BrokenPack {
@@ -393,7 +393,7 @@ fn scan_dir(root: &Path, source: PackSource) -> (Vec<Pack>, Vec<BrokenPack>) {
         }
         match read_manifest(&manifest_path) {
             Ok(manifest) => {
-                // 팩이 자기 스킬을 소유한다 — skills_dir 은 늘 팩 폴더 안이다.
+                // A pack owns its skills — skills_dir is always inside the pack folder.
                 ok.push(Pack {
                     manifest,
                     skills_dir: dir.join("skills"),
@@ -426,7 +426,7 @@ impl Registry {
         self.packs.iter().find(|p| p.manifest.id == id)
     }
 
-    /// 활성 팩에서만 액션을 찾는다 — 꺼진 팩의 액션이 예약·실행되면 "끈다"가 거짓말이 된다.
+    /// Looks up actions in enabled packs only — if a disabled pack's action were scheduled or run, "disabled" would be a lie.
     pub fn action(&self, pack_id: &str, action_id: &str) -> Option<(&Pack, &PackAction)> {
         let p = self.get(pack_id).filter(|p| p.enabled)?;
         p.manifest.action(action_id).map(|a| (p, a))
@@ -438,8 +438,8 @@ impl Registry {
     }
 }
 
-/// 내장 + 사용자 팩을 모아 활성 여부까지 확정한다.
-/// `enabled` 가 비어 있으면 전부 활성 — 기존 사용자가 업그레이드했을 때 화면이 사라지지 않게.
+/// Collects builtin + user packs and settles their enabled state.
+/// Empty `enabled` means everything enabled — so screens don't vanish when existing users upgrade.
 pub fn load_registry_from(
     builtin_root: Option<&Path>,
     user_root: &Path,
@@ -455,7 +455,7 @@ pub fn load_registry_from(
     }
     let (ok, bad) = scan_dir(user_root, PackSource::User);
     broken.extend(bad);
-    // 같은 id 면 사용자 팩이 이긴다 (커스터마이즈 경로)
+    // Same id: the user pack wins (the customization path)
     for p in ok {
         if let Some(slot) = packs.iter_mut().find(|b| b.manifest.id == p.manifest.id) {
             *slot = p;
@@ -488,8 +488,8 @@ pub fn load_registry_from(
     for p in &mut packs {
         p.enabled = enabled.is_empty()
             || enabled.iter().any(|e| e == &p.manifest.id)
-            // 1.0의 업무방식 묶음을 켜 둔 사용자는 기능별 확장으로 자연스럽게
-            // 넘어간다. 첫 토글 저장 때 정규 id 목록으로 치환된다.
+            // Users who enabled a 1.0 workflow bundle move over to per-feature packs naturally.
+            // The first toggle save replaces this with the canonical id list.
             || match p.manifest.id.as_str() {
                 "journal" => enabled.iter().any(|e| e == "starter" || e == "si"),
                 "concepts" | "project-docs" | "todos" => enabled.iter().any(|e| e == "si"),
@@ -505,10 +505,10 @@ pub fn load_registry(enabled: &[String]) -> Registry {
     load_registry_from(builtin.as_deref(), &user_packs_dir(), enabled)
 }
 
-/// 이 팩의 스킬이 에이전트에서 도는 네임스페이스.
-/// 내장 팩은 `sawhorse` 플러그인 하나에 실리고, 사용자 팩은 자기만의 skills-dir
-/// 플러그인(`~/.claude/skills/sawhorse-<id>/`)으로 설치되므로 팩마다 다르다.
-/// `render_prompt` 의 `{{ns}}` 가 유일한 소비자다.
+/// The namespace this pack's skills run under in the agent.
+/// Builtin packs ride on the single `sawhorse` plugin, while user packs install their own skills-dir
+/// plugin (`~/.claude/skills/sawhorse-<id>/`), so it differs per pack.
+/// `{{ns}}` in `render_prompt` is the only consumer.
 pub fn namespace(pack: &Pack) -> String {
     match pack.source {
         PackSource::Builtin => "sawhorse".into(),
@@ -516,18 +516,18 @@ pub fn namespace(pack: &Pack) -> String {
     }
 }
 
-// ---------- 프롬프트 · cwd ----------
+// ---------- prompts · cwd ----------
 
-/// `{{key}}` 치환. 리스트는 공백으로 잇는다.
+/// Substitutes `{{key}}` slots. Lists are joined with spaces.
 ///
-/// **치환값에서만** 개행·백틱을 지운다 — 프롬프트가 슬래시 커맨드 한 줄로 전달되는 경로가
-/// 있어 파라미터에 줄바꿈이 섞이면 명령이 잘린다. 템플릿 자체의 줄바꿈은 보존한다:
-/// 팩이 여러 줄짜리 무인 실행 지시를 쓸 수 있어야 한다.
+/// Newlines and backticks are stripped **from substituted values only** — some paths deliver the prompt as a
+/// single slash-command line, so a newline inside a parameter would truncate the command. The template's own
+/// newlines are preserved: packs must be able to write multi-line unattended run instructions.
 ///
-/// `ns` 는 예약 변수다 — 팩 프롬프트가 네임스페이스(`/sawhorse:issues`)를 직접 쓰면
-/// 팩 복제 때 일괄 수정이 필요해지므로 `/{{ns}}:issues` 로 쓰고, 렌더 진입점이 **항상**
-/// 주입한다. 사용자 파라미터로는 절대 채워지지 않는다(채워지지 않은 `{{…}}` 는 조용히
-/// 지워지므로 `ns` 누락은 `/:issues` 라는 치명적 망가짐이 된다 — 서명으로 원천 차단).
+/// `ns` is a reserved variable — if a pack prompt wrote the namespace (`/sawhorse:issues`) directly,
+/// cloning a pack would require a bulk rewrite, so prompts write `/{{ns}}:issues` and the render entry point **always**
+/// injects it. It is never filled from user parameters (an unfilled `{{…}}` is silently removed, so a missing
+/// `ns` would degrade into the broken `/:issues` — the signature prevents this at the source).
 pub fn render_prompt(template: &str, ns: &str, params: &Map<String, Value>) -> String {
     let mut out = template.replace("{{ns}}", ns);
     for (k, v) in params {
@@ -556,14 +556,14 @@ pub fn render_prompt(template: &str, ns: &str, params: &Map<String, Value>) -> S
             .collect();
         out = out.replace(&format!("{{{{{k}}}}}"), cleaned.trim());
     }
-    // 채워지지 않은 자리는 흔적을 남기지 않는다
+    // unfilled slots leave no trace
     while let Some(start) = out.find("{{") {
         let Some(rel) = out[start..].find("}}") else {
             break;
         };
         out.replace_range(start..start + rel + 2, "");
     }
-    // 빈 자리가 남긴 이중 공백만 줄 단위로 정리하고, 줄 구조는 그대로 둔다
+    // collapse only the double spaces left by empty slots, per line; keep the line structure intact
     out.lines()
         .map(|line| {
             line.split(' ')
@@ -577,8 +577,8 @@ pub fn render_prompt(template: &str, ns: &str, params: &Map<String, Value>) -> S
         .to_string()
 }
 
-/// 액션이 어디서 돌아야 하는가. project 는 레거시 `improve.projects` 도 호환 입력으로 쓴다 —
-/// 코드 프로젝트 경로 등록은 이미 그쪽이 정본이고, 없으면 작업공간으로 떨어진다.
+/// Where an action should run. `project` also accepts the legacy `improve.projects` as compatible input —
+/// registering code project paths is already canonical there; falls back to the workspace when absent.
 pub fn resolve_cwd(
     action: &PackAction,
     params: &Map<String, Value>,
@@ -612,25 +612,26 @@ pub fn resolve_cwd(
     Ok(view.vault_path.clone())
 }
 
-// ---------- 예약 엔트리 ----------
+// ---------- scheduled entries ----------
 
-/// 스케줄러가 보는 최소 단위. `decide()` 는 이 목록만 순회하므로 루틴 3개가 특별하지 않다.
+/// The smallest unit the scheduler sees. `decide()` walks only this list, so the three routines are nothing special.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ScheduledEntry {
-    /// "<packId>.<actionId>" — 설정 키이자 last_run 키
+    /// "<packId>.<actionId>" — both the settings key and the last_run key
     pub key: String,
     pub pack_id: String,
     pub action_id: String,
     pub label: String,
-    /// daily | weekdays | once (once는 호스트 내장 작업 전용)
+    /// daily | weekdays | once (once is for host built-in tasks only)
     pub kind: String,
     pub time: String,
     pub enabled: bool,
-    /// once 전용 실행 날짜(YYYY-MM-DD). daily·weekdays는 없다. 코드에서만 만든다.
+    /// once-only run date (YYYY-MM-DD). Absent for daily/weekdays. Created only from code.
     pub date: Option<String>,
+    pub days: Vec<u32>,
 }
 
-/// 활성 팩의 예약 가능한 액션 + config 의 사용자 재정의를 합친 결과.
+/// Schedulable actions from enabled packs merged with the user's config overrides.
 pub fn scheduled_entries(reg: &Registry, view: &ConfigView) -> Vec<ScheduledEntry> {
     let mut out = Vec::new();
     for pack in reg.enabled() {
@@ -652,6 +653,7 @@ pub fn scheduled_entries(reg: &Registry, view: &ConfigView) -> Vec<ScheduledEntr
                 enabled: over.as_ref().map(|o| o.enabled).unwrap_or(sched.enabled),
                 key,
                 date: None,
+                days: vec![],
             });
         }
     }
@@ -659,7 +661,7 @@ pub fn scheduled_entries(reg: &Registry, view: &ConfigView) -> Vec<ScheduledEntr
     out
 }
 
-// ---------- 프론트엔드 계약 ----------
+// ---------- frontend contract ----------
 
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -669,7 +671,7 @@ pub struct PackInfo {
     pub dir: String,
     pub source: PackSource,
     pub enabled: bool,
-    /// 이 팩이 실제로 들고 있는 스킬(파일이 있는 것만)
+    /// Skills this pack actually carries (only those with files present)
     pub available_skills: Vec<String>,
     pub settings_values: Map<String, Value>,
 }
@@ -706,7 +708,7 @@ pub fn registry_view(reg: &Registry, view: &ConfigView) -> PackRegistryView {
     }
 }
 
-/// 사이드바 한 줄.
+/// One sidebar entry.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct NavEntry {
@@ -715,11 +717,11 @@ pub struct NavEntry {
     pub view_id: String,
     pub label: String,
     pub icon: String,
-    /// notes | native — 프론트엔드 계약 이름은 뷰 매니페스트와 같은 `type` 이다
+    /// notes | native — the wire name matches the view manifest's `type`
     #[serde(rename = "type")]
     pub kind: String,
     pub component: String,
-    /// 사이드바 섹션 태그 (VIEW_GROUPS). 빈 값이면 프론트가 「기타」로 분류한다.
+    /// Sidebar section tag (VIEW_GROUPS). The frontend files empty values under "Other".
     pub group: String,
 }
 
@@ -987,7 +989,7 @@ mod tests {
             "/note 첫 줄 둘째 줄"
         );
 
-        // 템플릿 자체의 줄바꿈은 살아 있어야 여러 줄 무인 지시를 쓸 수 있다
+        // the template's own newlines must survive so multi-line unattended instructions are possible
         let multi = render_prompt(
             "첫 줄 지시\n둘째 줄 {{missing}} 지시",
             "sawhorse",
@@ -1066,8 +1068,8 @@ mod tests {
         fs::remove_dir_all(&builtin).unwrap();
     }
 
-    /// 프론트엔드 계약 이름 자물쇠. Rust 필드가 `kind` 인데 JSON 이 `type` 이어야 하는
-    /// 자리가 여럿이라, 하나만 어긋나도 화면이 조용히 빈다.
+    /// Wire-name lock. Several places need a Rust field named `kind` to serialize as JSON `type`;
+    /// a single mismatch quietly blanks a screen.
     #[test]
     fn wire_names_match_the_frontend_contract() {
         let nav = NavEntry {
@@ -1114,7 +1116,7 @@ mod tests {
         };
         assert_eq!(serde_json::to_value(&col).unwrap()["type"], "badge");
 
-        // 매니페스트는 `type` 으로 읽히고 예전 `kind` 도 받아 준다
+        // the manifest reads `type` and still accepts the old `kind`
         let parsed: PackView =
             serde_json::from_str(r#"{"id":"a","type":"native","component":"x"}"#).unwrap();
         assert_eq!(parsed.kind, "native");
@@ -1123,7 +1125,7 @@ mod tests {
         assert_eq!(legacy.kind, "native");
     }
 
-    /// 동봉한 팩이 실제로 파싱되는지 — 깨진 매니페스트를 배포하지 않기 위한 자물쇠.
+    /// Do the shipped packs actually parse — a lock against deploying a broken manifest.
     #[test]
     fn skill_names_are_unique_safe_directory_names() {
         for skills in [vec!["../escape"], vec!["/absolute"], vec!["wiki", "wiki"]] {

@@ -1,13 +1,13 @@
-// 확장 manifest 계약. 설계 591-679줄: bundle → component → configured instance 3층.
+// Extension manifest contract. Design lines 591-679: three layers — bundle → component → configured instance.
 //
-// - bundle: 설치·업데이트하는 배포 단위(extension.json)
-// - component: bundle 안의 pack 또는 connector 구현
-// - instance: 사용자가 연결한 계정·저장소·feed 묶음. grant·secret ref·cursor는
-//   bundle이 아니라 instance에 귀속된다(설계 597줄).
+// - bundle: the deployed unit that gets installed/updated (extension.json)
+// - component: a pack or connector implementation inside the bundle
+// - instance: the account/repository/feed bundle a user connected. Grants, secret refs,
+//   and cursors belong to the instance, not the bundle (design 597).
 //
-// MVP 실행 신뢰 단계(648-659줄): `builtin:github`, `builtin:rss` 같은 호스트 구현
-// 어댑터와 선언형 설정만 허용한다. 사용자 bundle이 같은 ID의 내장 connector를
-// 조용히 덮어쓰지 못한다(612-614줄).
+// MVP execution trust tier (648-659): only host-implemented adapters like `builtin:github`
+// and `builtin:rss` with declarative config. A user bundle cannot silently overwrite a
+// built-in connector with the same ID (612-614).
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -15,16 +15,16 @@ use std::path::{Path, PathBuf};
 
 pub const SUPPORTED_SCHEMA_VERSION: u32 = 1;
 
-/// connector가 요청하는 권한(설계 630-634줄 예시).
+/// Permissions requested by a connector (design 630-634 example).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct PermissionRequests {
-    /// 읽기·쓰기 수준. 예: repository: ["read"], issues: ["read", "write"]
+    /// Read/write levels. E.g. repository: ["read"], issues: ["read", "write"]
     pub repository: Vec<String>,
     pub issues: Vec<String>,
-    /// 네트워크 도메인 allowlist.
+    /// Network domain allowlist.
     pub network: Vec<String>,
-    /// secret ref 이름(예: github.oauth). 토큰 자체는 manifest에 절대 넣지 않는다.
+    /// Secret ref names (e.g. github.oauth). The token itself never goes into the manifest.
     pub secrets: Vec<String>,
 }
 
@@ -32,7 +32,7 @@ pub struct PermissionRequests {
 #[serde(rename_all = "camelCase")]
 pub struct SourceContribution {
     pub id: String,
-    /// issue | article. wire에서는 설계 예시 그대로 `type`이다.
+    /// issue | article. On the wire it is `type`, as in the design example.
     #[serde(rename = "type")]
     pub kind: String,
 }
@@ -41,7 +41,7 @@ pub struct SourceContribution {
 #[serde(rename_all = "camelCase")]
 pub struct ViewContribution {
     pub id: String,
-    /// 사전 등록된 호스트 renderer만 허용한다(설계 673-674줄).
+    /// Only pre-registered host renderers are allowed (design 673-674).
     pub renderer: String,
 }
 
@@ -58,10 +58,10 @@ pub struct ComponentContribution {
 #[serde(rename_all = "camelCase", default)]
 pub struct ExtensionComponent {
     pub id: String,
-    /// connector | pack. wire에서는 설계 예시 그대로 `type`이다.
+    /// connector | pack. On the wire it is `type`, as in the design example.
     #[serde(rename = "type")]
     pub kind: String,
-    /// builtin:github | builtin:rss | (추후 wasi:...)
+    /// builtin:github | builtin:rss | (later wasi:...)
     pub adapter: String,
     #[serde(default)]
     pub requests: PermissionRequests,
@@ -91,11 +91,11 @@ impl Default for ExtensionComponent {
 #[serde(rename_all = "camelCase", default)]
 pub struct ExtensionManifest {
     pub schema_version: u32,
-    /// bundle ID. 전역에서 유일해야 한다(설계 611줄).
+    /// Bundle ID. Must be globally unique (design 611).
     pub id: String,
     pub name: String,
     pub version: String,
-    /// 호스트 코어 최소 버전. semantic compare는 major만 본다(MVP).
+    /// Minimum host core version. Semantic compare looks at major only (MVP).
     pub min_core_version: String,
     #[serde(default)]
     pub components: Vec<ExtensionComponent>,
@@ -179,7 +179,7 @@ pub struct DiscoveredBundle {
     pub dir: String,
 }
 
-/// 내장 확장은 앱 리소스에서, 사용자 확장은 ~/.claude/sawhorse/extensions/에서 발견한다(설계 608-610줄).
+/// Built-in extensions are discovered from app resources, user extensions from ~/.claude/sawhorse/extensions/ (design 608-610).
 pub fn discover(builtin_root: Option<&Path>) -> Result<Vec<DiscoveredBundle>, String> {
     let mut out = Vec::new();
     let mut push_dir = |dir: &Path, source: &str| {
@@ -221,8 +221,8 @@ pub fn user_extensions_dir() -> PathBuf {
     crate::collab::workbench_root().join("extensions")
 }
 
-/// 사용자 bundle이 내장 connector를 덮어쓰려는 시도 검사(설계 612-614줄).
-/// 개발자 모드에서만 명시적 override를 허용한다.
+/// Checks attempts by a user bundle to overwrite a built-in connector (design 612-614).
+/// Explicit override is allowed only in developer mode.
 pub fn check_override_conflicts(
     bundles: &[DiscoveredBundle],
     allow_override: bool,
@@ -250,24 +250,24 @@ pub fn check_override_conflicts(
 
 // ---------- instance · grant ----------
 
-/// 설정된 connector instance. 사용자가 계정·저장소·feed를 연결한 단위.
+/// A configured connector instance. The unit where a user connected account, repository, or feed.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct ConnectorInstance {
     pub instance_id: String,
     pub extension_id: String,
     pub component_id: String,
-    /// adapter별 설정(feed URL 목록, GitHub account/repo 등).
+    /// Per-adapter config (feed URL list, GitHub account/repo, etc.).
     pub config: serde_json::Value,
-    /// 승인된 권한. manifest 요청과 다르면 paused다.
+    /// Approved permissions. Paused when differing from the manifest request.
     pub grant: PermissionRequests,
-    /// 권한 증가 재승인 전까지 기능 정지(설계 664줄).
+    /// Suspended until increased permissions are re-approved (design 664).
     pub paused: bool,
     pub created_at: String,
     pub updated_at: String,
 }
 
-/// 업데이트 시 권한 증가 검사. 증가가 있으면 true — instance를 paused로 둔다(설계 664줄).
+/// Permission-increase check on update. True when increased — the instance goes paused (design 664).
 pub fn permission_increased(old: &PermissionRequests, new: &PermissionRequests) -> bool {
     let added =
         |old_list: &[String], new_list: &[String]| new_list.iter().any(|v| !old_list.contains(v));
@@ -277,7 +277,7 @@ pub fn permission_increased(old: &PermissionRequests, new: &PermissionRequests) 
         || added(&old.secrets, &new.secrets)
 }
 
-/// 확장 capability 카탈로그(설계 671-672줄). `local_integrate`는 확장 capability가 아니다.
+/// Extension capability catalog (design 671-672). `local_integrate` is not an extension capability.
 pub const CAPABILITY_REMOTE_BRANCH_PUSH: &str = "remote_branch_push";
 pub const CAPABILITY_PULL_REQUEST_CREATE: &str = "pull_request_create";
 pub const CAPABILITY_ISSUE_WRITE: &str = "issue_write";

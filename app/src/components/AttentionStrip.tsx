@@ -1,9 +1,10 @@
-// 마이그레이션·이관처럼 사용자가 직접 진행해야 하는 작업을 모든 화면 위 1급으로
-// 띄운다. UpgradeGate 가 "앱을 못 쓰는 상태"를 전면 가림으로 처리한다면 이 스트립은
-// "작업은 가능하지만 모르고 넘어가면 안 되는 문제"를 담당한다. 실제 해결은 각
-// 전문 화면(스키마 스튜디오·작업대 이슈)에서 이뤄지므로 스트립의 역할은 인지시키고
-// 안내하는 것까지다. 닫아도 이 세션 안에서만 사라진다 — 상태가 남는 한 다음
-// 실행 때 다시 묻는다.
+// Surfaces tasks the user must carry out themselves, such as migrations and
+// data moves, as first-class items above every screen. Where UpgradeGate blocks
+// the whole app for an "unusable state", this strip handles "work is possible,
+// but these are problems you must not skip unaware". Actual fixes happen in the
+// dedicated screens (schema studio, workbench issues), so the strip's role ends
+// at making the user aware and pointing the way. Dismissing hides it only for
+// this session — as long as the state persists it asks again on the next run.
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AlertTriangle, ArrowRightLeft, Inbox, X } from "lucide-react";
@@ -32,7 +33,7 @@ export function AttentionStrip() {
 
   if (!attention) return null;
   const rows: AttentionRow[] = [];
-  // 충돌은 마이그레이션 자체를 막으므로 이동 대기보다 위에 온다.
+  // Conflicts block the migration itself, so they rank above move-pending.
   if (attention.schemaConflicts > 0) {
     rows.push({
       id: "schema-conflicts",

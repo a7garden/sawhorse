@@ -4,7 +4,9 @@ import { sddApi } from "@/features/workbench/api";
 import type { HarnessRun } from "@/features/workbench/types";
 import type { PendingTaskRequest } from "@/lib/types";
 import { useEffect, useState } from "react";
-import { Bell, Search, ChevronRight } from "lucide-react";
+import { Bell, Search, ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useApp } from "@/lib/store";
 import { useCoreExtensions } from "@/lib/core-extensions";
 import { Dialog } from "./ui/dialog";
@@ -13,8 +15,15 @@ import { CommandPalette } from "./CommandPalette";
 
 const isMac = /mac/i.test(navigator.platform);
 
-export function AppToolbar({ contextLabel, pageLabel }: { contextLabel?: string; pageLabel?: string }) {
+export function AppToolbar({ contextLabel, pageLabel, sidebarCollapsed, onToggleSidebar }: {
+  contextLabel?: string; pageLabel?: string; sidebarCollapsed: boolean; onToggleSidebar: () => void;
+}) {
   const { t } = useTranslation("common");
+  useEffect(() => {
+    const title = [contextLabel, pageLabel, "Sawhorse"].filter(Boolean).join(" · ");
+    document.title = title;
+    if (isTauri()) void getCurrentWindow().setTitle(title).catch(() => undefined);
+  }, [contextLabel, pageLabel]);
   const [runs, setRuns] = useState<HarnessRun[]>([]);
   const [pending, setPending] = useState<PendingTaskRequest[]>([]);
   useEffect(() => {
@@ -142,10 +151,15 @@ export function AppToolbar({ contextLabel, pageLabel }: { contextLabel?: string;
   }
   return (
     <>
-      <div className="app-toolbar">
-        <div className="app-location" aria-label={t("toolbar.location")}>
-          <span>{contextLabel}</span>
-          {pageLabel && <><ChevronRight size={12} aria-hidden /><strong>{pageLabel}</strong></>}
+      <header className={`app-toolbar app-titlebar${isTauri() && isMac ? " has-native-controls" : ""}`} data-tauri-drag-region aria-label={t("toolbar.titlebar")}>
+        <button className="app-sidebar-toggle" onClick={onToggleSidebar} aria-label={t(sidebarCollapsed ? "nav.expandSidebar" : "nav.collapseSidebar")} aria-expanded={!sidebarCollapsed} title={t(sidebarCollapsed ? "nav.expandSidebar" : "nav.collapseSidebar")}>
+          {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        </button>
+        <span className="app-toolbar-brand" data-tauri-drag-region>Sawhorse</span>
+        <div className="app-location" aria-label={t("toolbar.location")} data-tauri-drag-region>
+          {contextLabel && <span data-tauri-drag-region>{contextLabel}</span>}
+          <ChevronRight size={12} aria-hidden />
+          {pageLabel && <strong data-tauri-drag-region>{pageLabel}</strong>}
         </div>
         <button
           className="app-search-trigger"
@@ -174,7 +188,7 @@ export function AppToolbar({ contextLabel, pageLabel }: { contextLabel?: string;
             </span>
           )}
         </button>
-      </div>
+      </header>
       <CommandPalette open={search} onClose={() => setSearch(false)} />
       <Dialog
         open={notifications}

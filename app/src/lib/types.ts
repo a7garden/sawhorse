@@ -13,28 +13,28 @@ export interface Schedules {
 
 export type PermissionMode = "default" | "acceptEdits" | "bypassPermissions";
 
-/** 동작은 둘뿐이다. 옛 설정 파일의 "auto"는 백엔드가 headless로 정규화한다. */
+/** Only two behaviors exist. "auto" in old config files is normalized to headless by the backend. */
 export type HerdrMode = "herdr" | "headless";
 export type HerdrCleanup = "closeOnSuccess" | "keep" | "closeAlways";
 
 export interface HerdrCfg {
   mode: HerdrMode;
   bin: string;
-  session: string; // "" = herdr 기본 세션
+  session: string; // "" = herdr default session
   workspaceLabel: string;
   cleanup: HerdrCleanup;
   maxParallel: number;
   startTimeoutSec: number;
-  jobTimeoutMin: number; // 0 = 무제한
+  jobTimeoutMin: number; // 0 = unlimited
   notify: boolean;
   childModelPolicy: "auto" | "inherit";
 }
 
-/** 카탈로그에 없는 CLI 를 사용자가 직접 등록하는 항목. */
+/** A CLI not in the catalog, registered manually by the user. */
 export interface CustomAgent {
   id: string;
   name: string;
-  /** 실행 파일 이름 또는 절대 경로. 비면 id 를 이름으로 본다. */
+  /** Executable name or absolute path. If empty, falls back to the id as the name. */
   bin: string;
   installUrl: string;
 }
@@ -47,7 +47,7 @@ export interface DashboardCfg {
   launchAtLogin: boolean;
   herdr: HerdrCfg;
   customAgents: CustomAgent[];
-  /** 승인 정책·통합 방식. 새 세션의 초기값 계산에만 쓰인다. */
+  /** Approval policy and integration method. Used only to compute a new session's initial value. */
   collaboration: CollaborationPolicy;
 }
 
@@ -65,7 +65,7 @@ export interface ConfigView {
   vaultPath: string;
   defaultProject: string;
   projects: ProjectCfg[];
-  /** 새 코어 프로젝트 정본. key는 등록 때 만든 UUID projectId다. */
+  /** Canonical new-core-project. key is the UUID projectId created at registration. */
   coreProjects: Record<string, CoreProjectCfg>;
   dashboard: DashboardCfg;
 }
@@ -75,7 +75,7 @@ export type ConfigPatch = Partial<DashboardCfg> & {
   defaultProject?: string;
   projects?: ProjectCfg[];
   coreProjects?: Record<string, CoreProjectCfg>;
-  /** 대시보드 블록 부분 갱신 — dashboard.collaboration 즉시 저장에 쓴다. */
+  /** Dashboard block partial update — used for instant saves of dashboard.collaboration. */
   dashboard?: Partial<Omit<DashboardCfg, "collaboration">> & {
     collaboration?: Partial<CollaborationPolicy>;
   };
@@ -169,7 +169,7 @@ export interface VaultAudit {
   scannedAtMs: number;
 }
 
-/** 작업대 상단 1급 스트립이 읽는 "사용자가 진행해야 할 일" 집계. */
+/** "What the user should do next" aggregates read by the top-level strip of the workbench. */
 export interface VaultAttention {
   pendingSchemaMoves: number;
   schemaConflicts: number;
@@ -192,7 +192,7 @@ export type JobKind =
   | "initVault"
   | "setup"
   | "promote"
-  /** 팩이 선언한 액션 */
+  /** Actions declared by the pack */
   | "action"
   | "task";
 
@@ -208,14 +208,14 @@ export interface JobRequest {
 }
 
 export type JobRunner = "headless" | "herdr";
-/// herdr가 본 세션의 생명주기. blocked = 사람이 herdr에서 승인/입력해야 함.
+/// Lifecycle of a session as seen by herdr. blocked = a human must approve/provide input in herdr.
 export type AgentStatus = "idle" | "working" | "blocked" | "done" | "unknown";
 
 export interface Job {
   id: string;
   kind: JobKind;
   label: string;
-  /** 중복 실행 판정 키. 같은 키의 잡이 대기·실행 중이면 새 잡을 받지 않는다. */
+  /** Dedup key. A new job is rejected while a job with the same key is queued or running. */
   dedupKey: string;
   status: JobStatus;
   project?: string;
@@ -248,7 +248,7 @@ export interface HerdrDiag {
   serverOk: boolean;
   effectiveRunner: JobRunner;
   reason?: string | null;
-  /** headless 실행을 herdr 창으로 들여다볼 수 있는가 — 「herdr로 보기」의 가부 */
+  /** Whether a headless run can be peeked at in a herdr window — governs the "herdr로 보기" (view in herdr) action */
   viewerOk: boolean;
 }
 
@@ -267,10 +267,10 @@ export interface Diagnostics {
 }
 
 export interface MissedRoutine {
-  key: string; // "<예약 키>-<date>"
-  /** 예약 키(`si.morning`). 구형 기록은 루틴 이름(`morning`)을 담고 있다. */
+  key: string; // "<schedule key>-<date>"
+  /** Schedule key (`si.morning`). Older records carry the routine name (`morning`). */
   routine: string;
-  /** 사람이 읽는 이름. 구형 기록에는 없다. */
+  /** Human-readable name. Absent in older records. */
   label?: string;
   date: string; // YYYY-MM-DD
   scheduledAt: string; // HH:MM
@@ -304,11 +304,11 @@ export interface PluginBundle {
   skills: SkillInfo[];
 }
 
-// ---------- 확장(pack) ----------
+// ---------- Extensions (pack) ----------
 
 export type SettingFieldType =
   "text" | "path" | "number" | "bool" | "select" | "table";
-export type ScheduleKind = "daily" | "weekdays" | "once";
+export type ScheduleKind = "daily" | "weekdays" | "weekly" | "once";
 export type ViewKind =
   | "notes"
   | "native"
@@ -371,7 +371,7 @@ export interface PackAction {
 export interface ViewColumn {
   field: string;
   label: string;
-  /** "" | "title" | "mtime" — 프론트매터가 아니라 노트 자체에서 오는 값 */
+  /** "" | "title" | "mtime" — values coming from the note itself, not frontmatter */
   source: string;
   type: string;
   width: number;
@@ -385,7 +385,7 @@ export interface PackView {
   component: string;
   columns: ViewColumn[];
   groupBy: string;
-  /** none | multiple. multiple은 체크한 행만 뷰 액션의 ids로 전달한다. */
+  /** none | multiple. multiple passes only the checked rows as the view action's ids. */
   selection: "none" | "multiple";
   actions: string[];
   empty: string;
@@ -539,11 +539,11 @@ export interface NavEntry {
   icon: string;
   type: ViewKind;
   component: string;
-  /** 사이드바 섹션 태그: work | execution | vault | reading | automation (빈 값 = 기타) */
+  /** Sidebar section tag: work | execution | vault | reading | automation (empty = other) */
   group: string;
 }
 
-// ---------- 노트 질의 ----------
+// ---------- Note queries ----------
 
 export interface NoteRow {
   path: string;
@@ -559,7 +559,7 @@ export interface QueryResult {
   truncated: boolean;
 }
 
-// ---------- 에이전트 브리지 ----------
+// ---------- Agent bridge ----------
 
 export type SkillState = "installed" | "modified" | "missing" | "noSource";
 
@@ -583,23 +583,23 @@ export interface AgentSkillGroup {
 
 export interface PackAgentStatus {
   packId: string;
-  /** 설치 대상 에이전트별 스킬 상태 — 대상이 늘어도 스키마가 그대로다 */
+  /** Per-target-agent skill install status — the schema stays the same as targets grow */
   agents: AgentSkillGroup[];
   pluginInstalls: PluginInstall[];
 }
 
-/** 에이전트 폴더에서 실제로 발견한 스킬 하나 (출처 무관 열람용) */
+/** A skill actually found in an agent folder (browsable regardless of origin) */
 export interface AgentSkillEntry {
   name: string;
   description: string;
   path: string;
-  /** 최상위 폴더(플러그인·모음) 이름. Codex 슬래시 프롬프트는 "prompts" */
+  /** Top-level folder (plugin·collection) name. Codex slash prompts use "prompts" */
   group: string;
-  /** sawhorse 가 관리하는 사본인가 */
+  /** Whether this is a copy managed by sawhorse */
   managed: boolean;
 }
 
-/** skills.sh 마켓플레이스 검색 결과 한 줄 */
+/** One skills.sh marketplace search result row */
 export interface MarketSkill {
   id: string;
   skillId: string;
@@ -613,14 +613,14 @@ export interface AgentPresence {
   name: string;
   detected: boolean;
   version?: string;
-  /** 실제로 찾은 실행 파일 경로 ("" = 못 찾음) */
+  /** Executable path actually found ("" = not found) */
   path: string;
   home: string;
-  /** 스킬 설치 대상인가 */
+  /** Whether this is a skill install target */
   installable: boolean;
-  /** 앱이 이 에이전트로 잡을 직접 돌릴 수 있는가 */
+  /** Whether the app can run jobs directly with this agent */
   runsJobs: boolean;
-  /** "" 이면 설치 위치가 등록돼 있지 않다 — 버튼을 내지 않는다. */
+  /** If "", no install location is registered — the button is withheld. */
   installUrl: string;
   installHint: string;
   custom: boolean;
@@ -629,13 +629,13 @@ export interface AgentPresence {
 
 export interface AgentsView {
   agents: AgentPresence[];
-  /** 설정값을 정상화한 기본 에이전트 id */
+  /** Default agent id with the setting value normalized */
   defaultAgent: string;
 }
 
 export type Need = "required" | "recommended" | "optional";
 
-/** 제품이 실제로 쓰는 외부 프로그램 하나의 상태. */
+/** Status of one external program the product actually uses. */
 export interface RequirementStatus {
   id: string;
   name: string;
@@ -644,7 +644,7 @@ export interface RequirementStatus {
   detected: boolean;
   version?: string;
   path: string;
-  /** 깔려는 있는데 최소 버전에 못 미친다 */
+  /** Installed but below the minimum version */
   outdated: boolean;
   minMajor: number;
   installUrl: string;
@@ -663,7 +663,7 @@ export interface ProvisionReport {
   failed: string[];
 }
 
-// ---------- 예약 ----------
+// ---------- Schedules ----------
 
 export interface ScheduleView {
   key: string;
@@ -674,11 +674,11 @@ export interface ScheduleView {
   time: string;
   enabled: boolean;
   lastRun?: string;
-  /** 지금 실행하면 생길 잡의 중복 판정 키 (Job.dedupKey 와 맞춰 본다). */
+  /** Dedup key of the job this would produce if run now (kept in sync with Job.dedupKey). */
   jobKey: string;
 }
 
-// ---------- herdr 터미널 ----------
+// ---------- herdr terminal ----------
 
 export interface HerdrWorkspace {
   workspaceId: string;
@@ -721,13 +721,14 @@ export interface HerdrSnapshot {
   agents: HerdrAgentRow[];
 }
 
-// ---------- 자동화 작업(TaskDef) — 자동화 화면이 다루는 저장된 실행 내용.
-// 개발 보드의 개발 항목(WorkItem, features/workbench/types.ts)과는 다른 개념이다. ----------
+// ---------- Automation tasks (TaskDef) — stored run definitions handled by the automation screen.
+// A different concept from the board's work items (WorkItem, features/workbench/types.ts). ----------
 
 export interface TaskSchedule {
   kind: ScheduleKind;
   time: string;
   date?: string | null;
+  days?: number[];
 }
 
 export interface TaskSource {
@@ -745,6 +746,7 @@ export interface TaskDef {
   builtin: boolean;
   skill: string | null;
   project: string | null;
+  action?: { id: string; params: Record<string, unknown> } | null;
   source: TaskSource;
   createdAt: string;
   updatedAt: string;
@@ -753,7 +755,7 @@ export interface TaskDef {
 export interface TaskRow {
   def: TaskDef;
   lastRun: string | null;
-  /** 지금 실행하면 생길 잡의 중복 판정 키 (Job.dedupKey 와 맞춰 본다). */
+  /** Dedup key of the job this would produce if run now (kept in sync with Job.dedupKey). */
   jobKey: string;
 }
 
@@ -778,7 +780,7 @@ export interface TasksView {
   pending: PendingTaskRequest[];
   rejected: RejectedRequest[];
 }
-// ---------- 협업(멀티에이전트 통합 레인) ----------
+// ---------- Collaboration (unified multi-agent lane) ----------
 
 export type CollabSessionStatus =
   "active" | "paused" | "readyToFinalize" | "finalized";
@@ -817,7 +819,7 @@ export interface CollabSession {
   goal: string;
   status: CollabSessionStatus;
   mode: CollabSessionMode;
-  /** 대표 체크아웃 절대경로. */
+  /** Absolute path of the primary checkout. */
   integrationPath: string;
   integrationBranch: string;
   targetStartSha: string;
@@ -883,7 +885,7 @@ export interface CollabChangeSet {
   updatedAt: string;
 }
 
-/** 검토 화면용 후보 스냅샷. CollabChangeSet 평탄화 + 구조화된 manifest. */
+/** Candidate snapshot for the review screen. Flattened CollabChangeSet + structured manifest. */
 export interface CollabChangeSetView {
   id: string;
   sessionId: string;
@@ -986,7 +988,7 @@ export interface CollabInboxReport {
   reason: string;
 }
 
-// 검증 프로필 — argv 배열만 허용(임의 shell 문자열 금지).
+// Verification profiles — argv arrays only (arbitrary shell strings forbidden).
 export interface CollabVerifyCheckCommand {
   kind: "command";
   cwd: string;
@@ -1008,7 +1010,7 @@ export interface CollabVerifyProfile {
 
 export type LocalIntegrationApproval = "required" | "autoAfterPreflight";
 
-/** 승인 정책. 새 세션 초기값 계산에만 쓰인다 — 활성 세션은 시작 때 찍은 snapshot을 따른다. */
+/** Approval policy. Used only to compute a new session's initial value — active sessions follow the snapshot taken at start. */
 export interface CollaborationPolicy {
   localIntegrationApproval: LocalIntegrationApproval;
   verificationMode: string;
@@ -1017,14 +1019,14 @@ export interface CollaborationPolicy {
   remoteWriteApproval: string;
 }
 
-/** 새 코어 프로젝트 정본. key는 등록 때 만든 UUID projectId다. */
+/** Canonical new-core-project. key is the UUID projectId created at registration. */
 export interface CoreProjectCfg {
   path: string;
   integration: CollabIntegrationTarget;
   verifyProfiles: Record<string, CollabVerifyProfile>;
 }
 
-// ---------- 소스 커넥터 · 읽을거리 ----------
+// ---------- Source connectors · reading feed ----------
 
 export type ExtensionSourceKind = "builtin" | "user";
 
@@ -1040,12 +1042,12 @@ export interface ExtensionViewContribution {
 }
 
 export interface ExtensionPermissionRequests {
-  /** 예: ["read"], ["read", "write"] */
+  /** e.g. ["read"], ["read", "write"] */
   repository: string[];
   issues: string[];
-  /** 네트워크 도메인 allowlist 요청 */
+  /** Network domain allowlist request */
   network: string[];
-  /** secret ref 이름 — 토큰 자체는 오지 않는다 */
+  /** secret ref name — the token itself never arrives */
   secrets: string[];
 }
 
@@ -1084,7 +1086,7 @@ export interface ExtensionsListView {
   bundles: ExtensionBundle[];
 }
 
-/** feed instance 설정(FeedSourceConfig, camelCase). */
+/** Feed instance config (FeedSourceConfig, camelCase). */
 export interface FeedEntryCfg {
   name: string;
   url: string;
@@ -1097,19 +1099,19 @@ export interface FeedSourceCfg {
   storeContent: boolean;
 }
 
-/** GitHub source instance 설정(GitHubSourceConfig). */
+/** GitHub source instance config (GitHubSourceConfig). */
 export interface GitHubSourceCfg {
   account: string;
   repository: string;
   repositoryId: string;
   state: string;
-  /** 이 동기화가 묶인 프로젝트(sdlc id). 이전 인스턴스는 없을 수 있다. */
+  /** Project (sdlc id) this sync is bound to. Older instances may lack it. */
   projectId?: string;
 }
 
 export type SourceInstanceCfg = FeedSourceCfg | GitHubSourceCfg;
 
-/** feed 설정은 feeds 배열이 있다 — instance 목록이 확장 id를 안 주므로 형태로 판별한다. */
+/** Feed config has a feeds array — the instance list omits the extension id, so discriminate by shape. */
 export function isFeedCfg(c: SourceInstanceCfg): c is FeedSourceCfg {
   return "feeds" in c;
 }
@@ -1141,7 +1143,7 @@ export interface ArticleRow {
   url: string;
   title: string;
   summary: string;
-  /** JSON 문자열: string[] */
+  /** JSON string: string[] */
   tags: string;
   publishedAt: string;
   discoveredAt: string;
@@ -1174,11 +1176,11 @@ export interface GitHubIssuePayload {
 
 export interface InboundChange {
   id: string;
-  /** 빈 문자열이면 가져오기 후보(새 이슈), 아니면 연결된 노트의 field update 후보. */
+  /** Empty string = an import candidate (new issue); otherwise a field update candidate for the linked note. */
   linkId: string;
   sourceInstance: string;
   externalId: string;
-  /** JSON 문자열: GitHubIssuePayload */
+  /** JSON string: GitHubIssuePayload */
   payload: string;
   targetPath: string;
   createdAt: string;
@@ -1196,7 +1198,7 @@ export interface RemoteOperation {
   payloadHash: string;
   status: string;
   observedRevision: string;
-  /** JSON 문자열 또는 짧은 텍스트 */
+  /** JSON string or short text */
   resultJson: string;
   createdAt: string;
   updatedAt: string;
@@ -1216,3 +1218,13 @@ export interface GitHubRepository {
   language: string | null;
   updatedAt: string;
 }
+
+export interface ManagedTodo {
+  id: string;
+  text: string;
+  checked: boolean;
+  dueDate: string | null;
+  priority: "high" | "normal" | "low";
+  source: string;
+}
+export type ManagedTodoInput = Pick<ManagedTodo, "text" | "checked" | "dueDate" | "priority"> & { id?: string; deleted?: boolean };

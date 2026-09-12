@@ -1,4 +1,4 @@
-/* Journal (일지) — vault page. Uses global theme tokens so light/dark follow
+/* Journal — vault page. Uses global theme tokens so light/dark follow
  * the app theme automatically. Layout: calendar+index left, reader right. */
 
 .journal-page {

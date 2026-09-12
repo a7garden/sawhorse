@@ -82,12 +82,18 @@ pub fn list(root: &Path, work_id: &str) -> Result<Vec<IntentCheckpoint>, String>
         if id.starts_with('.') {
             continue;
         }
-        validate_id(&id)?;
+        if validate_id(&id).is_err() {
+            continue;
+        }
         let path = entry.path().join("record.json");
         safe_path(root, &path)?;
-        let checkpoint: IntentCheckpoint =
-            serde_json::from_str(&fs::read_to_string(path).map_err(|error| error.to_string())?)
-                .map_err(|error| error.to_string())?;
+        let checkpoint: IntentCheckpoint = match fs::read_to_string(&path)
+            .map_err(|error| error.to_string())
+            .and_then(|content| serde_json::from_str(&content).map_err(|error| error.to_string()))
+        {
+            Ok(checkpoint) => checkpoint,
+            Err(_) => continue,
+        };
         if checkpoint.id != id {
             return Err("기록 ID가 일치하지 않습니다".into());
         }

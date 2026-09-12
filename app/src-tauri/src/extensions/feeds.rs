@@ -1,20 +1,20 @@
-// builtin:rss 어댑터. 설계 721-786줄.
+// builtin:rss adapter. Design lines 721-786.
 //
-// - 공통 계약: `discover(source_config, cursor) -> Article[] + next_cursor`
-// - RSS 2.0과 Atom을 처리한다. feed로 부족한 사이트별 파서는 같은 Article 계약을
-//   구현하는 별도 connector로 추가한다(설계 744-746줄).
-// - 물리 identity는 `(source_instance_id, external_id/GUID)`. GUID가 없거나 재사용되면
-//   entry URL·게시시각·content hash의 source-scoped fallback을 쓰고 collision을 기록한다
-//   (설계 766-767줄).
-// - 기본 저장은 제목, 링크, 짧은 요약, 태그, 읽음/보관 상태다. 원문 전문은 기본 저장하지
-//   않는다(설계 772줄).
+// - Common contract: `discover(source_config, cursor) -> Article[] + next_cursor`
+// - Handles RSS 2.0 and Atom. Site-specific parsers that feeds cannot cover are added as
+//   separate connectors implementing the same Article contract (design 744-746).
+// - Physical identity is `(source_instance_id, external_id/GUID)`. When the GUID is missing
+//   or reused, a source-scoped fallback over entry URL, publish time, and content hash is
+//   used and the collision is recorded (design 766-767).
+// - Default storage: title, link, short summary, tags, read/archived state. Full original
+//   content is not stored by default (design 772).
 
 use super::broker::ExtensionContext;
 use crate::collab::store::Store;
 use crate::collab::{new_id, now_ts};
 use serde::{Deserialize, Serialize};
 
-/// 설계 730-742줄의 Article 계약.
+/// The Article contract from design lines 730-742.
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct Article {
@@ -27,17 +27,17 @@ pub struct Article {
     pub tags: Vec<String>,
     pub published_at: String,
     pub discovered_at: String,
-    /// 원문 전문 참조. 기본 저장하지 않는다(storeContent=false가 기본).
+    /// Reference to full original content. Not stored by default (storeContent=false is the default).
     pub content_ref: String,
 }
 
-/// configured source instance의 feeds 설정(설계 750-764줄 예시).
+/// feeds settings of a configured source instance (design 750-764 example).
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(default, rename_all = "camelCase")]
 pub struct FeedSourceConfig {
     pub feeds: Vec<FeedEntry>,
     pub refresh_minutes: u32,
-    /// 원문 전문 저장 여부. 기본 false.
+    /// Whether to store full original content. Default false.
     pub store_content: bool,
 }
 
@@ -49,7 +49,7 @@ pub struct FeedEntry {
     pub tags: Vec<String>,
 }
 
-/// XML 파싱 결과 하나. RSS의 <item> 또는 Atom의 <entry>.
+/// One XML parse result. An RSS <item> or an Atom <entry>.
 #[derive(Clone, Debug, Default)]
 pub struct RawEntry {
     pub guid: String,
@@ -61,8 +61,8 @@ pub struct RawEntry {
     pub published_at: String,
 }
 
-/// RSS 2.0 + Atom을 같은 RawEntry로 정규화한다. DTD·external entity는 파서가
-/// 처리하지 않는다 — quick-xml은 entity를 그대로 텍스트로 노출하므로 XXE 면책(설계 785줄).
+/// Normalizes RSS 2.0 + Atom into the same RawEntry. DTDs and external entities are not
+/// handled by the parser — quick-xml exposes entities as plain text, which is the XXE disclaimer (design 785).
 pub fn parse_feed(xml: &str) -> Result<Vec<RawEntry>, String> {
     use quick_xml::events::Event;
     let mut reader = quick_xml::Reader::from_str(xml);
@@ -188,7 +188,7 @@ fn local_name(tag: &str) -> String {
     tag.rsplit(':').next().unwrap_or(tag).to_lowercase()
 }
 
-/// 요약용 HTML 제거. WebView 표시 전 sanitize의 최소 형태(설계 786줄).
+/// Strips HTML for summaries. Minimal form of sanitization before WebView display (design 786).
 pub fn strip_html(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     let mut in_tag = false;
@@ -203,8 +203,8 @@ pub fn strip_html(input: &str) -> String {
     out.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// GUID fallback(설계 766-767줄): GUID가 없으면 URL·게시시각·content hash의
-/// source-scoped 해시. GUID 재사용 collision은 호출자가 기록한다.
+/// GUID fallback (design 766-767): without a GUID, a source-scoped hash of URL,
+/// publish time, and content hash. GUID-reuse collisions are recorded by the caller.
 pub fn external_id_of(
     source_instance_id: &str,
     entry: &RawEntry,
@@ -230,21 +230,25 @@ pub fn external_id_of(
     }
 }
 
-/// feed 하나를 가져와 파싱한다. ETag·Last-Modified 커서와 304 처리를 포함한다.
+/// Fetches and parses one feed. Includes ETag/Last-Modified cursors and 304 handling.
 pub async fn fetch_feed(
     ctx: &ExtensionContext,
     url: &str,
     etag: &str,
     last_modified: &str,
 ) -> Result<Option<(Vec<RawEntry>, String, String, String)>, String> {
-    // 784줄: entry 수·본문 길이 상한은 guarded_get의 8MB 본문 상한이 담당한다.
-    let _ = ctx; // grant 검사는 guarded_get이 수행한다
+    // Line 784: entry-count and body-size limits are handled by guarded_get's 8MB body limit.
+    let _ = ctx; // grant checks are performed by ssrf_guard below
+    let addrs = super::broker::ssrf_guard(url, &ctx.granted_domains)?;
+    // ssrf_guard가 검증한 주소로 DNS를 고정한다: 실제 요청이 재조회한 주소로
+    // 접속하는 DNS rebinding TOCTOU를 막는다.
+    let (host, pinned_addrs) = super::broker::dns_override(url, &addrs)?;
     let client = reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
+        .resolve_to_addrs(&host, &pinned_addrs)
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| format!("client 생성 실패: {e}"))?;
-    super::broker::ssrf_guard(url, &ctx.granted_domains)?;
     let mut req = client.get(url).header("User-Agent", "sawhorse-dashboard");
     if !etag.is_empty() {
         req = req.header("If-None-Match", etag);
@@ -281,15 +285,16 @@ pub async fn fetch_feed(
     }
     let xml = String::from_utf8_lossy(&bytes).to_string();
     let entries = parse_feed(&xml)?;
-    // entry 수 상한(설계 784줄).
+    // Entry-count limit (design 784).
     if entries.len() > 500 {
         return Err(format!("entry 수 상한 초과: {}", entries.len()));
     }
     Ok(Some((entries, new_etag, new_lm, xml)))
 }
 
-/// discover 계약의 구현: instance 설정의 모든 feed를 가져와 Article로 정규화하고 장부에 반영한다.
-/// 반환: 새로 발견된 기사 수. cursor는 sync_cursor 테이블의 etag/last_modified 조합이다.
+/// Implementation of the discover contract: fetches every feed in the instance config,
+/// normalizes to Articles, and reflects them in the ledger. Returns the number of newly
+/// discovered articles. The cursor is the etag/last_modified combination in the sync_cursor table.
 pub async fn discover(
     store: &Store,
     ctx: &ExtensionContext,
@@ -304,7 +309,7 @@ pub async fn discover(
             Ok(Some((e, et, lm, _xml))) => (e, et, lm),
             Ok(None) => continue,
             Err(e) => {
-                // 실패는 dead-letter로 남기고 다른 feed를 계속한다(설계 864줄).
+                // Failures are dead-lettered and the remaining feeds continue (design 864).
                 record_failure(store, &ctx.instance_id, &feed.url, &e);
                 continue;
             }
@@ -325,7 +330,7 @@ pub async fn discover(
                 })?;
             }
             let article_id = new_id("a");
-            // canonical URL이 같아도 row를 합치지 않는다 — same_as는 UI 접기용(설계 768-769줄).
+            // Rows are not merged even with the same canonical URL — same_as is for UI folding (design 768-769).
             let inserted = store.upsert_article(
                 &article_id,
                 &ctx.instance_id,
@@ -364,7 +369,7 @@ fn stored_cursor(store: &Store, key: &str) -> (String, String) {
         .ok()
         .flatten()
         .map(|(combined, _etag, _lm)| {
-            // combined는 과거 형식 호환용. 실제 값은 etag/lm 컬럼.
+            // combined exists for legacy-format compatibility. Real values live in the etag/lm columns.
             let _ = combined;
             (String::new(), String::new())
         })
@@ -418,7 +423,7 @@ mod tests {
             entries[0].summary
         );
         assert!(!entries[0].summary.contains('<'));
-        // GUID 없는 항목.
+        // Entry without a GUID.
         assert_eq!(entries[1].guid, "");
     }
 

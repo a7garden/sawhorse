@@ -4,7 +4,8 @@
       "installed": "Installed",
       "marketplace": "Marketplace",
       "skill": "Skills",
-      "workflow": "Workflows"
+      "workflow": "Workflows",
+      "feature": "Features"
     }
   },
   "packages": {
@@ -22,7 +23,9 @@
     "openStudio": "Workflow studio",
     "nodes": "{{n}} nodes"
   },
-  "header": { "title": "Extension manager" },
+  "header": {
+    "title": "Extension manager"
+  },
   "actions": {
     "applyWorkspace": "Apply to workspace",
     "refresh": "Refresh",
@@ -35,12 +38,19 @@
     "requiredParamsTitle": "Actions with required inputs must be run from their view",
     "cancel": "Cancel"
   },
-  "broken": { "count": "{{n}} unreadable extension(s)" },
+  "broken": {
+    "count": "{{n}} unreadable extension(s)"
+  },
   "core": {
     "title": "Connected features",
     "subtitle": "Manage each feature's screens and connection status.",
-    "feeds": { "name": "Reading", "desc": "RSS feeds · read list · article archive" },
-    "github": { "desc": "Browse repositories · import projects · sync issues" },
+    "feeds": {
+      "name": "Reading",
+      "desc": "RSS feeds · read list · article archive"
+    },
+    "github": {
+      "desc": "Browse repositories · import projects · sync issues"
+    },
     "coreExtension": "Core extension",
     "installed": "Installed",
     "available": "Available",
@@ -138,9 +148,17 @@
     "native": "Native view",
     "declarative": "Declarative"
   },
-  "actionsList": { "count": "{{n}} actions" },
-  "schedule": { "weekdays": "Weekdays", "daily": "Daily" },
-  "source": { "builtin": "built-in", "user": "user" },
+  "actionsList": {
+    "count": "{{n}} actions"
+  },
+  "schedule": {
+    "weekdays": "Weekdays",
+    "daily": "Daily"
+  },
+  "source": {
+    "builtin": "built-in",
+    "user": "user"
+  },
   "packAgents": {
     "label": "Agents",
     "detected": "detected",
@@ -154,8 +172,14 @@
     "explain2": " — to overwrite them, use \"Update\".",
     "marketplaceExists": "A marketplace plugin is already installed ({{plugins}}). Since the content is identical, the app does not create a copy — that plugin provides the skills."
   },
-  "settings": { "title": "Extension settings", "deleteRow": "Delete", "addRow": "Add row" },
-  "workspace": { "creates": "Created in the workspace" },
+  "settings": {
+    "title": "Extension settings",
+    "deleteRow": "Delete",
+    "addRow": "Add row"
+  },
+  "workspace": {
+    "creates": "Created in the workspace"
+  },
   "report": {
     "processed": "{{n}} processed",
     "skipped": "{{n}} skipped",
@@ -185,7 +209,9 @@
     "open": "Open",
     "loadingDoc": "Reading document…"
   },
-  "select": { "project": "Select project" },
+  "select": {
+    "project": "Select project"
+  },
   "steps": {
     "intro": "Start",
     "programs": "Core setup",
@@ -197,7 +223,7 @@
   },
   "defaultBadge": "Default",
   "wizard": {
-    "title": "Get started with the sawhorse workbench",
+    "title": "Get started with Sawhorse",
     "intro": {
       "lead": "Your workflow defines how work gets done.",
       "rest": "Sawhorse deterministically ports stages, deliverables, approvals, and extensions. A particular delivery format or development method belongs to the selected workflow, not the core app.",
@@ -274,7 +300,11 @@
     "minVersion": "{{version}}+ required",
     "get": "Get",
     "blocking": "Required items are missing ({{list}}). You can continue for now; after installing, re-check in Settings → Diagnostics.",
-    "need": { "required": "Required", "recommended": "Recommended", "optional": "Optional" }
+    "need": {
+      "required": "Required",
+      "recommended": "Recommended",
+      "optional": "Optional"
+    }
   },
   "agentStep": {
     "introA": "These are the agents found on this PC. Press one to make it your",
@@ -369,5 +399,49 @@
     "conflict": "User-edit conflict",
     "draftMeta": "{{provenance}} sources · {{chars}} chars",
     "viewDraft": "View draft"
+  },
+  "marketplace": {
+    "title": "Make room for what you need",
+    "subtitle": "Discover agent skills, reusable workflows, and new app features in one place.",
+    "typeFilter": "Extension types",
+    "all": "Browse all",
+    "multiType": "An extension can provide more than one type of contribution.",
+    "types": {
+      "skill": {
+        "title": "Skill extensions",
+        "desc": "Knowledge and instructions for agents"
+      },
+      "workflow": {
+        "title": "Workflow extensions",
+        "desc": "Steps, deliverables, and approvals"
+      },
+      "feature": {
+        "title": "Feature extensions",
+        "desc": "Views, actions, and service connections"
+      }
+    },
+    "defaultSource": "Included",
+    "skillsSourceDesc": "Search public skills and install with npx skills. No source setup needed.",
+    "searchPlaceholder": "What skill do you need? Try react, design, testing",
+    "explore": "Explore topics",
+    "globalScope": "Global install · available in all projects for selected agents",
+    "startSearch": "Find the next skill for your agent",
+    "startSearchDesc": "Enter a query or choose a topic above to search skills.sh.",
+    "searching": "Searching skills.sh…",
+    "results": "{{count}} results for “{{query}}”",
+    "results_one": "{{count}} result for “{{query}}”",
+    "results_other": "{{count}} results for “{{query}}”",
+    "retrySearch": "Retry search",
+    "installSuccess": "Installed {{name}} for the selected agents.",
+    "workflowSourceDesc": "Explore workflows provided by extensions, then apply them to projects from the library.",
+    "manageWorkflows": "Manage workflows",
+    "viewWorkflows": "View workflows",
+    "workflowEmpty": "No packages provide workflows yet. Open the library from workflow management or connect an external package below.",
+    "featureSourceDesc": "Explore Sawhorse features and installed packages, and manage what you use.",
+    "connectionsDesc": "Connect repositories and issues, and manage RSS subscriptions and reading lists.",
+    "additionalSource": "Connect an external extension catalog",
+    "additionalSourceDesc": "Add a Sawhorse catalog from your team or a publisher. The default skills.sh source needs no configuration.",
+    "invalidCatalog": "This is not a valid Sawhorse extension catalog.",
+    "package": "Extension package"
   }
 }

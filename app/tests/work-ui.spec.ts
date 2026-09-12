@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-const workNav = (page: Page) => page.locator("aside nav").getByRole("button", { name: "작업", exact: true });
+const workNav = (page: Page) => page.locator("aside nav").getByRole("button", { name: "작업대", exact: true });
 const cards = (page: Page) => page.locator(".wb-board-card");
 const results = (page: Page) => page.locator(".wb-work-results").getByRole("status");
 const filterToggle = (page: Page) => page.locator(".wb-work-toolbar").getByRole("button", { name: /^필터/ });
@@ -11,7 +11,7 @@ async function choose(page: Page, name: string, option: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/?preview=1");
-  await expect(page.getByRole("heading", { name: "작업대", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "대시보드", exact: true })).toBeVisible();
   await workNav(page).click();
 });
 
@@ -78,41 +78,38 @@ test("done remains in the flow, list preference persists, and project scope appl
   await expect(page.getByRole("button", { name: "목록", exact: true })).toHaveAttribute("aria-pressed", "true");
   await choose(page, "프로젝트 필터", "Herdr");
   await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(2);
-  await page.getByRole("button", { name: "새 의도", exact: true }).click();
+  await page.getByRole("button", { name: "새 항목", exact: true }).click();
+  await page.getByRole("combobox", { name: "시작할 워크플로", exact: true }).click();
+  await page.getByRole("option", { name: "SDD · 의도에서 완료까지", exact: true }).click();
+  await page.getByRole("button", { name: "계속", exact: true }).click();
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "프로젝트", exact: true })).toContainText("Herdr");
 });
 
-test("the intent tab gathers intent work without dropping the state axis", async ({ page }) => {
-  const intentTab = page.locator(".wb-work-intent-tab");
-  // 의도가 하나도 없으면 탭도 없다. 첫 의도를 남기면 그때 상태 탭 옆에 붙는다.
-  await expect(intentTab).toHaveCount(0);
-  await page.getByRole("button", { name: "새 의도", exact: true }).click();
+test("saving an intent adds an inbox note without increasing the work count", async ({ page }) => {
+  const inbox = page.getByRole("group", { name: "작업 공간" }).getByRole("button", { name: /^의도 인박스/ });
+  await expect(inbox).toContainText("2");
+  await page.getByRole("button", { name: "새 항목", exact: true }).click();
+  await page.getByRole("combobox", { name: "시작할 워크플로", exact: true }).click();
+  await page.getByRole("option", { name: "SDD · 의도에서 완료까지", exact: true }).click();
+  await page.getByRole("button", { name: "계속", exact: true }).click();
   await page.getByRole("dialog").getByRole("combobox", { name: "프로젝트", exact: true }).click();
   await page.getByRole("option", { name: "Sawhorse", exact: true }).click();
   await page.getByRole("dialog").getByRole("textbox").fill("# 의도 모아보기");
   await page.getByRole("button", { name: "메모만 저장", exact: true }).click();
   await expect(page.locator(".wb-intent-flow")).toBeVisible();
   await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
-  await expect(cards(page)).toHaveCount(7);
-  await expect(intentTab).toContainText("1");
-  await intentTab.click();
-  await expect(results(page)).toHaveText("1개 작업");
-  await expect(cards(page)).toContainText("의도 모아보기");
-  // 상태는 여전히 제 축이다. 닫힌 작업으로 옮기면 두 축이 함께 걸린다.
-  const states = page.getByRole("group", { name: "열림 상태", exact: true });
-  await states.getByRole("button", { name: /^닫힌 작업/ }).click();
-  await expect(intentTab).toContainText("0");
-  await expect(page.getByText("조건에 맞는 작업이 없습니다", { exact: true })).toBeVisible();
-  await page.locator(".wb-empty").getByRole("button", { name: "필터 초기화", exact: true }).click();
-  await expect(intentTab).toHaveAttribute("aria-pressed", "false");
-  await expect(cards(page)).toHaveCount(1);
+  await expect(cards(page)).toHaveCount(5);
+  await expect(inbox).toContainText("3");
+  await inbox.click();
+  await expect(results(page)).toHaveText("의도 3개 · 작업 수에 포함되지 않음");
+  await expect(page.getByRole("button", { name: "의도 모아보기", exact: true })).toBeVisible();
 });
 
 test("narrow windows keep page controls within the canvas and scroll work locally", async ({ page }) => {
   for (const width of [820, 540]) {
     await page.setViewportSize({ width, height: 900 });
     await expect(page.getByRole("textbox", { name: "작업 검색", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "새 의도", exact: true })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "새 항목", exact: true })).toBeInViewport();
     const bounds = await page.locator(".wb-work-page").evaluate((el) => ({ width: el.clientWidth, scroll: el.scrollWidth }));
     expect(bounds.scroll).toBeLessThanOrEqual(bounds.width + 1);
   }
@@ -124,23 +121,23 @@ test("narrow windows keep page controls within the canvas and scroll work locall
 });
 
 test("sort choice orders the list and the board alike, and survives a reload", async ({ page }) => {
-  const intake = page.locator('[data-stage="intent"] .wb-board-card');
+  const intake = page.locator('[data-stage="build"] .wb-board-card');
   await choose(page, "정렬 기준", "이슈 번호순");
-  await expect(intake.first()).toContainText("work-calendar");
+  await expect(intake.first()).toContainText("work-editor");
   await page.getByRole("button", { name: "정렬 방향: 오름차순", exact: true }).click();
-  await expect(intake.first()).toContainText("work-search");
+  await expect(intake.first()).toContainText("work-session");
   await page.getByRole("button", { name: "목록", exact: true }).click();
   const ids = page.locator(".wb-issue-table tbody tr .wb-issue-id");
   await expect(ids.first()).toHaveText("work-session");
-  await expect(ids.last()).toHaveText("work-calendar");
+  await expect(ids.last()).toHaveText("work-editor");
   await page.reload();
   await workNav(page).click();
   await expect(page.getByRole("combobox", { name: "정렬 기준", exact: true })).toContainText("이슈 번호순");
   await expect(ids.first()).toHaveText("work-session");
-  // 축을 바꾸면 방향은 그 축의 기본값으로 돌아간다 — 기한은 임박한 쪽이 먼저다.
+  // Switching axes resets the direction to that axis's default — due date puts the most imminent first.
   await choose(page, "정렬 기준", "기한순");
-  await expect(ids.first()).toHaveText("work-session");
-  await expect(ids.last()).toHaveText("work-search");
+  await expect(ids.first()).toHaveText("work-release");
+  await expect(ids.last()).toHaveText("work-editor");
 });
 
 test("the copilot rail answers about the open work item and remembers being closed", async ({ page }) => {
@@ -149,20 +146,21 @@ test("the copilot rail answers about the open work item and remembers being clos
   await expect(dialog).toBeVisible();
   const copilot = dialog.locator(".wb-copilot");
   await expect(copilot).toBeVisible();
-  // 빈 상태의 예시 질문을 누르면 그대로 질문이 되어 답이 붙는다.
+  // Clicking an example question from the empty state sends it as-is and an answer follows.
   await copilot.getByRole("button", { name: "이 작업을 한 문단으로 요약해 줘", exact: true }).click();
   await expect(copilot.locator(".wb-copilot-question")).toHaveText("이 작업을 한 문단으로 요약해 줘");
   await expect(copilot.locator(".wb-copilot-answer")).toContainText("마크다운 라이브 편집기");
-  // 직접 쓴 질문도 같은 대화에 이어 붙는다.
+  // A hand-typed question continues the same conversation.
   await copilot.getByRole("textbox", { name: "질문", exact: true }).fill("다음 단계는?");
   await copilot.getByRole("button", { name: "묻기", exact: true }).click();
   await expect(copilot.locator(".wb-copilot-question")).toHaveCount(2);
   await expect(copilot.locator(".wb-copilot-answer")).toHaveCount(2);
-  // 접어 두면 다음에 연 상세에서도 접혀 있다.
+  // Once collapsed, it stays collapsed the next time the detail opens.
   await dialog.getByRole("button", { name: "코파일럿", exact: true }).click();
   await expect(copilot).toHaveCount(0);
   await page.keyboard.press("Escape");
-  await page.locator(".wb-board-card").filter({ hasText: "프로젝트를 넘나드는 지식 검색" }).click();
+  await page.getByRole("group", { name: "작업 공간" }).getByRole("button", { name: /^의도 인박스/ }).click();
+  await page.getByRole("button", { name: "프로젝트를 넘나드는 지식 검색", exact: true }).click();
   await expect(dialog).toBeVisible();
   await expect(dialog.locator(".wb-copilot")).toHaveCount(0);
   await dialog.getByRole("button", { name: "코파일럿", exact: true }).click();

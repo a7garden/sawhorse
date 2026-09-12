@@ -5,6 +5,25 @@ import type { WorkItem, WorkflowDefinition } from "./types";
 export const taskStages = ["clarify", "design", "approval", "queued", "build", "unconfirmed", "done"] as const;
 export type TaskStage = typeof taskStages[number] | "discarding" | "other";
 export type WorkArea = "flow" | "inbox" | "archive" | "mockups";
+export const workflowKey = (workflow: { id: string; version: string }) => JSON.stringify([workflow.id, workflow.version]);
+export const workWorkflowKey = (work: Pick<WorkItem, "workflowId" | "workflowVersion">) => workflowKey({ id: work.workflowId, version: work.workflowVersion });
+export const usesLifecycleBoard = (workflow?: WorkflowDefinition) => !workflow || (workflow.id === "intent-flow" && ["2.0.0", "2.0.1"].includes(workflow.version));
+
+/** Keep child execution inside its parent stage and retain unknown stages for old revisions. */
+export function workflowBoardStage(work: WorkItem, workflow: WorkflowDefinition): string {
+  if (work.status === "done") return "done";
+  const active = work.activeNodes?.find((node) => node.workflowId === workflow.id && node.workflowVersion === workflow.version);
+  return active?.nodeId ?? work.stage;
+}
+
+export function workflowBoardLanes(workflow: WorkflowDefinition, work: WorkItem[]) {
+  const lanes = workflow.nodes.map((node) => ({ id: node.id, label: node.label, kind: node.kind }));
+  for (const item of work) {
+    const id = workflowBoardStage(item, workflow);
+    if (!lanes.some((lane) => lane.id === id)) lanes.push({ id, label: id, kind: id === "done" ? "end" : "agent" });
+  }
+  return lanes;
+}
 export const isMockupWork = (work: WorkItem) => work.workflowId === "mockup-review" || work.artifacts.includes("mockup");
 export const isArchivedWork = (work: WorkItem) => ["cancelled", "rejected"].includes(work.status) || ["cancelled", "discarded"].includes(work.stage);
 export function isTaskRecord(work: WorkItem) {

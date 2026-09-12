@@ -6,11 +6,11 @@
   flex-direction: column;
   border-right: 1px solid var(--border);
   background: var(--sidebar);
-  padding: 0 10px;
+  padding: 18px 10px 0;
 }
 .app-brand { display: flex; align-items: center; gap: 9px; min-height: 64px; padding: 0 8px; }
 .app-wordmark { font-size: 17px; font-weight: 700; letter-spacing: -.055em; }
-.app-sidebar-toggle { display: grid; place-items: center; width: 28px; height: 28px; margin-left: auto; color: var(--muted-foreground); border-radius: 5px; }
+.app-sidebar-toggle { display: grid; place-items: center; flex-shrink: 0; width: 28px; height: 28px; color: var(--muted-foreground); border-radius: 5px; }
 .app-sidebar-toggle:hover { background: var(--accent); color: var(--foreground); }
 .app-navigation { display: flex; flex: 1; min-height: 0; flex-direction: column; overflow-y: auto; overflow-x: hidden; padding-top: 5px; }
 .app-nav-section { display: flex; flex-shrink: 0; flex-direction: column; gap: 1px; margin-bottom: 16px; }
@@ -77,4 +77,42 @@
   .app-search-trigger span, .app-search-trigger kbd { display: none; }
   .app-preview-notice { padding: 6px 16px; }
   .app-page-tabs { padding: 0 16px; gap: 18px; }
+}
+
+/* One project switch stays visible when the sidebar collapses. Native macOS
+   window controls occupy the reserved space at the left of the overlay titlebar. */
+.app-titlebar { height: 52px; min-height: 52px; padding: 0 18px; gap: 12px; user-select: none; }
+.app-titlebar.has-native-controls { padding-left: 94px; }
+.app-titlebar .app-sidebar-toggle { display: grid; margin: 0; }
+.app-titlebar-project { width: 220px; min-width: 150px; max-width: 30vw; flex-shrink: 0; }
+.app-titlebar-project [role="combobox"] { border-color: transparent; background: transparent; box-shadow: none; font-weight: 600; }
+.app-titlebar-project [role="combobox"]:hover { background: var(--accent); }
+.app-titlebar .app-location { height: 100%; }
+.app-shared-location { padding: 2px 6px; border-radius: 4px; background: var(--muted); font-size: 10px; }
+.app-section-caption { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wb-process-group + .wb-process-group { margin-top: 24px; }
+.wb-process-heading { font-size: 14px; font-weight: 600; margin: 0 0 12px; }
+.wb-process-heading small { color: var(--muted-foreground); font-weight: 400; }
+@media (max-width: 700px) {
+  .app-titlebar { padding-inline: 10px; gap: 6px; }
+  .app-titlebar-project { min-width: 125px; width: 160px; max-width: 38vw; }
+  .app-titlebar .app-location { font-size: 10px; gap: 5px; }
+  .app-titlebar .app-search-trigger { flex-shrink: 0; }
+  .app-titlebar .app-shared-location { display: none; }
+}
+
+/* The shared desk sits above a project switch that scopes only its own section. */
+.app-toolbar-brand { flex: 0 0 150px; font-size: 14px; font-weight: 650; letter-spacing: -.04em; }
+.app-project-section { border-block: 1px solid var(--border); padding: 16px 0 14px; margin-bottom: 14px; }
+.app-project-section + .app-workspace-section { border-top: 0; padding-top: 0; }
+.app-project-picker { margin: 0 3px 9px; }
+.app-project-picker [role="combobox"] { min-height: 40px; font-weight: 600; border-radius: 7px; }
+.app-project-workflow { margin: 8px 7px 2px; font-size: 10px; color: var(--muted-foreground); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.app-project-hint { margin: 0 10px 10px; color: var(--muted-foreground); font-size: 11px; line-height: 1.7; }
+.is-sidebar-collapsed :is(.app-project-hint, .app-project-workflow) { display: none; }
+.is-sidebar-collapsed .app-project-picker { margin-inline: 0; }
+@media (max-width: 700px) {
+  .app-toolbar-brand { display: none; }
+  .app-project-hint, .app-project-workflow { display: none; }
+  .app-project-picker { margin-inline: 0; }
 }

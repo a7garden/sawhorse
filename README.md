@@ -2,21 +2,26 @@
 
 ![Sawhorse — a deterministic, portable workflow platform](docs/images/sawhorse-overview.png)
 
-**팀의 일하는 방식을 결정론적으로 이식하는 로컬 워크플로우 플랫폼.**
+**A local workflow platform that deterministically ports the way a team works.**
 
-Sawhorse의 코어는 특정 개발 방법론이나 산출물 형식을 강제하지 않는다. 워크플로우가 단계, 산출물,
-사람의 승인, 자동 실행, 필요한 확장과 외부 프로그램을 한 버전으로 정의한다. 같은 정의와 고정된
-확장 버전을 옮기면 다른 환경에서도 같은 순서와 게이트로 실행된다.
+Sawhorse's core does not enforce a specific development methodology or artifact format. A workflow
+defines stages, artifacts, human approvals, automated runs, and the required extensions and external
+programs in one version. Carrying the same definition with pinned extension versions reproduces the
+same sequence and gates in a different environment.
 
-- 산출물 중심 팀은 요구사항·설계·목업을 차례로 만들고 Task Master로 분해한 뒤 자동 수행하는 워터폴 흐름을 정의할 수 있다.
-- 애자일 팀은 `intent.md`에서 의도를 구체화하고 설계 승인 뒤 구현하는 짧은 흐름을 정의할 수 있다.
-- XLSX 보고나 DOCX 입력이 필요한 흐름만 해당 확장과 Node.js·Pandoc 같은 실행 도구를 선언한다.
+- Artifact-centric teams can define a waterfall flow that produces requirements, design, and mockups
+  in sequence, decomposes them with Task Master, and runs them automatically.
+- Agile teams can define a short flow that elaborates intent in `intent.md` and implements it after
+  design approval.
+- Only flows that need XLSX reporting or DOCX input declare those extensions and runtime tools such
+  as Node.js or Pandoc.
 
-칸반·캘린더·마크다운 편집기·실행 하네스는 선택한 워크플로우의 같은 작업과 프로젝트를 바라본다.
-데이터는 로컬 Markdown에 남으며 Obsidian 없이도 앱만으로 편집하고 관리할 수 있다. 앱 전체의
-공통 권장 연동은 Obsidian과 Herdr뿐이며, 나머지는 워크플로우에 귀속되는 선택 확장이다.
+The kanban board, calendar, Markdown editor, and execution harness all look at the same work items
+and projects of the selected workflow. Data stays in local Markdown and can be edited and managed
+with the app alone, without Obsidian. The only app-wide recommended integrations are Obsidian and
+Herdr; everything else is an optional extension scoped to a workflow.
 
-## 시작
+## Getting started
 
 ```bash
 cd app
@@ -24,92 +29,108 @@ bun install
 bun run tauri dev
 ```
 
-기존 설치를 업데이트하면 첫 실행에서 이전 볼트와 Sawhorse 플러그인을 백업·검증 후 자동 갱신한다. [자동 업그레이드와 복구](docs/architecture/automatic-upgrades.md)를 참고한다.
+When updating an existing installation, the first launch backs up and verifies the previous vault
+and Sawhorse plugin, then upgrades them automatically. See
+[Automatic upgrades and recovery](docs/architecture/automatic-upgrades.md).
 
-처음 실행하면 설정 마법사에서 기록을 저장할 작업공간 경로를 정한다.
-작업대에서 **작업공간 초기화**를 누른 뒤 **프로젝트**에 폴더를 등록한다. 이름은 폴더에서 따오고,
-설명과 검증 명령은 저장 후 에이전트가 분석해 채운다. 기본 모델 목록은 에이전트 CLI에서 가져온다.
-**워크플로**에서 팀의 흐름을 만들거나 가져와 프로젝트에 적용한다. 번들된 `intent-flow`를 쓰는 경우
-**새 의도**에서 메모와 이미지를 남기고 구체화를 요청한다. 방향을 검토해 설계로 넘기고, 설계 승인 후 구현 대기 항목을 일괄 실행한다.
+On first launch, the setup wizard picks the workspace path where records are stored. In the
+workbench, press **작업공간 초기화** (initialize workspace), then register folders under
+**프로젝트** (projects). Names come from the folder; after saving, an agent analyzes and fills in
+the description and verification command. The default model list is fetched from agent CLIs.
+In **워크플로** (workflows), create or import your team's flow and apply it to a project. With the
+bundled `intent-flow`, leave notes and images in **새 의도** (new intent) and request elaboration.
+Review the direction, hand it over to design, and after design approval run the items waiting for
+implementation in batch.
 
 ```bash
-# UI만 체험: http://127.0.0.1:1420/?preview=1
+# UI-only preview: http://127.0.0.1:1420/?preview=1
 bun run dev
 
-# 검증
+# Verification
 bun run build
 bun run test:e2e
 (cd src-tauri && cargo test --lib)
 
-# 데스크톱 배포 번들
+# Desktop distribution bundle
 bun run tauri build
 ```
 
-브라우저 체험은 예제 데이터를 브라우저에 저장한다. 실제 파일 접근과 에이전트 실행은
-Tauri 데스크톱에서만 동작한다. 처음 UI 테스트를 실행할 때 `bunx playwright install chromium`이 필요하다.
+The browser preview stores its sample data in the browser. Real file access and agent execution
+work only in the Tauri desktop app. The first UI test run requires `bunx playwright install chromium`.
 
-## 기본 화면
+## Default screens
 
-영문 UI에 예제 프로젝트와 작업을 넣은 실제 앱 화면이다. [캡처용 데모 실행과 이미지 재생성](docs/images/README.md)으로 같은 구성을 다시 열 수 있다.
+Actual app screens with the English UI populated by a sample project and work. Reopen the same
+setup with [running the capture demo and regenerating the images](docs/images/README.md).
 
 ![English process board with sample work progressing through Intent, Design, Build, Verify, and Deploy](docs/images/process-board.png)
 
 <details>
-<summary>작업 상세 — Markdown 명세와 에이전트 실행 맥락</summary>
+<summary>Work detail — Markdown specification and agent execution context</summary>
 
 ![A Markdown specification beside the agent role, model, and execution context in Sawhorse](docs/images/work-detail.png)
 
 </details>
 
-| 화면 | 기능 |
+| Screen | Function |
 |---|---|
-| 작업대 | 진행 중 작업, 기한, 다음 작업, 단계별 분포 |
-| 작업 | 같은 작업의 목록·공정 보드 전환, 작업 생성·편집, 마일스톤·프로젝트·의존 작업 연결 |
-| 캘린더 | 월/목록 보기, 작업 기한, 마일스톤·검토·배포·회의 일정 |
-| 작업 상세 | 선택한 워크플로우의 단계·결정 이력, Atomic Editor로 Markdown 직접 편집 |
-| 작업 코파일럿 | 작업 상세 오른쪽에서 그 작업의 문서·결정 기록을 두고 묻고 답하기(설정한 에이전트로 읽기 전용 질의) |
-| 에이전트 하네스 | 역할·모델 선택, Herdr 실행, 부모·자식 실행, 상태와 출력 기록 |
-| 프로젝트 | 폴더 선택(첫 폴더가 기본), 폴더에서 따오는 이름, 분석으로 채워지는 설명·검증 명령, CLI 모델 목록, 기본 에이전트·모델 |
-| 워크플로 | 단계·산출물·하위 흐름 편집, 시뮬레이션, 초안·불변 버전 발행·내보내기 |
-| 스키마 | 문서 타입·필드·경로·템플릿 편집, 볼트 스캔, 링크/필드 변경 미리보기·적용·롤백·활성화 |
-| 프로젝트 가져오기 | 여러 코드/문서 폴더 snapshot, 파일별 재개, 근거 문서 초안, 충돌 검토·적용 |
-| 확장 | v2 패키지 설치·의존성 해석·권한 승인·프로젝트 lock·portable 내보내기 |
-| 기록과 지식 | 작업공간 Markdown 검색과 산출물 이동 |
+| Workbench | In-progress work, due dates, next work item, per-stage distribution |
+| Work | List/process-board switching for the same work items, work item creation and editing, milestone/project/dependency links |
+| Calendar | Month and list views, work due dates, milestone/review/deploy/meeting schedules |
+| Work detail | Stage and decision history of the selected workflow, direct Markdown editing with the Atomic Editor |
+| Work copilot | Q&A at the right of work detail over that item's documents and decision log (read-only queries through the configured agent) |
+| Agent harness | Role and model selection, Herdr runs, parent and child runs, status and output logging |
+| Projects | Folder selection (first folder is default), folder-derived names, analysis-filled description and verification command, CLI model list, default agent and model |
+| Workflows | Editing stages, artifacts, and subflows; simulation; draft and immutable version publishing and export |
+| Schemas | Editing document types, fields, paths, and templates; vault scan; preview/apply/rollback/activation of link and field changes |
+| Project import | Snapshot of multiple code/document folders, per-file resume, evidence document drafts, conflict review and apply |
+| Extensions | v2 package installation, dependency resolution, permission approval, project lock, portable export |
+| Records and knowledge | Workspace Markdown search and artifact relocation |
 
-기존 루틴·잡·협업 세션·검토·소스·RSS·터미널과 확장 화면도 유지한다.
+The existing routine, job, collaboration session, review, source, RSS, terminal, and extension screens are retained as well.
 
-## 기본 SDD 흐름: 의도에서 결과 확인까지
+## Default SDD flow: from intent to result confirmation
 
 ```text
-의도 → 구체화·인터뷰 → 설계·인터뷰 → 승인 대기 → 구현 대기 → 구현 → 완료·미확인 → 완료
-원본    brief.md       spec/plan      검토 결정    일괄 접수    검증·커밋       사용자 확인
+Intent → Elaboration·interview → Design·interview → Awaiting approval → Ready to implement → Implementation → Done·unconfirmed → Done
+source     brief.md         spec/plan        review decision    batch intake     verification·commit       user confirmation
 ```
 
-작업 상세에서 현재 단계와 다음 행동, 연결된 실행과 단계별 문서 기록을 확인한다.
-원본 의도와 수정 전 문서, 설계 검토·실행 입력·결과 인수 시점의 문서는 `work/<id>/history/`에 별도 보존한다.
-승인 뒤 의도나 설계·계획이 바뀌면 다시 검토해야 구현 실행과 결과 인수를 진행할 수 있다.
-기록은 이 기능 적용 이후부터 쌓이며, 기존에 덮어쓴 과거 내용은 복원하지 않는다.
-새 흐름의 인터뷰·A2A·커밋 통합·의존성 기반 폐기는 [SDD v2 생명주기](docs/architecture/sdd-lifecycle-v2.md)를 참고한다. 기존 v1 작업은 [이전 의도 흐름](docs/architecture/intent-flow.md)을 유지한다.
+Work detail shows the current stage, the next action, and the linked runs and per-stage document
+history. The original intent and pre-edit documents, plus documents captured at design review, run
+input, and result acceptance, are preserved separately under `work/<id>/history/`. If the intent,
+design, or plan changes after approval, re-review is required before implementation runs and result
+acceptance can proceed. History accumulates from when this feature was enabled; previously
+overwritten past content is not restored. For the new flow's interviews, A2A, commit integration,
+and dependency-based discarding, see [the SDD v2 lifecycle](docs/architecture/sdd-lifecycle-v2.md).
+Existing v1 work items keep the [legacy intent flow](docs/architecture/intent-flow.md).
 
-프로젝트 화면에서 DESIGN.md와 산출물 템플릿을 등록·추출·적용·내보낸다. 작업 화면의 목업 보기에서는 최신 버전과 이전 버전을 함께 관리한다. Sawhorse 자체 디자인 기준은 [DESIGN.md](DESIGN.md)에 모은다.
+The projects screen registers, extracts, applies, and exports DESIGN.md and artifact templates.
+The mockups view in the work screen manages the latest version alongside previous ones. Sawhorse's
+own design guidelines are collected in [DESIGN.md](DESIGN.md).
 
-## 번들된 워터폴 예시: SDD 흐름
+## Bundled waterfall example: SDD flow
 
 ```text
-의도          설계       구현       검증               배포·결과 인수
+Intent         Design     Implementation  Verification      Deployment·result acceptance
 intent.md  →  spec.md  →  plan.md  →  verification.md  →  release.md
-운영에서 발견한 후속 의도는 새 작업으로 연결한다.
+Follow-up intents discovered in operation are linked as new work items.
 ```
 
-작업은 하나의 워크플로로 진행하며, 상태(`접수 / 예정 / 진행 / 결과 검토 / 보류 / 완료 / 반려 / 취소`)는 그 진행과 수락·종료 결정을 요약한다. 상태와 승인 체크를 별도로 편집하지 않는다.
-단계를 앞으로 이동할 때 이전 산출물의 근거와 의존 작업을 검사하고 검토 결정을 기록한다.
-문서를 저장할 때는 읽었던 revision을 비교하므로 다른 편집에서 바뀐 내용을 조용히 덮지 않는다.
+Work items progress through a single workflow; the status
+(`접수 / 예정 / 진행 / 결과 검토 / 보류 / 완료 / 반려 / 취소` — intake / scheduled / in progress /
+result review / on hold / done / rejected / canceled) summarizes that progress and the
+acceptance/closing decisions. Status and approval checks are not edited separately.
+Moving a stage forward checks the previous artifact's evidence and dependent work items and records
+the review decision. Saving a document compares against the revision that was read, so content
+changed by another edit is never silently overwritten.
 
-에이전트의 `idle`·`done` 신호는 **검토 대기**로 기록한다. 테스트 통과나 실제 배포의 증거는
-검증·배포 산출물에 남겨야 한다. 앱은 임의의 서비스를 자동 배포하거나 원격 저장소를
-자동 병합하는 범용 CI 서비스가 아니다. 프로젝트에 맞는 실행·검증·배포 절차를 연결한다.
+Agent `idle` and `done` signals are recorded as **검토 대기** (awaiting review). Evidence of passing
+tests or an actual deployment must be left in the verification and deployment artifacts. The app is
+not a general-purpose CI service that auto-deploys arbitrary services or auto-merges remote
+repositories; it connects the run, verification, and deployment procedures that fit the project.
 
-## 앱이 소유하는 작업공간과 워크플로우
+## The workspace and workflows the app owns
 
 ```text
 <vault>/
@@ -134,79 +155,89 @@ intent.md  →  spec.md  →  plan.md  →  verification.md  →  release.md
   runs/<id>.md
 ```
 
-YAML frontmatter는 관계와 상태, 본문은 사람이 읽는 기록이다. 프로젝트는 사용할
-워크플로우를 선택하고 작업은 생성 시점의 정확한 버전과 내용 digest를 고정한다.
-초기화는 반복해도 기존 파일이나 공개된 워크플로우 정의를 덮지 않으며 예전 `프로젝트/`,
-`일지/`, `개념/` 등은 유지한다. 기존 문서를 새 작업으로 자동 변환하지는 않는다.
+YAML frontmatter carries relationships and status; the body is a human-readable record. A project
+selects the workflow to use, and a work item pins the exact version and content digest at creation
+time. Re-running initialization never overwrites existing files or published workflow definitions,
+and legacy `프로젝트/` (projects), `일지/` (journal), and `개념/` (concepts) folders are kept.
+Existing documents are not converted into new work items automatically.
 
-## Herdr와 에이전트
+## Herdr and agents
 
-터미널 에이전트에서 워크플로우 자체를 작성할 때는 **Sawhorse CLI + 작성 스킬**을 사용한다.
-`sawhorse workflow`가 조회·스키마·검증·시뮬레이션·초안·불변 발행·프로젝트 적용을 제공하고,
-`sawhorse skill install --agent codex` 또는 `--agent claude`로 작성 절차를 보급한다.
-Windows와 macOS용 독립 실행 파일을 제공하며 앱을 켜지 않아도 동작한다.
-[설치와 명령 안내](docs/cli.md)를 참고한다.
+To author workflows themselves from a terminal agent, use the **Sawhorse CLI + authoring skill**.
+`sawhorse workflow` provides listing, schemas, validation, simulation, drafts, immutable
+publishing, and project application, and `sawhorse skill install --agent codex` or `--agent claude`
+distributes the authoring procedure. Standalone executables are provided for Windows and macOS and
+work without launching the app. See [installation and command reference](docs/cli.md).
 
-[Herdr](https://herdr.dev)의 지속 터미널을 실행 기반으로 사용한다. 하네스는 Herdr가
-지원하는 로컬 에이전트를 감지해 실행하며 조사·계획·구현·검증·검토 역할을 선택할 수 있다.
-이 PC에 설치한 실행 가능 에이전트가 기본값이 되고, 프로젝트별 기본 모델을 정하거나 실행마다
-바꿀 수 있다. 해당 CLI의 설치와 유효한 로그인이 필요하다.
+[Herdr](https://herdr.dev)'s persistent terminals are the foundation for runs. The harness detects
+and runs the local agents Herdr supports, with selectable roles for research, planning,
+implementation, verification, and review. Agents installed and executable on this PC are the
+defaults; a per-project default model can be set or changed per run. The corresponding CLI must be
+installed with a valid login.
 
-실행 시작 전에 Markdown 장부를 만들고, 실제 Herdr 세션·워크스페이스·탭·pane·에이전트
-이름을 기록한다. 앱을 다시 열어도 같은 실행을 추적하며, 다른 pane의 프로세스를
-잘못 제어하지 않도록 identity를 확인한다. 에이전트가 승인을 기다리면 blocked로 표시한다.
-하위 조사 요청도 호스트가 검증하고 독립된 실행 기록으로 관리한다.
+Before a run starts, a Markdown ledger records the actual Herdr session, workspace, tab, pane, and
+agent names. Reopening the app keeps tracking the same run, and identity is checked so that
+processes in other panes are never controlled by mistake. When an agent waits for approval it is
+shown as blocked. Sub-investigation requests are also validated by the host and managed as
+independent run records.
 
-내부 SDD·TDD 스킬은 하위 작업의 난이도를 판단해 작은 조사·구현·검증은 Sonnet,
-복잡한 추론은 Opus로 위임한다. 부모 모델은 유지하고 명시한 모델 선택은 우선한다.
-설정 → 실행에서 자동 선택/부모 모델 상속을 정할 수 있으며, 실행 상세에는 선택 근거가 남는다.
-Codex·사용자 정의 모델은 같은 에이전트의 부모 모델을 상속한다.
-[정책·역할·한도 설계](docs/architecture/model-aware-delegation.md)를 참고한다.
+The internal SDD and TDD skills judge subtask difficulty and delegate small research,
+implementation, and verification work to Sonnet and complex reasoning to Opus. The parent model is
+retained, and an explicitly chosen model takes precedence. In 설정 → 실행 (Settings → Runs) you can
+pick automatic selection or parent-model inheritance, and the run detail records the reason for the
+choice. Codex and custom models inherit the parent model of the same agent. See the
+[policy, role, and limit design](docs/architecture/model-aware-delegation.md).
 
-기존 루틴 잡 실행기는 별도로 남는다. 기존 headless 잡은 Claude Code 전용이고,
-새 SDD 하네스는 Herdr를 통해 선택한 CLI를 실행한다.
+The legacy routine job runner remains separate. Existing headless jobs are Claude Code only, while
+the new SDD harness runs the selected CLI through Herdr.
 
-## 확장과 배포
+## Extensions and distribution
 
-`app/`은 Tauri 2 + React 데스크톱 앱, `plugin/`은 번들되는 스킬·팩·훅이다.
-SDD 작업대는 앱의 기본 기능이며 별도 팩 설치가 필요하지 않다.
-`plugin/skills/sdd`와 `plugin/skills/tdd`는 에이전트가 선택한 워크플로우의 산출물·증거 규약을 따르도록 돕는다.
+`app/` is the Tauri 2 + React desktop app; `plugin/` holds the bundled skills, packs, and hooks.
+The SDD workbench is a default app feature and needs no separate pack installation.
+`plugin/skills/sdd` and `plugin/skills/tdd` help agents follow the artifact and evidence
+conventions of the selected workflow.
 
-- `journal`: 하루 기록, 빠른 메모, 업무 보고와 주간 회고.
-- `concepts`: 개념 노트 생성·분류·연결.
-- `todos`: 일지 체크리스트를 보여 주는 할 일 화면.
-- `project-docs`: 제안서와 코드베이스의 프로젝트 문서화.
-- 사용자 팩: `~/.claude/sawhorse/packs/<id>/pack.json`에서 추가한다.
+- `journal`: daily records, quick notes, work reports, and weekly retrospectives.
+- `concepts`: creating, classifying, and linking concept notes.
+- `todos`: a todo screen that surfaces journal checklists.
+- `project-docs`: project documentation of proposals and the codebase.
+- User packs: add them at `~/.claude/sawhorse/packs/<id>/pack.json`.
 
-팩의 단위는 업종이나 업무방식이 아니라 독립 기능이다. 팩은 폴더·템플릿·설정·액션·추가 화면을 선언하며, 끄더라도 원본 노트는 남는다. 볼트 점검은 항상 필요한 앱 네이티브 기능이라 팩 설치 여부와 무관하게 제공한다.
-앱과 플러그인은 `~/.claude/sawhorse/config.json`을 공유한다.
+A pack's unit is an independent feature, not an industry or a way of working. A pack declares
+folders, templates, settings, actions, and extra screens; turning it off leaves the original notes
+in place. The vault health check is an always-needed app-native feature, so it is provided
+regardless of pack installation. The app and plugins share `~/.claude/sawhorse/config.json`.
 
-통합 확장 package v2는 로컬 폴더/파일, exact Git commit, HTTPS에서 설치할 수 있다.
-전체 payload SHA-256과 engine/semver 의존성을 확인한 뒤 프로젝트마다 요청 권한과 정확한
-package digest를 lock에 기록한다. 앱에서 portable package로 다시 내보내 사내 파일 서버나
-Git으로 배포할 수 있다. `xlsx-export`는 설치·활성화한 프로젝트에만 나타나는 선택 확장이다.
+Unified extension package v2 installs from local folders/files, exact Git commits, or HTTPS. After
+verifying the full payload SHA-256 and engine/semver dependencies, it records the requested
+permissions and exact package digest in each project's lock. The app can re-export a portable
+package for distribution over an internal file server or Git. `xlsx-export` is an optional
+extension that appears only in projects where it is installed and activated.
 
-배포는 Tauri 번들(dmg, deb/AppImage, Windows NSIS)을 사용한다. GitHub의 기존 태그 릴리스
-워크플로를 유지한다. 플러그인만 쓸 때는 `/plugin marketplace add a7garden/sawhorse` 후
-`/plugin install sawhorse@sawhorse`로 설치한다.
+Distribution uses Tauri bundles (dmg, deb/AppImage, Windows NSIS) and keeps the existing GitHub
+tag-release workflow. For plugin-only use, install with `/plugin marketplace add a7garden/sawhorse`
+followed by `/plugin install sawhorse@sawhorse`.
 
-## 개발 및 설계 문서
+## Development and design documents
+- [v2 design: app-independent document spaces, HTML originals, layered document app adapters](docs/architecture/v2-platform-design.md)
 
-- [골 모드: 목표 달성까지 자율 반복, 매시간 토큰 복구 재시도, 공통 작업 점유](docs/architecture/goal-mode.md)
+- [Goal mode: autonomous iteration until the goal is met, hourly token-recovery retries, shared work claiming](docs/architecture/goal-mode.md)
 
-- [SDD 제품·저장·하네스 설계](docs/architecture/sdd-workbench.md)
-- [SDD API 및 구현 계약](docs/architecture/sdd-contract.md)
-- [구현 검증과 운영 범위](docs/architecture/sdd-validation.md)
-- [확장 가능한 워크플로우 플랫폼 설계와 구현 현황](docs/architecture/workflow-platform-design.md)
-- [앱 개발 안내](app/README.md)
-- [워크플로우·스키마·확장의 경계와 정리 내역](docs/architecture/extension-boundaries.md)
-- [팩 작성 안내](plugin/packs/README.md)
-- [기존 협업 및 확장 설계](docs/superpowers/specs/2026-09-05-multi-agent-collaboration-design.md)
+- [SDD product, storage, and harness design](docs/architecture/sdd-workbench.md)
+- [SDD API and implementation contract](docs/architecture/sdd-contract.md)
+- [Implementation validation and operational scope](docs/architecture/sdd-validation.md)
+- [Extensible workflow platform design and implementation status](docs/architecture/workflow-platform-design.md)
+- [App development guide](app/README.md)
+- [Boundaries of workflows, schemas, and extensions, and the cleanup record](docs/architecture/extension-boundaries.md)
+- [Pack authoring guide](plugin/packs/README.md)
+- [Legacy collaboration and extension design](docs/superpowers/specs/2026-09-05-multi-agent-collaboration-design.md)
 - [Connector SDK](docs/connector-sdk.md)
 
-Anthropic의 [AI-Native SDLC Playbook](https://academy.claude.com/courses/ai-native-sdlc-playbook)을
-참고해 Sawhorse에 맞게 설계했다. Markdown 편집은 [Atomic Editor](https://github.com/kenforthewin/atomic-editor)를
-사용한다. [zvec-grep](https://github.com/zvec-ai/zvec-grep)는 선택적 의미 검색 공급자 후보이며,
-현재 앱의 검색은 로컬 Markdown 정확 검색이다.
+Designed for Sawhorse with reference to Anthropic's
+[AI-Native SDLC Playbook](https://academy.claude.com/courses/ai-native-sdlc-playbook). Markdown
+editing uses the [Atomic Editor](https://github.com/kenforthewin/atomic-editor).
+[zvec-grep](https://github.com/zvec-ai/zvec-grep) is a candidate optional semantic search provider;
+the app's current search is exact search over local Markdown.
 
 MIT License.

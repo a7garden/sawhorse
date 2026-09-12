@@ -21,9 +21,10 @@ import type { Job } from "@/lib/types";
 import { isClosedStatus, type WorkItem, type HarnessRun } from "@/features/workbench/types";
 
 /**
- * 지표 카드 하나가 곧 위젯 하나다. 어떤 숫자를 볼지는 사람마다 다르므로 — 누구는
- * 제안이 몇 건 쌓였는지, 누구는 승인이 몇 건 밀렸는지 — 카드를 묶어 고정하지 않고
- * 카탈로그에서 낱개로 켜고 끄고 크기까지 정하게 한다.
+ * One metric card is one widget. Which number matters differs per person —
+ * some want to know how many proposals piled up, others how many approvals
+ * are backed up — so cards are not bundled or fixed; each can be toggled,
+ * sized, and arranged individually from the catalog.
  */
 export const METRIC_KEYS = [
   "backlog",
@@ -57,24 +58,24 @@ export function isMetricWidgetId(id: string): id is MetricWidgetId {
   );
 }
 
-/** 지표가 세는 재료. 대시보드가 이미 들고 있는 것만 쓴다. */
+/** Ingredients the metrics count. Only uses what the dashboard already holds. */
 export interface MetricSource {
   work: WorkItem[];
   jobs: Job[];
   runs?: HarnessRun[];
-  /** YYYY-MM-DD 로컬 날짜. 호출부가 넘겨 렌더마다 흔들리지 않게 한다. */
+  /** YYYY-MM-DD local date. Passed in by the caller so it stays stable across renders. */
   today: string;
 }
 
 export interface MetricDefinition {
   key: MetricKey;
   label: string;
-  /** 카드 아래 한 줄. 카탈로그 설명으로도 그대로 쓴다. */
+  /** One line under the card. Also used verbatim as the catalog description. */
   hint: string;
   icon: LucideIcon;
-  /** 카드를 눌렀을 때 갈 화면. */
+  /** Screen to navigate to when the card is pressed. */
   page: string;
-  /** 0보다 크면 주의색으로 칠할지. */
+  /** Whether to paint in warning color when greater than 0. */
   warnWhenPositive?: boolean;
   count: (source: MetricSource) => number;
 }
@@ -87,7 +88,7 @@ function shiftDays(date: string, days: number) {
   next.setDate(next.getDate() + days);
   return localDate(next);
 }
-/** 열린 항목 — 완료·반려·취소가 아닌 것. 기한·담당 지표는 모두 이 기준을 쓴다. */
+/** Open items — anything not done/rejected/cancelled. All due-date and assignee metrics use this baseline. */
 function isOpen(item: WorkItem) {
   return !isClosedStatus(item.status);
 }
@@ -139,7 +140,7 @@ export const METRIC_DEFINITIONS: MetricDefinition[] = [
     page: "board",
     count: ({ work }) => countWork(work, (item) => item.status === "done"),
   },
-  // 보류는 아래 `blocked` 한 장이 센다. 이 카드는 닫혔지만 완료가 아닌 쪽이다.
+  // The single `hold` card below counts these. This card is closed-but-not-done.
   {
     key: "hold",
     label: "반려·취소",
@@ -287,7 +288,7 @@ export const METRIC_BY_KEY = Object.fromEntries(
   METRIC_DEFINITIONS.map((metric) => [metric.key, metric]),
 ) as Record<MetricKey, MetricDefinition>;
 
-/** 예전 '핵심 지표' 묶음이 보여주던 네 장. 기본 대시보드와 이관의 기준점이다. */
+/** The four cards the old 'core metrics' bundle showed. Baseline for the default dashboard and for migration. */
 export const DEFAULT_METRIC_KEYS: MetricKey[] = [
   "running",
   "ready",

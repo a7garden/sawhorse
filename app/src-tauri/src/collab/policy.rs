@@ -1,17 +1,17 @@
-// 승인 정책 평가. 설계 234-320줄.
+// Approval policy evaluation. Design lines 234-320.
 //
-// - 설정은 전역(dashboard.collaboration) → 프로젝트(integration.approval) 순으로
-//   새 세션의 초기값을 계산하고, 세션 시작 때 immutable v1 snapshot을 만든다.
-// - 전역·프로젝트 설정 변경은 활성 세션을 몰래 바꾸지 않는다. 사람이 「세션 정책 변경」을
-//   확인했을 때만 v2가 생긴다.
-// - 에이전트·pack·connector가 정책을 쓰는 명령은 제공하지 않는다.
+// - Settings compute a new session's initial values in global (dashboard.collaboration) then
+//   project (integration.approval) order, and an immutable v1 snapshot is made at session start.
+// - Global or project setting changes never silently alter active sessions. A v2 exists only
+//   after a human confirms the "세션 정책 변경" (change session policy) action.
+// - No command lets agents, packs, or connectors write policy.
 
 use super::model::*;
 use super::store::Store;
 use crate::config::ConfigView;
 use serde_json::json;
 
-/// 세션 시작 시 적용할 effective policy. 전역값에 프로젝트 approval 재정의를 얹는다.
+/// Effective policy applied at session start. Project approval overrides layer on top of global values.
 pub fn effective_policy(view: &ConfigView, project_id: &str) -> CollaborationPolicy {
     let mut policy = view.dashboard.collaboration.clone();
     if let Some(project) = view.core_projects.get(project_id) {
@@ -22,15 +22,15 @@ pub fn effective_policy(view: &ConfigView, project_id: &str) -> CollaborationPol
     policy
 }
 
-/// 프로젝트별 approval 재정의는 config의 `projects.<id>.integration.approval`에 둔다.
-/// CoreProject 구조는 검증 프로필·경로만 알고 approval은 wire에서 별도로 읽는다.
+/// Per-project approval overrides live in config at `projects.<id>.integration.approval`.
+/// The CoreProject struct knows only verification profile and paths; approval is read separately from the wire.
 fn project_override(_branch: &str, _view: &ConfigView, _project_id: &str) -> Option<PolicyMode> {
-    // approval 필드는 serde로 CoreProject에 들어오지 않는다(설계 예시의 "approval": null은
-    // "재정의 없음"). MVP는 전역 정책만 사용하고 재정의는 4단계 batch integration과 함께 넣는다.
+    // The approval field does not reach CoreProject through serde ("approval": null in the design example
+    // means "no override"). MVP uses the global policy only; overrides land together with phase-4 batch integration.
     None
 }
 
-/// 세션 시작 스냅샷(v1). 사람이 시작을 확인한 시점의 정책이 고정된다.
+/// Session start snapshot (v1). Pins the policy as of the moment a human confirmed the start.
 pub fn snapshot_for_new_session(
     store: &Store,
     project_id: &str,
@@ -49,8 +49,8 @@ pub fn snapshot_for_new_session(
     Ok((version, policy))
 }
 
-/// 세션 정책 개정. 사람이 확인했을 때만 v2를 만들고 새 버전을 반환한다.
-/// 완화는 v2로 만든 review snapshot부터, 강화는 아직 통합되지 않은 후보에 적용된다.
+/// Amend the session policy. Creates v2 only when a human confirms, and returns the new version.
+/// Loosening applies starting from the v2-created review snapshot; tightening applies to candidates not yet integrated.
 pub fn amend_policy(
     store: &Store,
     project_id: &str,
@@ -81,7 +81,7 @@ pub fn load_policy(
     serde_json::from_str(&snapshot.policy_json).map_err(|e| format!("정책 스냅샷 해석 실패: {e}"))
 }
 
-/// 승인 때 본 HEAD와 현재 HEAD가 한 bit라도 다르면 재승인(설계 378-380줄).
+/// If the HEAD seen at approval time differs from the current HEAD by even one bit, re-approval is required (design lines 378-380).
 pub fn approval_is_stale(
     approval: &Approval,
     current_head: &str,
@@ -96,7 +96,7 @@ pub fn approval_is_stale(
     Ok(approval.expected_head != current_head)
 }
 
-/// 승인 결정 처리. 사람 승인은 Approval + AuthorizationDecision(human)을 남긴다.
+/// Handle an approval decision. A human approval leaves an Approval plus AuthorizationDecision (human).
 pub fn record_human_approval(
     store: &Store,
     candidate: &ChangeSet,
@@ -128,8 +128,8 @@ pub fn record_human_approval(
     Ok(decision)
 }
 
-/// 자동 정책 허가. 사전검사(preflight) 결과가 모두 통과일 때만 policy authorization을 만든다.
-/// 사람 승인으로 위장하지 않는다(설계 317-320줄).
+/// Automatic policy authorization. Creates a policy authorization only when every preflight result passes.
+/// It never masquerades as human approval (design lines 317-320).
 pub fn record_policy_authorization(
     store: &Store,
     candidate: &ChangeSet,
@@ -140,7 +140,7 @@ pub fn record_policy_authorization(
     if !preflight_ok {
         return Ok(None);
     }
-    // 자동 모드도 승인 기록은 남긴다 — 누가(무엇이) 허가했는지 재현 가능해야 한다(설계 49줄).
+    // Auto mode still records an approval — who (or what) granted it must be reproducible (design line 49).
     let approval = Approval {
         id: super::new_id("ap"),
         candidate_id: candidate.id.clone(),
@@ -165,7 +165,7 @@ pub fn record_policy_authorization(
     Ok(Some(decision))
 }
 
-/// 감사 payload 표준형.
+/// Standard audit payload shape.
 pub fn audit_payload(candidate: &ChangeSet, extra: serde_json::Value) -> serde_json::Value {
     json!({
         "candidateId": candidate.id,
@@ -183,7 +183,7 @@ mod tests {
     fn temp_store() -> Store {
         let dir = std::env::temp_dir().join(format!("sawhorse-policy-{}", uuid::Uuid::new_v4()));
         Store::open_at(dir.join("wb.sqlite")).unwrap();
-        // Store는 Arc 래퍼라 테스트에서 직접 반환하지 않는다 — 헬퍼로 재구성.
+        // Store is an Arc wrapper and cannot be returned directly from tests — rebuild it via the helper.
         panic!("unused");
     }
 

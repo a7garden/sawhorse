@@ -3,9 +3,9 @@ use super::*;
 use std::io::{Read, Seek, SeekFrom};
 use std::process::Stdio;
 
-/// 실행 인자와 stdin 으로 보낼 프롬프트. 프롬프트를 argv 로 넘기면 Windows 명령줄
-/// 한도(cmd 8,191자 · CreateProcess 32,767자)에 걸려 에이전트가 시작도 못 한다.
-/// stdin 을 받는 에이전트(claude · codex)는 프롬프트를 stdin 으로 보낸다.
+/// Run arguments and the prompt to send over stdin. Passing the prompt via argv hits
+/// the Windows command-line limits (cmd 8,191 chars · CreateProcess 32,767 chars) and
+/// the agent fails to start at all. Agents that accept stdin (claude · codex) get it on stdin.
 fn args(root: &Path, record: &mut RunRecord) -> Result<(Vec<String>, Option<String>), String> {
     let mut args: Vec<String> = match record.agent.as_str() {
         "claude" => {
@@ -42,9 +42,9 @@ fn args(root: &Path, record: &mut RunRecord) -> Result<(Vec<String>, Option<Stri
         args.extend(["--model".into(), record.model.clone()]);
     }
     let stdin_prompt = match record.agent.as_str() {
-        // claude -p 는 위치 프롬프트가 없으면 stdin 에서 읽는다.
+        // claude -p reads from stdin when there is no positional prompt.
         "claude" => Some(record.prompt.clone()),
-        // codex exec 는 `-` 위치 인자로 stdin 프롬프트를 받는다.
+        // codex exec takes the stdin prompt via the `-` positional argument.
         "codex" => {
             args.push("-".into());
             Some(record.prompt.clone())
@@ -57,20 +57,20 @@ fn args(root: &Path, record: &mut RunRecord) -> Result<(Vec<String>, Option<Stri
     Ok((args, stdin_prompt))
 }
 
-/// 사람이 따라 읽는 진행 로그.
+/// Human-readable progress log.
 ///
-/// transcript 는 에이전트의 stream-json 원문이라 그대로 tail 하면 JSON 한 줄씩만
-/// 흘러간다. 같은 내용을 한 줄씩 사람 말로 옮겨 두고 「herdr로 보기」는 이 파일을 tail 한다.
-/// 원문은 `report()` 가 파싱해야 하므로 손대지 않는다.
+/// The transcript is the agent's raw stream-json, so tailing it directly streams one
+/// JSON line after another. The same content is rewritten line by line in human words,
+/// and 「herdr로 보기」 (View in herdr) tails this file. The raw text is left for `report()` to parse.
 fn view_log_path(root: &Path, id: &str) -> Result<PathBuf, String> {
     checked_run_id(id)?;
     Ok(runs_dir(root)?.join(format!("{id}.view.log")))
 }
 
-/// 터미널 한 줄을 넘기면 따라 읽기 어렵다. 도구 인자·결과는 앞부분만 남긴다.
+/// More than one terminal line is hard to follow. Tool arguments and results keep only their head.
 const VIEW_LINE_MAX: usize = 400;
 
-/// 여러 줄짜리 값을 한 줄로 접고 길면 자른다.
+/// Folds a multi-line value onto one line and clips it when long.
 fn one_line(text: &str, max: usize) -> String {
     let folded = text.split_whitespace().collect::<Vec<_>>().join(" ");
     if folded.chars().count() <= max {
@@ -80,7 +80,7 @@ fn one_line(text: &str, max: usize) -> String {
     }
 }
 
-/// 도구 호출에서 사람이 알아볼 만한 인자 하나. 못 고르면 입력 전체를 줄여 쓴다.
+/// One human-recognizable argument from a tool call; falls back to a truncated whole input.
 fn tool_brief(input: &Value) -> String {
     for key in [
         "command",
@@ -102,7 +102,7 @@ fn tool_brief(input: &Value) -> String {
     }
 }
 
-/// 도구 결과는 문자열이거나 블록 배열이다.
+/// A tool result is either a string or an array of blocks.
 fn result_text(content: &Value) -> String {
     match content {
         Value::String(text) => one_line(text, VIEW_LINE_MAX),
@@ -118,8 +118,8 @@ fn result_text(content: &Value) -> String {
     }
 }
 
-/// stream-json 한 줄을 사람이 읽는 줄로 옮긴다. JSON 이 아닌 줄(stderr, 머리말)은
-/// 그대로 흘려보내고, 화면에 남길 게 없는 이벤트는 버린다.
+/// Renders one stream-json line as a human-readable line. Non-JSON lines (stderr,
+/// headers) pass through unchanged; events with nothing to show are dropped.
 fn render_line(line: &str) -> Option<String> {
     let line = line.trim_end_matches(['\n', '\r']);
     if line.trim().is_empty() {
@@ -138,7 +138,8 @@ fn render_line(line: &str) -> Option<String> {
             for block in value["message"]["content"].as_array().into_iter().flatten() {
                 match block["type"].as_str().unwrap_or_default() {
                     "text" => {
-                        let text = one_line(block["text"].as_str().unwrap_or_default(), VIEW_LINE_MAX);
+                        let text =
+                            one_line(block["text"].as_str().unwrap_or_default(), VIEW_LINE_MAX);
                         if !text.is_empty() {
                             out.push(format!("● {text}"));
                         }
@@ -170,7 +171,7 @@ fn render_line(line: &str) -> Option<String> {
                 one_line(value["result"].as_str().unwrap_or_default(), VIEW_LINE_MAX)
             )
         }),
-        // codex 의 이벤트 이름
+        // codex event names
         "item.completed" => {
             let item = &value["item"];
             match item["type"].as_str().unwrap_or_default() {
@@ -201,9 +202,9 @@ fn render_line(line: &str) -> Option<String> {
     (!out.is_empty()).then(|| out.join("\n"))
 }
 
-/// 파일에서 읽어 온 덩어리는 줄 가운데서 잘린다. 완성된 줄만 옮기고 나머지는
-/// 다음 덩어리까지 들고 있는다. 바이트로 모으는 이유는 256KB 경계가 한글 한 글자를
-/// 반으로 자를 수 있기 때문이다.
+/// A chunk read from the file can end mid-line. Only complete lines are moved; the rest
+/// is carried until the next chunk. Bytes are accumulated because a 256KB boundary can
+/// split a Hangul character in half.
 #[derive(Default)]
 struct ViewLog {
     pending: Vec<u8>,
@@ -237,7 +238,7 @@ impl ViewLog {
         Self::write(path, &rendered)
     }
 
-    /// 마지막 줄에 개행이 없을 수 있다.
+    /// The last line may be missing its newline.
     fn flush(&mut self, path: &Path) -> Result<(), String> {
         if self.pending.is_empty() {
             return Ok(());
@@ -250,8 +251,8 @@ impl ViewLog {
     }
 }
 
-/// 이 변경 전에 시작했거나 이미 끝난 실행에는 진행 로그가 없다. 그때는 transcript 를
-/// 한 번 옮겨 담아 만들어 준다 — tail 대상 파일이 없으면 pane 에 오류만 뜬다.
+/// Runs started before this change, or already finished, have no progress log. Backfill
+/// one by copying the transcript over — with no tail target file the pane only shows an error.
 fn ensure_view_log(root: &Path, id: &str) -> Result<PathBuf, String> {
     let path = view_log_path(root, id)?;
     reject_symlink(&path)?;
@@ -260,7 +261,7 @@ fn ensure_view_log(root: &Path, id: &str) -> Result<PathBuf, String> {
     }
     let transcript = transcript_path(root, id)?;
     reject_symlink(&transcript)?;
-    // 원문이 비어 있어도 파일 자체는 있어야 tail 이 붙는다. 먼저 만들고 채운다.
+    // Even an empty raw transcript needs the file to exist for tail to attach. Create first, then fill.
     ViewLog::write(&path, "")?;
     let raw = fs::read(&transcript).unwrap_or_default();
     let mut view = ViewLog::default();
@@ -277,7 +278,7 @@ fn read_tail(path: &Path) -> Result<String, String> {
         .map_err(|e| e.to_string())?;
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-    // 에이전트 stdout(UTF-8)과 cmd·도구의 CP949 stderr 가 섞일 수 있어 줄 단위로 판별한다.
+    // Agent stdout (UTF-8) and CP949 stderr from cmd/tools can interleave, so encoding is decided per line.
     Ok(crate::spawn::decode_console_lines(&bytes))
 }
 
@@ -296,8 +297,12 @@ fn report(agent: &str, output: &str) -> Result<String, String> {
         let Ok(value) = serde_json::from_str::<Value>(line) else {
             continue;
         };
-        if value["error"].as_str().is_some_and(sdlc::goals::quota_error)
-            || value["error"]["code"].as_str().is_some_and(sdlc::goals::quota_error)
+        if value["error"]
+            .as_str()
+            .is_some_and(sdlc::goals::quota_error)
+            || value["error"]["code"]
+                .as_str()
+                .is_some_and(sdlc::goals::quota_error)
         {
             return Err(value["error"].to_string());
         }
@@ -313,8 +318,20 @@ fn report(agent: &str, output: &str) -> Result<String, String> {
                     ));
                 }
                 if value["is_error"] == true {
-                    if let Some(errors) = value["errors"].as_array().filter(|errors| !errors.is_empty()) {
-                        return Err(errors.iter().map(|error| error.as_str().map(str::to_string).unwrap_or_else(|| error.to_string())).collect::<Vec<_>>().join("\n"));
+                    if let Some(errors) = value["errors"]
+                        .as_array()
+                        .filter(|errors| !errors.is_empty())
+                    {
+                        return Err(errors
+                            .iter()
+                            .map(|error| {
+                                error
+                                    .as_str()
+                                    .map(str::to_string)
+                                    .unwrap_or_else(|| error.to_string())
+                            })
+                            .collect::<Vec<_>>()
+                            .join("\n"));
                     }
                     return Err(value["result"]
                         .as_str()
@@ -352,17 +369,29 @@ fn report(agent: &str, output: &str) -> Result<String, String> {
 fn process_alive(pid: u32) -> Result<bool, String> {
     #[cfg(unix)]
     {
-        let output = crate::spawn::platform_command("/bin/ps", &["-p", &pid.to_string(), "-o", "pid="])
-            .output().map_err(|e| e.to_string())?;
-        if output.status.success() { return Ok(!output.stdout.is_empty()); }
-        if output.status.code() == Some(1) && output.stderr.is_empty() { return Ok(false); }
+        let output =
+            crate::spawn::platform_command("/bin/ps", &["-p", &pid.to_string(), "-o", "pid="])
+                .output()
+                .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            return Ok(!output.stdout.is_empty());
+        }
+        if output.status.code() == Some(1) && output.stderr.is_empty() {
+            return Ok(false);
+        }
         Err("백그라운드 프로세스 생존 여부를 확인할 수 없습니다".into())
     }
     #[cfg(windows)]
     {
-        let output = crate::spawn::platform_command("tasklist.exe", &["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
-            .output().map_err(|e| e.to_string())?;
-        if !output.status.success() { return Err("백그라운드 프로세스 생존 여부를 확인할 수 없습니다".into()); }
+        let output = crate::spawn::platform_command(
+            "tasklist.exe",
+            &["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"],
+        )
+        .output()
+        .map_err(|e| e.to_string())?;
+        if !output.status.success() {
+            return Err("백그라운드 프로세스 생존 여부를 확인할 수 없습니다".into());
+        }
         Ok(String::from_utf8_lossy(&output.stdout).contains(&format!("\",\"{pid}\",")))
     }
 }
@@ -374,15 +403,20 @@ pub(super) fn refresh(root: &Path, mut record: RunRecord) -> Result<RunRecord, S
             Err(error) if error.starts_with("workspace-busy") => return Ok(record),
             Err(error) => return Err(error),
         };
-        if record.worker_pid.is_some_and(|pid| process_alive(pid).unwrap_or(true)) {
+        if record
+            .worker_pid
+            .is_some_and(|pid| process_alive(pid).unwrap_or(true))
+        {
             update(&mut record, "unknown", Some("이전 백그라운드 프로세스가 살아 있어 작업 점유를 유지합니다. 종료를 확인한 뒤 이어갑니다.".into()));
             save_record(root, &record)?;
             return Ok(record);
         }
         // The launch transaction may have persisted the run just before its owner
         // acquired the lifetime lock. Allow that short dispatch window.
-        if record.status == "starting" && chrono::DateTime::parse_from_rfc3339(&record.updated_at)
-            .is_ok_and(|time| (Utc::now() - time.with_timezone(&Utc)).num_seconds() < 30) {
+        if record.status == "starting"
+            && chrono::DateTime::parse_from_rfc3339(&record.updated_at)
+                .is_ok_and(|time| (Utc::now() - time.with_timezone(&Utc)).num_seconds() < 30)
+        {
             return Ok(record);
         }
         // A durable record exists briefly before spawn_start registers its owner.
@@ -435,7 +469,7 @@ pub(super) async fn run(root: &Path, mut record: RunRecord) {
         ),
         Err(error) => update(&mut latest, "failed", Some(error)),
     }
-    // 뷰어를 열어 둔 사람이 끝을 보고 알 수 있어야 한다 — 진행 로그는 tail 중이다.
+    // Anyone holding the viewer open must see the ending — the progress log is being tailed.
     if let Ok(path) = view_log_path(root, &latest.id) {
         let _ = ViewLog::write(
             &path,
@@ -481,8 +515,8 @@ async fn execute(root: &Path, record: &mut RunRecord) -> Result<Option<String>, 
     .await
 }
 
-/// 에이전트가 쓰고 있는 로그에서 아직 안 옮긴 부분을 transcript(원문)와
-/// 진행 로그(사람이 읽는 쪽) 양쪽으로 옮기고, 이번에 옮긴 바이트 수를 돌려준다.
+/// Moves the not-yet-drained part of the log the agent is writing into both the
+/// transcript (raw) and the progress log (human side), returning this drain's byte count.
 fn drain(
     source: &Path,
     offset: &mut u64,
@@ -534,7 +568,7 @@ async fn execute_command(
     let stdout = fs::File::create(&turn_path).map_err(|e| e.to_string())?;
     let stderr = fs::File::create(&stderr_path).map_err(|e| e.to_string())?;
     drop(output);
-    // 이 턴이 시작되기 전에 진행 로그가 있어야 「herdr로 보기」가 곧바로 붙는다.
+    // The progress log must exist before the turn starts so 「herdr로 보기」 (View in herdr) attaches right away.
     let view_path = ensure_view_log(root, &record.id)?;
     {
         let _guard = run_lock(&record.id).lock().await;
@@ -564,8 +598,8 @@ async fn execute_command(
             kill_tree(&mut child).await;
             return Err(format!("{} stdin을 열 수 없습니다", record.agent));
         };
-        // 프롬프트가 파이프 버퍼보다 길면 자식이 읽기 시작할 때까지 write 가 막힌다.
-        // 진행 로그 옮기기가 멈추지 않게 별도 태스크로 흘려보내고 닫는다.
+        // A prompt longer than the pipe buffer blocks the write until the child starts
+        // reading. Feed it from a separate task and close, so progress draining never stalls.
         tokio::spawn(async move {
             let _ = stdin.write_all(text.as_bytes()).await;
             let _ = stdin.shutdown().await;
@@ -594,7 +628,7 @@ async fn execute_command(
             }
             if latest.parent_run_id.is_none()
                 && latest.workflow_id == "intent-flow"
-                && latest.workflow_version == "2.0.0"
+                && matches!(latest.workflow_version.as_str(), "2.0.0" | "2.0.1")
             {
                 sdlc::lifecycle::process_requests(
                     root,
@@ -604,8 +638,13 @@ async fn execute_command(
                     false,
                 )?;
             }
-            update(&mut latest, "running", None);
-            save_record(root, &latest)?;
+            // 상태가 어긋나 있을 때만 되돌려 기록한다. 매 500ms 회차마다 런
+            // 레코드를 다시 쓰는 것은 낭비다. 취소 검사는 기록 없이 매 회차
+            // 유지된다.
+            if latest.status != "running" || latest.error.is_some() {
+                update(&mut latest, "running", None);
+                save_record(root, &latest)?;
+            }
             cancellation_requested(root, &latest)
         }
         .await;
@@ -650,7 +689,7 @@ async fn execute_command(
                 let report = report(&record.agent, &stdout)?;
                 if record.parent_run_id.is_none()
                     && record.workflow_id == "intent-flow"
-                    && record.workflow_version == "2.0.0"
+                    && matches!(record.workflow_version.as_str(), "2.0.0" | "2.0.1")
                 {
                     sdlc::lifecycle::process_requests(
                         root,
@@ -687,17 +726,19 @@ async fn open_viewer_with(root: &Path, record: &mut RunRecord, h: &Herdr) -> Res
             return Ok(());
         }
     }
-    // 원문(stream-json)이 아니라 사람이 읽는 진행 로그를 따라간다.
+    // Follow the human-readable progress log, not the raw stream-json.
     let path = ensure_view_log(root, &record.id)?;
-    // 같은 실행을 다시 열 때 워크스페이스를 새로 만들면 herdr 전환기에 계속 쌓인다.
-    // 기록해 둔 것 → 라벨이 같은 것 → 없으면 그때 새로 만든다.
+    // Reopening the same run must not mint a new workspace each time; the herdr
+    // switcher would pile up. Recorded one → same label → create new only if absent.
     let label = format!("sdd-{}", &record.id[..8]);
     let (workspace, created) = match record.workspace_id.as_deref() {
         Some(id) if h.workspace_exists(id).await => (id.to_string(), false),
         _ => match h.find_workspace_by_label(&label).await {
             Some(id) => (id, false),
             None => (
-                h.create_workspace(&label).await.map_err(|e| e.to_string())?,
+                h.create_workspace(&label)
+                    .await
+                    .map_err(|e| e.to_string())?,
                 true,
             ),
         },
@@ -708,7 +749,7 @@ async fn open_viewer_with(root: &Path, record: &mut RunRecord, h: &Herdr) -> Res
     {
         Ok(tab) => tab,
         Err(e) => {
-            // 남의 워크스페이스는 닫지 않는다. 방금 내가 만든 것만 치운다.
+            // Do not close someone else's workspace; clean up only the one just created.
             if created {
                 let _ = h.close_workspace(&workspace).await;
             }
@@ -773,7 +814,7 @@ mod tests {
         let (first, stdin) = args(root.path(), &mut record).unwrap();
         assert!(first.contains(&"--session-id".into()));
         assert!(first.contains(&"/trusted library".into()));
-        // 프롬프트는 argv 가 아니라 stdin 으로 간다 — Windows 명령줄 한도 때문이다.
+        // The prompt goes over stdin, not argv — because of the Windows command-line limit.
         assert!(!first.contains(&record.prompt));
         assert_eq!(stdin.as_deref(), Some("긴 설계 프롬프트"));
         let session = record.agent_session.clone().unwrap();
@@ -792,8 +833,8 @@ mod tests {
         assert!(args(root.path(), &mut record).is_err());
     }
 
-    /// 뷰어가 tail 하는 파일은 사람이 읽을 수 있어야 한다. JSON 이 아닌 줄
-    /// (stderr, 머리말)은 그대로 두고, 화면에 남길 게 없는 이벤트는 버린다.
+    /// The file the viewer tails must be human-readable. Non-JSON lines (stderr,
+    /// headers) are left as-is; events with nothing to show are dropped.
     #[test]
     fn stream_json_renders_as_readable_progress() {
         assert_eq!(
@@ -836,17 +877,17 @@ mod tests {
             .unwrap(),
             "● done"
         );
-        // 원문이 아닌 줄은 손대지 않는다
+        // Non-raw lines are left untouched
         assert_eq!(
             render_line("# Harness transcript: x").unwrap(),
             "# Harness transcript: x"
         );
-        // 사람이 볼 게 없는 이벤트와 빈 줄은 흘리지 않는다
+        // Events with nothing to show and blank lines are not passed through
         assert!(render_line(r#"{"type":"stream_event","event":{}}"#).is_none());
         assert!(render_line("   ").is_none());
     }
 
-    /// 덩어리 경계가 줄 가운데(한글 한 글자 가운데까지)에 떨어져도 글자가 깨지면 안 된다.
+    /// A chunk boundary falling mid-line (even mid-Hangul-character) must not corrupt text.
     #[test]
     fn view_log_buffers_partial_lines_across_chunks() {
         let root = tempfile::tempdir().unwrap();
@@ -864,8 +905,8 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "● 진행 상황\n");
     }
 
-    /// 이 변경 전에 돌았거나 이미 끝난 실행을 처음 뷰어로 열면, 그때까지의 원문이
-    /// 사람이 읽는 형태로 그대로 채워져 있어야 한다.
+    /// Opening a pre-change or already-finished run in the viewer for the first time
+    /// must show everything so far backfilled in human-readable form.
     #[test]
     fn first_viewer_open_backfills_existing_transcript() {
         let (root, record) = fixture();
@@ -878,11 +919,8 @@ mod tests {
         let rendered = fs::read_to_string(&path).unwrap();
         assert!(rendered.contains("● 이미 지나간 진행"), "{rendered}");
         assert!(rendered.contains("✔ 완료: 끝"), "{rendered}");
-        // 두 번째 호출은 이미 있는 파일을 그대로 쓴다 — 내용이 겹쳐 쌓이지 않는다
-        assert_eq!(
-            ensure_view_log(root.path(), &record.id).unwrap(),
-            path
-        );
+        // The second call reuses the existing file as-is — content must not stack up
+        assert_eq!(ensure_view_log(root.path(), &record.id).unwrap(), path);
         assert_eq!(fs::read_to_string(&path).unwrap(), rendered);
     }
 
@@ -933,8 +971,8 @@ esac
         open_viewer_with(root.path(), &mut record, &h)
             .await
             .unwrap();
-        // 탭이 사라진 뒤 다시 열어도 워크스페이스는 기록해 둔 것을 그대로 쓴다 —
-        // 볼 때마다 새로 만들면 herdr 전환기에 sdd-* 워크스페이스가 쌓인다.
+        // Reopening after the tab is gone reuses the recorded workspace as-is —
+        // creating a new one per view would pile up sdd-* workspaces in the herdr switcher.
         record.tab_id = Some("gone".into());
         save_record(root.path(), &record).unwrap();
         open_viewer_with(root.path(), &mut record, &h)
@@ -961,9 +999,15 @@ esac
     async fn background_process_captures_both_streams_and_rejects_empty_followup() {
         let (root, mut record) = fixture();
         let cmd = crate::spawn::platform_command_async("/bin/sh", &["-c", "echo diagnostic >&2; echo '{\"type\":\"result\",\"is_error\":false,\"result\":\"completed report\"}'"]);
-        let result = execute_command(root.path(), &mut record, cmd, None, Some(Duration::from_secs(3)))
-            .await
-            .unwrap();
+        let result = execute_command(
+            root.path(),
+            &mut record,
+            cmd,
+            None,
+            Some(Duration::from_secs(3)),
+        )
+        .await
+        .unwrap();
         assert_eq!(result.as_deref(), Some("completed report"));
         let output = fs::read_to_string(transcript_path(root.path(), &record.id).unwrap()).unwrap();
         assert!(output.contains("diagnostic"));
@@ -995,10 +1039,13 @@ esac
         .await
         .unwrap_err()
         .contains("auth-error"));
-        // stdin 프롬프트는 그대로 자식에게 도착해야 한다 — argv 한도를 피하는 경로다.
+        // The stdin prompt must arrive at the child intact — this path avoids the argv limit.
         let echo = crate::spawn::platform_command_async(
             "/bin/sh",
-            &["-c", "printf '{\"type\":\"result\",\"is_error\":false,\"result\":\"%s\"}\\n' \"$(cat)\""],
+            &[
+                "-c",
+                "printf '{\"type\":\"result\",\"is_error\":false,\"result\":\"%s\"}\\n' \"$(cat)\"",
+            ],
         );
         let result = execute_command(
             root.path(),
@@ -1018,12 +1065,16 @@ esac
         let (root, mut record) = fixture();
         request_cancel(root.path(), &record.id).unwrap();
         let cmd = crate::spawn::platform_command_async("/bin/sh", &["-c", "sleep 30"]);
-        assert!(
-            execute_command(root.path(), &mut record, cmd, None, Some(Duration::from_secs(3)))
-                .await
-                .unwrap()
-                .is_none()
-        );
+        assert!(execute_command(
+            root.path(),
+            &mut record,
+            cmd,
+            None,
+            Some(Duration::from_secs(3))
+        )
+        .await
+        .unwrap()
+        .is_none());
         clear_cancel(root.path(), &record.id).unwrap();
         let cmd = crate::spawn::platform_command_async("/bin/sh", &["-c", "sleep 30"]);
         assert!(execute_command(
@@ -1039,8 +1090,16 @@ esac
     }
     #[test]
     fn requires_completion_and_reports_permissions_and_errors() {
-        assert!(sdlc::goals::quota_error(&report("claude", r#"{"type":"assistant","error":"rate_limit"}"#).unwrap_err()));
-        assert!(sdlc::goals::quota_error(&report("claude", r#"{"type":"result","is_error":true,"errors":["usage limit reached"]}"#).unwrap_err()));
+        assert!(sdlc::goals::quota_error(
+            &report("claude", r#"{"type":"assistant","error":"rate_limit"}"#).unwrap_err()
+        ));
+        assert!(sdlc::goals::quota_error(
+            &report(
+                "claude",
+                r#"{"type":"result","is_error":true,"errors":["usage limit reached"]}"#
+            )
+            .unwrap_err()
+        ));
         assert!(report("claude", "").is_err());
         assert!(report(
             "codex",

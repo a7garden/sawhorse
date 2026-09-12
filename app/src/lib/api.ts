@@ -46,6 +46,8 @@ import type {
   CollabSessionView,
   TaskDef,
   TasksView,
+  ManagedTodo,
+  ManagedTodoInput,
   TodoSection,
   TodoSections,
   UnpromotedItem,
@@ -96,6 +98,8 @@ export const api = {
   vaultAttention: (): Promise<VaultAttention> => invoke("vault_attention"),
   listUnpromoted: (): Promise<UnpromotedItem[]> => invoke("list_unpromoted"),
 
+  listManagedTodos: (): Promise<ManagedTodo[]> => invoke("list_managed_todos"),
+  saveManagedTodo: (input: ManagedTodoInput): Promise<void> => invoke("save_managed_todo", { ...input, deleted: input.deleted ?? false }),
   listTodos: (): Promise<TodoSections> => invoke("list_todos"),
   toggleTodo: (
     section: TodoSection,
@@ -141,7 +145,7 @@ export const api = {
     invoke("open_external", { url }),
   openPath: (path: string): Promise<void> => invoke("open_path", { path }),
 
-  // 확장(pack)
+  // Extensions (pack)
   listPacks: (): Promise<PackRegistryView> => invoke("list_packs"),
   listExtensionPackages: (): Promise<InstalledExtensionPackage[]> =>
     invoke("extension_package_list"),
@@ -215,7 +219,7 @@ export const api = {
   readPackSkill: (packId: string, name: string): Promise<string> =>
     invoke("read_pack_skill", { packId, name }),
 
-  // 에이전트 브리지
+  // Agent bridge
   listAgents: (): Promise<AgentsView> => invoke("list_agents"),
   checkRequirements: (): Promise<RequirementStatus[]> =>
     invoke("check_requirements"),
@@ -239,7 +243,7 @@ export const api = {
   readAgentSkill: (path: string): Promise<string> =>
     invoke("read_agent_skill", { path }),
 
-  // 스킬 마켓플레이스 (skills.sh · npx skills)
+  // Skill marketplace (skills.sh · npx skills)
   skillsMarketSearch: (query: string): Promise<MarketSkill[]> =>
     invoke("skills_market_search", { query }),
   skillsMarketInstall: (
@@ -250,13 +254,13 @@ export const api = {
     invoke("skills_market_install", { source, skill, agents }),
   skillsMarketUpdate: (): Promise<string> => invoke("skills_market_update"),
 
-  // 작업공간 프로비저닝
+  // Workspace provisioning
   suggestVaultPath: (): Promise<string> => invoke("suggest_vault_path"),
   workspacePlan: (): Promise<string[]> => invoke("workspace_plan"),
   provisionWorkspace: (vaultPath?: string): Promise<ProvisionReport> =>
     invoke("provision_workspace", { vaultPath: vaultPath ?? null }),
 
-  // 예약
+  // Schedules
   listSchedules: (): Promise<ScheduleView[]> => invoke("list_schedules"),
   runScheduledNow: (key: string): Promise<Job> =>
     invoke("run_scheduled_now", { key }),
@@ -266,7 +270,7 @@ export const api = {
     time: string,
   ): Promise<ConfigView> => invoke("set_schedule", { key, enabled, time }),
 
-  // herdr 터미널
+  // herdr terminal
   herdrSnapshot: (): Promise<HerdrSnapshot> => invoke("herdr_snapshot"),
   herdrFocusWorkspace: (id: string): Promise<void> =>
     invoke("herdr_focus_workspace", { id }),
@@ -281,7 +285,7 @@ export const api = {
     label?: string,
   ): Promise<{ tabId: string; paneId: string; workspaceId: string }> =>
     invoke("herdr_open_tab", { cwd: cwd ?? null, label: label ?? null }),
-  // 협업(멀티에이전트 통합 레인)
+  // Collaboration (unified multi-agent lane)
   collabProjectsView: (): Promise<CollabProjectsView> =>
     invoke("collab_projects_view"),
   collabRegisterProject: (
@@ -336,7 +340,7 @@ export const api = {
   collabRunQueue: (): Promise<string | null> => invoke("collab_run_queue"),
   collabInboxTick: (): Promise<CollabInboxReport[]> =>
     invoke("collab_inbox_tick"),
-  // 소스 커넥터 · 읽을거리
+  // Source connectors · reading feed
   fetchExtensionCatalog: (url: string): Promise<unknown> =>
     invoke("fetch_extension_catalog", { url }),
   setConnectorEnabled: (id: string, enabled: boolean): Promise<void> =>

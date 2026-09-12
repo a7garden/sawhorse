@@ -1,11 +1,13 @@
 import { PathInput } from "@/components/ui/path-input";
-// 첫 실행 마법사 — 대시보드 우선 온보딩.
+// First-run wizard — dashboard-first onboarding.
 //
-// 예전에는 플러그인을 먼저 깔고 스킬로 볼트를 만든 다음 앱을 열었다. 이제 순서가 뒤집혔다:
-// 앱이 이 PC를 훑고, 작업공간을 만들고, 확장을 고르고, **에이전트에 스킬을 설치해 준다.**
+// Previously the plugin was installed first, a vault was built from skills, and then
+// the app opened. Now the order is reversed: the app scans this PC, creates the
+// workspace, picks extensions, and **installs skills into the agent.**
 //
-// 앞의 두 단계(기본 환경·에이전트)는 아무것도 바꾸지 않는 읽기 전용 점검이다. 기본
-// 환경은 Obsidian·herdr만 다루며 기능별 도구는 선택한 workflow가 별도로 선언한다.
+// The first two steps (base environment·agents) are read-only checks that change
+// nothing. The base environment covers only Obsidian·herdr; per-feature tools are
+// declared separately by the selected workflow.
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, FolderOpen, Sparkles, SquareTerminal } from "lucide-react";
@@ -30,7 +32,7 @@ const STEPS = [
   "skills",
   "done",
 ] as const;
-/// 단계를 숫자로 넘기면 하나를 끼워 넣을 때 이동 코드가 조용히 어긋난다.
+/// Passing steps as numbers makes the navigation code silently drift when one is inserted.
 const S = {
   intro: 0,
   programs: 1,
@@ -42,7 +44,7 @@ const S = {
 } as const;
 const LAST = S.done;
 
-/** 상대경로를 받으면 앱이 어디를 기준으로 만들지 사용자와 앱의 생각이 갈린다. */
+/** If given a relative path, the user and the app may disagree on what it resolves against. */
 function isAbsolutePath(p: string): boolean {
   return p.startsWith("/") || p.startsWith("\\\\") || /^[A-Za-z]:[\\/]/.test(p);
 }
@@ -74,8 +76,8 @@ export default function SetupWizard() {
   const [plan, setPlan] = useState<string[]>([]);
   const [created, setCreated] = useState<string[] | null>(null);
   const [installed, setInstalled] = useState<Record<string, string>>({});
-  // 사용자가 이번 마법사에서 고른 값. 고르기 전에는 null 이고, 그동안은 저장된 값을
-  // 그대로 보여 준다 — 감지 결과가 늦게 와도 화면이 예전 값에 붙들리지 않게.
+  // Value the user picked in this wizard session. null until picked; while null, the
+  // stored value is shown as-is — so late-arriving detection results don't trap the UI on stale values.
   const [picked, setPicked] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -107,7 +109,7 @@ export default function SetupWizard() {
       .then(setSuggested)
       .catch(() => setSuggested(""));
     void scan();
-    // 작업공간 경로는 열 때의 설정값을 한 번만 집어넣는다 — 편집 중에 되돌리지 않는다.
+    // Workspace path is seeded once from the settings value at open time — never reverted while editing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, scan]);
 
@@ -116,7 +118,7 @@ export default function SetupWizard() {
     setChosen(Object.fromEntries(packs.packs.map((p) => [p.id, p.enabled])));
   }, [packs]);
 
-  // 마법사는 언제든 닫을 수 있어야 한다 — 갇힌 느낌을 주면 대충 눌러 넘긴다.
+  // The wizard must be closable at any time — a trapped feeling makes users click through carelessly.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {

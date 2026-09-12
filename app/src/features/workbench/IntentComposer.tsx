@@ -1,3 +1,4 @@
+import { WorkTypeField } from "./WorkTypeField";
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWebview } from "@tauri-apps/api/webview";
 import { useEffect, useRef, useState } from "react";
@@ -9,21 +10,19 @@ import { ImagePlus, Loader2, Send } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Select } from "@/components/ui/select";
 import { MarkdownView } from "@/pages/common";
 import { sddApi } from "./api";
 import { intentTitle, launchIntent, type IntentAttachment } from "./intent";
 import type { Project, WorkItem } from "./types";
 import "./intent.css";
-import { GoalComposer } from "./GoalPanel";
 
 export function IntentComposer({ initial, projects, onClose, onSaved }: {
   initial: WorkItem; projects: Project[]; onClose: () => void; onSaved: (work: WorkItem) => void;
 }) {
   const { t } = useTranslation("workbench");
-  const [mode, setMode] = useState<"sdd" | "goal">("sdd");
   const [markdown, setMarkdown] = useState(initial.description);
-  const [projectId, setProjectId] = useState(initial.projectId || (projects.length === 1 ? projects[0].id : ""));
+  const [issueType, setIssueType] = useState(initial.issueType || "작업");
+  const projectId = initial.projectId;
   const [images, setImages] = useState<IntentAttachment[]>([]);
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -110,12 +109,12 @@ export function IntentComposer({ initial, projects, onClose, onSaved }: {
     return () => { disposed = true; stop?.(); };
   }, []);
   async function submit(start: boolean) {
-    if (submitting.current || reading || !markdown.trim() || (start && !project)) return;
+    if (submitting.current || reading || !markdown.trim() || !project) return;
     submitting.current = true; setBusy(true); setError("");
     let item = saved;
     try {
       if (!item) {
-        item = await sddApi.captureIntent({ ...initial, id: id.current, projectId,
+        item = await sddApi.captureIntent({ ...initial, issueType, id: id.current, projectId,
           title: initial.title || intentTitle(markdown, t("intent.imageTitle")) }, markdown, embeddedImages(markdown, images));
         setSaved(item);
       }
@@ -127,13 +126,13 @@ export function IntentComposer({ initial, projects, onClose, onSaved }: {
     }
     finally { submitting.current = false; setBusy(false); }
   }
-  if (mode === "goal") return <GoalComposer initial={{ ...initial, description: markdown }} projects={projects} onClose={onClose} onSaved={onSaved} onMode={() => setMode("sdd")} />;
   return <Dialog open wide title={t("intent.new")} onClose={close} className="wb-intent-dialog">
     <div className="wb-intent-composer">
-      <div className="wb-goal-actions"><Button variant="outline" aria-pressed>{t("goal.sddMode")}</Button><Button variant="ghost" disabled={busy || reading || !!saved || images.length > 0} onClick={() => setMode("goal")}>{t("goal.title")}</Button></div>
+      <p className="wb-intent-help">{t("form.project")}: {project?.name} · {t("creation.workflow")}: v{initial.workflowVersion}</p>
       <div className="wb-intent-heading"><h2>{t("intent.heading")}</h2><p>{t("intent.hint")}</p></div>
       <div className="wb-intent-route"><span>{t("intent.note")}</span><span>→</span><span>{t("lifecycle.stages.clarify")}</span><span>→</span><span>{t("intent.design")}</span><span>→</span><span>{t("intent.approval")}</span><span>→</span><span>{t("intent.build")}</span></div>
       <p className="wb-intent-help">{t("intent.flowHint")}</p>
+      <WorkTypeField value={issueType} onChange={setIssueType} disabled={busy || reading || !!saved} empty={!markdown.trim()} onTemplate={updateMarkdown} />
       <div className="wb-intent-editor" onPasteCapture={(event) => {
         const incoming = Array.from(event.clipboardData.files);
         if (incoming.length) { event.preventDefault(); event.stopPropagation(); void addImages(incoming); }
@@ -152,9 +151,7 @@ export function IntentComposer({ initial, projects, onClose, onSaved }: {
         <p className="wb-intent-attachment-hint">{reading ? t("intent.readingImages") : t("intent.imageHint")}</p>
       </div>
       <div className="wb-intent-footer">
-        <Select aria-label={t("form.project")} value={projectId} disabled={busy || !!saved} onChange={setProjectId}
-          options={[{ value: "", label: t("intent.chooseProject") }, ...projects.map((project) => ({ value: project.id, label: project.name }))]} />
-        <Button variant="outline" disabled={busy || reading || !markdown.trim()} onClick={() => void submit(false)}>{t(saved ? "intent.openSaved" : "intent.saveNote")}</Button>
+        <Button variant="outline" disabled={busy || reading || !project || !markdown.trim()} onClick={() => void submit(false)}>{t(saved ? "intent.openSaved" : "intent.saveNote")}</Button>
         <Button disabled={busy || reading || !project || !markdown.trim()} onClick={() => void submit(true)}>{busy ? <Loader2 className="wb-spin" /> : <Send />}{t(saved ? "intent.retryDesign" : "intent.requestDesign")}</Button>
       </div>
       {!project && <p className="wb-intent-help">{t("intent.projectHint")}</p>}

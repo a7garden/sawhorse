@@ -3,12 +3,13 @@
   "nav": {
     "runs": "실행",
     "section": {
-      "work": "전체 작업공간",
+      "work": "공통 도구",
       "vault": "볼트",
       "reading": "확장 기능",
-      "project": "프로젝트별 화면"
+      "project": "프로젝트",
+      "overview": "내 작업공간"
     },
-    "overview": "작업대",
+    "overview": "대시보드",
     "board": "개발",
     "taskLibrary": "자동화",
     "calendar": "캘린더",
@@ -47,16 +48,21 @@
     "themeToggle": "테마 전환",
     "viewPicker": "화면 선택",
     "previewNotice": "브라우저 체험 · 예제 데이터는 이 브라우저에만 저장됩니다. 실제 에이전트와 파일은 데스크톱 앱에서 연결됩니다.",
-    "work": "작업",
+    "work": "작업대",
     "workDocuments": "작업 문서 검색",
     "scope": {
       "shared": "공통",
-      "select": "사이드바 프로젝트 선택",
+      "select": "프로젝트 전환",
       "appliesBelow": "아래 화면에 적용",
-      "sharedSettings": "앱 공통 설정"
+      "sharedSettings": "앱 공통 설정",
+      "overview": "전체 현황",
+      "choose": "프로젝트 선택",
+      "chooseHint": "프로젝트를 선택하면 아래에서 작업대와 실행 기록을 열 수 있어요."
     },
     "collapseSidebar": "사이드바 접기",
-    "expandSidebar": "사이드바 펼치기"
+    "expandSidebar": "사이드바 펼치기",
+    "projectsOverview": "프로젝트 현황",
+    "projectLibrary": "프로젝트 라이브러리"
   },
   "toolbar": {
     "search": "전체 검색",
@@ -75,7 +81,8 @@
     "runningStop": "실행 중 · 중단",
     "pendingCancel": "대기 중 · 취소",
     "stopHint": "실행 중입니다. 누르면 중단합니다.",
-    "location": "현재 위치"
+    "location": "현재 위치",
+    "titlebar": "앱 제목 표시줄"
   },
   "attention": {
     "dismiss": "닫기",

@@ -79,6 +79,7 @@ pub fn new_id() -> String {
 pub enum ScheduleKind {
     Daily,
     Weekdays,
+    Weekly,
     Once,
 }
 
@@ -89,6 +90,9 @@ pub struct Schedule {
     pub time: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub date: Option<String>,
+    /// Selected weekdays, Monday = 0 through Sunday = 6.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub days: Vec<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -110,9 +114,18 @@ pub struct TaskDef {
     pub builtin: bool,
     pub skill: Option<String>,
     pub project: Option<String>,
+    pub action: Option<TaskAction>,
     pub source: Source,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// A saved invocation of an existing tool, retaining its parameters for scheduled runs.
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+pub struct TaskAction {
+    pub id: String,
+    #[serde(default)]
+    pub params: serde_json::Map<String, serde_json::Value>,
 }
 
 impl Default for TaskDef {
@@ -126,6 +139,7 @@ impl Default for TaskDef {
             builtin: false,
             skill: None,
             project: None,
+            action: None,
             source: Source::default(),
             created_at: now_iso(),
             updated_at: now_iso(),
@@ -161,7 +175,12 @@ pub fn validate_schedule(s: &Schedule, today: &str) -> Result<(), String> {
             }
             Ok(())
         }
-        ScheduleKind::Daily | ScheduleKind::Weekdays => {
+        ScheduleKind::Daily | ScheduleKind::Weekdays | ScheduleKind::Weekly => {
+            if s.kind == ScheduleKind::Weekly
+                && (s.days.is_empty() || s.days.iter().any(|day| *day > 6))
+            {
+                return Err("반복할 요일을 선택하세요".into());
+            }
             if s.date.is_some() {
                 return Err("date는 once 스케줄에서만 사용합니다".into());
             }
@@ -176,7 +195,7 @@ pub fn validate_new(def: &TaskDef, today: &str) -> Result<(), String> {
         return Err(format!("제목은 1~{TITLE_MAX}자"));
     }
     let p = def.prompt.chars().count();
-    if p == 0 || p > PROMPT_MAX {
+    if (p == 0 && def.action.is_none()) || p > PROMPT_MAX {
         return Err(format!("프롬프트는 1~{PROMPT_MAX}자"));
     }
     if let Some(s) = &def.schedule {
@@ -246,7 +265,7 @@ pub fn delete_task(root: &Path, id: &str) -> Result<(), String> {
     std::fs::rename(&src, &dst).map_err(|e| format!("작업 삭제(보관 이동) 실패: {e}"))
 }
 
-/// 스케줄러가 once 작업을 소화한 뒤 조용히 꺼지게.
+/// Lets the scheduler quietly switch off a once task after it has been consumed.
 pub fn set_enabled(root: &Path, id: &str, enabled: bool) -> Result<(), String> {
     let mut def = get_task(root, id)?;
     if def.enabled == enabled {
@@ -424,6 +443,18 @@ pub fn schedule_label(s: &Schedule) -> String {
     let kind = match s.kind {
         ScheduleKind::Daily => "매일",
         ScheduleKind::Weekdays => "평일",
+        ScheduleKind::Weekly => {
+            return format!(
+                "매주 {} {}",
+                s.days
+                    .iter()
+                    .filter_map(|day| ["월", "화", "수", "목", "금", "토", "일"].get(*day as usize))
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join("·"),
+                s.time
+            )
+        }
         ScheduleKind::Once => return format!("{} {}", s.date.clone().unwrap_or_default(), s.time),
     };
     format!("{kind} {}", s.time)
@@ -662,6 +693,7 @@ mod tests {
             kind: ScheduleKind::Daily,
             time: "08:30".into(),
             date: None,
+            days: vec![],
         });
         save_task(&root, &d).unwrap();
         assert_eq!(list_tasks(&root).len(), 1);
@@ -704,24 +736,28 @@ mod tests {
             kind: ScheduleKind::Once,
             time: "09:00".into(),
             date: None,
+            days: vec![],
         });
         assert!(validate_new(&d, today).is_err()); // once without date
         d.schedule = Some(Schedule {
             kind: ScheduleKind::Once,
             time: "09:00".into(),
             date: Some("2026-09-01".into()),
+            days: vec![],
         });
         assert!(validate_new(&d, today).is_err()); // past date
         d.schedule = Some(Schedule {
             kind: ScheduleKind::Daily,
             time: "9:0".into(),
             date: None,
+            days: vec![],
         });
         assert!(validate_new(&d, today).is_err()); // bad time
         d.schedule = Some(Schedule {
             kind: ScheduleKind::Weekdays,
             time: "09:00".into(),
             date: None,
+            days: vec![],
         });
         assert!(validate_new(&d, today).is_ok());
     }
@@ -747,7 +783,7 @@ mod tests {
     }
 
     fn aged(root: &Path, stem: &str) {
-        // process_inbox의 mtime 2초 안정화를 우회: 파일 시간을 10초 전으로
+        // bypass process_inbox's 2-second mtime stabilization: set the file time 10 seconds back
         let p = inbox_dir(root).join(format!("{stem}.json"));
         let old = std::time::SystemTime::now() - std::time::Duration::from_secs(10);
         filetime::set_file_mtime(
@@ -806,7 +842,7 @@ mod tests {
         assert_eq!(d.source.request.as_deref(), Some("req-1"));
         assert!(d.enabled);
         assert!(get_task(&root, &d.id).is_ok());
-        assert!(list_pending(&root).is_empty()); // 요청 소비됨
+        assert!(list_pending(&root).is_empty()); // request consumed
         std::fs::remove_dir_all(&root).unwrap();
     }
 
@@ -819,6 +855,7 @@ mod tests {
             kind: ScheduleKind::Daily,
             time: "09:00".into(),
             date: None,
+            days: vec![],
         });
         save_task(&root, &base).unwrap();
         for (stem, body) in [
@@ -906,5 +943,22 @@ mod tests {
         // and nothing must have been deleted outside the inbox
         assert!(!inbox_dir(&root).join("../evil.json").exists());
         std::fs::remove_dir_all(&root).unwrap();
+    }
+    #[test]
+    fn weekly_schedule_validation_and_legacy_defaults() {
+        let legacy: Schedule = serde_json::from_str(r#"{"kind":"daily","time":"09:00"}"#).unwrap();
+        assert!(legacy.days.is_empty());
+        assert!(validate_schedule(&legacy, "2026-09-09").is_ok());
+        let mut weekly = Schedule {
+            kind: ScheduleKind::Weekly,
+            time: "14:15".into(),
+            days: vec![0, 2, 4],
+            date: None,
+        };
+        assert!(validate_schedule(&weekly, "2026-09-09").is_ok());
+        weekly.days = vec![7];
+        assert!(validate_schedule(&weekly, "2026-09-09").is_err());
+        weekly.days.clear();
+        assert!(validate_schedule(&weekly, "2026-09-09").is_err());
     }
 }

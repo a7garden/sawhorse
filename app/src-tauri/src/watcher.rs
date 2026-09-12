@@ -42,15 +42,16 @@ pub fn start_path(
                 Ok(_event) => {
                     *pending.lock() = true;
                 }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    let due = last_emit.lock().elapsed() >= Duration::from_secs(1);
-                    if *pending.lock() && due {
-                        *pending.lock() = false;
-                        *last_emit.lock() = Instant::now();
-                        emit(event, &payload);
-                    }
-                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
                 Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+            // Flush in a common tail path: a steady event stream never lets
+            // recv_timeout expire, so checking due only on Timeout would
+            // suppress the emit indefinitely. The 1s spacing is preserved.
+            if *pending.lock() && last_emit.lock().elapsed() >= Duration::from_secs(1) {
+                *pending.lock() = false;
+                *last_emit.lock() = Instant::now();
+                emit(event, &payload);
             }
         }
     });

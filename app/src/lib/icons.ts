@@ -1,6 +1,6 @@
-// 팩 매니페스트가 아이콘을 kebab-case 이름으로 선언한다. lucide 전체를 동적으로 끌어오면
-// 번들이 통째로 들어오므로, 쓰는 것만 명시적으로 등록하고 모르는 이름은 기본 아이콘으로 떨어진다.
-// 새 아이콘이 필요한 팩은 여기 한 줄을 더한다 — 조용히 빈 칸이 되는 것보다 낫다.
+// Pack manifests declare icons by kebab-case name. Pulling in all of lucide dynamically would
+// drag the whole bundle in, so only the used ones are registered explicitly and unknown names
+// fall back to a default icon. Packs needing a new icon add one line here — better than a silently blank slot.
 import {
   BookMarked,
   Bot,

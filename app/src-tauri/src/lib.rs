@@ -5,6 +5,9 @@ mod collab;
 mod commands;
 mod config;
 mod detect;
+mod document_apps;
+mod document_spaces;
+mod documents;
 mod error;
 mod extensions;
 mod herdr;
@@ -24,6 +27,7 @@ mod spawn;
 mod state;
 mod tasks;
 mod transcript;
+mod todos;
 mod upgrade;
 mod vault;
 mod watcher;
@@ -87,7 +91,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             apply_dock_icon();
-            // 번들은 plugin/ 통째로 실는다 — 리소스 디렉터리의 plugin 이 플러그인 루트다.
+            // Bundles ship the whole plugin/ — the plugin dir in the resource directory is the plugin root.
             if let Ok(res) = app.path().resource_dir() {
                 plugin::set_root_override(res.join("plugin"));
             }
@@ -104,13 +108,13 @@ pub fn run() {
             });
             let mgr = jobs::JobManager::start(state.clone(), emit_fn.clone());
             scheduler::start_tick(mgr.clone(), state.clone(), emit_fn.clone());
-            // 협업 서비스: 장부 열기 + 인박스 감시 + 큐 틱.
+            // Collaboration service: open the ledger + watch the inbox + tick the queue.
             let collab_tick_emit = emit_fn.clone();
             match collab::store::Store::open() {
                 Ok(store) => {
                     let svc = collab::service::CollabService::new(store, mgr.clone());
                     app.manage(svc.clone());
-                    // 재시작 복구(설계 479-486줄) — 앱이 뜨자마자 미종료 시도를 복구한다.
+                    // Restart recovery (design lines 479-486) — recovers unfinished attempts as soon as the app starts.
                     {
                         let svc = svc.clone();
                         let emit = collab_tick_emit.clone();
@@ -123,7 +127,7 @@ pub fn run() {
                             }
                         });
                     }
-                    // 인박스+큐 틱. tasks 스케줄러 틱과 별개로 협업 상태를 앞으로 민다.
+                    // Inbox+queue tick. Advances collaboration state independently of the tasks scheduler tick.
                     {
                         let svc = svc.clone();
                         let emit = collab_tick_emit.clone();
@@ -183,8 +187,8 @@ pub fn run() {
                 }
             }
 
-            // config.json 외부 변경(수동 편집) → 설정 스냅샷 갱신. 앱 내 저장은
-            // save_patch가 직접 갱신하므로 감시는 외부 변경만 담당한다.
+            // External config.json changes (manual edits) refresh the config snapshot. In-app saves
+            // update it via save_patch directly, so the watcher only handles external changes.
             {
                 let cfg_path = config::config_path();
                 if let Some(dir) = cfg_path.parent().map(std::path::Path::to_path_buf) {
@@ -305,6 +309,7 @@ pub fn run() {
             schemas::schema_plan,
             schemas::schema_changeset_preview,
             sdlc::sdd_snapshot,
+            sdlc::samples::sdd_create_samples,
             sdlc::sdd_repair_documents,
             sdlc::workflow_snapshot,
             sdlc::workflow_command,
@@ -338,6 +343,7 @@ pub fn run() {
             mockups::sdd_read_mockup,
             mockups::sdd_read_mockup_html,
             sdlc::sdd_write_document,
+            sdlc::sdd_read_html_document,
             sdlc::sdd_save_event,
             sdlc::sdd_delete_event,
             sdlc::sdd_search,
@@ -371,6 +377,8 @@ pub fn run() {
             commands::list_unpromoted,
             commands::audit_vault,
             commands::list_obsidian_vaults,
+            commands::list_managed_todos,
+            commands::save_managed_todo,
             commands::list_todos,
             commands::toggle_todo,
             commands::add_todo,
@@ -385,7 +393,7 @@ pub fn run() {
             commands::job_report,
             commands::list_tasks,
             commands::save_task,
-            // 협업(멀티에이전트 통합 레인)
+            // Collaboration (multi-agent integration lanes)
             commands::collab_create_session,
             commands::collab_list_sessions,
             commands::collab_session_detail,
@@ -405,7 +413,7 @@ pub fn run() {
             commands::collab_resume,
             commands::collab_run_queue,
             commands::collab_inbox_tick,
-            // 확장·소스(connector)
+            // Extensions and sources (connector)
             commands::extensions_list,
             extensions::github_management::github_account,
             extensions::github_management::github_oauth_start,
@@ -448,7 +456,7 @@ pub fn run() {
             commands::plugin_info,
             commands::open_external,
             commands::open_path,
-            // 확장(pack) 레지스트리
+            // Pack registry
             commands::list_packs,
             commands::list_nav,
             commands::set_pack_enabled,
@@ -456,7 +464,7 @@ pub fn run() {
             commands::query_pack_view,
             commands::run_pack_action,
             commands::read_pack_skill,
-            // 에이전트 브리지
+            // Agent bridge
             commands::list_agents,
             commands::check_requirements,
             commands::set_default_agent,
@@ -469,14 +477,14 @@ pub fn run() {
             skills_market::skills_market_search,
             skills_market::skills_market_install,
             skills_market::skills_market_update,
-            // 작업공간 프로비저닝
+            // Workspace provisioning
             commands::workspace_plan,
             commands::provision_workspace,
-            // 예약
+            // Schedules
             commands::list_schedules,
             commands::run_scheduled_now,
             commands::set_schedule,
-            // herdr 터미널
+            // herdr terminal
             commands::herdr_snapshot,
             commands::herdr_focus_workspace,
             commands::herdr_focus_pane,

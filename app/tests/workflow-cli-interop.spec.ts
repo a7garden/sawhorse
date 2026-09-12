@@ -5,6 +5,7 @@ import { expect, test } from "@playwright/test";
 test("external workflow drafts appear without overwriting unsaved Studio edits", async ({ page }) => {
   await page.goto("/?preview=1");
   await page.locator("aside nav").getByRole("button", { name: "워크플로", exact: true }).click();
+  await page.getByRole("button", { name: "새 워크플로", exact: true }).first().click();
   await page.getByRole("button", { name: /기능 개발 요청 정리/ }).click();
   await page.getByRole("button", { name: "초안 만들어 줘", exact: true }).click();
   const name = page.getByLabel("워크플로 이름", { exact: true });

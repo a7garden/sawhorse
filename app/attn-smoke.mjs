@@ -19,7 +19,7 @@ const fixtures = {
 const browser = await chromium.launch();
 const page = await browser.newPage();
 await page.addInitScript(() => {
-  // 아래 JSON 은 실행 시 주입된다
+  // The fixtures JSON below is injected at runtime
   window.__ATTN_FIXTURES__ = window.__ATTN_FIXTURES__;
 });
 await page.addInitScript((fx) => {
@@ -56,7 +56,7 @@ const rows = await page.$$eval('[role="alert"] > div', (els) =>
 );
 console.log("ROWS:", JSON.stringify(rows, null, 2));
 
-// CTA 클릭 → 스키마 스튜디오로 이동하는지
+// Clicking the CTA → verify navigation to the schema studio
 const conflictRow = page.locator('[role="alert"] > div').first();
 await conflictRow.getByRole("button", { name: /스튜디오|studio/i }).click();
 await page.waitForTimeout(1200);
@@ -65,7 +65,7 @@ const current = await page
   .allInnerTexts();
 console.log("ACTIVE_NAV:", JSON.stringify(current));
 
-// 닫기(X) → 해당 행만 사라지는지
+// Close (X) → verify only that row disappears
 const closeButtons = page.locator('[role="alert"] button[aria-label]');
 const before = await closeButtons.count();
 await closeButtons.last().click();

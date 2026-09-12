@@ -1,8 +1,10 @@
-// 예약 카드 — 활성 팩이 선언한 예약 가능 액션 목록. 루틴 3종을 손으로 적어두던 자리다.
+// Schedule card — list of schedulable actions declared by active packs. This is where
+// the three routines used to be hand-written.
 //
-// 설정 draft 와 저장 버튼을 타지 않는다: 예약은 `set_schedule` 로 즉시 커밋되고
-// (config 의 `dashboard.schedules` 에 재정의로 쌓인다) 목록 자체는 백엔드가 만든다.
-// 그래서 이 카드는 draft 를 받지 않고 스토어를 직접 본다.
+// Doesn't touch the settings draft or save button: schedules commit immediately via
+// `set_schedule` (stacked as overrides in the config's `dashboard.schedules`), and the
+// backend builds the list itself.
+// So this card takes no draft and reads the store directly.
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "@/lib/api";
@@ -15,7 +17,7 @@ import { Empty } from "../common";
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-/** 예약 한 줄. 시각은 타이핑 중 저장하지 않고, 형식이 맞을 때만 커밋한다. */
+/** One schedule row. The time isn't saved while typing; commits only when the format is valid. */
 function ScheduleRow({
   entry,
   onSaved,

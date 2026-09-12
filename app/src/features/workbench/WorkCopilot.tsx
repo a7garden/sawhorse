@@ -7,16 +7,16 @@ import { useApp } from "@/lib/store";
 import { sddApi } from "./api";
 import type { CopilotTurn, Project, WorkItem } from "./types";
 
-/** 대화는 작업마다 따로 남는다. 상세를 닫았다 다시 열어도 하던 이야기가 이어지도록
- *  세션 동안 메모리에 들고 있는다 — 볼트에는 쓰지 않는다. 질의는 기록이 아니다. */
+/** Conversations are kept per work item. Held in memory for the session so that closing and reopening
+ *  the detail continues the same thread — never written to the vault. Queries are not records. */
 const threads = new Map<string, CopilotTurn[]>();
 
 const SAMPLES = ["summary", "next", "risk"] as const;
 
 /**
- * 작업 단위 화면 오른쪽의 코파일럿. 열려 있는 작업의 문서·결정 기록·프로젝트 저장소를
- * 문맥으로 삼아 사용자가 설정해 둔 에이전트에게 묻고 답을 보여 준다. 읽기만 하므로
- * 작업 상태나 문서는 이 패널로 바뀌지 않는다.
+ * The copilot on the right of the work detail. Uses the open work item's documents, decision log,
+ * and project repository as context to ask the agent the user configured and shows the answer.
+ * Read-only, so work status and documents never change through this panel.
  */
 export function WorkCopilot({ work, project }: { work: WorkItem; project?: Project }) {
   const { t } = useTranslation("workbench");
@@ -43,7 +43,7 @@ export function WorkCopilot({ work, project }: { work: WorkItem; project?: Proje
   const ask = async (text: string) => {
     const asked = text.trim();
     if (!asked || busy) return;
-    // 보낸 질문은 곧바로 보이고, 답이 실패해도 남는다 — 다시 쓰지 않게.
+    // Sent questions appear immediately and survive a failed answer — so they need not be retyped.
     const history = turns;
     const next: CopilotTurn[] = [...history, { role: "question", text: asked }];
     threads.set(work.id, next);

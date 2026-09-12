@@ -22,8 +22,8 @@ import {
   useTicker,
 } from "./common";
 
-// 예약과 잡은 중복 판정 키로 잇는다 — 라벨이 아니라 "무엇을 하는 잡인가"가 기준이라,
-// 예약이 돌린 잡이든 사람이 다른 화면에서 누른 잡이든 같은 칸에 보인다.
+// Schedules and jobs link through the dedup key — the criterion is "what job is it", not the label,
+// so a job run by a schedule and one pressed on another screen show in the same slot.
 function jobsFor(jobs: Job[], s: ScheduleView): Job[] {
   return jobs.filter((j) => j.dedupKey === s.jobKey);
 }

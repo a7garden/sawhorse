@@ -1,8 +1,8 @@
 import { PathInput } from "@/components/ui/path-input";
 import { useCoreExtensions } from "@/lib/core-extensions";
-import { ExtensionMarketplace } from "@/components/ExtensionMarketplace";
-// 확장(pack) 화면. 앱이 에이전트를 설치 대상으로 다루는 곳 —
-// 여기서 "플러그인 설치"가 대시보드 안에서 일어난다.
+import { ExtensionMarketplace, packKinds } from "@/components/ExtensionMarketplace";
+// Extensions (packs) screen. Where the app treats agents as installation targets —
+// "plugin installation" happens here, inside the dashboard.
 import { useCallback, useEffect, useState } from "react";
 import {
   CircleAlert,
@@ -40,14 +40,15 @@ import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 import { Empty, MarkdownView, PageHeader } from "./common";
 
-type CatalogCategory = "installed" | "marketplace" | "skill" | "workflow";
+type CatalogCategory = "installed" | "marketplace" | "skill" | "workflow" | "feature";
 
-// 설계 문서(product-organization.md)의 확장 관리 탭 구성: 설치됨 · 마켓플레이스 · 스킬 · 워크플로.
+// Discovery plus installed contributions, grouped by what each extension adds.
 const CATALOG_TABS: CatalogCategory[] = [
   "installed",
   "marketplace",
   "skill",
   "workflow",
+  "feature",
 ];
 
 export default function PacksPage() {
@@ -91,7 +92,9 @@ export default function PacksPage() {
   const [category, setCategory] = useState<CatalogCategory>("installed");
 
   const list = packs?.packs ?? [];
-  const sel = list.find((p) => p.id === selId) ?? list[0] ?? null;
+  const visiblePacks = category === "feature" ? list.filter(pack => packKinds(pack).includes("feature")) : list;
+  const visiblePackages = category === "feature" ? installed.filter(item => ["views", "actions"].some(key => item.manifest.contributions[key]?.length)) : installed;
+  const sel = visiblePacks.find((p) => p.id === selId) ?? visiblePacks[0] ?? null;
 
   useEffect(() => {
     void refreshAgents();
@@ -119,7 +122,7 @@ export default function PacksPage() {
     setPackageWorkflows(workflows);
   }
 
-  // 워크플로 탭이 열릴 때만 라이브러리 카탈로그를 읽어 등록 여부를 매긴다.
+  // Read the library catalog only when the workflow tab opens, to mark whether each item is registered.
   useEffect(() => {
     if (category !== "workflow") return;
     let alive = true;
@@ -349,9 +352,9 @@ export default function PacksPage() {
   }
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto">
       <PageHeader title={t("header.title")}>
-        {category === "installed" && (
+        {(category === "installed" || category === "feature") && (
           <Button
             size="sm"
             variant="outline"
@@ -366,10 +369,12 @@ export default function PacksPage() {
         </Button>
       </PageHeader>
 
-      <div className="flex gap-1 border-b px-4 py-2">
+      <div role="group" aria-label={t("header.title")} className="flex shrink-0 flex-wrap gap-1 border-b px-4 py-2">
         {CATALOG_TABS.map((tab) => (
           <button
             key={tab}
+            aria-pressed={category === tab}
+            disabled={busy}
             onClick={() => setCategory(tab)}
             className={cn(
               "rounded-md px-2.5 py-1 text-xs font-medium transition-colors hover:bg-accent",
@@ -382,7 +387,7 @@ export default function PacksPage() {
       </div>
 
       {msg && (
-        <div className="border-b bg-muted px-4 py-1.5 text-xs">{msg}</div>
+        <div role="status" className="border-b bg-muted px-4 py-1.5 text-xs">{msg}</div>
       )}
 
       {(packs?.broken ?? []).length > 0 && (
@@ -401,7 +406,7 @@ export default function PacksPage() {
         </div>
       )}
 
-      {category === "installed" && (
+      {(category === "installed" || category === "feature") && (
         <div className="border-b p-4">
           <div className="mb-3">
             <h2 className="text-sm font-semibold">{t("core.title")}</h2>
@@ -504,7 +509,7 @@ export default function PacksPage() {
           </div>
         </div>
       )}
-      {category === "installed" && (
+      {(category === "installed" || category === "feature") && (
         <div className="border-b p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <div className="min-w-0">
@@ -514,9 +519,9 @@ export default function PacksPage() {
               </p>
             </div>
             <span className="ml-auto flex items-center gap-2">
-              {installed.length > 0 && (
+              {visiblePackages.length > 0 && (
                 <span className="text-xs text-muted-foreground">
-                  {t("install.countSuffix", { n: installed.length })}
+                  {t("install.countSuffix", { n: visiblePackages.length })}
                 </span>
               )}
               <span className="text-xs text-muted-foreground">
@@ -529,13 +534,13 @@ export default function PacksPage() {
               />
             </span>
           </div>
-          {installed.length === 0 ? (
+          {visiblePackages.length === 0 ? (
             <p className="text-xs text-muted-foreground">
               {t("packages.empty")}
             </p>
           ) : (
             <div className="grid gap-2 lg:grid-cols-2">
-              {installed.map((item) => {
+              {visiblePackages.map((item) => {
                 const locked = extensionLock?.projects[
                   extensionProject
                 ]?.some(
@@ -550,6 +555,10 @@ export default function PacksPage() {
                   >
                     <div className="flex items-center gap-2">
                       <strong>{item.manifest.name}</strong>
+                      {(["skill", "workflow", "feature"] as const).filter(kind => kind === "feature"
+                        ? ["views", "actions"].some(key => item.manifest.contributions[key]?.length)
+                        : (item.manifest.contributions[kind === "skill" ? "skills" : "workflows"]?.length ?? 0) > 0
+                      ).map(kind => <Badge key={kind} variant="outline">{t(`catalog.tabs.${kind}`)}</Badge>)}
                       <Badge variant="outline">{item.manifest.version}</Badge>
                       {locked && (
                         <Badge variant="success">{t("install.pinned")}</Badge>
@@ -605,14 +614,26 @@ export default function PacksPage() {
       {category === "marketplace" && (
         <div className="min-h-0 flex-1 overflow-y-auto">
           <ExtensionMarketplace
+            agents={agents}
+            packs={list}
+            workflows={packageWorkflows}
+            busy={busy}
+            setBusy={setBusy}
+            onManage={(kind, packId) => {
+              if (busy) return;
+              setCategory(kind);
+              if (packId) setSelId(packId);
+            }}
             onChoose={(source) => {
               setInstallOpen(true);
               setSourceKind(source.kind);
               setSourceLocation(source.location);
               setSourceCommit(source.commit ?? "");
+              requestAnimationFrame(() => document.getElementById("extension-package-install")?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
             }}
           />
           <details
+            id="extension-package-install"
             open={installOpen}
             onToggle={(event) => setInstallOpen(event.currentTarget.open)}
             className="border-b p-4"
@@ -760,11 +781,11 @@ export default function PacksPage() {
           )}
         </div>
       )}
-      {category === "installed" && list.length > 0 && (
+      {(category === "installed" || category === "feature") && visiblePacks.length > 0 && (
         <div className="flex min-h-0 flex-1">
           <div className="w-56 shrink-0 overflow-y-auto border-r p-2">
             {list.length === 0 && <Empty>{t("list.empty")}</Empty>}
-            {list.map((p) => {
+            {visiblePacks.map((p) => {
               const Icon = packIcon(p.icon);
               return (
                 <button

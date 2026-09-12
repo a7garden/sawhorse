@@ -11,7 +11,7 @@ export type Toast = {
   text: string;
 };
 
-/** 토스트는 페이지 밖에서도(비-컴포넌트 모듈) 띄울 수 있어야 하므로 store 를 모듈 전역에 둔다. */
+/** Toasts must be raisable outside the page too (non-component modules), so the store lives at module scope. */
 let items: Toast[] = [];
 let seq = 0;
 const listeners = new Set<() => void>();
@@ -21,7 +21,7 @@ function emit() {
   listeners.forEach((fn) => fn());
 }
 
-/** 오류는 읽는 데 시간이 더 걸린다 — 성공·안내보다 길게 띄운다. */
+/** Errors take longer to read — shown longer than success/info. */
 const LIFETIME: Record<ToastTone, number> = {
   success: 4000,
   info: 5000,
@@ -44,7 +44,7 @@ export function toast(input: { tone?: ToastTone; text: string }) {
   const text = input.text.trim();
   if (!text) return -1;
   const id = ++seq;
-  // 같은 문구가 연속으로 쌓이면 화면만 가린다 — 직전 것을 걷어내고 새로 띄운다.
+  // Identical messages piling up only obscure the screen — remove the previous one and raise the new.
   items
     .filter((item) => item.text === text)
     .forEach((item) => dismissToast(item.id));
@@ -80,7 +80,7 @@ const TONE_CLASS: Record<ToastTone, string> = {
   info: "text-foreground [&>svg]:text-muted-foreground",
 };
 
-/** 앱 최상단에 한 번만 올려 둔다. */
+/** Mount once at the top of the app. */
 export function Toaster() {
   const { t } = useTranslation("common");
   const toasts = useToasts();

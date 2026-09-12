@@ -4,6 +4,7 @@ import {
   DASHBOARD_COLS,
   DEFAULT_METRIC_WIDGET_IDS,
   DEFAULT_WIDGET_IDS,
+  GLOBAL_WIDGET_IDS,
   WIDGET_BY_ID,
   createDefaultLayouts,
   type DashboardBreakpoint,
@@ -11,7 +12,7 @@ import {
 } from "./registry";
 
 const STORAGE_KEY = "sawhorse.dashboard-layout";
-const LAYOUT_VERSION = 4;
+const LAYOUT_VERSION = 6;
 const LEGACY_ROW_PITCH = 60;
 const ROW_PITCH = 42;
 
@@ -35,6 +36,27 @@ function defaultDocument(defaultIds = DEFAULT_WIDGET_IDS): DashboardLayoutDocume
   };
 }
 
+function isPreviousDefault(document: Partial<DashboardLayoutDocument>): boolean {
+  const ids: DashboardWidgetId[] = ["metric:jobs-live", "metric:jobs-failed", "metric:due-today", "metric:done-today", "today", "jobs", "projects", "events", "schedules"];
+  if (JSON.stringify(document.enabled) !== JSON.stringify(ids)) return false;
+  return (Object.keys(DASHBOARD_COLS) as DashboardBreakpoint[]).every((breakpoint) => {
+    const saved = document.layouts?.[breakpoint];
+    if (saved?.length !== ids.length) return false;
+    let x = 0, y = 0, height = 0;
+    return ids.every((id, index) => {
+      const metric = index < 4;
+      const w = metric ? (breakpoint === "lg" ? 3 : 2) : breakpoint === "lg" ? (id === "today" ? 8 : 4) : DASHBOARD_COLS[breakpoint];
+      const h = metric ? 3 : breakpoint === "lg" ? (index > 5 ? 7 : 9) : id === "today" ? (breakpoint === "md" ? 10 : 11) : 8;
+      if (x && x + w > DASHBOARD_COLS[breakpoint]) { y += height; x = 0; height = 0; }
+      const item = saved.find((item) => item.i === id);
+      const matches = item?.x === x && item.y === y && item.w === w && item.h === h;
+      x += w; height = Math.max(height, h);
+      if (x >= DASHBOARD_COLS[breakpoint]) { y += height; x = 0; height = 0; }
+      return matches;
+    });
+  });
+}
+
 function isWidgetId(value: unknown): value is DashboardWidgetId {
   return (
     typeof value === "string" &&
@@ -42,28 +64,29 @@ function isWidgetId(value: unknown): value is DashboardWidgetId {
   );
 }
 
-/** 이름만 바뀐 위젯. 자리도 크기도 그대로 이어받는다. */
+/** Widget that only changed name. Inherits both position and size. */
 const LEGACY_ALIASES: Record<string, DashboardWidgetId> = {
   todos: "next",
   routines: "schedules",
   operations: "events",
 };
-/** 묶음이던 핵심 지표 위젯이 서 있던 자리 — 여기서 낱개 카드로 펼친다. */
+/** Where the bundled core-metrics widget stood — the individual cards fan out from here. */
 const LEGACY_METRIC_IDS = ["metrics", "overview"];
 
-/** 켜져 있던 위젯 목록을 현재 어휘로 옮긴다. 묶음 지표는 낱개 네 장이 된다. */
+/** Migrates the enabled widget list to the current vocabulary. The bundled metrics become four individual cards. */
 function migrateEnabled(value: unknown[]): DashboardWidgetId[] {
   return value.flatMap((id) => {
     if (typeof id !== "string") return [];
     if (LEGACY_METRIC_IDS.includes(id)) return DEFAULT_METRIC_WIDGET_IDS;
     const mapped = LEGACY_ALIASES[id] ?? id;
     return isWidgetId(mapped) ? [mapped] : [];
-  });
+  }).filter((id) => GLOBAL_WIDGET_IDS.includes(id));
 }
 
 /**
- * v3까지의 핵심 지표 한 칸을 낱개 지표 위젯 네 칸으로 편다. 원래 칸이 있던 줄에서
- * 시작해 폭이 모자라면 다음 줄로 접고, 아래에 있던 위젯은 세로 압축이 밀어낸다.
+ * Splits the pre-v3 core-metrics cell into four individual metric widgets.
+ * Starts at the row of the original cell, wraps to the next row when width runs
+ * out; widgets below are pushed down by the vertical expansion.
  */
 function expandLegacyMetrics(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
@@ -111,7 +134,7 @@ function sanitizeItem(
   if (!item || typeof item !== "object") return null;
   const value = { ...item } as Partial<LayoutItem>;
   if (value.i && LEGACY_ALIASES[value.i]) value.i = LEGACY_ALIASES[value.i];
-  if (!isWidgetId(value.i)) return null;
+  if (!isWidgetId(value.i) || !GLOBAL_WIDGET_IDS.includes(value.i)) return null;
   if (
     ![value.x, value.y, value.w, value.h].every(
       (n) => typeof n === "number" && Number.isFinite(n),
@@ -193,7 +216,7 @@ function loadDocument(storageKey = STORAGE_KEY, defaultIds = DEFAULT_WIDGET_IDS)
     const parsed = JSON.parse(
       localStorage.getItem(storageKey) ?? "null",
     ) as Partial<DashboardLayoutDocument> | null;
-    if (!parsed || ![1, 2, 3, LAYOUT_VERSION].includes(parsed.version ?? 0)) {
+    if (!parsed || ![1, 2, 3, 4, 5, LAYOUT_VERSION].includes(parsed.version ?? 0)) {
       const legacy = JSON.parse(
         (storageKey === STORAGE_KEY ? localStorage.getItem("sawhorse.overview-slots") : null) ?? "null",
       );
@@ -202,6 +225,9 @@ function loadDocument(storageKey = STORAGE_KEY, defaultIds = DEFAULT_WIDGET_IDS)
         next.enabled = migrateEnabled(legacy.enabled);
       return next;
     }
+    // Upgrade only the untouched previous starter board. Personal arrangements,
+    // removed widgets, and intentionally empty boards keep their saved geometry.
+    if (parsed.version === 5 && isPreviousDefault(parsed)) return defaultDocument(defaultIds);
     const enabled = Array.isArray(parsed.enabled)
       ? migrateEnabled(parsed.enabled)
       : [...defaultIds];

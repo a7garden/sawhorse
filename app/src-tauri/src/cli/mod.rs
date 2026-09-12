@@ -206,6 +206,8 @@ enum WorkspaceCommand {
 enum ProjectCommand {
     List,
     Show { id: String },
+    /// Add populated English sample projects for the current built-in workflows.
+    Samples,
 }
 #[derive(Subcommand)]
 enum SkillCommand {
@@ -368,9 +370,11 @@ fn read_json<T: DeserializeOwned>(path: &Path) -> Result<T> {
             .map_err(|e| CliError::new("input-read-failed", e.to_string(), 1))?;
         bytes
     } else {
-        fs::read(path).map_err(|e| {
-            CliError::new("input-read-failed", format!("{}: {e}", path.display()), 1)
-        })?
+        let mut bytes = Vec::new();
+        fs::File::open(path)
+            .and_then(|mut file| file.take(16 * 1024 * 1024 + 1).read_to_end(&mut bytes))
+            .map_err(|e| CliError::new("input-read-failed", format!("{}: {e}", path.display()), 1))?;
+        bytes
     };
     if bytes.len() > 16 * 1024 * 1024 {
         return Err(CliError::new(
@@ -560,6 +564,11 @@ fn dispatch(cli: &Cli) -> Result<Output> {
             json!({"vault": required()?, "initialized": required()?.join(".sawhorse/schema.json").is_file()}),
         ),
         Command::Project {
+            command: ProjectCommand::Samples,
+        } => Output::data(serde_json::to_value(
+            sdlc::samples::create_at(required()?).map_err(CliError::operation)?
+        ).map_err(|error| CliError::operation(error.to_string()))?),
+        Command::Project {
             command: ProjectCommand::List,
         } => {
             let snapshot = sdlc::snapshot(required()?).map_err(CliError::operation)?;
@@ -585,7 +594,8 @@ fn dispatch(cli: &Cli) -> Result<Output> {
                     workflow::catalog(root.as_deref()).map_err(CliError::operation)?;
                 let text = definitions
                     .iter()
-                    .map(|item| format!("{}@{}\t{}", item.id, item.version, item.label))
+                    .map(|item| format!("{}@{}\t{}{}", item.id, item.version, item.label,
+                        if workflow::builtins::is_selectable(&item.id) { "" } else { " (기존 작업 전용 · 작업 유형으로 이동)" }))
                     .collect::<Vec<_>>()
                     .join("\n");
                 Output::text(definitions, text)

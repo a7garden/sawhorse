@@ -5,8 +5,8 @@
   "noResultsHint": "Try another search or reset your filters.",
   "loading": "Loading items…",
   "tasks": {
-    "libraryDescription": "Save recurring work and run it whenever you need it.",
-    "schedulesDescription": "Choose when saved tasks run and manage their recurring schedules.",
+    "libraryDescription": "Run any task now or schedule it. Turn on automatic runs to set a schedule.",
+    "schedulesDescription": "Turn schedules on or off and edit times for both custom and built-in tasks.",
     "search": "Search automation tasks",
     "filters": "Automation task categories",
     "all": "All",
@@ -15,7 +15,7 @@
     "count": "{{count}} tasks",
     "enabled": "{{count}} active schedules",
     "emptyHint": "Create an automation task first, then schedule it for a time that works for you.",
-    "enabledLabel": "Enable {{title}}",
+    "enabledLabel": "Enable schedule for {{title}}",
     "createFirst": "Create your first task",
     "chooseForSchedule": "Choose a task to schedule"
   },

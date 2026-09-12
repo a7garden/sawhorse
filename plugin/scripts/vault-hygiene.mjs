@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// sawhorse 볼트 위생 점검. morning/lunch/evening 이 모드별로 호출한다.
+// sawhorse vault hygiene check. Invoked by morning/lunch/evening, one mode each.
 //
-// quick : 즉시형. 볼트 루트 첨부 회수, attachmentFolderPath 교정, .base 템플릿 제외 보정,
-//         인덱스 자산 존재 확인. 되돌릴 수 있는 기계적 조치만 수행한다. (morning)
-// scan  : 진단 전용. 죽은 링크, 고아 첨부, frontmatter 스키마 이탈을 찾아 보고만 한다.
-//         어떤 파일도 쓰지 않는다. (lunch)
-// fix   : quick + scan. 기계적 조치를 하고, 판단이 필요한 항목은 목록으로 넘긴다. (evening)
+// quick : immediate. Recovers vault-root attachments, corrects attachmentFolderPath, patches .base
+//         template exclusions, checks index assets. Performs only reversible mechanical actions. (morning)
+// scan  : diagnostics only. Finds dead links, orphan attachments, and frontmatter schema drift;
+//         reports only. Writes no files. (lunch)
+// fix   : quick + scan. Applies the mechanical actions and hands anything needing judgment over as a list. (evening)
 //
-// 스킬이 노트를 하나씩 열어 읽는 대신 이 스크립트 한 번으로 목록만 받는 것이 목적이다.
+// The goal is for the skill to get lists from this one script instead of opening and reading notes one by one.
 //
 // Usage: node vault-hygiene.mjs --vault <vault-path> --mode <quick|scan|fix>
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, lstatSync, statSync, writeFileSync } from "node:fs";
@@ -23,7 +23,7 @@ const argOf = (name) => {
 const vaultPath = argOf("--vault");
 const mode = argOf("--mode") ?? "";
 
-if (!vaultPath || !existsSync(vaultPath)) {
+if (!vaultPath || !existsSync(vaultPath) || !statSync(vaultPath).isDirectory()) {
   console.log(`[오류] vault 경로 없음: ${vaultPath ?? "(없음)"}`);
   process.exit(1);
 }
@@ -35,7 +35,7 @@ const V = vaultPath.replace(/[\\/]+$/, "");
 
 // ---------- constants ----------
 
-// 프로젝트 문서 루트. 이름을 바꾸기 전 볼트는 사업/ 만 갖고 있고, 이관은 사용자가 고른다.
+// Project document root. Before the rename the vault only had 사업/ (business); migration is the user's call.
 const ProjectRoot = existsSync(join(V, "프로젝트")) ? "프로젝트" : "사업";
 const DocumentFolders = ["일지", "기록", "문서", "노트", "개념", "프로젝트", "사업"];
 const ImageExt = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"];
@@ -59,18 +59,32 @@ const schemaManaged = (text) => /^---\r?\n[\s\S]*?^typeId:/m.test(text.split(/\r
 
 // ---------- walk ----------
 
+// Declared before the walk runs so visit() can record unreadable entries.
+const warn = [];
+
 const walk = (dir, filter) => {
   const out = [];
   const visit = (d) => {
-    for (const name of readdirSync(d)) {
+    let names;
+    try {
+      names = readdirSync(d);
+    } catch (e) {
+      warn.push(`[탐색실패] ${relOf(d) || "."} — 디렉터리 읽기 실패: ${e?.message ?? e}`);
+      return;
+    }
+    for (const name of names) {
       const full = join(d, name);
       if (excluded(full)) continue;
-      const st = lstatSync(full);
-      if (st.isSymbolicLink()) continue;
-      if (st.isDirectory()) {
-        if (!excluded(full)) visit(full);
-      } else if (st.isFile() && filter(name, full)) {
-        out.push(full);
+      try {
+        const st = lstatSync(full);
+        if (st.isSymbolicLink()) continue;
+        if (st.isDirectory()) {
+          if (!excluded(full)) visit(full);
+        } else if (st.isFile() && filter(name, full)) {
+          out.push(full);
+        }
+      } catch (e) {
+        warn.push(`[탐색실패] ${relOf(full)} — 항목 확인 실패: ${e?.message ?? e}`);
       }
     }
   };
@@ -88,12 +102,11 @@ const baseName = (full) => {
 
 let moved = 0;
 let fixed = 0;
-const warn = [];
 
 const say = (line) => console.log(line);
 
-// 파일명과 같은 H1 은 Obsidian 인라인 제목과 중복이다 (wiki 규범 제7조).
-// 파일명과 "다른" H1 은 파일명이 닫지 못한 정보이므로 절대 건드리지 않는다.
+// An H1 identical to the filename duplicates Obsidian's inline title (wiki convention article 7).
+// An H1 "different" from the filename carries information the filename cannot hold, so it is never touched.
 const titleDedup = (doFix) => {
   const hit = [];
   const reFm = /^---\r?\n[\s\S]*?\r?\n---\r?\n/;
@@ -134,7 +147,7 @@ const titleDedup = (doFix) => {
 if (mode === "quick" || mode === "fix") {
   say("== 볼트 위생: 즉시 점검 ==");
 
-  // 1) 볼트 루트 첨부 회수
+  // 1) Recover vault-root attachments
   const strays = allFiles.filter((full) => {
     const ext = basename(full).replace(/^.*(\.[^.]+)$/, "$1").toLowerCase();
     if (!AttachExt.includes(ext)) return false;
@@ -161,7 +174,7 @@ if (mode === "quick" || mode === "fix") {
   }
   if (strays.length === 0) say("[이동] 볼트 루트 첨부 없음");
 
-  // 2) attachmentFolderPath (붙여넣기 이미지가 루트에 쌓이는 근본 원인)
+  // 2) attachmentFolderPath (root cause of pasted images piling up in the vault root)
   const appJson = join(V, ".obsidian", "app.json");
   if (existsSync(appJson)) {
     let cfg = {};
@@ -191,7 +204,7 @@ if (mode === "quick" || mode === "fix") {
     fixed++;
   }
 
-  // 3) 루트에 남은 미분류 노트 (판단이 필요하므로 옮기지 않고 보고만)
+  // 3) Unclassified notes left in the root (needs judgment, so report only, never move)
   const rootNotes = mdFiles.filter((full) => relOf(full) === basename(full) && basename(full) !== "대시보드.md");
   if (rootNotes.length > 0) {
     say(`[미분류] 루트 노트 ${rootNotes.length}건 — 어디로 보낼지 판단 필요`);
@@ -200,7 +213,7 @@ if (mode === "quick" || mode === "fix") {
     say("[미분류] 루트 노트 없음");
   }
 
-  // 4) 인덱스 자산 존재 확인 (없으면 안내만 — 여기서 만들지 않는다)
+  // 4) Check index assets exist (announce only when missing — never created here)
   const missingAssets = IndexAssets.filter((a) => !existsSync(join(V, a)));
   if (missingAssets.length > 0) {
     say(`[자산] 없음: ${missingAssets.join(", ")} — /sawhorse:init-vault 필요`);
@@ -208,12 +221,12 @@ if (mode === "quick" || mode === "fix") {
     say("[자산] 문서 인덱스 모두 있음");
   }
 
-  // 5) .base 가 템플릿 폴더를 제외하는지 (템플릿 노트도 진짜 type 값을 갖고 있다)
+  // 5) Whether .base files exclude the template folder (template notes carry real type values too)
   const bases = walk(V, (name) => name.toLowerCase().endsWith(".base"));
   for (const full of bases) {
     if (!IndexAssets.includes(relOf(full))) continue;
     const txt = readFileSync(full, "utf8");
-    // 이미 폴더로 범위를 좁힌 base(개선의 프로젝트 범위)는 템플릿이 섞일 수 없으므로 건드리지 않는다.
+    // Bases already scoped to a folder (the improvements list's project scope) cannot mix in templates, so leave them alone.
     const scoped = /file\.inFolder\("[^"]+"\)/.test(txt);
     if (/^[ \t]*-[ \t]*type[ \t]*==/m.test(txt) && !scoped) {
       const ins = '$1    - not:\n        - file.inFolder("템플릿")\n';
@@ -228,7 +241,7 @@ if (mode === "quick" || mode === "fix") {
     }
   }
 
-  // 6) 파일명과 같은 H1 제거 (Obsidian 은 파일명을 인라인 제목으로 이미 보여준다 — 규범 제7조)
+  // 6) Remove H1s identical to the filename (Obsidian already shows the filename as the inline title — wiki convention article 7)
   const dupTitles = titleDedup(true);
   if (dupTitles.length > 0) {
     say(`[제목중복] 파일명과 같은 H1 ${dupTitles.length}건 제거`);
@@ -253,7 +266,7 @@ if (mode === "scan" || mode === "fix") {
     }
   };
 
-  // 링크 해석 사전: 노트 basename + 첨부 파일명 + aliases
+  // Link resolution dictionary: note basenames + attachment filenames + aliases
   const names = new Set();
   for (const full of mdFiles) names.add(baseName(full));
   for (const full of allFiles) names.add(basename(full));
@@ -268,10 +281,10 @@ if (mode === "scan" || mode === "fix") {
     }
   }
 
-  // 링크 수집 전에 "링크가 아닌 것"을 걷어낸다:
-  //   HTML 주석 — 템플릿에서 복사돼 온 안내 주석의 설명용 예시([[링크]] 등)
-  //   코드펜스·인라인 코드 — 위키링크 문법 자체를 설명하는 문장의 `[[링크]]`
-  // 걷어내지 않으면 노트마다 가짜 죽은 링크가 생겨 진짜 죽은 링크가 묻힌다.
+  // Strip "not actually links" before collecting links:
+  //   HTML comments — explanatory examples ([[link]] etc.) inside guidance comments copied from templates
+  //   code fences and inline code — `[[link]]` inside sentences explaining wikilink syntax itself
+  // Without this, every note sprouts fake dead links that bury the real ones.
   const linkRefs = new Map();
   for (const [full, txt] of bodies) {
     const visible = txt
@@ -286,7 +299,7 @@ if (mode === "scan" || mode === "fix") {
     }
   }
 
-  // 템플릿 안의 예시 링크(다른개념 등)는 죽은 링크가 아니다
+  // Example links inside templates (e.g. 다른개념 (other-concept)) are not dead links
   const dead = [];
   for (const [t, srcs] of linkRefs) {
     if (names.has(t)) continue;
@@ -302,12 +315,12 @@ if (mode === "scan" || mode === "fix") {
     }
   }
 
-  // 개념 수집 섹션 — '## 개념 수집' 아래에서 아직 승격되지 않은 줄
-  // 사용자는 아무 노트에나 이 섹션을 만들고 용어를 문맥과 함께 적어둔다.
-  // 이미 [[링크]]가 붙은 줄은 승격된 것으로 보고 건너뛴다(재실행 멱등).
-  // 목록이 하나라도 있는 섹션에서는 목록이 아닌 줄을 "공통 문맥"으로 보고 용어로 세지 않는다.
-  // (예: 머리글 문장이 매번 승격 대기로 뜨는 것을 막는다.)
-  // 목록이 전혀 없는 섹션은 한 줄에 용어 하나로 적은 것이므로 모든 줄을 후보로 본다.
+  // Concept harvest section — lines under '## 개념 수집' (concept collection) not yet promoted
+  // The user creates this section in any note and writes terms there with their context.
+  // Lines already carrying a [[link]] count as promoted and are skipped (idempotent across reruns).
+  // In a section containing at least one list, non-list lines are treated as "shared context" and not counted as terms.
+  // (e.g. it keeps a lead-in sentence from showing up as pending promotion on every run.)
+  // A section with no lists at all holds one term per line, so every line is a candidate.
   const harvest = [];
   const reList = /^\s*([-*+]|\d+\.)\s+/;
   for (const [full, txt] of bodies) {
@@ -321,7 +334,7 @@ if (mode === "scan" || mode === "fix") {
     let inComment = false;
     for (let i = 0; i < lines.length; i++) {
       const ln = lines[i];
-      // 여러 줄 HTML 주석 건너뛰기 (안내 주석이 용어로 잡히면 안 된다)
+      // Skip multi-line HTML comments (guidance comments must not be picked up as terms)
       if (inComment) {
         if (ln.includes("-->")) inComment = false;
         continue;
@@ -335,7 +348,7 @@ if (mode === "scan" || mode === "fix") {
       const h = ln.match(/^(#{2,6})\s*(.+?)\s*$/);
       if (h) {
         const lvl = h[1].length;
-        // 정확히 '개념 수집' 인 헤딩만 (대시보드의 '개념 수집함' 등은 제외)
+        // Only headings exactly '개념 수집' (concept collection); excludes the dashboard's '개념 수집함' (collection box) etc.
         if (/^개념\s*수집$/.test(h[2])) {
           cur = { hasList: false, items: [] };
           sections.push(cur);
@@ -353,12 +366,12 @@ if (mode === "scan" || mode === "fix") {
       if (!ln.trim()) continue;
       const isList = reList.test(ln);
       if (isList) cur.hasList = true;
-      if (ln.includes("[[")) continue; // 이미 승격된 줄
+      if (ln.includes("[[")) continue; // line already promoted
       cur.items.push({ line: i + 1, text: ln.trim(), isList });
     }
     for (const s of sections) {
       for (const it of s.items) {
-        if (s.hasList && !it.isList) continue; // 목록 있는 섹션의 산문 줄 = 문맥
+        if (s.hasList && !it.isList) continue; // prose line in a section with lists = context
         harvest.push(`${rel} : ${it.line} : ${it.text}`);
       }
     }
@@ -370,7 +383,7 @@ if (mode === "scan" || mode === "fix") {
     for (const h of harvest) say(`  - ${h}`);
   }
 
-  // 고아 첨부 (참조 없음) — 삭제하지 않는다
+  // Orphan attachments (no references) — never deleted
   const mdText = [...bodies.values()].join("\n");
   const attachments = allFiles.filter((full) =>
     AttachExt.includes(basename(full).replace(/^.*(\.[^.]+)$/, "$1").toLowerCase()),
@@ -383,7 +396,7 @@ if (mode === "scan" || mode === "fix") {
     for (const o of orphans) say(`  - ${relOf(o)}`);
   }
 
-  // frontmatter 스키마 대조
+  // frontmatter schema comparison
   const tplKeys = new Map();
   const tplDir = join(V, "템플릿");
   if (existsSync(tplDir)) {
@@ -406,7 +419,7 @@ if (mode === "scan" || mode === "fix") {
     const rel = relOf(full);
     if (!documentPath(full) || schemaManaged(raw)) continue;
     const name = basename(full);
-    // 과거 문서의 인박스와 MOC는 템플릿 대조에서 제외한다
+    // The legacy documents' inbox and MOC files are excluded from template comparison
     if (/^문제목록 - .*\.md$/.test(name) || / 문제목록\.md$/.test(name) || / 이슈목록\.md$/.test(name)) continue;
     if (name === "개선.md" && /(^|\/)개선\/개선\.md$/.test(rel)) continue;
     if (name === "이슈.md" && /(^|\/)이슈\/이슈\.md$/.test(rel)) continue;
@@ -439,7 +452,7 @@ if (mode === "scan" || mode === "fix") {
     for (const s of issues) say(`  - ${s}`);
   }
 
-  // 파일명과 같은 H1 (scan 은 진단만 — 제거는 quick/fix 가 한다)
+  // H1s identical to the filename (scan only diagnoses — quick/fix does the removal)
   if (mode === "scan") {
     const dupTitles = titleDedup(false);
     if (dupTitles.length > 0) {
@@ -458,6 +471,6 @@ say(`[요약] mode=${mode} · 이동 ${moved} · 교정 ${fixed} · 경고 ${war
 // ---------- helpers below (hoisted) ----------
 
 function renameOrCopy(from, to) {
-  // 같은 볼륨이면 rename — Move-Item 의미 유지. 실패는 호출자가 경고로 기록한다.
+  // Same volume means rename — preserves Move-Item semantics. Failures are logged as warnings by the caller.
   renameSync(from, to);
 }

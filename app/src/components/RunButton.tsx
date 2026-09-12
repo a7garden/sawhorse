@@ -1,8 +1,9 @@
-// 같은 작업을 두 번 시키지 않는 실행 버튼.
+// Run button that never asks for the same task twice.
 //
-// 이 버튼이 만드는 잡이 이미 대기·실행 중이면 누를 수 있는 것은 "중단"뿐이다. 판정은
-// 호스트가 붙인 중복 키(Job.dedupKey)로 하므로, 다른 화면에서 눌렀든 예약이 돌렸든
-// 같은 작업이면 여기서도 실행 중으로 보인다.
+// If a job this button creates is already queued or running, the only thing you
+// can press is "stop". The check uses the host-assigned dedup key
+// (Job.dedupKey), so whether it was pressed on another screen or triggered by a
+// schedule, the same task shows as running here too.
 import { useState, type ReactNode } from "react";
 import { Loader2, Play, Square } from "lucide-react";
 import { api } from "@/lib/api";
@@ -27,7 +28,7 @@ export function RunButton({
 }: {
   jobKey: string;
   label: string;
-  /** 아이콘만 있는 버튼(label 이 빈 문자열)에 이름을 준다. */
+  /** Names the icon-only button (when label is an empty string). */
   ariaLabel?: string;
   onRun: () => Promise<unknown> | unknown;
   onError?: (message: string) => void;

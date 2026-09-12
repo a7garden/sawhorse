@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 test.beforeEach(async ({ page }) => {
   await page.goto("/?preview=1");
   await expect(
-    page.getByRole("heading", { name: "작업대", exact: true }),
+    page.getByRole("heading", { name: "대시보드", exact: true }),
   ).toBeVisible();
 });
 const nav = (page: import("@playwright/test").Page, name: string) =>
@@ -18,8 +18,8 @@ test("dashboard widgets resize, move, hide and persist an intentionally empty bo
   const widget = page.locator(".widget-grid-item").filter({
     has: page.getByRole("heading", { name: "다음 작업", exact: true }),
   });
-  // 보드에 전체폭 위젯이 늘면 이 위젯은 첫 화면 아래로 밀린다. 마우스 좌표는
-  // 뷰포트 기준이므로 손잡이를 화면 안으로 가져온 뒤에 재야 한다.
+  // When the board gains full-width widgets, this widget is pushed below the fold. Mouse
+  // coordinates are viewport-relative, so bring the handle on-screen before measuring.
   await widget.scrollIntoViewIfNeeded();
   const before = (await widget.boundingBox())!;
   const handle = (await widget
@@ -63,7 +63,7 @@ test("dashboard widgets resize, move, hide and persist an intentionally empty bo
   await page.reload();
   await expect(page.getByText("표시할 위젯이 없습니다.")).toBeVisible();
   await page.getByRole("button", { name: "위젯 추가", exact: true }).click();
-  // 지표는 카드 한 장이 위젯 하나다. 하나만 켜서 보드가 그 한 칸으로 돌아오는지 본다.
+  // Metrics: one card is one widget. Enable just one and check the board returns to that single cell.
   await page.getByLabel("위젯 검색").fill("결과 검토");
   await page.getByLabel("결과 검토", { exact: false }).check();
   await page
@@ -109,15 +109,15 @@ test("tasks are defined once and scheduled by reference without duplicating cont
     .click();
   await expect(page.getByText("매일 09:00", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "한 번 예약", exact: true }).click();
-  await expect(page.getByText("매일 자료 정리", { exact: true })).toHaveCount(
+  await expect(page.getByRole("article", { name: "매일 자료 정리", exact: true })).toHaveCount(
     0,
   );
   await page.getByRole("button", { name: "반복 실행", exact: true }).click();
-  await expect(page.getByText("매일 자료 정리", { exact: true })).toBeVisible();
+  await expect(page.getByRole("article", { name: "매일 자료 정리", exact: true })).toBeVisible();
   await page.reload();
   await nav(page, "자동화");
   await page.getByRole("button", { name: "자동화 작업", exact: true }).click();
-  await expect(page.getByText("매일 자료 정리", { exact: true })).toHaveCount(
+  await expect(page.getByRole("article", { name: "매일 자료 정리", exact: true })).toHaveCount(
     1,
   );
 });
@@ -125,12 +125,12 @@ test("tasks are defined once and scheduled by reference without duplicating cont
 test("the SDLC board and the automation library are separate entry points", async ({
   page,
 }) => {
-  // 개발 = intent.md 로 시작하는 작업, 자동화 = 저장해 둔 자동화 작업.
-  // 같은 그룹에 섞이면 다시 같은 말로 읽히므로 진입점 자체가 갈라져 있어야 한다.
-  await nav(page, "작업");
+  // Development = work starting from intent.md; automation = saved automation tasks.
+  // Mixing them into one group reads as the same thing twice, so the entry points themselves must stay split.
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "공정 보드", exact: true }).click();
   await expect(
-    page.getByRole("heading", { name: "작업", exact: true }),
+    page.getByRole("heading", { name: "작업대", exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "새 작업", exact: true }),
@@ -340,14 +340,14 @@ test("installed GitHub stays manageable when disabled and repositories provide c
   ).toBeVisible();
 });
 
-// 이슈와 작업은 한 저장소다. 마일스톤 소속도 작업의 milestone 필드
-// 한 곳에만 적히고, 이슈 화면과 캘린더가 같은 편집기를 쓴다.
+// Issues and work items share one store. Milestone membership is written only to the work item's
+// milestone field, and the issue view and the calendar use the same editor.
 test("milestones group work items and share membership with calendar editing", async ({
   page,
 }) => {
   const closed = "work-release 첫 작업대 배포 기록";
   const open = "work-search 프로젝트를 넘나드는 지식 검색";
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "목록", exact: true }).click();
   await page
     .getByRole("button", { name: "마일스톤 추가", exact: true })
@@ -371,7 +371,7 @@ test("milestones group work items and share membership with calendar editing", a
     .getByRole("dialog")
     .getByRole("button", { name: "저장", exact: true })
     .click();
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "목록", exact: true }).click();
   await expect(
     page.getByRole("progressbar", { name: "9월 개선 진행률" }),
@@ -430,9 +430,9 @@ test("opening a published workflow from the library edits the selected definitio
 
 test("one work entry shares filters, detail and decisions between list and process board", async ({ page }) => {
   const sidebar = page.locator("aside nav");
-  await expect(sidebar.getByRole("button", { name: "작업", exact: true })).toHaveCount(1);
+  await expect(sidebar.getByRole("button", { name: "작업대", exact: true })).toHaveCount(1);
   for (const removed of ["개발", "이슈"]) await expect(sidebar.getByRole("button", { name: removed, exact: true })).toHaveCount(0);
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "목록", exact: true }).click();
   await page.getByLabel("프로젝트 필터").selectOption("sawhorse");
   const row = page.locator(".wb-issue-table tbody tr").filter({ hasText: "의도에서 시작하는 개발 흐름" });
@@ -450,7 +450,7 @@ test("one work entry shares filters, detail and decisions between list and proce
   await page.getByRole("button", { name: "목록", exact: true }).click();
   await expect(row.getByRole("button", { name: "구현", exact: true })).toBeVisible();
   await page.reload();
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await expect(page.locator(".wb-issue-table")).toBeVisible();
   await page.getByRole("button", { name: "새 작업", exact: true }).click();
   await expect(page.getByLabel("상태", { exact: true })).toHaveCount(0);
@@ -460,12 +460,12 @@ test("one work entry shares filters, detail and decisions between list and proce
 test("issue rows run their own stage, select in bulk and filter by tag", async ({
   page,
 }) => {
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "목록", exact: true }).click();
   const row = (title: string) =>
     page.locator(".wb-issue-table tbody tr").filter({ hasText: title });
 
-  // 행마다 지금 밟을 단계가 그대로 버튼이 된다.
+  // Each row's current stage appears as a button in place.
   await expect(
     row("의도에서 시작하는 개발 흐름").getByRole("button", {
       name: "설계",
@@ -479,7 +479,7 @@ test("issue rows run their own stage, select in bulk and filter by tag", async (
     }),
   ).toBeVisible();
 
-  // 끝난 항목에는 더 밟을 단계가 없다. 이 항목은 배포에서 완료되었다.
+  // Finished items have no further stage to advance; this one completed at the deploy stage.
   await page.getByLabel("열림 상태").selectOption("all");
   await expect(
     row("첫 작업대 배포 기록").getByRole("button", {
@@ -489,7 +489,7 @@ test("issue rows run their own stage, select in bulk and filter by tag", async (
   ).toHaveCount(0);
   await page.getByLabel("열림 상태").selectOption("open");
 
-  // 실행은 확인창을 거친다. 체험 모드는 실행을 거절하므로 실패가 그대로 보인다.
+  // Running goes through a confirmation dialog. Preview mode rejects the run, so the failure shows as-is.
   await row("의도에서 시작하는 개발 흐름")
     .getByRole("button", { name: "설계", exact: true })
     .click();
@@ -508,7 +508,7 @@ test("issue rows run their own stage, select in bulk and filter by tag", async (
   await expect(page.getByRole("button", { name: "선택 실행", exact: true })).toBeEnabled();
   await expect(page.getByRole("button", { name: "선택 승인", exact: true })).toHaveCount(0);
 
-  // 문서에 적힌 태그로도 거를 수 있다.
+  // Filtering also works on tags written in the document.
   await page.getByRole("button", { name: "새 작업", exact: true }).click();
   await page
     .getByLabel("작업 이름", { exact: true })
@@ -521,7 +521,7 @@ test("issue rows run their own stage, select in bulk and filter by tag", async (
     .locator(".wb-detail-dialog")
     .getByRole("button", { name: "닫기", exact: true })
     .click();
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await page.getByRole("button", { name: "목록", exact: true }).click();
   await page.getByLabel("태그 필터", { exact: true }).selectOption("챗봇");
   await expect(page.locator(".wb-issue-table tbody tr")).toHaveCount(1);
@@ -531,7 +531,7 @@ test("issue rows run their own stage, select in bulk and filter by tag", async (
 test("the bundled metric strip becomes four cards a user can rearrange one by one", async ({
   page,
 }) => {
-  // v3 까지 쓰던 묶음 위젯. 이관은 같은 자리에서 낱개 카드 넉 장으로 펼쳐야 한다.
+  // The bundled widget used through v3. Migration must expand it in place into four single cards.
   await page.evaluate(() => {
     localStorage.setItem(
       "sawhorse.dashboard-layout",
@@ -557,7 +557,7 @@ test("the bundled metric strip becomes four cards a user can rearrange one by on
   });
   await page.reload();
   await expect(
-    page.getByRole("heading", { name: "작업대", exact: true }),
+    page.getByRole("heading", { name: "대시보드", exact: true }),
   ).toBeVisible();
   await expect(page.locator(".wb-metric.is-solo")).toHaveCount(4);
   await expect(page.locator(".widget-grid-item")).toHaveCount(5);
@@ -573,7 +573,7 @@ test("the bundled metric strip becomes four cards a user can rearrange one by on
     "next",
   ]);
 
-  // 이제 카드 하나가 위젯 하나이므로 원하는 숫자만 따로 켤 수 있다.
+  // Now one card is one widget, so any number can be toggled on individually.
   await page.getByRole("button", { name: "위젯 추가", exact: true }).click();
   await page.getByLabel("위젯 검색").fill("제안");
   await page.getByLabel("제안", { exact: false }).check();

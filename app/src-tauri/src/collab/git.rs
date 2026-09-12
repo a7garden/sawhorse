@@ -1,16 +1,16 @@
-// Git 검사 계층. 설계 823줄: 읽기 전용 검사와 protected ref만 담당한다.
-// 실제 merge·revert 변경은 integration.rs가, 이 모듈은 판정에 필요한 모든 조회를 제공한다.
+// Git inspection layer. Design line 823: responsible only for read-only checks and protected refs.
+// integration.rs performs the actual merge/revert changes; this module provides every query the decision needs.
 //
-// 모든 호출은 argv 기반 `git --no-optional-locks -C <path> ...`(기존 CLI 호출 방식과 동일).
-// 에이전트 입력의 SHA·경로를 신뢰하지 않고 Git 객체로 재확인한다(설계 218-229줄).
+// Every call is argv-based `git --no-optional-locks -C <path> ...` (same invocation style as the existing CLI calls).
+// Never trust agent-supplied SHAs or paths; re-verify them against Git objects (design lines 218-229).
 
 use super::model::ManifestEntry;
 use std::collections::HashSet;
 use std::path::Path;
 use std::process::Command;
 
-/// 등록된 repository identity(설계 224줄). 같은 경로를 다른 alias로 등록해도
-/// 이 세 값이 일치해야 같은 저장소로 인정된다.
+/// Registered repository identity (design line 224). Even if the same path is registered under a different alias,
+/// all three values must match for it to count as the same repository.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RepoIdentity {
     pub canonical_root: String,
@@ -19,7 +19,7 @@ pub struct RepoIdentity {
 }
 
 impl RepoIdentity {
-    /// repository_id는 identity 비교·표시용 키(canonical root 경로의 sha256 앞 16자).
+    /// repository_id is the key for identity comparison and display (first 16 hex chars of the canonical root path's sha256).
     pub fn repository_id(&self) -> String {
         use sha2::{Digest, Sha256};
         let mut h = Sha256::new();
@@ -28,7 +28,7 @@ impl RepoIdentity {
     }
 }
 
-/// git 명령 실행. 실패 시 stderr를 담은 오류를 반환한다.
+/// Run a git command. On failure, returns an error carrying stderr.
 fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
     let out = crate::spawn::no_window(Command::new("git"))
         .arg("--no-optional-locks")
@@ -49,7 +49,7 @@ fn git(repo: &Path, args: &[&str]) -> Result<String, String> {
     Ok(stdout)
 }
 
-/// NUL 구분 출력용(경로에 공백·개행이 섞여도 안전).
+/// For NUL-delimited output (safe even when paths contain spaces or newlines).
 fn git_bytes(repo: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     let out = crate::spawn::no_window(Command::new("git"))
         .arg("--no-optional-locks")
@@ -69,7 +69,7 @@ fn git_bytes(repo: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     Ok(out.stdout)
 }
 
-/// identity 계산. canonicalize로 macOS /private 심볼릭 차이를 흡수한다.
+/// Compute identity. canonicalize absorbs the macOS /private symlink difference.
 pub fn repo_identity(path: &Path) -> Result<RepoIdentity, String> {
     let root = git(path, &["rev-parse", "--show-toplevel"])?
         .trim()
@@ -94,15 +94,15 @@ pub fn repo_identity(path: &Path) -> Result<RepoIdentity, String> {
     })
 }
 
-/// 현재 HEAD·branch·clean 상태. 통합 전 필수 확인(설계 375-376줄).
+/// Current HEAD, branch, and clean state. Mandatory pre-integration check (design lines 375-376).
 #[derive(Clone, Debug)]
 pub struct HeadInfo {
     pub head: String,
     pub branch: String,
     pub clean: bool,
-    /// porcelain 상태 전체. 진단·UI 표시용.
+    /// Full porcelain status. For diagnostics and UI display.
     pub status_lines: Vec<String>,
-    /// detached HEAD, MERGE_HEAD·REBASE_HEAD·CHERRY_PICK_HEAD·REVERT_HEAD 존재.
+    /// Detached HEAD, or presence of MERGE_HEAD/REBASE_HEAD/CHERRY_PICK_HEAD/REVERT_HEAD.
     pub dangerous_state: Option<String>,
 }
 
@@ -150,7 +150,7 @@ pub fn head_info(path: &Path) -> Result<HeadInfo, String> {
     })
 }
 
-/// 축약되지 않은 commit object인지 확인. 존재하지 않거나 다른 타입이면 거절한다.
+/// Verify the object is an unabbreviated commit. Rejects if missing or of another type.
 pub fn resolve_commit(repo: &Path, sha: &str) -> Result<String, String> {
     if sha.len() != 40 || !sha.chars().all(|c| c.is_ascii_hexdigit()) {
         return Err(format!("SHA '{sha}'는 축약되었거나 형식이 올바르지 않다"));
@@ -173,7 +173,7 @@ pub fn is_ancestor(repo: &Path, ancestor: &str, descendant: &str) -> Result<bool
     Ok(out.status.success())
 }
 
-/// base..source가 merge commit을 포함하는지(설계 227줄 — 기본 거부).
+/// Whether base..source contains a merge commit (design line 227 — rejected by default).
 pub fn contains_merge_commit(repo: &Path, base: &str, source: &str) -> Result<bool, String> {
     let out = git(
         repo,
@@ -182,8 +182,8 @@ pub fn contains_merge_commit(repo: &Path, base: &str, source: &str) -> Result<bo
     Ok(!out.trim().is_empty())
 }
 
-/// 두 commit 사이의 exact change manifest 재계산(설계 189-190·219-220줄).
-/// rename은 `-M`으로 감지해 rename_from에 원래 경로를 남긴다. binary는 numstat의 `-`로 판정.
+/// Recompute the exact change manifest between two commits (design lines 189-190 and 219-220).
+/// Renames are detected with `-M` and keep the original path in rename_from. Binary is detected from the numstat `-`.
 pub fn compute_manifest(
     repo: &Path,
     base: &str,
@@ -226,7 +226,7 @@ pub fn compute_manifest(
         }
         let new_mode = cols[1].to_string();
         let status = cols[4].to_string();
-        // -z rename 레코드는 old 경로가 먼저, new 경로가 나중에 온다.
+        // In -z rename records the old path comes first, then the new path.
         let (path, rename_from) = if status.starts_with('R') || status.starts_with('C') {
             let from = parts.next().unwrap_or("").to_string();
             let to = parts.next().unwrap_or("").to_string();
@@ -260,10 +260,10 @@ pub fn compute_manifest(
     Ok((entries, manifest_json))
 }
 
-/// worktree를 건드리지 않는 3-way simulation.
-/// merge: (ours=HEAD, theirs=source, base=자동) — 설계 381-382줄.
-/// revert: (ours=HEAD, theirs=<merge>^1, base=<merge>) — `-m 1` revert의 결과 tree.
-/// Git ≥2.40(--merge-base 지원)을 요구한다. 충돌이면 Err(충돌 경로)를 돌려준다.
+/// 3-way simulation that never touches the worktree.
+/// merge: (ours=HEAD, theirs=source, base=auto) — design lines 381-382.
+/// revert: (ours=HEAD, theirs=<merge>^1, base=<merge>) — the resulting tree of a `-m 1` revert.
+/// Requires Git >=2.40 (--merge-base support). On conflict, returns Err(conflict paths).
 pub fn three_way_simulation(
     repo: &Path,
     ours: &str,
@@ -313,8 +313,8 @@ pub fn three_way_simulation(
     }
 }
 
-/// protected candidate ref 생성. create-only(설계 195-198줄).
-/// `update-ref <ref> <new> <zero-old>`는 ref가 이미 있으면 실패하므로 경합에서도 안전하다.
+/// Create the protected candidate ref. Create-only (design lines 195-198).
+/// `update-ref <ref> <new> <zero-old>` fails when the ref already exists, so this is safe under races.
 pub fn create_protected_ref(repo: &Path, candidate_id: &str, sha: &str) -> Result<(), String> {
     let refname = format!("refs/sawhorse/candidates/{candidate_id}");
     let zero = "0".repeat(40);
@@ -328,7 +328,7 @@ pub fn create_protected_ref(repo: &Path, candidate_id: &str, sha: &str) -> Resul
     if out.status.success() {
         return Ok(());
     }
-    // 이미 존재하는 경우: 같은 SHA면 멱등 성공, 다르면 거부.
+    // Already exists: same SHA is an idempotent success, a different SHA is rejected.
     if let Some(existing) = protected_ref_sha(repo, candidate_id)? {
         if existing == sha {
             return Ok(());
@@ -358,7 +358,7 @@ pub fn protected_ref_sha(repo: &Path, candidate_id: &str) -> Result<Option<Strin
     }
 }
 
-/// 안전 자동 적용을 가로막는 콘텐츠 검사(설계 150-151·492-493줄).
+/// Content checks that block safe auto-apply (design lines 150-151 and 492-493).
 #[derive(Clone, Debug, Default)]
 pub struct RiskFindings {
     pub submodules: Vec<String>,
@@ -388,7 +388,7 @@ pub fn assess_manifest_risks(
     Ok(findings)
 }
 
-/// 새 blob 내용을 검사하는 확장. LFS pointer·크기 상한은 blob을 읽어야 하므로 분리했다.
+/// Extension that inspects new blob contents. Split out because LFS pointers and the size cap require reading the blob.
 pub fn assess_blob_risks(repo: &Path, entries: &[ManifestEntry]) -> Result<RiskFindings, String> {
     let mut findings = RiskFindings::default();
     for e in entries {
@@ -406,15 +406,15 @@ pub fn assess_blob_risks(repo: &Path, entries: &[ManifestEntry]) -> Result<RiskF
     Ok(findings)
 }
 
-/// 통합 직전 untracked 파일이 후보가 만들 경로와 부딪히는지 사전검사(설계 492줄).
+/// Pre-check whether untracked files collide with paths the candidate creates, right before integration (design line 492).
 pub fn untracked_collisions(repo: &Path, entries: &[ManifestEntry]) -> Result<Vec<String>, String> {
-    let status = git(repo, &["status", "--porcelain", "-z"])?;
+    let status = git(repo, &["status", "--porcelain", "-z", "-uall"])?;
     let mut untracked = HashSet::new();
     for rec in status.split('\u{0}').filter(|r| !r.is_empty()) {
         let mut chars = rec.chars();
         let x = chars.next().unwrap_or(' ');
         let y = chars.next().unwrap_or(' ');
-        let _space = chars.next(); // XY 뒤의 단일 공백
+        let _space = chars.next(); // single space after XY
         let path = chars.as_str().to_string();
         if x == '?' || y == '?' {
             untracked.insert(path);
@@ -427,7 +427,7 @@ pub fn untracked_collisions(repo: &Path, entries: &[ManifestEntry]) -> Result<Ve
         .collect())
 }
 
-/// 검사 실행 뒤 HEAD·branch·index·tracked worktree 불변 확인(설계 393-394줄).
+/// Verify HEAD, branch, index, and tracked worktree stayed unchanged after the checks ran (design lines 393-394).
 pub fn verify_unchanged(repo: &Path, before: &HeadInfo) -> Result<(), String> {
     let after = head_info(repo)?;
     if after.head != before.head {
@@ -483,7 +483,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("sawhorse-git-{}-{tag}", uuid::Uuid::new_v4()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.clone();
-        // 러너·머신마다 git 의 기본 브랜치가 다르므로(main/master) 테스트는 고정한다.
+        // The default git branch differs per runner and machine (main/master), so tests pin it.
         run(&path, &["init", "-q", "-b", "main"]);
         run(&path, &["config", "user.email", "t@example.com"]);
         run(&path, &["config", "user.name", "t"]);
@@ -517,7 +517,7 @@ mod tests {
         std::fs::write(path.join("a.txt"), "2").unwrap();
         let info = head_info(&path).unwrap();
         assert!(!info.clean);
-        // MERGE_HEAD 흉내.
+        // Simulate MERGE_HEAD.
         std::fs::write(path.join(".git").join("MERGE_HEAD"), "0".repeat(40)).unwrap();
         let info = head_info(&path).unwrap();
         assert!(info.dangerous_state.unwrap().contains("MERGE_HEAD"));
@@ -611,7 +611,7 @@ mod tests {
         assert!(!tree.is_empty());
         assert!(conflicts.is_empty());
 
-        // 같은 파일을 양쪽에서 편집하면 충돌.
+        // Editing the same file on both sides conflicts.
         run(&path, &["checkout", "-q", "side"]);
         let side2 = commit_file(&path, "shared.txt", "side-edit", "side-edit");
         run(&path, &["checkout", "-q", "main"]);
@@ -643,11 +643,11 @@ mod tests {
             .unwrap()
             .0;
 
-        // 실제 revert 후의 tree와 일치해야 한다.
+        // Must match the tree after an actual revert.
         run(&path, &["revert", "--no-edit", "-m", "1", &merge_sha]);
         let actual = run(&path, &["rev-parse", "HEAD^{tree}"]).trim().to_string();
         assert_eq!(simulated, actual);
-        // base 커밋과 같은 내용으로 돌아간다.
+        // Content goes back to that of the base commit.
         let base_tree = run(&path, &["rev-parse", &format!("{base}^{{tree}}")])
             .trim()
             .to_string();
@@ -681,7 +681,7 @@ mod tests {
         let (entries, _) = compute_manifest(&path, &base, &src).unwrap();
         let findings = assess_blob_risks(&path, &entries).unwrap();
         assert_eq!(findings.lfs_pointers, vec!["asset.bin".to_string()]);
-        // submodule(mode 160000) 흉내는 mode만으로 판정한다.
+        // The submodule (mode 160000) simulation is judged from the mode alone.
         let entries = vec![ManifestEntry {
             path: "sub".into(),
             old_blob: String::new(),
@@ -709,6 +709,26 @@ mod tests {
         assert_eq!(
             untracked_collisions(&path, &entries).unwrap(),
             vec!["collide.txt".to_string()]
+        );
+    }
+
+    #[test]
+    fn untracked_collision_found_inside_untracked_directory() {
+        let (_d, path) = init_repo("untracked-dir");
+        let base = commit_file(&path, "a.txt", "1", "init");
+        run(&path, &["checkout", "-q", "-b", "side"]);
+        std::fs::create_dir_all(path.join("newdir")).unwrap();
+        std::fs::write(path.join("newdir/collide.txt"), "x").unwrap();
+        run(&path, &["add", "."]);
+        run(&path, &["commit", "-q", "-m", "add nested collide"]);
+        let src = run(&path, &["rev-parse", "HEAD"]).trim().to_string();
+        run(&path, &["checkout", "-q", "main"]);
+        std::fs::create_dir_all(path.join("newdir")).unwrap();
+        std::fs::write(path.join("newdir/collide.txt"), "user file").unwrap();
+        let (entries, _) = compute_manifest(&path, &base, &src).unwrap();
+        assert_eq!(
+            untracked_collisions(&path, &entries).unwrap(),
+            vec!["newdir/collide.txt".to_string()]
         );
     }
 

@@ -1,6 +1,7 @@
-// SessionsPage — 멀티에이전트 협업 세션. 목표 하나에 에이전트 레인 여럿과 변경 후보를
-// 묶고, 대표 체크아웃(통합 체크아웃) 상태를 함께 보여 준다. 후보 승인·거부는 검토
-// 화면(ReviewPage)의 몫이다.
+// SessionsPage — multi-agent collaboration sessions. Binds one goal to several agent
+// lanes plus change candidates, showing the representative checkout (integration
+// checkout) status alongside. Approving·rejecting candidates is the review
+// screen's (ReviewPage) job.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -102,7 +103,7 @@ function emptyLane(): LaneDraft {
   return { taskId: "", taskPrompt: "", driver: "claude" };
 }
 
-/** 의존을 먼저 나열하는 단순 위상 정렬. 순환은 남는 항목을 그대로 이어 붙인다. */
+/** Simple topological sort listing dependencies first. Cycles just append the remaining items in order. */
 function topoSort(candidates: CollabChangeSetView[]): CollabChangeSetView[] {
   const byDigest: Record<string, CollabChangeSetView> = {};
   for (const c of candidates) byDigest[c.digest] = c;
@@ -113,7 +114,7 @@ function topoSort(candidates: CollabChangeSetView[]): CollabChangeSetView[] {
     const ready = rest.filter((c) =>
       c.dependsOn.every((d) => done[d] || !byDigest[d]),
     );
-    const pick = ready.length > 0 ? ready : rest.slice(0, 1); // 순환 등 걸리는 묶음은 순서 유지
+    const pick = ready.length > 0 ? ready : rest.slice(0, 1); // stuck groups (cycles etc.) keep their order
     for (const c of pick) {
       done[c.digest] = true;
       out.push(c);
@@ -136,7 +137,7 @@ export default function SessionsPage() {
   const [pauseOpen, setPauseOpen] = useState(false);
   const [pauseReason, setPauseReason] = useState("");
 
-  // 새 세션 폼
+  // New session form
   const [projectId, setProjectId] = useState("");
   const [goal, setGoal] = useState("");
   const [mode, setMode] = useState<CollabSession["mode"]>("direct");

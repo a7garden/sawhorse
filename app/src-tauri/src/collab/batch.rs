@@ -1,9 +1,9 @@
-// 승인된 batch integration. 설계 355-357줄·881줄.
+// Approved batch integration. Design lines 355-357 and 881.
 //
-// - approvedBatch 모드: 배치 전체 digest를 승인에 묶는다. 후보 하나의 digest가 아니라
-//   순서가 담긴 전체 배치 digest여야 재현 가능하다.
-// - 제거는 역순이다: 마지막에 병합된 후보부터 revert한다.
-// - 배치 내부는 perChange다 — 하나가 실패하면 그 뒤는 진행하지 않는다(불변식 5).
+// - approvedBatch mode: ties the approval to the whole batch digest. To be reproducible it must be
+//   the ordered full-batch digest, not a single candidate's digest.
+// - Removal is in reverse order: revert candidates starting from the last merged one.
+// - Inside a batch it is perChange — one failure halts everything after it (invariant 5).
 
 use crate::collab::model::{ChangeSet, ChangeSetStatus, Session};
 use crate::collab::policy;
@@ -11,7 +11,7 @@ use crate::collab::store::Store;
 use crate::collab::{new_id, now_ts};
 use sha2::{Digest, Sha256};
 
-/// 순서가 담긴 배치 digest. 후보 id·digest·예상 HEAD를 순서대로 묶는다.
+/// Ordered batch digest. Binds candidate ids, digests, and the expected HEAD in order.
 pub fn batch_digest(candidate_ids: &[String], digests: &[String], expected_head: &str) -> String {
     let mut h = Sha256::new();
     for (id, d) in candidate_ids.iter().zip(digests.iter()) {
@@ -25,7 +25,7 @@ pub fn batch_digest(candidate_ids: &[String], digests: &[String], expected_head:
     hex::encode(h.finalize())[..32].to_string()
 }
 
-/// 배치 승인 가능성 검사: 같은 세션, review_pending 또는 changes_requested, 의존성 순서 유지.
+/// Batch approvability check: same session, review_pending or changes_requested, dependency order preserved.
 pub fn validate_batch(
     store: &Store,
     session: &Session,
@@ -49,7 +49,7 @@ pub fn validate_batch(
             ));
         }
     }
-    // 의존성: depends_on의 후보 digest는 같은 배치에서 앞서거나 이미 verified여야 한다.
+    // Dependencies: a depends_on candidate digest must appear earlier in the same batch or already be verified.
     let digest_index: std::collections::HashMap<&str, usize> = candidates
         .iter()
         .enumerate()
@@ -78,8 +78,8 @@ pub fn validate_batch(
     Ok(())
 }
 
-/// 배치 승인. 사람 승인 기록을 후보마다 남기고 모두 queued로 넣는다.
-/// 배치 전체 digest는 감사 이벤트에 기록된다(설계 356-357줄).
+/// Approve a batch. Records a human approval per candidate and moves them all to queued.
+/// The full batch digest is recorded in the audit event (design lines 356-357).
 pub fn approve_batch(
     store: &Store,
     session: &Session,
@@ -113,7 +113,7 @@ pub fn approve_batch(
     Ok(digest)
 }
 
-/// 배치 제거 순서: 마지막에 병합된 후보부터(역순).
+/// Batch removal order: starting from the last merged candidate (reverse).
 pub fn revert_order(candidate_ids: &[String]) -> Vec<String> {
     candidate_ids.iter().rev().cloned().collect()
 }
@@ -222,7 +222,7 @@ mod tests {
         store.insert_session(&s).unwrap();
         let c1 = candidate(&store, "s-2", "d1", &[]);
         let c2 = candidate(&store, "s-2", "d2", &["d1".into()]);
-        // c2가 c1보다 앞서면 거부다.
+        // Rejected when c2 comes before c1.
         assert!(approve_batch(&store, &s, &[c2.clone(), c1.clone()], "head", "human").is_err());
     }
 

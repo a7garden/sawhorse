@@ -54,7 +54,7 @@ export default function OnboardingPage({
   const [jobs, setJobs] = useState<IngestionJob[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  // 드라이브 중에는 배치 사이 진행이 화면에 흐른다. 사용자가 멈추면 다음 배치 전에 끝난다.
+  // While driving, progress between batches streams onto the screen. If the user stops, it ends before the next batch.
   const [drivingId, setDrivingId] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const stopDrive = useRef(false);
@@ -77,7 +77,7 @@ export default function OnboardingPage({
       .then((s) => setProjects(s.projects))
       .catch((e) => setMessage(String(e)));
     void load().catch((error) => setMessage(String(error)));
-    // 러스트 의존성 없음 — 끌어다 놓은 폴더·파일의 실제 경로를 받는다.
+    // No Rust dependency — receives the real paths of the dragged-in folders/files.
     if (!isTauri()) return;
     const listening = getCurrentWebview().onDragDropEvent((event) => {
       const payload = event.payload;
@@ -117,7 +117,7 @@ export default function OnboardingPage({
     setSources((current) => current.filter((item) => item !== path));
   }
 
-  // 던진 재료를 앱이 끝까지 읽는다. 배치 한계(200파일)마다 이어서 자동 호출.
+  // The app reads the submitted material all the way through. Auto-continues at each batch limit (200 files).
   async function drive(id: string) {
     stopDrive.current = false;
     setDrivingId(id);

@@ -6,12 +6,12 @@ const widget = (page: Page, name: string) => page.locator(".widget-grid-item").f
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/?preview=1");
-  await expect(page.getByRole("heading", { name: "작업대", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "대시보드", exact: true })).toBeVisible();
 });
 
 test("project scope follows navigation, new work, documents and reload without narrowing global search", async ({ page }) => {
   await scope(page).selectOption("herdr");
-  await expect(page.getByRole("heading", { name: "Herdr 작업대", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Herdr 대시보드", exact: true })).toBeVisible();
   await expect(widget(page, "다음 작업")).toContainText("Herdr 실행과 기록 연결");
   await expect(widget(page, "다음 작업")).not.toContainText("마크다운 라이브 편집기");
   await expect(widget(page, "작업 문서")).not.toContainText("마크다운 라이브 편집기");
@@ -22,7 +22,7 @@ test("project scope follows navigation, new work, documents and reload without n
   ).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(scope(page)).toHaveValue("herdr");
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await expect(page.getByLabel("프로젝트 필터")).toHaveValue("herdr");
   await expect(page.locator(".wb-board-card")).toHaveCount(2);
   await page.getByRole("button", { name: "새 작업", exact: true }).click();
@@ -31,10 +31,10 @@ test("project scope follows navigation, new work, documents and reload without n
   await nav(page, "캘린더");
   await expect(scope(page)).toHaveValue("herdr");
   await expect(page.locator(".wb-calendar")).not.toContainText("SDD 명세 검토");
-  await nav(page, "작업대");
+  await nav(page, "대시보드");
   await page.reload();
   await expect(scope(page)).toHaveValue("herdr");
-  await expect(page.getByRole("heading", { name: "Herdr 작업대", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Herdr 대시보드", exact: true })).toBeVisible();
 });
 
 test("project layouts retain independent hidden widgets and leave the global layout intact", async ({ page }) => {
@@ -89,7 +89,7 @@ test("workflow versions and nested processes keep separate counts, columns and s
   await expect(page.locator('[data-workflow="sdd-main@1.1.0"]')).toContainText("설계1");
   await expect(page.locator('[data-workflow="sdd-main@0.9.0"]')).toContainText("구버전 설계1");
   await expect(page.locator('[data-workflow="tdd-cycle@1.0.0"]')).toContainText("Red1");
-  await nav(page, "작업");
+  await nav(page, "작업대");
   await expect(page.locator(".wb-process-group")).toHaveCount(3);
   await page.getByLabel("단계 필터").selectOption("sdd-main@0.9.0:design");
   await expect(page.locator(".wb-board-card")).toHaveCount(1);
@@ -115,7 +115,7 @@ test("an empty project displays its configured process and stale project selecti
   await page.evaluate(() => localStorage.setItem("sawhorse.project-scope", "deleted-project"));
   await page.reload();
   await expect(scope(page)).toHaveValue("");
-  await expect(page.getByRole("heading", { name: "작업대", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "대시보드", exact: true })).toBeVisible();
 });
 
 test("sidebar groups runs by source and preserves project scope between tabs", async ({ page }) => {

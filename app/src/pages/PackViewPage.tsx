@@ -1,5 +1,5 @@
-// 선언형 뷰 렌더러. 팩이 `type: "notes"` 로 선언한 화면 전부가 이 한 컴포넌트로 그려진다.
-// 호스트는 필드의 뜻을 모르고, 라벨·순서·묶는 기준은 매니페스트가 정한다.
+// Declarative view renderer. Every screen a pack declares with `type: "notes"` is drawn by this single component.
+// The host doesn't know what the fields mean; the manifest decides labels, order, and grouping.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ExternalLink, RefreshCw, Search } from "lucide-react";
@@ -413,7 +413,7 @@ export default function PackViewPage({
     }
   }
 
-  /** 행을 고른 채 누른 액션은 그 문서를 대상으로 돈다. 중복 판정 키도 이 인자로 정해진다. */
+  /** An action pressed with rows selected runs against those documents. The dedup key is also determined by this argument. */
   function paramsFor(targets: NoteRow[]): Record<string, unknown> {
     const params: Record<string, unknown> = {};
     const ids = targets
@@ -551,7 +551,7 @@ export default function PackViewPage({
                     : "text-muted-foreground hover:bg-accent",
                 )}
               >
-                {g}
+                {g === ALL ? t("view.all") : g}
               </button>
             ))}
           </div>

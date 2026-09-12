@@ -3,12 +3,13 @@
   "nav": {
     "runs": "Runs",
     "section": {
-      "work": "Workspace",
+      "work": "Shared tools",
       "vault": "Vault",
       "reading": "Extensions",
-      "project": "Project views"
+      "project": "Project",
+      "overview": "My workspace"
     },
-    "overview": "Workbench",
+    "overview": "Dashboard",
     "board": "Develop",
     "taskLibrary": "Automation",
     "calendar": "Calendar",
@@ -47,16 +48,21 @@
     "themeToggle": "Toggle theme",
     "viewPicker": "View picker",
     "previewNotice": "Browser preview · Sample data is stored in this browser only. Connect real agents and files from the desktop app.",
-    "work": "Work",
+    "work": "Workbench",
     "workDocuments": "Work document search",
     "scope": {
       "shared": "Shared",
-      "select": "Sidebar project selection",
+      "select": "Switch project",
       "appliesBelow": "Applies to the views below",
-      "sharedSettings": "App settings · shared"
+      "sharedSettings": "App settings · shared",
+      "overview": "All projects",
+      "choose": "Choose a project",
+      "chooseHint": "Choose a project to open its workbench and runs below."
     },
     "collapseSidebar": "Collapse sidebar",
-    "expandSidebar": "Expand sidebar"
+    "expandSidebar": "Expand sidebar",
+    "projectsOverview": "Project overview",
+    "projectLibrary": "Project library"
   },
   "toolbar": {
     "search": "Search everything",
@@ -75,7 +81,8 @@
     "runningStop": "Running · Stop",
     "pendingCancel": "Pending · Cancel",
     "stopHint": "Running. Click to stop.",
-    "location": "Current location"
+    "location": "Current location",
+    "titlebar": "App title bar"
   },
   "attention": {
     "dismiss": "Dismiss",

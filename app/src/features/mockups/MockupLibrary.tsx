@@ -15,9 +15,9 @@ export function MockupLibrary({ work, projects, onSelectWork }: { work: WorkItem
   const { t } = useTranslation("workbench");
   const [items, setItems] = useState<Mockup[]>([]), [errors, setErrors] = useState<string[]>([]);
   const [latestOnly, setLatestOnly] = useState(true), [loading, setLoading] = useState(false);
-  const key = work.filter((w) => w.workflowId === "mockup-review" || w.artifacts.includes("mockup")).map((w) => `${w.id}:${w.updatedAt}`).sort().join("|");
+  const key = work.filter((w) => w.workflowId === "mockup-review" || w.artifacts.includes("mockup")).map((w) => w.id).sort().join("|");
   useEffect(() => { let alive = true; setLoading(true);
-    const ids = key ? key.split("|").map((value) => value.split(":")[0]) : [];
+    const ids = key ? key.split("|") : [];
     void Promise.allSettled(ids.map((id) => sddApi.readMockup(id))).then((results) => {
       if (!alive) return;
       setItems(results.flatMap((r) => r.status === "fulfilled" ? [r.value] : []));

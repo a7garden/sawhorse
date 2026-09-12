@@ -1,11 +1,13 @@
-// 확장 서명. 설계 879줄: 서명·업데이트·권한 증가 재승인.
+// Extension signing. Design line 879: signing, updates, and re-approval on permission increase.
 //
-// - bundle의 extension.json 바이트에 ed25519 서명을 붙인다(`<bundle>/extension.json.sig`,
-//   hex 64바이트). 서명 검증에 쓸 신뢰 공개키는 `~/.claude/sawhorse/extensions/trusted-keys.json`
-//   (hex 공개키 배열)에서 관리한다.
-// - 검증 실패한 사용자 bundle은 설치·업데이트를 거부한다. 내장 bundle은 앱 서명으로 본다.
-// - 권한 증가가 있는 업데이트는 재승인 전까지 instance를 paused로 둔다(설계 664줄) —
-//   이 판정은 manifest::permission_increased가, 정지는 commands 쪽이 담당한다.
+// - An ed25519 signature is attached to the bundle's extension.json bytes
+//   (`<bundle>/extension.json.sig`, 64 hex bytes). Trusted public keys used for signature
+//   verification are managed in `~/.claude/sawhorse/extensions/trusted-keys.json`
+//   (array of hex public keys).
+// - User bundles failing verification are refused for install/update. Built-in bundles are
+//   treated as covered by the app signature.
+// - Updates with permission increases leave the instance paused until re-approved (design 664) —
+//   manifest::permission_increased makes that decision; the commands side enforces the pause.
 
 use crate::extensions::manifest::{DiscoveredBundle, ExtensionManifest};
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
@@ -17,7 +19,7 @@ fn trusted_keys_path() -> std::path::PathBuf {
     crate::extensions::manifest::user_extensions_dir().join("trusted-keys.json")
 }
 
-/// 신뢰 공개키 목록 조회(hex 32바이트).
+/// Lists trusted public keys (hex, 32 bytes).
 pub fn trusted_keys() -> Vec<String> {
     std::fs::read_to_string(trusted_keys_path())
         .ok()
@@ -51,8 +53,8 @@ fn decode_pubkey(hex_str: &str) -> Result<VerifyingKey, String> {
     VerifyingKey::from_bytes(&arr).map_err(|e| format!("공개키 검증 실패: {e}"))
 }
 
-/// bundle 서명 검증. 서명 파일이 있고 신뢰 키 중 하나로 통과하면 Ok(true).
-/// 서명 파일이 아예 없으면 Ok(false) — 정책에 따라 거부할지 결정한다.
+/// Verifies a bundle signature. Ok(true) when a signature file exists and passes with one of the trusted keys.
+/// Ok(false) when there is no signature file at all — policy decides whether to refuse.
 pub fn verify_bundle(dir: &Path, keys: &[String]) -> Result<bool, String> {
     let manifest_bytes = std::fs::read(dir.join("extension.json"))
         .map_err(|e| format!("extension.json 읽기 실패: {e}"))?;
@@ -76,8 +78,8 @@ pub fn verify_bundle(dir: &Path, keys: &[String]) -> Result<bool, String> {
     Ok(false)
 }
 
-/// 설치 가능 여부 판정. 사용자 bundle은 서명이 필요하고(설계 879줄), 내장 bundle은
-/// 앱이 배포하므로 그대로 신뢰한다.
+/// Decides installability. User bundles require a signature (design 879); built-in bundles
+/// are distributed by the app and trusted as-is.
 pub fn install_allowed(bundle: &DiscoveredBundle, keys: &[String]) -> Result<(), String> {
     if bundle.source == "builtin" {
         return Ok(());
@@ -91,8 +93,8 @@ pub fn install_allowed(bundle: &DiscoveredBundle, keys: &[String]) -> Result<(),
     }
 }
 
-/// 업데이트 후 manifest를 다시 검증한다. 권한이 늘었는지는 호출자가 permission_increased로 판정해
-/// instance를 paused로 둔다(설계 664줄).
+/// Re-validates the manifest after an update. Whether permissions grew is decided by the caller
+/// via permission_increased, which leaves the instance paused (design 664).
 pub fn validate_update(old: &ExtensionManifest, new: &ExtensionManifest) -> Result<(), String> {
     new.validate()?;
     if new.id != old.id {
@@ -136,14 +138,14 @@ mod tests {
         std::fs::write(dir.path().join(SIG_FILE), hex::encode(sig.to_bytes())).unwrap();
         let good = hex::encode(signing.verifying_key().to_bytes());
         assert!(verify_bundle(dir.path(), &[good.clone()]).unwrap());
-        // 변조된 manifest는 거부.
+        // Tampered manifest is rejected.
         std::fs::write(
             dir.path().join("extension.json"),
             json.replace("0.1.0", "0.2.0"),
         )
         .unwrap();
         assert!(!verify_bundle(dir.path(), &[good]).unwrap());
-        // 서명 파일이 없으면 false(정책 판단은 install_allowed가 한다).
+        // No signature file → false (install_allowed makes the policy call).
         let (dir2, _signing2) = bundle_dir(json);
         assert!(!verify_bundle(dir2.path(), &[]).unwrap());
     }
@@ -157,9 +159,9 @@ mod tests {
             source: source.into(),
             dir: d,
         };
-        // 내장은 무서명 허용.
+        // Built-in is allowed unsigned.
         assert!(install_allowed(&mk("builtin", String::new()), &[]).is_ok());
-        // 사용자는 서명 필요.
+        // User requires a signature.
         assert!(
             install_allowed(&mk("user", dir.path().to_string_lossy().to_string()), &[]).is_err()
         );

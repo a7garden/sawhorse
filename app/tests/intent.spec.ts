@@ -3,8 +3,11 @@ const KEY = "sawhorse.workflow.preview.v2";
 const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aN1sAAAAASUVORK5CYII=", "base64");
 async function open(page: Page) {
   await page.goto("/?preview=1");
-  await page.locator("aside nav").getByRole("button", {name:"작업",exact:true}).click();
-  await page.getByRole("button", {name:"새 의도",exact:true}).click();
+  await page.locator("aside nav").getByRole("button", {name:"작업대",exact:true}).click();
+  await page.getByRole("button", { name: "새 항목", exact: true }).click();
+  await page.getByRole("combobox", { name: "시작할 워크플로", exact: true }).click();
+  await page.getByRole("option", { name: "SDD · 의도에서 완료까지", exact: true }).click();
+  await page.getByRole("button", { name: "계속", exact: true }).click();
 }
 async function project(page: Page) {
   await page.getByRole("dialog").getByRole("combobox",{name:"프로젝트",exact:true}).click();
@@ -24,7 +27,7 @@ async function design(page: Page) {
     localStorage.setItem(key,JSON.stringify(state));
   },KEY);
   await page.reload();
-  await page.locator("aside nav").getByRole("button", {name:"작업",exact:true}).click();
+  await page.locator("aside nav").getByRole("button", {name:"작업대",exact:true}).click();
   await page.getByRole("button", {name:"설계 검토",exact:true}).click();
   await expect(page.getByRole("button",{name:"설계 승인하고 구현 시작",exact:true})).toBeEnabled();
 }
@@ -49,7 +52,7 @@ test("note and image survive saving, editing and reopening", async ({page}) => {
   await expect(page.locator(".wb-intent-review-document")).toContainText("추가 메모.");
   await page.getByRole("dialog").getByRole("button",{name:"닫기",exact:true}).click();
   await page.reload();
-  await page.locator("aside nav").getByRole("button",{name:"작업",exact:true}).click();
+  await page.locator("aside nav").getByRole("button",{name:"작업대",exact:true}).click();
   await page.getByRole("group", {name:"작업 공간"}).getByRole("button",{name:/^의도 인박스/}).click();
   await page.getByRole("button",{name:/거친 메모/}).first().click();
   await expect(page.locator(".wb-intent-review-document")).toContainText("추가 메모.");

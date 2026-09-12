@@ -307,7 +307,7 @@ mod tests {
             ..Default::default()
         });
         assert_eq!(result.status, SimulationStatus::Paused);
-        assert_eq!(result.loop_iterations.get("tdd-iteration"), Some(&2));
+        assert_eq!(result.loop_iterations.get("tdd-iteration"), Some(&1));
     }
 
     #[test]

@@ -36,8 +36,8 @@ const SEV: Record<
   },
 };
 
-// 미승격 목록의 절대 경로에서 볼트 경로 prefix를 떼어 볼트 기준 상대 경로로 바꾼다.
-// 구분자는 슬래시로 정규화하고, 볼트 경로와 맞지 않으면 null을 돌려준다.
+// Strips the vault-path prefix off the unpromoted list's absolute path, making it vault-relative.
+// Separators are normalized to slashes; returns null when the path doesn't match the vault path.
 function vaultRel(listPath: string, vaultPath: string): string | null {
   const norm = (p: string) => p.replace(/\\/g, "/").replace(/\/+$/, "");
   const v = norm(vaultPath);
@@ -82,7 +82,7 @@ export default function VaultPage() {
     }
   }
 
-  // 미승격 목록은 frontmatter가 없어 read_note가 거부하므로 볼트 노트 읽기로 연다.
+  // Unpromoted lists have no frontmatter, so read_note rejects them; open them with the vault-note read.
   async function openList(rel: string) {
     try {
       const v = await api.readVaultNote(rel);

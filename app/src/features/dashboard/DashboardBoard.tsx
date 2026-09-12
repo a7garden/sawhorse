@@ -21,16 +21,14 @@ import {
   DASHBOARD_BREAKPOINTS,
   DASHBOARD_COLS,
   WIDGET_REGISTRY,
-  DEFAULT_WIDGET_IDS,
-  PROJECT_DEFAULT_WIDGET_IDS,
-  PROJECT_WIDGET_IDS,
+  GLOBAL_WIDGET_IDS,
   type DashboardBreakpoint,
   type DashboardWidgetDefinition,
   type DashboardWidgetId,
 } from "./registry";
 import { METRIC_PREFIX, isMetricWidgetId } from "./metrics";
 
-/** 위젯 화면 문자열의 번들 키. 지표 카드는 metrics.<key>.* 를 쓴다. */
+/** Bundle key for the widget screen strings. Metric cards use metrics.<key>.*. */
 function widgetTextKeys(id: DashboardWidgetId) {
   if (isMetricWidgetId(id)) {
     const key = `metrics.${id.slice(METRIC_PREFIX.length)}`;
@@ -42,18 +40,16 @@ function widgetTextKeys(id: DashboardWidgetId) {
   };
 }
 
-/** 카탈로그가 길어졌으므로 카테고리로 묶는다. 등록 순서를 그대로 쓴다. */
+/** The catalog has grown, so widgets are grouped by category. Registration order is preserved. */
 function groupWidgets(
   query: string,
   t: TFunction,
-  scope: string,
   available: (id: DashboardWidgetId) => boolean,
 ) {
   const needle = query.trim().toLowerCase();
   const groups: { categoryKey: string; widgets: typeof WIDGET_REGISTRY }[] =
     [];
   for (const widget of WIDGET_REGISTRY) {
-    if (scope && !PROJECT_WIDGET_IDS.includes(widget.id)) continue;
     if (!available(widget.id)) continue;
     const keys = widgetTextKeys(widget.id);
     const haystack = [
@@ -75,8 +71,8 @@ function groupWidgets(
 }
 
 /**
- * 미리보기 박스는 위젯의 실제 lg 종횡비를 그대로 쓴다. 보드 폭은 화면마다
- * 다르므로 대표값 하나를 기준으로 격자 픽셀을 계산해 비율만 남긴다.
+ * The preview box uses the widget's actual lg aspect ratio. Board width differs
+ * per screen, so grid pixels are computed from one representative width and only the ratio is kept.
  */
 const PREVIEW_BOARD_WIDTH = 1160;
 const GRID_MARGIN = 12;
@@ -96,7 +92,7 @@ function previewGeometry(widget: DashboardWidgetDefinition): CSSProperties {
   };
 }
 
-/** 카탈로그 한 장. 실제 데이터로 그린 위젯 모습을 보고 추가하게 한다. */
+/** One catalog card. Shows the widget rendered with real data so users can decide to add it. */
 function CatalogCard({
   widget,
   enabled,
@@ -154,20 +150,18 @@ function CatalogCard({
 }
 
 export function DashboardBoard({
-  scope = "",
   editing,
   catalogOpen,
   onCatalogClose,
   renderWidget,
 }: {
-  scope?: string;
   editing: boolean;
   catalogOpen: boolean;
   onCatalogClose: () => void;
   renderWidget: (id: DashboardWidgetId) => ReactNode;
 }) {
   const { t } = useTranslation("dashboard");
-  const useDashboardLayout = useMemo(() => createDashboardLayout(scope, scope ? PROJECT_DEFAULT_WIDGET_IDS : DEFAULT_WIDGET_IDS), [scope]);
+  const useDashboardLayout = useMemo(() => createDashboardLayout(), []);
   const enabled = useDashboardLayout((state) => state.enabled);
   const layouts = useDashboardLayout((state) => state.layouts);
   const setLayouts = useDashboardLayout((state) => state.setLayouts);
@@ -179,11 +173,12 @@ export function DashboardBoard({
   const featureEnabled = (id: string) =>
     packs == null || packs.some((pack) => pack.id === id && pack.enabled);
   const available = (id: DashboardWidgetId) =>
+    GLOBAL_WIDGET_IDS.includes(id) &&
     (id !== "checklist" || featureEnabled("todos")) &&
     (id !== "journal" || featureEnabled("journal"));
   const visibleEnabled = enabled.filter(available);
   const [query, setQuery] = useState("");
-  const groups = groupWidgets(query, t, scope, available);
+  const groups = groupWidgets(query, t, available);
   const { width, containerRef, mounted } = useContainerWidth({
     measureBeforeMount: true,
   });
@@ -223,7 +218,7 @@ export function DashboardBoard({
             breakpoints={DASHBOARD_BREAKPOINTS}
             cols={DASHBOARD_COLS}
             rowHeight={30}
-            margin={[24, 12]}
+            margin={[16, 16]}
             containerPadding={[0, 0]}
             compactor={verticalCompactor}
             dragConfig={{

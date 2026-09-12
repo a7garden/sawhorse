@@ -1,14 +1,15 @@
-// GitHub outbound — 필드별 쓰기 intent와 원격 쓰기 상태머신(설계 698-719줄).
+// GitHub outbound — per-field write intents and the remote write state machine (design 698-719).
 //
-// - title·state·labels·assignees·milestone만 필드별 동기화. 로컬 status·approve는
-//   GitHub open/closed로 축소하지 않고 로컬 전용으로 둔다(설계 701줄).
-// - GitHub body는 marker로 둘러싼 sawhorse 관리 영역만 바꾼다(설계 702-703줄).
-// - 마지막 sync의 필드별 base snapshot과 양쪽 현재값을 비교해 inbound/outbound/conflict를
-//   판정한다. 양쪽이 모두 바뀌면 자동 last-write-wins 없이 conflict(설계 705-707줄).
-// - 모든 원격 쓰기는 remote_operation(prepared → sending → succeeded | uncertain →
-//   reconciled | failed | stale)으로 관리한다. 승인은 payload hash + 관찰 revision에
-//   묶이고, 실행 직전 revision이 다르면 stale로 되돌린다(설계 708-712줄).
-// - push와 PR 생성은 서로 다른 intent·권한·승인이다(설계 716-719줄).
+// - Only title, state, labels, assignees, and milestone sync per field. Local status and approve
+//   stay local-only and are not collapsed into GitHub open/closed (design 701).
+// - The GitHub body changes only the sawhorse-managed region enclosed by markers (design 702-703).
+// - inbound/outbound/conflict are decided by comparing the per-field base snapshot of the last
+//   sync against both current values. When both sides changed, it is a conflict with no
+//   automatic last-write-wins (design 705-707).
+// - Every remote write is managed as a remote_operation (prepared → sending → succeeded |
+//   uncertain → reconciled | failed | stale). Approval binds to payload hash + observed
+//   revision; if the revision differs right before execution, the operation reverts to stale (design 708-712).
+// - Push and PR creation are separate intents, permissions, and approvals (design 716-719).
 
 use crate::collab::store::Store;
 use crate::collab::{new_id, now_ts};
@@ -16,10 +17,10 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::path::Path;
 
-/// 필드별 동기화 정책. 이 목록만 원격으로 나간다(설계 700줄).
+/// Per-field sync policy. Only this list ever leaves for the remote (design 700).
 pub const SYNC_FIELDS: &[&str] = &["title", "state", "labels", "assignees", "milestone"];
 
-/// sawhorse가 관리하는 GitHub body 영역 marker(설계 702-703줄).
+/// Markers of the sawhorse-managed region in the GitHub body (design 702-703).
 pub const BODY_MARKER_BEGIN: &str = "<!-- sawhorse:begin -->";
 pub const BODY_MARKER_END: &str = "<!-- sawhorse:end -->";
 
@@ -29,7 +30,7 @@ pub fn sha256_hex(s: &str) -> String {
     hex::encode(h.finalize())
 }
 
-/// 필드 하나의 3-way 판정.
+/// 3-way decision for a single field.
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct FieldDiff {
@@ -37,11 +38,11 @@ pub struct FieldDiff {
     pub base: String,
     pub local: String,
     pub remote: String,
-    /// inbound: 원격만 변경. outbound: 로컬만 변경. conflict: 양쪽 모두.
+    /// inbound: remote changed only. outbound: local changed only. conflict: both.
     pub direction: String,
 }
 
-/// 필드별 3-way 비교. base는 field_sync_base의 스냅샷이다.
+/// Per-field 3-way comparison. base is the snapshot from field_sync_base.
 pub fn field_diffs(
     store: &Store,
     link_id: &str,
@@ -64,8 +65,8 @@ pub fn field_diffs(
             .unwrap_or_default();
         let local_value = get(local, field);
         let remote_value = get(remote, field);
-        // base가 없으면 아직 한 번도 sync된 적 없는 필드다. 양쪽 값이 같으면 변화 없음,
-        // 다르면 conflict다(설계 705-707줄).
+        // No base means the field has never been synced. Same values on both sides = no change,
+        // different values = conflict (design 705-707).
         let local_changed = if base.is_empty() {
             local_value != remote_value
         } else {
@@ -95,8 +96,8 @@ pub fn field_diffs(
     out
 }
 
-/// outbound intent 생성. 사람의 승인을 받아야 sending으로 간다.
-/// payload hash와 관찰한 remote revision(updated_at)에 묶인다(설계 711-712줄).
+/// Creates an outbound intent. Requires human approval before it can go to sending.
+/// Bound to the payload hash and the observed remote revision (updated_at) (design 711-712).
 pub fn propose_outbound(
     store: &Store,
     kind: &str,
@@ -124,7 +125,7 @@ pub fn propose_outbound(
     Ok(id)
 }
 
-/// PR 초안 게시는 push intent와 PR create intent 둘로 분리된다(설계 716-719줄).
+/// Publishing a draft PR splits into a push intent and a PR-create intent (design 716-719).
 pub fn propose_pr_publish(
     store: &Store,
     repository: &str,
@@ -153,7 +154,7 @@ pub fn propose_pr_publish(
         &push_payload,
         remote_base,
     )?;
-    // PR 생성은 push가 끝난 뒤에만 실행 가능하다 — dependsOn을 payload에 기록.
+    // PR creation is executable only after the push finishes — recorded as dependsOn in the payload.
     let pr_payload = serde_json::json!({ "dependsOn": push_id, "pr": pr_payload });
     let pr_id = propose_outbound(
         store,
@@ -165,13 +166,13 @@ pub fn propose_pr_publish(
     Ok((push_id, pr_id))
 }
 
-/// 실행 직전 remote revision 재확인. 달라지면 stale로 되돌린다(설계 712줄).
+/// Re-verifies the remote revision right before execution. Reverts to stale on mismatch (design 712).
 pub fn revision_matches(observed: &str, current_remote: &str) -> bool {
     observed.is_empty() || current_remote.is_empty() || observed == current_remote
 }
 
-/// uncertain 상태의 재조정. GET으로 이미 생성됐는지 확인해 reconciled/failed를 판정한다
-/// (설계 558-562줄: 무작정 같은 create를 다시 보내지 않는다).
+/// Reconciles an uncertain operation. Checks via GET whether it was already created to decide
+/// reconciled/failed (design 558-562: never blindly resend the same create).
 pub fn mark_reconciled(
     store: &Store,
     operation_id: &str,
@@ -196,7 +197,7 @@ pub fn mark_reconciled(
     )
 }
 
-/// 승인: 사람이 원격 쓰기를 허가한다. payload hash는 그대로 묶여 실행 때 재검증된다.
+/// Approval: a human authorizes the remote write. The payload hash stays bound and is re-verified at execution.
 pub fn approve_operation(
     store: &Store,
     operation_id: &str,
@@ -230,8 +231,8 @@ pub fn approve_operation(
     Ok(())
 }
 
-/// 실행. push는 `git push --force-with-lease`, PR은 `gh pr create --draft`다.
-/// 네트워크 오류 뒤 결과를 알 수 없으면 uncertain으로 둔다(설계 559-561줄).
+/// Execution. Push is `git push --force-with-lease`; PR is `gh pr create --draft`.
+/// After a network error with unknown outcome, mark uncertain (design 559-561).
 pub fn execute_operation(
     store: &Store,
     operation_id: &str,
@@ -242,6 +243,11 @@ pub fn execute_operation(
         .ok_or("operation이 없다")?;
     if status != "approved" {
         return Err(format!("승인된 operation만 실행한다: {status}"));
+    }
+    // Approval binds to the payload hash; re-verify locally that the stored payload is still
+    // exactly what was approved right before the remote write goes out (design 711-712).
+    if sha256_hex(&payload_json) != hash {
+        return Err("payload 해시가 승인값과 다릅니다".into());
     }
     store.update_remote_operation(operation_id, "sending", "")?;
     let payload: serde_json::Value =
@@ -257,7 +263,7 @@ pub fn execute_operation(
             Ok(result)
         }
         Err(e) if is_network_error(&e) => {
-            // 요청이 갔는지 알 수 없다 — reconcile까지 uncertain으로 둔다.
+            // Unknown whether the request went out — stay uncertain until reconcile.
             store.update_remote_operation(operation_id, "uncertain", &e)?;
             Err(e)
         }
@@ -281,7 +287,7 @@ fn execute_push(repo_dir: &Path, payload: &serde_json::Value) -> Result<String, 
         .as_str()
         .ok_or("localCommit이 없다")?;
     let branch = payload["branch"].as_str().ok_or("branch가 없다")?;
-    // remote 이름은 repository 표기에서 유추하지 않는다 — origin 고정(MVP).
+    // The remote name is not inferred from the repository notation — pinned to origin (MVP).
     let _ = repository;
     let out = crate::spawn::no_window(std::process::Command::new("git"))
         .arg("-C")
@@ -306,7 +312,7 @@ fn execute_pr_create(
     repo_dir: &Path,
     payload: &serde_json::Value,
 ) -> Result<String, String> {
-    // pr_create는 push intent에 의존한다 — 먼저 succeeded여야 한다(설계 716-719줄).
+    // pr_create depends on the push intent — the push must have succeeded first (design 716-719).
     let pr = &payload["pr"];
     if let Some(dep) = payload["dependsOn"].as_str() {
         let (_, _, _, _, _, status, _, _) = store
@@ -338,7 +344,7 @@ fn execute_pr_create(
     }
 }
 
-/// GitHub body의 sawhorse 관리 영역만 교체한다(설계 702-703줄).
+/// Replaces only the sawhorse-managed region of the GitHub body (design 702-703).
 pub fn replace_managed_body(remote_body: &str, managed_markdown: &str) -> String {
     let begin = remote_body.find(BODY_MARKER_BEGIN);
     let end = remote_body.find(BODY_MARKER_END);
@@ -385,7 +391,7 @@ mod tests {
         store
             .set_field_sync_base("l1", "title", "h", "원래 제목")
             .unwrap();
-        // state는 base 없음 — 아직 한 번도 sync된 적 없음.
+        // state has no base — never synced yet.
         let local = vec![
             ("title".to_string(), "원래 제목".to_string()),
             ("state".to_string(), "open".to_string()),
@@ -399,13 +405,13 @@ mod tests {
         assert_eq!(diffs[0].field, "title");
         assert_eq!(diffs[0].direction, "inbound");
 
-        // 양쪽 다 바꾸면 conflict.
+        // Both sides changed → conflict.
         let local2 = vec![("title".to_string(), "로컬 제목".to_string())];
         let remote2 = vec![("title".to_string(), "원격 제목".to_string())];
         let diffs2 = field_diffs(&store, "l1", &local2, &remote2);
         assert_eq!(diffs2[0].direction, "conflict");
 
-        // 로컬만 바꾸면 outbound.
+        // Local-only change → outbound.
         let local3 = vec![("title".to_string(), "로컬 제목".to_string())];
         let remote3 = vec![("title".to_string(), "원래 제목".to_string())];
         let diffs3 = field_diffs(&store, "l1", &local3, &remote3);
@@ -472,7 +478,7 @@ mod tests {
         assert!(out.contains("새 관리 내용"));
         assert!(!out.contains("옛 관리 내용"));
         assert!(out.ends_with("사용자 꼬리"));
-        // marker 없으면 뒤에 추가한다.
+        // Without a marker, append at the end.
         let out2 = replace_managed_body("원격 본문", "관리");
         assert!(out2.starts_with("원격 본문"));
         assert!(out2.contains(super::BODY_MARKER_BEGIN));

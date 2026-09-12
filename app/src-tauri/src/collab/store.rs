@@ -1,10 +1,10 @@
-// 장부(SQLite) 계층. 설계 500-556줄: 여러 에이전트가 직접 쓰는 공유 DB가 아니라
-// Tauri 코어의 단일 writer가 transaction·outbox를 보증하기 위한 것이다.
+// Ledger (SQLite) layer. Design lines 500-556: not a shared DB written directly by many agents,
+// but a single writer inside the Tauri core that guarantees transaction and outbox semantics.
 //
-// - 경로: `~/.claude/sawhorse/workbench.sqlite` (전역 단일 DB, project-scoped 행은 project_id 보유)
-// - WAL + synchronous=FULL: 앱 크래시 뒤 장부가 Git 상태보다 뒤처지지 않게(장부 먼저 쓰기).
-// - 모든 접근은 `parking_lot::Mutex<Connection>`으로 직렬화한다. 백그라운드 워커와
-//   tauri 커맨드가 같은 인스턴스를 공유한다.
+// - Path: `~/.claude/sawhorse/workbench.sqlite` (one global DB; project-scoped rows carry a project_id)
+// - WAL + synchronous=FULL: after an app crash the ledger must not lag behind Git state (ledger written first).
+// - All access is serialized through `parking_lot::Mutex<Connection>`. Background workers and
+//   tauri commands share the same instance.
 
 use super::model::*;
 use super::{new_id, now_ts, workbench_root};
@@ -19,12 +19,12 @@ pub struct Store {
 
 pub type StoreHandle = Arc<Store>;
 
-/// 스키마 버전. 구조 변경 시 이 숫자를 올리고 migrate의 match에 분기를 추가한다.
+/// Schema version. Bump this number on structural changes and add a branch to the migrate match.
 pub const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA_V1: &str = r#"
 CREATE TABLE IF NOT EXISTS project (
-    id TEXT PRIMARY KEY,            -- UUID 기반 projectId (path·이름 hash 아님)
+    id TEXT PRIMARY KEY,            -- UUID-based projectId (not a hash of path or name)
     path TEXT NOT NULL,
     canonical_root TEXT NOT NULL DEFAULT '',
     worktree_git_dir TEXT NOT NULL DEFAULT '',
@@ -82,7 +82,7 @@ CREATE INDEX IF NOT EXISTS idx_changeset_session ON change_set(session_id, creat
 CREATE INDEX IF NOT EXISTS idx_changeset_status ON change_set(status);
 CREATE TABLE IF NOT EXISTS change_dependency (
     candidate_id TEXT NOT NULL,
-    depends_on TEXT NOT NULL,       -- candidate digest 또는 verified merge SHA
+    depends_on TEXT NOT NULL,       -- candidate digest or verified merge SHA
     PRIMARY KEY (candidate_id, depends_on)
 );
 CREATE TABLE IF NOT EXISTS integration_attempt (
@@ -150,7 +150,7 @@ CREATE TABLE IF NOT EXISTS audit_event (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_event(session_id, created_at);
--- 아래는 2단계 이후 사용. 스키마를 미리 고정해 마이그레이션 경계를 줄인다.
+-- Used from phase 2 onward. Fixing the schema up front shrinks the migration boundary.
 CREATE TABLE IF NOT EXISTS extension_install (
     id TEXT PRIMARY KEY,
     bundle_id TEXT NOT NULL,
@@ -282,7 +282,7 @@ ALTER TABLE article ADD COLUMN discovered_at TEXT NOT NULL DEFAULT '';
 "#;
 
 impl Store {
-    /// 열거나 만든다. 부모 디렉터리가 없으면 만든다.
+    /// Opens or creates the store. Creates the parent directory if missing.
     pub fn open() -> Result<StoreHandle, String> {
         Self::open_at(Self::default_path())
     }
@@ -298,7 +298,7 @@ impl Store {
         let conn = Connection::open(&path).map_err(|e| format!("장부 열기 실패: {e}"))?;
         conn.pragma_update(None, "journal_mode", "WAL")
             .map_err(|e| format!("WAL 설정 실패: {e}"))?;
-        // 크래시 복구 규칙이 장부를 진실원으로 삼으므로 FULL로 둔다.
+        // Crash recovery treats the ledger as the source of truth, so keep FULL.
         conn.pragma_update(None, "synchronous", "FULL")
             .map_err(|e| format!("synchronous 설정 실패: {e}"))?;
         conn.pragma_update(None, "foreign_keys", "ON")
@@ -395,7 +395,7 @@ impl Store {
         Ok(rows)
     }
 
-    /// finalized가 아닌 세션. 통합 워커 lease 확인에 쓴다.
+    /// Sessions that are not finalized. Used for the integration worker's lease check.
     pub fn active_sessions_for_path(&self, integration_path: &str) -> Result<Vec<Session>, String> {
         let conn = self.conn.lock();
         let mut stmt = conn
@@ -531,7 +531,7 @@ impl Store {
         Ok(rows)
     }
 
-    /// 검토 대기 이상, 종결되지 않은 후보를 전역 순서로. 큐 워커의 입력.
+    /// Unfinished candidates at review_pending or later, in global order. Input to the queue worker.
     pub fn pending_change_sets(&self) -> Result<Vec<ChangeSet>, String> {
         let conn = self.conn.lock();
         let mut stmt = conn
@@ -563,7 +563,7 @@ impl Store {
 
     // ---------- integration_attempt ----------
 
-    /// WAL 선기록. 실제 Git 변경 전에 반드시 이 메서드로 prepared를 남긴다.
+    /// WAL pre-write. Always record prepared through this method before any actual Git change.
     pub fn insert_attempt(&self, a: &IntegrationAttempt) -> Result<(), String> {
         let conn = self.conn.lock();
         conn.execute(
@@ -580,7 +580,7 @@ impl Store {
         Ok(())
     }
 
-    /// Git 단계 하나가 끝날 때마다 장부를 먼저 전진시킨다(설계 476-477줄).
+    /// Advance the ledger first after each Git step completes (design lines 476-477).
     pub fn update_attempt_phase(
         &self,
         id: &str,
@@ -645,7 +645,7 @@ impl Store {
         Ok(rows)
     }
 
-    /// 종료되지 않은 시도. 재시작 복구 스캔의 입력.
+    /// Unfinished attempts. Input to the restart recovery scan.
     pub fn unfinished_attempts(&self) -> Result<Vec<IntegrationAttempt>, String> {
         let conn = self.conn.lock();
         let mut stmt = conn
@@ -718,7 +718,7 @@ impl Store {
         Ok(())
     }
 
-    /// 후보의 유효 승인. digest·예상 HEAD가 모두 일치해야 유효하다(불변식 3).
+    /// The candidate's valid approval. Valid only when digest and expected HEAD both match (invariant 3).
     pub fn latest_approval(&self, candidate_id: &str) -> Result<Option<Approval>, String> {
         let conn = self.conn.lock();
         conn.query_row(
@@ -831,7 +831,7 @@ impl Store {
         .map_err(|e| format!("프로젝트 조회 실패: {e}"))
     }
 
-    // ---------- 확장: instance · grant · article · sync ----------
+    // ---------- extensions: instance · grant · article · sync ----------
 
     pub fn upsert_instance(
         &self,
@@ -1035,7 +1035,7 @@ impl Store {
         Ok(rows)
     }
 
-    // ---------- 확장: external link · inbound change · file WAL ----------
+    // ---------- extensions: external link · inbound change · file WAL ----------
 
     #[allow(clippy::too_many_arguments)]
     pub fn upsert_external_link(
@@ -1135,7 +1135,7 @@ impl Store {
         Ok(())
     }
 
-    /// 파일 적용 WAL(설계 563-571줄). prepared → applied로만 전진한다.
+    /// File apply WAL (design lines 563-571). Only advances prepared -> applied.
     pub fn file_wal_prepare(
         &self,
         target_path: &str,
@@ -1213,7 +1213,7 @@ impl Store {
         .map_err(|e| format!("field sync base 조회 실패: {e}"))
     }
 
-    // ---------- 확장: remote operation(원격 쓰기 상태머신) ----------
+    // ---------- extensions: remote operation (remote write state machine) ----------
 
     #[allow(clippy::too_many_arguments)]
     pub fn insert_remote_operation(
@@ -1320,7 +1320,7 @@ impl Store {
 
     // ---------- audit ----------
 
-    /// 감사 이벤트 기록. 같은 커넥션 안에서 실행되므로 outbox와 함께 원자적이다.
+    /// Record an audit event. Runs on the same connection, so it is atomic together with the outbox.
     pub fn insert_audit_event(&self, e: &AuditEvent) -> Result<(), String> {
         let conn = self.conn.lock();
         conn.execute(
@@ -1348,7 +1348,7 @@ impl Store {
         Ok(rows)
     }
 
-    /// 상태 전이 + 감사 기록을 한 트랜잭션으로 묶는 헬퍼. 큐 워커가 전이마다 쓴다.
+    /// Helper wrapping a status transition plus audit record in one transaction. The queue worker calls it per transition.
     pub fn transition_with_audit(
         &self,
         candidate_id: &str,
@@ -1368,7 +1368,7 @@ impl Store {
             )
             .map_err(|e| format!("상태 전이 실패: {e}"))?;
         if changed == 0 {
-            // 이미 다른 상태로 갔다 — 경합 패배. 오류 대신 무시(멱등).
+            // Already moved to another state — lost the race. Ignore instead of erroring (idempotent).
             return Ok(());
         }
         let event = AuditEvent {
@@ -1797,7 +1797,7 @@ mod tests {
             store.get_change_set("c-1").unwrap().unwrap().status,
             ChangeSetStatus::Approved
         );
-        // 경합 패배: 이미 Approved인 후보를 ReviewPending에서 Approved로 또 바꾸려 함 — 무시.
+        // Lost race: trying to move an already Approved candidate from ReviewPending to Approved again — ignored.
         store
             .transition_with_audit(
                 "c-1",

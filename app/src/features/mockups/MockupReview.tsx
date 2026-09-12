@@ -133,7 +133,7 @@ export function MockupReview({
 
   const screen = mockup?.screens.find((item) => item.id === screenId);
   const device = devices.find((item) => item.id === deviceId) ?? devices[0];
-  const scale = fit ? Math.min(1, Math.max(1, width - 32) / device.width) : 1;
+  const scale = fit ? Math.min(1, Math.max(0.1, (width - 32) / device.width)) : 1;
   const draftKey = `${screenId}:${kind}`;
   const draft = drafts[draftKey] ?? "";
   const comments = useMemo(

@@ -1,7 +1,7 @@
-// 마법사 「에이전트」 단계 — 이 PC의 터미널 에이전트를 훑고 그중 기본을 고른다.
+// Wizard "Agents" step — scans this PC's terminal agents and picks a default among them.
 //
-// Herdr가 지원하는 로컬 에이전트는 같은 실행 수명주기 계약으로 다룬다. 스킬 설치는
-// 에이전트별 형식이 있어 Claude/Codex에만 별도로 제공될 수 있다.
+// Local agents supported by Herdr are treated under the same run-lifecycle contract. Skill
+// installation is per-agent in format, so it may be offered separately for Claude/Codex only.
 import { RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AgentPresence } from "@/lib/types";

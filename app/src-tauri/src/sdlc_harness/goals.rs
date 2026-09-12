@@ -66,6 +66,7 @@ pub(super) fn prompt(
         r#"You are pursuing a user-authorized autonomous goal in Sawhorse.
 Goal: {objective}
 This work: {work_objective}
+{work_type}
 The excerpts above may be shortened. Read the complete goal, acceptance criteria and task history from {goal_state}, and this work's full state from {work_state} before acting. Each task's full objective and evidence remain in its work directory; inspect those files as needed. Keep prompts bounded by reading durable history instead of copying it all into new reports.
 Phase: {phase}. Run ID: {run_id}.
 The user has authorized planning, task creation, design, implementation and verification without human stage approvals. Resolve ordinary choices yourself. Keep working toward the goal; do not stop at a plan or ask for stage approval. Respect the requested scope. Do not change host-managed work, goal, or run records.
@@ -89,6 +90,7 @@ Root goal: {is_root}. No fixed iteration limit. Return a concise final report af
             .chars()
             .take(4000)
             .collect::<String>(),
+        work_type = sdlc::work_type_guidance(work),
         work_objective = state.objective.chars().take(4000).collect::<String>(),
         goal_state = sdlc::work_path(root, state.parent_id.as_deref().unwrap_or(&work.id))
             .with_file_name("goal.json")
@@ -304,6 +306,14 @@ fn tick_with(
             continue;
         }
         store::materialize_tasks(root, &state)?;
+        // 스냅샷과 런 목록은 루트당 1회 계산한다. 멤버마다 전체 재계산하면 골
+        // 멤버 수에 비례해 vault 전체를 다시 읽는다. materialize_tasks가 만든
+        // 새 작업 항목이 조회되어야 하므로 그 뒤에서 계산하고, 성공한 출발은
+        // records에 메모리로 반영해 뒤 멤버 판정(동시 한도·범위 겹침)이 이를
+        // 보게 한다. 이번 패스 중간에 다른 경로가 만든 변화는 다음 틱에
+        // 반영된다 — 틱 주기 내의 짧은 관측 지연으로 충분하다.
+        let all_work = sdlc::snapshot(root)?.work;
+        let mut records = list_records(root)?;
         let mut members = state
             .tasks
             .iter()
@@ -315,10 +325,10 @@ fn tick_with(
             if matches!(state.status.as_str(), "paused" | "cancelled" | "completed") {
                 continue;
             }
-            let work = sdlc::snapshot(root)?
-                .work
-                .into_iter()
+            let work = all_work
+                .iter()
                 .find(|w| w.id == state.work_id)
+                .cloned()
                 .ok_or("목표 작업 없음")?;
             let project = sdlc::project_by_id(root, &work.project_id)?;
             let agent = crate::agents::normalize_id(&project.default_agent).to_string();
@@ -369,7 +379,7 @@ fn tick_with(
                 }
                 state.phase = "verify".into();
             }
-            let dependency_work = sdlc::snapshot(root)?.work;
+            let dependency_work = &all_work;
             if !work.depends_on.iter().all(|id| {
                 dependency_work
                     .iter()
@@ -386,7 +396,6 @@ fn tick_with(
                 store::save(root, &state)?;
                 continue;
             }
-            let records = list_records(root)?;
             if active_for(&records, &state.work_id) {
                 continue;
             }
@@ -445,6 +454,8 @@ fn tick_with(
                     state.run_id = Some(run.id.clone());
                     state.status = "running".into();
                     store::save(root, &state)?;
+                    // 방금 출발한 런을 이번 패스의 뒤 멤버 판정에 반영한다.
+                    records.push(run.clone());
                     dispatch(root.to_path_buf(), run.id);
                 }
                 Err(error)
@@ -704,6 +715,8 @@ mod tests {
             sdlc::Project {
                 id: "game".into(),
                 name: "Game".into(),
+                workflow_id: "goal-main".into(),
+                workflow_version: "1.0.0".into(),
                 repo_path: root.path().display().to_string(),
                 default_agent: "codex".into(),
                 ..Default::default()
@@ -718,6 +731,8 @@ mod tests {
                 objective: "Build and test a playable game".into(),
                 max_parallel: 2,
                 start: true,
+                workflow_version: String::new(),
+                issue_type: "작업".into(),
             },
         )
         .unwrap();

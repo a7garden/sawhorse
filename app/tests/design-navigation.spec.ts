@@ -14,8 +14,11 @@ test("the default desk prioritizes work, and new intents inherit the project", a
   expect(nextBounds.width).toBeGreaterThan(projectBounds.width);
   await expect(page.locator(".wb-overview-page").getByRole("combobox")).toHaveCount(0);
   await projects.getByRole("button", { name: /^Herdr/ }).click();
-  await expect(page.getByRole("heading", { name: "Herdr 작업대", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "새 의도", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Herdr 대시보드", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "새 항목", exact: true }).click();
+  await page.getByRole("combobox", { name: "시작할 워크플로", exact: true }).click();
+  await page.getByRole("option", { name: "SDD · 의도에서 완료까지", exact: true }).click();
+  await page.getByRole("button", { name: "계속", exact: true }).click();
   await expect(page.getByRole("dialog").getByRole("combobox", { name: "프로젝트", exact: true })).toContainText("Herdr");
 });
 
@@ -28,9 +31,9 @@ test("collapsed navigation persists and the project menu remains readable", asyn
   await expect(menu).toBeVisible();
   expect((await menu.boundingBox())!.width).toBeGreaterThanOrEqual(200);
   await page.getByRole("option", { name: "Herdr", exact: true }).click();
-  await nav(page, "작업").click();
+  await nav(page, "작업대").click();
   await expect(page.getByRole("combobox", { name: "프로젝트 필터", exact: true })).toContainText("Herdr");
-  await expect(nav(page, "작업")).toHaveAttribute("aria-current", "page");
+  await expect(nav(page, "작업대")).toHaveAttribute("aria-current", "page");
   await page.reload();
   await expect(page.getByRole("button", { name: "사이드바 펼치기", exact: true })).toBeVisible();
   await expect(scope(page)).toHaveAttribute("aria-label", "사이드바 프로젝트 선택");
@@ -41,11 +44,11 @@ test("collapsed navigation persists and the project menu remains readable", asyn
 test("compact navigation retains search and page controls in both themes", async ({ page }) => {
   await page.setViewportSize({ width: 540, height: 820 });
   await page.goto("/?preview=1");
-  await expect(page.getByRole("button", { name: "새 의도", exact: true })).toBeInViewport();
+  await expect(page.getByRole("button", { name: "새 항목", exact: true })).toBeInViewport();
   await page.getByRole("button", { name: "전체 검색", exact: true }).click();
   await expect(page.getByPlaceholder("문서와 작업을 검색하세요")).toBeVisible();
   await page.keyboard.press("Escape");
-  await nav(page, "작업").click();
+  await nav(page, "작업대").click();
   await expect(page.getByRole("textbox", { name: "작업 검색", exact: true })).toBeInViewport();
   await page.getByRole("button", { name: "목록", exact: true }).click();
   for (let i = 0; i < 3; i++) {

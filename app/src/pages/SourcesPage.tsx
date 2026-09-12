@@ -1,6 +1,6 @@
 import { PathInput } from "@/components/ui/path-input";
-// SourcesPage — 소스 커넥터 화면. instance 연결(feed/GitHub), 동기화 실행,
-// GitHub 가져오기·field update 승인, 원격 쓰기 승인 대기를 담당한다(설계 690-810줄).
+// SourcesPage — source connectors screen. Owns instance connections (feed/GitHub), sync runs,
+// GitHub import · field-update approvals, and remote-write approval waits (design lines 690-810).
 import { useCallback, useEffect, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import {
@@ -107,7 +107,7 @@ function parseTagText(text: string): string[] {
     .filter(Boolean);
 }
 
-/** 연결 가능한 connector component 하나(bundle+component 평탄화). */
+/** One connectable connector component (bundle+component flattened). */
 interface ConnChoice {
   key: string;
   extensionId: string;
@@ -135,7 +135,7 @@ function connChoices(bundles: ExtensionBundle[]): ConnChoice[] {
   return out;
 }
 
-/** instance의 설정 모양으로 어댑터를 되찾는다 — instance 행이 extension id를 주지 않는다. */
+/** Recovers the adapter from the instance's config shape — instance rows don't carry the extension id. */
 function adapterOf(config: SourceInstanceCfg): string {
   return isFeedCfg(config) ? "builtin:rss" : "builtin:github";
 }
@@ -172,19 +172,23 @@ export default function SourcesPage({
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  /** 가져오기 대상 프로젝트 목록. 이슈는 프로젝트의 개발 항목으로 들어온다. */
+  /** Projects that can be import targets. Issues come in as a project's work items. */
   const [projects, setProjects] = useState<Project[]>([]);
-  /** 가져오기 수락 폼 대상 — null이면 닫힘. */
+  /** Import-accept form target — null when closed. */
   const [importFor, setImportFor] = useState<InboundChange | null>(null);
   const [importProjectId, setImportProjectId] = useState("");
-  /** 실행 repoDir 프롬프트 대상 — null이면 닫힘. */
+  /** Run repoDir prompt target — null when closed. */
   const [execFor, setExecFor] = useState<RemoteOperation | null>(null);
   const [execRepoDir, setExecRepoDir] = useState("");
 
   const reload = useCallback(async () => {
+    let instError: unknown = null;
     const [ext, inst, ib, ops] = await Promise.all([
       api.extensionsList().catch(() => null),
-      api.sourcesListInstances().catch(() => null),
+      api.sourcesListInstances().catch((error: unknown) => {
+        instError = error;
+        return null;
+      }),
       scope === "github"
         ? api.inboundList("staged").catch(() => null)
         : Promise.resolve(null),
@@ -200,12 +204,17 @@ export default function SourcesPage({
             b.manifest.components.some((c) => c.adapter === `builtin:${scope}`),
         ),
       );
-    setInstances(
-      (inst?.instances ?? []).filter((i) =>
-        scope === "rss" ? isFeedCfg(i.config) : isGitHubCfg(i.config),
-      ),
-    );
-    setDeadLetters(inst?.deadLetters ?? []);
+    if (inst) {
+      setInstances(
+        (inst.instances ?? []).filter((i) =>
+          scope === "rss" ? isFeedCfg(i.config) : isGitHubCfg(i.config),
+        ),
+      );
+      setDeadLetters(inst.deadLetters ?? []);
+    } else {
+      // A transient failure must not blank the list; keep the last data and surface the error.
+      setMsg({ ok: false, text: String(instError) });
+    }
     setInbound(ib?.inbound ?? []);
     setRemoteOps(ops?.operations ?? []);
   }, [scope]);
@@ -213,7 +222,7 @@ export default function SourcesPage({
   useEffect(() => {
     void reload();
     let unlisten: UnlistenFn | null = null;
-    // 새 EVENTS 없이 협업 레인 변화 이벤트에 편승한다 + 15초 폴링.
+    // Piggybacks on the collab lane change event rather than new EVENTS + 15s polling.
     let disposed = false;
     if ("__TAURI_INTERNALS__" in window)
       void listen(EVENTS.collabChanged, () => void reload())
@@ -230,7 +239,7 @@ export default function SourcesPage({
     };
   }, [reload]);
 
-  // 가져오기 대상이 될 프로젝트 목록. 깃허브 이슈는 프로젝트의 작업 항목이 된다.
+  // Projects that can serve as import targets. GitHub issues become the project's work items.
   useEffect(() => {
     void sddApi
       .snapshot()
@@ -318,7 +327,7 @@ export default function SourcesPage({
 
   function openImportForm(ib: InboundChange) {
     setImportFor(ib);
-    // 동기화 인스턴스가 기억하는 프로젝트를 기본 선택으로 둔다.
+    // Defaults the selection to the project the sync instance remembers.
     const config = sel && isGitHubCfg(sel.config) ? sel.config : null;
     setImportProjectId(config?.projectId ?? "");
   }
@@ -987,7 +996,7 @@ function AddConnectionDialog({
   const [ghRepositoryId, setGhRepositoryId] = useState("");
   const [ghState, setGhState] = useState("open");
   const [ghRepository, setGhRepository] = useState("");
-  /** 이 동기화로 가져온 이슈가 들어갈 프로젝트. 가져오기 폼의 기본값이 된다. */
+  /** Project for issues imported by this sync. Becomes the import form's default. */
   const [ghProjectId, setGhProjectId] = useState("");
   const [granted, setGranted] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
@@ -1000,7 +1009,7 @@ function AddConnectionDialog({
   ];
   const missingHosts = suggestedHosts.filter((h) => !granted[h]);
 
-  // feed URL이 늘면 도메인 grant 후보를 자동으로 담는다(사용자가 끌 수도 있다).
+  // Auto-includes new feed URL domains as grant candidates (the user can turn them off).
   const hostKey = suggestedHosts.join("|");
   useEffect(() => {
     if (!isRss || suggestedHosts.length === 0) return;

@@ -7,8 +7,8 @@ import { sddApi } from "./api";
 const DOC_PREVIEW_LIMIT = 8;
 
 /**
- * 스냅샷 진단을 원문 나열 대신 종류별로 묶은 알림으로 보여주고, 알려진 형식
- * 문제는 앱 안에서 바로 자동 수정할 수 있게 한다.
+ * Shows snapshot diagnostics as notices grouped by kind instead of a raw listing, and lets
+ * known format problems be auto-fixed right inside the app.
  */
 export function DiagnosticsBanner({
   diagnostics,
@@ -22,8 +22,8 @@ export function DiagnosticsBanner({
   const { t } = useTranslation("workbench");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  // 진단은 항상 "경로.md: 메시지" 꼴이다. 같은 메시지끼리 묶어야 문서 수십
-  // 개가 같은 원인일 때 한 줄로 읽힌다.
+  // Diagnostics always take the form "path.md: message". Grouping identical messages lets dozens
+  // of documents sharing one cause read as a single line.
   const groups = useMemo(() => {
     const byMessage = new Map<string, string[]>();
     for (const entry of diagnostics) {

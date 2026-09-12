@@ -1,5 +1,5 @@
-// ReviewPage — 변경 후보 검토. 승인대기 카드(Diff·수정 요청·승인·거부)와 통합 카드
-// (단계·검사 기록·수동 확인·수정 작업·되돌리기), 그리고 큐 정체 배너를 담당한다.
+// ReviewPage — review of change candidates. Owns the pending-review cards (diff · request changes · approve · reject) and the unified card
+// (stages · audit history · manual check · repair tasks · revert), plus the queue-stalled banner.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
@@ -76,7 +76,7 @@ function statusVariant(
   return "secondary";
 }
 
-/** manifest 항목 하나의 변경 상태. old/new blob 유무와 rename으로 판정한다. */
+/** Change status of one manifest entry. Determined by old/new blob presence and renames. */
 function entryAction(e: CollabManifestEntry): "A" | "M" | "D" | "R" {
   if (e.renameFrom) return "R";
   if (!e.oldBlob) return "A";
@@ -94,7 +94,7 @@ function fmtWhen(iso: string): string {
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
 }
 
-/// 큐가 멈춘 판정. 이 상태 후보가 하나라도 있으면 배너를 띄운다.
+/// Stalled-queue test. Shows the banner when even one candidate has one of these statuses.
 const STALLED_STATUSES = [
   "verification_failed",
   "conflicted",
@@ -107,7 +107,7 @@ interface Candidate {
   run: CollabAgentRun | null;
 }
 
-/// 확인·수정·거부 사유를 묻는 대화상자 모드.
+/// Dialog modes that ask for a manual-check · repair · reject reason.
 type PromptMode =
   "request_changes" | "reject" | "manual_fail" | "repair" | null;
 
@@ -133,7 +133,7 @@ export default function ReviewPage() {
         try {
           next[s.id] = await api.collabSessionDetail(s.id);
         } catch {
-          // 세션 하나가 실패해도 나머지는 그린다
+          // render the rest even if one session fails
         }
         try {
           nextAudits[s.id] = await api.collabSessionAudit(s.id);

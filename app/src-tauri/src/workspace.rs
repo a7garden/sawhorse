@@ -1,11 +1,11 @@
-// workspace.rs — 작업공간(볼트) 프로비저닝.
+// workspace.rs — workspace (vault) provisioning.
 //
-// `init-vault` 스킬이 하던 일 중 **에이전트 판단이 필요 없는 부분**을 앱으로 가져온 것이다.
-// 이게 있어야 "앱을 먼저 깔고 앱만으로 시작한다"가 성립한다 — 폴더와 템플릿은 결정적인
-// 파일 복사이므로 LLM 을 부를 이유가 없다.
+// This pulls the parts of the `init-vault` skill's job that **need no agent judgment** into the app.
+// Only with this does "install the app first and start from the app alone" hold — folders and templates
+// are deterministic file copies, so there is no reason to call an LLM.
 //
-// `.obsidian/*` 설정(templates.json·app.json·types.json·homepage)은 스킬에 남긴다:
-// Obsidian 설치 여부와 기존 설정 병합은 판단이 필요하고, 그건 에이전트가 잘하는 일이다.
+// The `.obsidian/*` settings (templates.json, app.json, types.json, homepage) stay with the skill:
+// whether Obsidian is installed and merging with existing settings take judgment, which is what agents are good at.
 
 use std::path::{Component, Path, PathBuf};
 
@@ -29,8 +29,8 @@ impl ProvisionReport {
     }
 }
 
-/// 작업공간 밖으로 나가는 상대 경로를 막는다. 팩 매니페스트는 사람이 쓰는 파일이라
-/// `../` 오타 하나가 홈 디렉터리에 파일을 흘릴 수 있다.
+/// Blocks relative paths that escape the workspace. Pack manifests are hand-written files, so a
+/// single `../` typo could leak files into the home directory.
 fn safe_join(root: &Path, rel: &str) -> Option<PathBuf> {
     let rel = rel.trim().replace('\\', "/");
     if rel.is_empty() {
@@ -51,7 +51,7 @@ fn safe_join(root: &Path, rel: &str) -> Option<PathBuf> {
     Some(root.join(candidate))
 }
 
-/// 작업공간 루트 자체를 확보한다 (없으면 만든다).
+/// Secures the workspace root itself (creates it if missing).
 pub fn ensure_root(vault: &Path) -> Result<(), String> {
     if vault.as_os_str().is_empty() {
         return Err("작업공간 경로가 비어 있습니다".into());
@@ -68,8 +68,8 @@ pub fn ensure_root(vault: &Path) -> Result<(), String> {
     std::fs::create_dir_all(vault).map_err(|e| format!("작업공간 생성 실패: {e}"))
 }
 
-/// 팩 하나의 `workspace` 블록을 작업공간에 반영한다.
-/// **기존 파일은 절대 덮지 않는다** — 사용자의 노트가 팩 업그레이드로 사라지면 안 된다.
+/// Applies one pack's `workspace` block to the workspace.
+/// **Never overwrites existing files** — a pack upgrade must not destroy the user's notes.
 pub fn provision_pack(vault: &Path, pack: &Pack) -> ProvisionReport {
     let mut r = ProvisionReport::default();
     for folder in &pack.manifest.workspace.folders {
@@ -121,7 +121,7 @@ pub fn provision_pack(vault: &Path, pack: &Pack) -> ProvisionReport {
     r
 }
 
-/// 활성 팩 전부를 반영한다. 팩 하나가 실패해도 나머지는 계속 간다.
+/// Applies every enabled pack. One pack failing does not stop the rest.
 pub fn provision(vault: &Path, packs: &[&Pack]) -> Result<ProvisionReport, String> {
     ensure_root(vault)?;
     let mut out = ProvisionReport::default();
@@ -131,7 +131,7 @@ pub fn provision(vault: &Path, packs: &[&Pack]) -> Result<ProvisionReport, Strin
     Ok(out)
 }
 
-/// 실제로 쓰기 전에 무엇이 생길지 보여준다 (마법사 미리보기).
+/// Shows what would be created before anything is written (wizard preview).
 pub fn plan(vault: &Path, packs: &[&Pack]) -> Vec<String> {
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -212,7 +212,7 @@ mod tests {
             "템플릿 본문"
         );
 
-        // 사용자가 템플릿을 고친 뒤 재실행 — 덮지 않는다
+        // user edits the template, then re-runs — must not overwrite
         fs::write(vault.join("템플릿/일지.md"), "내가 고친 템플릿").unwrap();
         let second = provision(&vault, &[&pack]).unwrap();
         assert!(second.created.is_empty());
@@ -271,8 +271,8 @@ mod tests {
         fs::remove_dir_all(&packdir).unwrap();
     }
 
-    /// 동봉한 팩으로 빈 폴더 하나를 실제 작업공간으로 만든다 — 마법사 2·3단계가 하는 일
-    /// 전체를 에이전트 없이 통과시키는 것이 이 아키텍처의 핵심 주장이다.
+    /// Turns an empty folder into a real workspace with the shipped packs — getting through all of
+    /// wizard steps 2 and 3 without an agent is this architecture's core claim.
     #[test]
     fn shipped_packs_provision_a_usable_workspace() {
         let vault = tempdir("shipped");
@@ -286,7 +286,7 @@ mod tests {
         assert!(report.failed.is_empty(), "{:?}", report.failed);
         assert_eq!(report.created.len(), planned, "계획과 결과가 같아야 한다");
 
-        // 일지·개념·프로젝트 문서화 확장
+        // journal, concepts, and project-docs packs
         assert!(vault.join("일지").is_dir());
         assert!(vault.join("프로젝트").is_dir());
         assert!(vault.join("개념").is_dir());
@@ -299,7 +299,7 @@ mod tests {
         assert!(vault.join("템플릿/journal/문서.md").is_file());
         assert!(vault.join("템플릿/journal/일지.md").is_file());
 
-        // 선언형 뷰가 갓 만든 작업공간에서 오류 없이 빈 결과를 낸다
+        // declarative views produce empty results without errors on a freshly created workspace
         for pack in &enabled {
             for view in pack.manifest.views.iter().filter(|v| v.kind == "notes") {
                 let r = crate::notes::query(&vault, &view.query);
@@ -307,7 +307,7 @@ mod tests {
             }
         }
 
-        // 두 번째 실행은 아무것도 만들지 않는다 (멱등)
+        // a second run creates nothing (idempotent)
         let again = provision(&vault, &enabled).unwrap();
         assert!(again.created.is_empty());
         assert!(plan(&vault, &enabled).is_empty());

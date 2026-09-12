@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 const KEY = "sawhorse.workflow.preview.v2";
-async function open(page: Page) { await page.goto("/?preview=1&lifecycle=1&mockups=1"); await page.locator("aside nav").getByRole("button", { name: "작업", exact: true }).click(); }
+async function open(page: Page) { await page.goto("/?preview=1&lifecycle=1&mockups=1"); await page.locator("aside nav").getByRole("button", { name: "작업대", exact: true }).click(); }
 const panel = (page: Page) => page.locator(".wb-lifecycle");
 test("the board separates intent, clarification, approval, queue and unconfirmed results", async ({ page }) => {
   await open(page);
@@ -46,24 +46,57 @@ test("discard shows downstream dependency impact before permitting a revert", as
   await expect(panel(page).getByText(/이 작업에 의존하는 항목이 있습니다/)).toBeVisible();
   await expect(panel(page).getByRole("button", { name: "영향 확인 · 폐기 실행", exact: true })).toBeDisabled();
 });
-test("registered designs and artifact templates persist and attach to a project", async ({ page }) => {
-  await open(page); await page.locator("aside nav").getByRole("button", { name: "프로젝트", exact: true }).click();
-  const library = page.getByRole("region", { name: "디자인과 템플릿" });
+test("a global project library persists documents and projects only select references", async ({ page }) => {
+  await page.goto("/?preview=1&lifecycle=1&mockups=1");
+  const navigate = (name: string) => page.locator("aside nav").getByRole("button", { name, exact: true }).click();
+  await navigate("프로젝트");
+  await expect(page.locator(".wb-resources")).toHaveCount(0);
+  await page.getByRole("button", { name: "라이브러리 선택", exact: true }).first().click();
+  await expect(page.getByRole("dialog")).toContainText("등록된 문서가 없습니다");
+  await page.getByRole("dialog").getByRole("button", { name: "닫기", exact: true }).click();
+  await navigate("프로젝트 라이브러리");
+  const library = page.getByRole("region", { name: "프로젝트 라이브러리", exact: true });
+  await expect(library.getByRole("button", { name: "프로젝트에 적용", exact: true })).toHaveCount(0);
   await library.getByLabel("이름", { exact: true }).fill("제품 디자인");
-  await library.getByLabel("DESIGN.md", { exact: true }).fill("# DESIGN.md\n\n## Color Palette\nPrimary: #0064FF\n\n## Voice\n짧고 명확한 문장");
+  await library.getByLabel("DESIGN.md", { exact: true }).fill("# DESIGN.md\n\n## Color Palette\nPrimary: #0064FF");
   await library.getByRole("button", { name: "저장", exact: true }).click();
-  await library.getByRole("button", { name: "프로젝트에 적용", exact: true }).click();
-  await expect(library.getByRole("status")).toContainText("프로젝트에 적용했습니다");
+  await expect(library.getByRole("status")).toContainText("문서를 저장했습니다");
   await library.getByRole("button", { name: "산출물 템플릿", exact: true }).click();
   await library.getByLabel("이름", { exact: true }).fill("설계 양식");
-  await library.getByLabel("템플릿 내용", { exact: true }).fill("# {{제목}}\n\n## 검증 기준\n<!-- 실제 명령과 기대 결과 -->");
+  await library.getByLabel("템플릿 내용", { exact: true }).fill("# {{제목}}\n\n## 검증 기준");
   await library.getByRole("button", { name: "저장", exact: true }).click();
-  await library.getByRole("button", { name: "프로젝트에 적용", exact: true }).click();
-  await expect(library.getByRole("status")).toContainText("프로젝트에 적용했습니다");
-  await page.reload(); await page.locator("aside nav").getByRole("button", { name: "프로젝트", exact: true }).click();
+  await expect(library.getByRole("status")).toContainText("문서를 저장했습니다");
+  expect(await page.evaluate((key) => Object.keys(JSON.parse(localStorage.getItem(key)!).resourceAssignments ?? {}).length, KEY)).toBe(0);
+  await page.reload();
+  await navigate("프로젝트 라이브러리");
   await expect(library.locator(".wb-resource-list button")).toHaveCount(2);
-  await expect(library).toContainText("제품 디자인");
-  expect(await page.evaluate((key) => Object.values(JSON.parse(localStorage.getItem(key)!).resourceAssignments).some((a: any) => a.designId && a.templates.spec), KEY)).toBe(true);
+  await navigate("프로젝트");
+  await page.getByRole("button", { name: "라이브러리 선택", exact: true }).first().click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("textbox")).toHaveCount(0);
+  await dialog.getByRole("combobox", { name: "프로젝트 디자인", exact: true }).click();
+  await expect(page.getByRole("option", { name: "설계 양식", exact: true })).toHaveCount(0);
+  await page.getByRole("option", { name: "제품 디자인", exact: true }).click();
+  await expect(dialog.getByRole("status")).toContainText("프로젝트에 적용했습니다");
+  await dialog.getByRole("combobox", { name: "설계 템플릿", exact: true }).click();
+  await expect(page.getByRole("option", { name: "제품 디자인", exact: true })).toHaveCount(0);
+  await page.getByRole("option", { name: "설계 양식", exact: true }).click();
+  await expect(dialog.getByRole("status")).toContainText("프로젝트에 적용했습니다");
+  await page.reload();
+  await navigate("프로젝트");
+  await page.getByRole("button", { name: "라이브러리 선택", exact: true }).first().click();
+  await expect(dialog.getByRole("combobox", { name: "프로젝트 디자인", exact: true })).toContainText("제품 디자인");
+  await expect(dialog.getByRole("combobox", { name: "설계 템플릿", exact: true })).toContainText("설계 양식");
+  await dialog.getByRole("button", { name: "닫기", exact: true }).click();
+  await page.getByRole("button", { name: "라이브러리 선택", exact: true }).nth(1).click();
+  await expect(dialog.getByRole("combobox", { name: "프로젝트 디자인", exact: true })).toContainText("저장소 DESIGN.md 사용");
+  await dialog.getByRole("combobox", { name: "프로젝트 디자인", exact: true }).click();
+  await page.getByRole("option", { name: "제품 디자인", exact: true }).click();
+  await expect(dialog.getByRole("status")).toContainText("프로젝트에 적용했습니다");
+  await dialog.getByRole("combobox", { name: "프로젝트 디자인", exact: true }).click();
+  await page.getByRole("option", { name: "저장소 DESIGN.md 사용 (있는 경우)", exact: true }).click();
+  await expect(dialog.getByRole("status")).toContainText("적용을 해제했습니다");
+  expect(await page.evaluate((key) => Object.values(JSON.parse(localStorage.getItem(key)!).resourceAssignments).filter((a: any) => a.designId && a.templates.spec).length, KEY)).toBe(1);
 });
 test("mockup management groups latest revisions and exposes previous revisions", async ({ page }) => {
   await open(page); await page.getByRole("group", { name: "작업 공간" }).getByRole("button", { name: /^목업/ }).click();

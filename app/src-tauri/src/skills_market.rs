@@ -1,15 +1,15 @@
-// skills_market.rs — 스킬 마켓플레이스: skills.sh 검색 + `npx skills` CLI 연동.
+// skills_market.rs — skill marketplace: skills.sh search + `npx skills` CLI integration.
 //
-// 스킬 마켓플레이스는 우리가 소유한 레지스트리가 아니라 공개 생태계다. 목록은
-// skills.sh 디렉터리가 들고 있고, 설치·업데이트는 `npx skills` CLI 가 에이전트별
-// 폴더 규약(심링크·잠금)을 알아서 처리한다. 앱은 두 가지만 한다: 검색 프록시와
-// 비대화형 실행(-y). 설치 산출물의 상태는 열람 화면(list_agent_skills)이 다시 읽는다.
+// The skill marketplace is a public ecosystem, not a registry we own. skills.sh holds the
+// directory listing, and the `npx skills` CLI handles each agent's folder conventions
+// (symlinks, lockfiles) on install/update. The app does only two things: a search proxy and
+// non-interactive runs (-y). Installed output state is re-read by the browse screen (list_agent_skills).
 
 use serde::Serialize;
 
 const SEARCH_URL: &str = "https://skills.sh/api/search";
 
-/// skills.sh 검색 결과 한 줄. 설치 명령의 재료는 `source`(owner/repo)와 `skill_id`다.
+/// One skills.sh search result row. The install command is built from `source` (owner/repo) and `skill_id`.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct MarketSkill {
@@ -41,20 +41,43 @@ pub async fn skills_market_search(query: String) -> Result<Vec<MarketSkill>, Str
         .json()
         .await
         .map_err(|e| format!("skills.sh 응답 해석 실패: {e}"))?;
+    parse_search_results(&value)
+}
+
+fn parse_search_results(value: &serde_json::Value) -> Result<Vec<MarketSkill>, String> {
     let rows = value
         .get("skills")
         .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .ok_or("skills.sh 응답에 skills 목록이 없습니다")?;
+    let mut seen = std::collections::HashSet::new();
     Ok(rows
         .iter()
-        .filter_map(|s| {
+        .filter_map(|row| {
+            let id = row.get("id")?.as_str()?;
+            let skill_id = text_of(row, "skillId");
+            let source = text_of(row, "source");
+            // A missing skill id must never turn a single-card install into a whole-repo install.
+            if id.is_empty()
+                || !valid_repo(&source)
+                || !valid_skill_name(&skill_id)
+                || !seen.insert(id)
+            {
+                return None;
+            }
+            let name = text_of(row, "name");
             Some(MarketSkill {
-                id: s.get("id")?.as_str()?.to_string(),
-                skill_id: text_of(s, "skillId"),
-                name: text_of(s, "name"),
-                source: text_of(s, "source"),
-                installs: s.get("installs").and_then(serde_json::Value::as_u64).unwrap_or(0),
+                id: id.to_string(),
+                name: if name.is_empty() {
+                    skill_id.clone()
+                } else {
+                    name
+                },
+                skill_id,
+                source,
+                installs: row
+                    .get("installs")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0),
             })
         })
         .collect())
@@ -67,8 +90,8 @@ fn text_of(v: &serde_json::Value, key: &str) -> String {
         .to_string()
 }
 
-/// 설치 소스는 GitHub `owner/repo` 만 받는다 — CLI 인자로 들어가는 값이므로
-/// 형식을 좁혀 임의 플래그·경로 주입을 막는다.
+/// Install sources accept only GitHub `owner/repo` — the value goes into CLI arguments, so the
+/// narrow format blocks arbitrary flag/path injection.
 fn valid_repo(source: &str) -> bool {
     let parts: Vec<&str> = source.split('/').collect();
     parts.len() == 2
@@ -88,7 +111,7 @@ fn valid_skill_name(name: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
-/// 앱 내부 에이전트 id → skills CLI 의 에이전트 키.
+/// App-internal agent id → skills CLI agent key.
 fn cli_agent_key(agent: &str) -> Option<&'static str> {
     match agent {
         crate::agents::CLAUDE => Some("claude-code"),
@@ -105,7 +128,7 @@ fn strip_ansi(text: &str) -> String {
             out.push(c);
             continue;
         }
-        // ESC [ … 종료문자(@-~) 시퀀스를 통째로 삼킨다.
+        // Swallow whole ESC [ … final-byte (@-~) sequences.
         if chars.peek() == Some(&'[') {
             chars.next();
             for c in chars.by_ref() {
@@ -130,6 +153,7 @@ async fn run_npx_skills(args: &[&str]) -> Result<String, String> {
     all.extend_from_slice(args);
     let mut cmd = crate::spawn::platform_command_async(&npx, &all);
     cmd.stdin(std::process::Stdio::null());
+    cmd.kill_on_drop(true);
     let out = tokio::time::timeout(std::time::Duration::from_secs(300), cmd.output())
         .await
         .map_err(|_| "npx skills 실행이 5분을 넘겨 중단했습니다".to_string())?
@@ -151,20 +175,28 @@ async fn run_npx_skills(args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// `npx skills add <owner/repo> -g -y [-s skill] -a <agents>` — 전역 설치.
-/// 스킬을 지정하지 않으면 저장소의 스킬 전부가 설치된다.
+/// `npx skills add <owner/repo> -g -y --skill <skill> --agent <agents>` — exact global install.
 #[tauri::command]
 pub async fn skills_market_install(
     source: String,
     skill: Option<String>,
     agents: Vec<String>,
 ) -> Result<String, String> {
+    let args = install_args(&source, skill.as_deref(), &agents)?;
+    run_npx_skills(&args.iter().map(String::as_str).collect::<Vec<_>>()).await
+}
+
+fn install_args(
+    source: &str,
+    skill: Option<&str>,
+    agents: &[String],
+) -> Result<Vec<String>, String> {
     let source = source.trim().to_string();
     if !valid_repo(&source) {
         return Err("설치 소스는 owner/repo 형식이어야 합니다".into());
     }
     let mut keys: Vec<&'static str> = Vec::new();
-    for agent in &agents {
+    for agent in agents {
         let Some(key) = cli_agent_key(agent) else {
             return Err(format!("{agent} 는 마켓플레이스 설치 대상이 아닙니다"));
         };
@@ -175,24 +207,24 @@ pub async fn skills_market_install(
     if keys.is_empty() {
         return Err("설치할 에이전트를 하나 이상 고르세요".into());
     }
-    let mut args: Vec<String> = vec![source, "-g".into(), "-y".into()];
-    if let Some(name) = skill.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
-        if !valid_skill_name(name) {
-            return Err(format!("잘못된 스킬 이름입니다: {name}"));
-        }
-        args.push("--skill".into());
-        args.push(name.into());
+    let mut args: Vec<String> = vec!["add".into(), source, "-g".into(), "-y".into()];
+    let name = skill
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .ok_or("설치할 스킬을 선택하세요")?;
+    if !valid_skill_name(name) {
+        return Err(format!("잘못된 스킬 이름입니다: {name}"));
     }
+    args.push("--skill".into());
+    args.push(name.into());
     for key in keys {
         args.push("--agent".into());
         args.push(key.into());
     }
-    let mut refs: Vec<&str> = vec!["add"];
-    refs.extend(args.iter().map(String::as_str));
-    run_npx_skills(&refs).await
+    Ok(args)
 }
 
-/// `npx skills update -g -y` — 전역으로 설치된 마켓플레이스 스킬 전부 업데이트.
+/// `npx skills update -g -y` — updates globally installed marketplace skills.
 #[tauri::command]
 pub async fn skills_market_update() -> Result<String, String> {
     run_npx_skills(&["update", "-g", "-y"]).await
@@ -201,6 +233,49 @@ pub async fn skills_market_update() -> Result<String, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn search_requires_an_explicit_installable_skill_and_deduplicates() {
+        let row = serde_json::json!({"id":"owner/repo/react", "skillId":"react", "source":"owner/repo", "name":"React", "installs":42});
+        let parsed = parse_search_results(&serde_json::json!({"skills":[row.clone(), row,
+            {"id":"missing", "source":"owner/repo"},
+            {"id":"flag", "skillId":"--all", "source":"owner/repo"}
+        ]}))
+        .unwrap();
+        assert_eq!(parsed.len(), 1);
+        assert_eq!(parsed[0].skill_id, "react");
+        assert_eq!(parsed[0].installs, 42);
+        assert!(parse_search_results(&serde_json::json!({"error":"unavailable"})).is_err());
+    }
+
+    #[test]
+    fn install_targets_exact_skill_and_selected_agents_globally() {
+        assert_eq!(
+            install_args(
+                "owner/repo",
+                Some("react"),
+                &["claude".into(), "codex".into(), "claude".into()]
+            )
+            .unwrap(),
+            vec![
+                "add",
+                "owner/repo",
+                "-g",
+                "-y",
+                "--skill",
+                "react",
+                "--agent",
+                "claude-code",
+                "--agent",
+                "codex"
+            ]
+        );
+        assert!(install_args("owner/repo", None, &["codex".into()]).is_err());
+        assert!(install_args("owner/repo", Some(""), &["codex".into()]).is_err());
+        assert!(install_args("owner/repo", Some("--all"), &["codex".into()]).is_err());
+        assert!(install_args("owner/repo", Some("react"), &[]).is_err());
+        assert!(install_args("owner/repo", Some("react"), &["unsupported".into()]).is_err());
+    }
 
     #[test]
     fn repo_validation_rejects_flag_injection() {

@@ -1,32 +1,32 @@
-// 에이전트 실행 드라이버 경계(설계 153-157줄).
+// Agent run driver boundary (design lines 153-157).
 //
-// 세션 모델은 AgentDriver(start, status, cancel, reattach, collect_result)를 먼저 정의하고,
-// 1단계 관리형 병렬 실행은 Claude headless/herdr lane으로 한정한다. Codex는 감지·수동
-// 인박스 제출만 지원하며, driver가 구현되기 전에는 앱이 시작·취소·재연결을 보장한다고
-// 표시하지 않는다.
+// The session model first defines AgentDriver(start, status, cancel, reattach, collect_result);
+// phase-1 managed parallel execution is limited to the Claude headless/herdr lane. Codex supports only
+// detection and manual inbox submission, and until a driver exists the app must not display itself as
+// guaranteeing start, cancel, or reattach.
 
 use super::model::AgentRun;
 use crate::jobs::{CollabLaneSpec, JobManager, JobRequest};
 use std::sync::Arc;
 
 pub trait AgentDriver: Send + Sync {
-    /// 드라이버 식별자. agent_run.driver에 기록된다.
+    /// Driver identifier. Recorded in agent_run.driver.
     fn id(&self) -> &'static str;
-    /// 사람이 볼 수 있는 보장 수준 설명. UI가 그대로 표시한다(설계 856줄).
+    /// Human-readable description of the guarantee level. The UI shows it verbatim (design line 856).
     fn guarantee(&self) -> &'static str;
-    /// 레인을 시작한다. 성공 시 관련 잡 ID를 반환한다.
+    /// Start the lane. On success, returns the related job ID.
     fn start(&self, run: &AgentRun, lane: CollabLaneSpec) -> Result<String, String>;
-    /// 실행 상태: pending | running | done | failed | cancelled | manual
+    /// Run status: pending | running | done | failed | cancelled | manual
     fn status(&self, run: &AgentRun) -> Result<String, String>;
     fn cancel(&self, run: &AgentRun) -> Result<(), String>;
-    /// 앱 재시작 뒤 살아 있는 실행에 다시 붙는다. 붙었으면 true.
+    /// Reattach to a run that survived an app restart. True if attached.
     fn reattach(&self, run: &AgentRun) -> Result<bool, String>;
-    /// 실행 결과 보고서 경로. 아직 없으면 None.
+    /// Path to the run result report. None if not available yet.
     fn collect_result(&self, run: &AgentRun) -> Result<Option<String>, String>;
 }
 
-/// 관리형 Claude lane. 기존 JobManager(headless/herdr)를 그대로 재사용한다 —
-/// 큐·로그·리포트·재연결 규칙이 잡과 동일하게 유지된다(설계 837-840줄).
+/// Managed Claude lane. Reuses the existing JobManager (headless/herdr) as-is —
+/// queue, log, report, and reattach rules stay identical to regular jobs (design lines 837-840).
 pub struct ClaudeManagedDriver {
     jobs: Arc<JobManager>,
 }
@@ -52,7 +52,7 @@ impl AgentDriver for ClaudeManagedDriver {
             collab: Some(lane),
             ..Default::default()
         })?;
-        let _ = run; // run의 상태는 서비스가 job 이벤트로 갱신한다
+        let _ = run; // the service updates the run state from job events
         Ok(job.id)
     }
 
@@ -80,8 +80,8 @@ impl AgentDriver for ClaudeManagedDriver {
         if run.job_id.is_empty() {
             return Ok(());
         }
-        // cancel은 비동기다. 레인 취소는 즉시성이 덜 중요하므로 여기서 block하지 않고
-        // 서비스가 tokio 런타임에서 호출하도록 한다 — 이 메서드는 try_current로 처리.
+        // cancel is asynchronous. Lane cancellation is not latency-critical, so instead of blocking here
+        // let the service call it from the tokio runtime — this method handles that via try_current.
         if tokio::runtime::Handle::try_current().is_ok() {
             let jobs = self.jobs.clone();
             let id = run.job_id.clone();
@@ -113,8 +113,8 @@ impl AgentDriver for ClaudeManagedDriver {
     }
 }
 
-/// Codex 수동 드라이버. 시작·취소를 보장하지 않는다(설계 156-157줄).
-/// 에이전트가 직접 인박스에 후보 파일을 쓰는 것만 지원하며 UI는 이 사실을 그대로 표시한다.
+/// Manual Codex driver. Does not guarantee start or cancel (design lines 156-157).
+/// Supports only the agent writing candidate files to the inbox itself, and the UI displays this fact verbatim.
 pub struct CodexManualDriver;
 
 impl AgentDriver for CodexManualDriver {
@@ -151,7 +151,7 @@ impl AgentDriver for CodexManualDriver {
 mod tests {
     use super::*;
 
-    /// JobManager 없이 Codex 드라이버의 계약만 확인한다.
+    /// Checks only the Codex driver's contract, without a JobManager.
     #[test]
     fn codex_manual_never_promises_management() {
         let driver = CodexManualDriver;

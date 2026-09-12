@@ -20,6 +20,9 @@ pub struct SplitNote {
 }
 
 pub fn split_frontmatter(text: &str) -> Option<SplitNote> {
+    // Editors and Obsidian sync can leave a BOM in front of the opening fence;
+    // don't let one stray character make a note invisible.
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     if !text.starts_with("---") {
         return None;
     }
@@ -32,7 +35,7 @@ pub fn split_frontmatter(text: &str) -> Option<SplitNote> {
     let mut offset = 0;
     for line in rest.split_inclusive('\n') {
         let t = line.trim_end_matches(|c| c == '\n' || c == '\r');
-        if t == "---" || t == "..." {
+        if t.trim_end() == "---" || t.trim_end() == "..." {
             return Some(SplitNote {
                 yaml: rest[..offset].to_string(),
                 after_close: rest[offset + line.len()..].to_string(),
@@ -119,17 +122,17 @@ pub(crate) fn mtime_ms(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
-// ---------- 프로젝트 폴더 ----------
+// ---------- project folders ----------
 
-/// 프로젝트 문서가 사는 볼트 루트. 새로 쓰는 경로는 항상 이 이름이다.
+/// Vault root where project documents live. Newly written paths always use this name.
 pub const PROJECT_ROOT: &str = "프로젝트";
-/// SI 업무 전용이던 시절의 이름. 읽기만 호환하며 새로 만들지 않는다.
+/// Name from the SI-only era. Read for compatibility only; never created anew.
 pub const LEGACY_PROJECT_ROOT: &str = "사업";
 
-/// 한 프로젝트의 문서 폴더. 정본 위치가 있으면 그것만 쓰고, 없을 때만 예전
-/// `사업/`을 읽는다. 마이그레이션 도중 같은 이슈가 두 루트에서 두 번 잡히는
-/// 것을 막으려는 것이다. 둘 다 없으면 정본 경로를 돌려준다 — 진단 메시지가
-/// 사용자에게 안내할 경로는 새 위치여야 한다.
+/// One project's document folder. When the canonical location exists only it is used; the legacy
+/// `사업/` (business) root is read only otherwise. This keeps the same issue from being picked up
+/// twice across both roots mid-migration. When neither exists the canonical path is returned —
+/// the path a diagnostic message guides the user to must be the new location.
 pub(crate) fn project_dir(vault: &Path, project: &str) -> PathBuf {
     let canonical = vault.join(PROJECT_ROOT).join(project);
     if canonical.is_dir() {
@@ -169,25 +172,25 @@ pub struct ImprovementNote {
     pub depends_on: Vec<String>,
     pub dependents: Vec<String>,
     pub commits: Vec<String>,
-    /// 세션 모드: 세션의 target_start_sha(설계 85줄). 레거시 노트는 빈 값.
+    /// Session mode: the session's target_start_sha (design line 85). Empty for legacy notes.
     pub base: String,
-    /// 세션 모드: 통합 대상 branch(설계 86줄).
+    /// Session mode: the branch being merged (design line 86).
     pub branch: String,
     pub github_repo: String,
     pub github_number: String,
     pub github_url: String,
     pub github_state: String,
-    /// 마지막 원격 갱신 시각. connector 단계에서 typed로 읽는다(설계 687-688줄).
+    /// Last remote refresh time. Read as typed by the connector step (design lines 687-688).
     pub github_updated: String,
     pub closed: String,
     pub legacy: bool,
-    /// 이 노트를 옮겨 만든 개발 항목 ID. 비어 있으면 아직 이관 전이다.
+    /// ID of the dev item this note was migrated into. Empty means not yet migrated.
     pub migrated_to: String,
     pub mtime_ms: u64,
 }
 
 fn is_issue_note(file_name: &str) -> bool {
-    // 이슈 노트만. MOC, 인박스, 뷰는 제외.
+    // Issue notes only. Excludes MOCs, inboxes, and views.
     file_name.ends_with(".md")
         && file_name != "이슈.md"
         && file_name != "개선.md"
@@ -279,7 +282,7 @@ pub(crate) fn note_from_file(
 }
 
 /// Merge configured projects with every first-level project directory in the
-/// vault. Both the canonical `프로젝트/` root and the legacy `사업/` root count,
+/// vault. Both the canonical `프로젝트/` (projects) root and the legacy `사업/` (business) root count,
 /// so a half-migrated vault still lists each project exactly once.
 /// A project without a codebase config can still own and display generic issues.
 pub fn project_pairs(vault: &Path, configured: &[(String, String)]) -> Vec<(String, String)> {
@@ -362,7 +365,7 @@ pub fn scan_improvements(
 }
 
 /// Human approval. Same write the vault checkbox performs: approve→true,
-/// approved→today, status→승인. Preconditions guard against skill-side misuse.
+/// approved→today, status→승인 (approved). Preconditions guard against skill-side misuse.
 pub fn approve_note(path: &Path) -> Result<(), String> {
     let text = std::fs::read_to_string(path).map_err(|e| format!("노트 읽기 실패: {e}"))?;
     let split = split_frontmatter(&text).ok_or("frontmatter가 없는 노트입니다")?;
@@ -375,7 +378,7 @@ pub fn approve_note(path: &Path) -> Result<(), String> {
     if status != "승인대기" {
         return Err(format!("승인대기 상태가 아닙니다 (현재: {status})"));
     }
-    // 실행 대상 게이트: 설계 없이 체크만 켜진 건은 승인 무효.
+    // Implementation-target gate: a checked box without a design section makes approval invalid.
     // Legacy notes retain their historical heading for read-only compatibility.
     let body = &split.after_close;
     if !body.contains("### 실행 대상") && !body.contains("### 변경 대상") {
@@ -413,9 +416,9 @@ pub fn read_note(path: &Path) -> Result<(Json, String), String> {
     Ok((Json::Object(obj), split.after_close))
 }
 
-/// Resolve each project's inbox list files: 이슈/<idPrefix> 이슈목록.md (new) and
-/// 개선/<idPrefix> 문제목록.md (legacy). Projects with an empty id_prefix match
-/// any `*이슈목록.md`/`*문제목록.md`; missing folders yield no entries.
+/// Resolve each project's inbox list files: 이슈/<idPrefix> 이슈목록.md (issue list, new) and
+/// 개선/<idPrefix> 문제목록.md (problem list, legacy). Projects with an empty id_prefix match
+/// any `*이슈목록.md` (issue list)/`*문제목록.md` (problem list); missing folders yield no entries.
 fn problem_list_paths(
     vault: &Path,
     projects: &[(String, String)],
@@ -487,7 +490,7 @@ pub struct UnpromotedItem {
     pub list_path: String,
 }
 
-/// List unpromoted items (`## 신규 (미승격)`) from issue and legacy inboxes.
+/// List unpromoted items (`## 신규 (미승격)` — "new (unpromoted)") from issue and legacy inboxes.
 pub fn list_unpromoted(vault: &Path, projects: &[(String, String)]) -> Vec<UnpromotedItem> {
     let mut out = Vec::new();
     for (name, id_prefix, path) in problem_list_paths(vault, projects) {
@@ -597,10 +600,14 @@ fn milestone_ids(vault: &Path, project: &str) -> std::collections::HashSet<Strin
 pub fn audit_vault(vault: &Path, projects: &[(String, String)]) -> VaultAudit {
     let mut issues = Vec::new();
 
-    // 이슈 노트 규칙: status/state, 승인 기록, 의존성, 마일스톤 참조.
+    // Issue note rules: status/state, approval record, dependencies, milestone references.
     let names: Vec<String> = projects.iter().map(|(n, _)| n.clone()).collect();
     let notes = scan_issues(vault, None, &names);
     let ids: std::collections::HashSet<&str> = notes.iter().map(|n| n.id.as_str()).collect();
+    // milestone_ids() re-reads whole directories; cache per project instead
+    // of rescanning once per note (O(n×m) → O(n + m)).
+    let mut milestone_cache: std::collections::HashMap<&str, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
     for n in &notes {
         if !STATUS_SET.contains(&n.status.as_str()) {
             issues.push(AuditIssue {
@@ -659,12 +666,17 @@ pub fn audit_vault(vault: &Path, projects: &[(String, String)]) -> VaultAudit {
                     ),
                 });
             }
-            if !n.milestone.is_empty() && !milestone_ids(vault, &n.project).contains(&n.milestone) {
-                issues.push(AuditIssue {
-                    severity: "error".into(),
-                    path: n.path.clone(),
-                    message: format!("{}: milestone '{}' 문서 없음", n.id, n.milestone),
-                });
+            if !n.milestone.is_empty() {
+                let known = milestone_cache
+                    .entry(n.project.as_str())
+                    .or_insert_with(|| milestone_ids(vault, &n.project));
+                if !known.contains(&n.milestone) {
+                    issues.push(AuditIssue {
+                        severity: "error".into(),
+                        path: n.path.clone(),
+                        message: format!("{}: milestone '{}' 문서 없음", n.id, n.milestone),
+                    });
+                }
             }
         }
         for d in n.depends_on.iter().chain(n.dependents.iter()) {
@@ -678,7 +690,7 @@ pub fn audit_vault(vault: &Path, projects: &[(String, String)]) -> VaultAudit {
         }
     }
 
-    // 일지 (4)
+    // journal (4)
     let today = chrono::Local::now().date_naive();
     let today_exists = journal_path(vault).is_file();
     if !today_exists {
@@ -760,7 +772,18 @@ fn parse_todo_line(line: &str) -> Option<(bool, String)> {
         "x" | "X" => true,
         _ => return None,
     };
-    Some((checked, after.trim_start().to_string()))
+    let body = after.trim_start();
+    if let Some((text, metadata)) = body.rsplit_once(" <!-- sawhorse-todo:") {
+        if let Some(json) = metadata.strip_suffix(" -->") {
+            if let Ok(value) = serde_json::from_str::<serde_json::Value>(json) {
+                if value.get("deleted").and_then(|v| v.as_bool()) == Some(true) {
+                    return None;
+                }
+                return Some((checked, text.to_string()));
+            }
+        }
+    }
+    Some((checked, body.to_string()))
 }
 
 struct SectionItems {
@@ -1091,7 +1114,7 @@ fn percent_decode(src: &str) -> String {
 }
 
 /// Obsidian's "shortest path" embeds carry only the file name, so fall back to a
-/// bounded search of the vault (첨부/ included — vault_tree skips it, we must not).
+/// bounded search of the vault (첨부/ (attachments) included — vault_tree skips it, we must not).
 fn find_by_name(dir: &Path, name: &str, depth: usize, budget: &mut u32) -> Option<PathBuf> {
     if depth > 8 || *budget == 0 {
         return None;
@@ -1210,52 +1233,6 @@ pub fn read_note_asset(vault: &Path, note: &Path, src: &str) -> Result<String, S
     Ok(format!("data:{mime};base64,{}", BASE64.encode(bytes)))
 }
 
-// ---------- Obsidian vault detection (first-run wizard helper) ----------
-
-#[derive(Serialize, Clone, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct VaultCandidate {
-    pub path: String,
-    pub open: bool,
-}
-
-/// Parse Obsidian's vault registry JSON: {"vaults": {"<id>": {"path": ..., "open": ...}}}.
-fn parse_vault_registry(text: &str) -> Vec<(String, bool)> {
-    let Ok(v) = serde_json::from_str::<Json>(text) else {
-        return vec![];
-    };
-    let Some(vaults) = v.get("vaults").and_then(Json::as_object) else {
-        return vec![];
-    };
-    let mut out = Vec::new();
-    for entry in vaults.values() {
-        let Some(p) = entry.get("path").and_then(Json::as_str) else {
-            continue;
-        };
-        let open = entry.get("open").and_then(Json::as_bool).unwrap_or(false);
-        out.push((p.to_string(), open));
-    }
-    out
-}
-
-/// Known vaults from Obsidian's own config, existing dirs first (open first).
-pub fn detect_obsidian_vaults() -> Vec<VaultCandidate> {
-    let Some(cfg_dir) = dirs::config_dir() else {
-        return vec![];
-    };
-    let registry = cfg_dir.join("obsidian").join("obsidian.json");
-    let Ok(text) = std::fs::read_to_string(registry) else {
-        return vec![];
-    };
-    let mut out: Vec<VaultCandidate> = parse_vault_registry(&text)
-        .into_iter()
-        .filter(|(p, _)| Path::new(p).is_dir())
-        .map(|(path, open)| VaultCandidate { path, open })
-        .collect();
-    out.sort_by(|a, b| b.open.cmp(&a.open));
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1288,9 +1265,25 @@ mod tests {
         root
     }
 
-    /// 이름을 바꾸기 전 만든 볼트는 `사업/` 밖에 없다. 이관하지 않아도 프로젝트
-    /// 목록과 이슈 스캔이 그대로 동작해야 한다 — 마이그레이션은 사용자가 고르는
-    /// 별도 작업이지 앱 실행의 전제 조건이 아니다.
+    /// A UTF-8 BOM before the opening fence (editor/sync artifact) or trailing
+    /// spaces on the closing fence must not make the note invisible.
+    #[test]
+    fn split_frontmatter_tolerates_bom_and_loose_closing_fence() {
+        let bom = "\u{feff}---\nid: FDR-001\n---  \n본문\n";
+        let split = split_frontmatter(bom).expect("BOM note must still parse");
+        assert!(split.yaml.contains("id: FDR-001"));
+        assert_eq!(split.after_close, "본문\n");
+
+        let ellipsis = "---\nid: FDR-002\n...  \n본문\n";
+        assert!(split_frontmatter(ellipsis).is_some());
+
+        let no_frontmatter = "본문만 있는 노트\n";
+        assert!(split_frontmatter(no_frontmatter).is_none());
+    }
+
+    /// Vaults made before the rename have nothing outside `사업/` (business). Even unmigrated, project
+    /// listing and issue scanning must keep working — migration is a separate task the user
+    /// opts into, not a precondition for running the app.
     #[test]
     fn legacy_business_root_still_lists_projects_and_issues() {
         let root =
@@ -1313,8 +1306,8 @@ mod tests {
         std::fs::remove_dir_all(&root).unwrap();
     }
 
-    /// 두 루트가 함께 있으면 정본만 읽는다. 이관 도중 같은 이슈가 두 번 나오면
-    /// 승인·집계가 전부 어긋나므로 중복이 없다는 것이 이 폴백의 핵심 조건이다.
+    /// With both roots present, read only the canonical one. If the same issue appeared twice mid-migration,
+    /// approvals and aggregates would all skew, so zero duplicates is the core condition of this fallback.
     #[test]
     fn canonical_project_root_wins_over_legacy_during_migration() {
         let root = std::env::temp_dir().join(format!("swdash-vault-both-{}", uuid::Uuid::new_v4()));
@@ -1400,7 +1393,7 @@ mod tests {
         assert_eq!(fm_str(&map, "id"), "FDR-001");
         assert_eq!(fm_list(&map, "commits").len(), 0);
 
-        // idempotence / gate: second approval and non-대기 status both fail
+        // idempotence / gate: second approval and a status other than 승인대기 (awaiting approval) both fail
         assert!(approve_note(&path).is_err());
         let path2 = vault
             .join("프로젝트")
@@ -1445,14 +1438,14 @@ mod tests {
     #[test]
     fn audit_clean_vault_has_no_issues() {
         let vault = fixture_vault("audit-ok");
-        // 오늘 일지 작성 — 없으면 error 이슈 1건 (fixture에 일지/ 디렉터리는 없다)
+        // create today's journal — without it one error issue fires (the fixture has no 일지/ (journal) directory)
         std::fs::create_dir_all(vault.join("일지")).unwrap();
         std::fs::write(
             journal_path(&vault),
             "---\ntype: 일지\n---\n\n## 오늘 할 일\n\n- [ ] A\n",
         )
         .unwrap();
-        // 최근 7일 일지도 작성 — 없으면 info 이슈가 나온다
+        // create the last 7 days of journals too — otherwise an info issue fires
         let today = chrono::Local::now().date_naive();
         for i in 1..=7 {
             let d = today - chrono::Duration::days(i);
@@ -1694,17 +1687,5 @@ mod tests {
         let vault = fixture_vault("trav");
         assert!(read_vault_note(&vault, "../outside.md").is_err());
         assert!(read_vault_note(&vault, "/etc/passwd").is_err());
-    }
-    #[test]
-    fn parse_vault_registry_shapes() {
-        let parsed = parse_vault_registry(
-            r#"{"vaults":{"a1":{"path":"/v/main","ts":1,"open":true},"a2":{"path":"/v/old","ts":2}}}"#,
-        );
-        assert_eq!(parsed.len(), 2);
-        assert!(parsed.iter().any(|(p, o)| p == "/v/main" && *o));
-        assert!(parsed.iter().any(|(p, o)| p == "/v/old" && !o));
-        assert!(parse_vault_registry("not json").is_empty());
-        assert!(parse_vault_registry(r#"{"vaults":{}}"#).is_empty());
-        assert!(parse_vault_registry(r#"{"other":1}"#).is_empty());
     }
 }

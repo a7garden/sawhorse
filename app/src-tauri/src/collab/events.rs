@@ -1,12 +1,12 @@
-// 감사 이벤트와 tauri 이벤트 방출. 설계 825줄: audit event·transactional outbox.
-// 내부 상태 전이는 store.transition_with_audit으로 같은 트랜잭션에 기록되고,
-// 이 모듈은 프론트엔드 알림(`collab-changed`)과 감사 이벤트 생성을 담당한다.
+// Audit events and tauri event emission. Design line 825: audit event and transactional outbox.
+// Internal state transitions are recorded in the same transaction via store.transition_with_audit,
+// and this module owns frontend notification (`collab-changed`) and audit event creation.
 
 use super::model::AuditEvent;
 use super::{new_id, now_ts};
 use serde_json::json;
 
-/// 감사 이벤트 종류. 설계 676-679줄의 대표 이벤트 이름을 그대로 쓴다.
+/// Audit event kinds. Uses the canonical event names from design lines 676-679 verbatim.
 pub const SESSION_CREATED: &str = "session.created";
 pub const AGENT_RUN_COMPLETED: &str = "agent.run.completed";
 pub const CHANGESET_PROPOSED: &str = "changeset.proposed";
@@ -34,10 +34,10 @@ pub fn make_event(
     }
 }
 
-/// 프론트엔드 방출 콜백. tauri AppHandle은 서비스 계층에서 주입받는다.
+/// Frontend emit callback. The tauri AppHandle is injected by the service layer.
 pub type Emit = Box<dyn Fn(&str, serde_json::Value) + Send + Sync>;
 
-/// `collab-changed` 방출. UI는 이 이벤트 하나로 세션·검토 화면을 갱신한다.
+/// Emit `collab-changed`. The UI refreshes the session and review screens from this one event.
 pub fn notify_changed(emit: &Emit, reason: &str) {
     emit("collab-changed", json!({ "reason": reason }));
 }

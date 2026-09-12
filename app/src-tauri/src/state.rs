@@ -27,11 +27,11 @@ pub struct PersistedState {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MissedEntry {
-    /// "<예약 키>-<date>"
+    /// "<schedule key>-<date>"
     pub key: String,
-    /// 예약 키(`si.morning`). 구형 state.json 은 루틴 이름(`morning`)을 담고 있다.
+    /// Schedule key (`si.morning`). Older state.json files hold the routine name (`morning`).
     pub routine: String,
-    /// 사람이 읽는 이름. 구형 기록에는 없다.
+    /// Human-readable name. Absent from older records.
     #[serde(default)]
     pub label: String,
     pub date: String,
@@ -78,11 +78,8 @@ impl AppState {
     pub fn save_state(&self) {
         let guard = self.state.lock();
         let path = Self::state_path(&self.data_dir);
-        let tmp = path.with_extension("json.tmp");
         if let Ok(json) = serde_json::to_string_pretty(&*guard) {
-            if std::fs::write(&tmp, json).is_ok() {
-                let _ = std::fs::rename(&tmp, &path);
-            }
+            let _ = crate::config::write_atomic(&path, json.as_bytes());
         }
     }
 
@@ -114,6 +111,16 @@ impl AppState {
             .filter_map(|id| latest.remove(id))
             .collect();
         jobs.truncate(200);
+        // Compact the append-only transition log: keep only the collapsed
+        // latest records so jobs.jsonl stops growing across restarts.
+        let mut payload = String::new();
+        for job in &jobs {
+            if let Ok(line) = serde_json::to_string(job) {
+                payload.push_str(&line);
+                payload.push('\n');
+            }
+        }
+        let _ = crate::config::write_atomic(&Self::jobs_path(data_dir), payload.as_bytes());
         jobs
     }
 
@@ -165,6 +172,15 @@ impl AppState {
             j.error = Some("앱 재시작으로 중단됨".into());
         }
         resumable
+    }
+
+    /// Job ids become log/report file names; reject anything path-like before
+    /// it reaches the filesystem (`../` must not escape logs/ or reports/).
+    pub fn validate_job_id(id: &str) -> Result<(), String> {
+        if id.is_empty() || id.contains('/') || id.contains('\\') || id.contains("..") {
+            return Err("잘못된 작업 ID입니다.".into());
+        }
+        Ok(())
     }
 
     pub fn log_path(&self, id: &str) -> PathBuf {

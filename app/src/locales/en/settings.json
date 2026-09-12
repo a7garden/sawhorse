@@ -192,7 +192,7 @@
       "off": "Off"
     },
     "schedule": {
-      "manual": "Manual",
+      "manual": "On demand",
       "daily": "Daily",
       "weekdays": "Weekdays"
     },
@@ -213,11 +213,15 @@
         "none": "Run manually when needed",
         "daily": "Daily",
         "weekdays": "Weekdays",
-        "once": "One-time"
+        "once": "One-time",
+        "weekly": "Choose weekdays"
       },
       "select": "Select one",
       "listPlaceholder": "Comma-separated",
-      "askAgent": "Delegate to agent"
+      "askAgent": "Delegate to agent",
+      "timeLabel": "Run time",
+      "dateLabel": "Run date",
+      "days": "Repeat on"
     },
     "ask": {
       "none": "run directly without a schedule",
@@ -228,6 +232,44 @@
       "body": "Create a task in the workbench.\nTitle: {{title}}\nContent: {{prompt}}\nSchedule: {{schedule}}\nQueue it for approval following the workbench skill spec.",
       "noTitle": "(title)",
       "noContent": "(content)"
+    },
+    "groups": {
+      "scheduled": "Automatic runs",
+      "scheduledHint": "Runs at the scheduled time. Turning the switch off pauses the schedule; Run now is still available.",
+      "manual": "On-demand runs",
+      "manualHint": "Every task can run now or at a scheduled time."
+    },
+    "state": {
+      "on": "Schedule on",
+      "off": "Schedule off"
+    },
+    "editSchedule": "Edit schedule",
+    "addSchedule": "Add schedule",
+    "days": {
+      "0": "Mon",
+      "1": "Tue",
+      "2": "Wed",
+      "3": "Thu",
+      "4": "Fri",
+      "5": "Sat",
+      "6": "Sun"
+    },
+    "timeline": {
+      "title": "Weekly timeline",
+      "hint": "Drag a task onto a day and time in 30-minute steps. Click a scheduled task to edit the exact time.",
+      "previous": "Previous week",
+      "next": "Next week",
+      "today": "This week",
+      "week": "Week to display",
+      "newSchedule": "New schedule",
+      "repeat": "Repeat weekly",
+      "once": "Once on this date",
+      "choose": "Tasks to schedule",
+      "selected": "{{title}} · Choose a time slot.",
+      "editHint": "You can also select a task and click a time slot. Moving a recurring task changes the time for its other weekdays too.",
+      "past": "Choose a future date and time.",
+      "grid": "Weekly schedule grid",
+      "local": "Local time"
     }
   },
   "vault": {

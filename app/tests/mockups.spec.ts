@@ -13,7 +13,7 @@ async function open(page: Page) {
   await page.goto(tour);
   await page
     .locator(".app-navigation")
-    .getByRole("button", { name: "작업", exact: true })
+    .getByRole("button", { name: "작업대", exact: true })
     .click();
   await page.getByRole("group", {name:/작업 공간|Work spaces/}).getByRole("button",{name:/^목업|^Mockups/}).click();
   await page
@@ -282,7 +282,7 @@ test("compact review stays within the dialog and English labels are available", 
   await page.reload();
   await page
     .locator(".app-navigation")
-    .getByRole("button", { name: "Work", exact: true })
+    .getByRole("button", { name: "Workbench", exact: true })
     .click();
   await page.getByRole("group", {name:/작업 공간|Work spaces/}).getByRole("button",{name:/^목업|^Mockups/}).click();
   await page

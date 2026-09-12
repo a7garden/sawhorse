@@ -4,7 +4,7 @@ use super::*;
 use serde_json::json;
 
 pub fn supports(work: &WorkItem) -> bool {
-    work.workflow_id == "intent-flow" && work.workflow_version == "2.0.0"
+    work.workflow_id == "intent-flow" && matches!(work.workflow_version.as_str(), "2.0.0" | "2.0.1")
 }
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -301,7 +301,6 @@ pub fn action_at(root: &Path, input: ActionInput) -> Result<WorkItem, String> {
     };
     let next = next.to_string();
     state.error.clear();
-    save(root, &work.id, &mut state)?;
     persist_work(
         root,
         &mut work,
@@ -309,6 +308,7 @@ pub fn action_at(root: &Path, input: ActionInput) -> Result<WorkItem, String> {
         status,
         &format!("{}: {}", input.action, input.note),
     )?;
+    save(root, &work.id, &mut state)?;
     Ok(work)
 }
 #[tauri::command]
@@ -925,9 +925,7 @@ pub async fn tick(root: &Path) -> Result<(), String> {
         )
     });
     for mut work in candidates {
-        if crate::sdlc_harness::has_active_work(root, &work.id)?
-            || !dependency_ready(&work, &snapshot(root)?.work)
-        {
+        if crate::sdlc_harness::has_active_work(root, &work.id)? || !dependency_ready(&work, &all) {
             continue;
         }
         let mut state = read(root, &work.id)?;

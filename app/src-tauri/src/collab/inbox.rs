@@ -1,9 +1,9 @@
-// 후보 파일 인박스. 설계 200-232줄·819-820줄.
+// Candidate file inbox. Design lines 200-232 and 819-820.
 //
-// 에이전트는 `~/.claude/sawhorse/collab/inbox/changesets/`에 JSON 파일 하나만 쓴다
-// (tasks.rs의 파일 인박스 패턴과 동일한 단일 작성자 규칙). 이 모듈이 파일을 검증하고
-// Git 객체를 다시 확인한 뒤 장부(SQLite)에 정규화하고 파일을 processed/rejected로 옮긴다.
-// 정식 후보 기록은 장부만 쓴다 — 인박스 파일은 요청일 뿐이다.
+// An agent writes exactly one JSON file into `~/.claude/sawhorse/collab/inbox/changesets/`
+// (single-writer rule, same as the file inbox pattern in tasks.rs). This module validates the file,
+// re-verifies the Git objects, normalizes the candidate into the ledger (SQLite), and moves the file to processed/rejected.
+// Only the ledger holds the canonical candidate record — the inbox file is just a request.
 
 use super::git;
 use super::model::*;
@@ -12,7 +12,7 @@ use super::{inbox_dir, inbox_done_dir, inbox_rejected_dir, new_id, now_ts};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
-/// 인박스 처리 한 건의 결과.
+/// Result of processing one inbox entry.
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct InboxReport {
@@ -22,7 +22,7 @@ pub struct InboxReport {
     pub reason: String,
 }
 
-/// 에이전트가 제출한 검사 결과. 참고용으로만 남기고 수용 판정에는 쓰지 않는다.
+/// Check results submitted by the agent. Kept for reference only; never used for the acceptance decision.
 fn note_checks(checks: &[ProposedCheck]) -> String {
     checks
         .iter()
@@ -31,8 +31,8 @@ fn note_checks(checks: &[ProposedCheck]) -> String {
         .join(", ")
 }
 
-/// 인박스의 대기 파일을 모두 처리한다. 워커와 커맨드 양쪽에서 호출한다.
-/// 파일이 아직 쓰이는 중일 수 있으므로 2초 mtime 안정 가드를 둔다(tasks.rs와 동일).
+/// Process every pending file in the inbox. Called by both the worker and the command.
+/// Files may still be mid-write, so a 2-second mtime stability guard applies (same as tasks.rs).
 pub fn process_inbox(store: &Store) -> Result<Vec<InboxReport>, String> {
     let dir = inbox_dir();
     if std::fs::create_dir_all(&dir).is_err() {
@@ -49,7 +49,7 @@ pub fn process_inbox(store: &Store) -> Result<Vec<InboxReport>, String> {
         .unwrap_or_default();
     entries.sort();
     for path in entries {
-        // 2초 mtime 가드: 최근에 바뀐 파일은 다음 틱에 다시 본다.
+        // 2-second mtime guard: files changed recently are re-examined on the next tick.
         if let Ok(meta) = std::fs::metadata(&path) {
             if let Ok(modified) = meta.modified() {
                 if modified.elapsed().map(|e| e.as_secs() < 2).unwrap_or(true) {
@@ -78,7 +78,7 @@ pub fn process_inbox(store: &Store) -> Result<Vec<InboxReport>, String> {
             Err(reason) => {
                 let rejected = inbox_rejected_dir().join(&name);
                 std::fs::create_dir_all(inbox_rejected_dir()).ok();
-                // 거부 사유를 사이드카로 남겨 에이전트가 원인을 알 수 있게 한다.
+                // Leave the rejection reason as a sidecar file so the agent can learn the cause.
                 let _ = std::fs::write(
                     inbox_rejected_dir().join(format!("{name}.reason.txt")),
                     &reason,
@@ -103,8 +103,8 @@ fn handle_file(store: &Store, path: &Path) -> Result<String, String> {
     validate_request(store, &req)
 }
 
-/// 스키마·세션·Git 검증을 통과하면 장부에 후보를 만들고 ID를 반환한다.
-/// 코어는 에이전트 입력을 신뢰하지 않고 저장소 identity와 Git object를 다시 확인한다(설계 218-229줄).
+/// If schema, session, and Git validation pass, create the candidate in the ledger and return its ID.
+/// The core does not trust agent input; it re-verifies the repository identity and Git objects (design lines 218-229).
 pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, String> {
     if req.op != "propose" {
         return Err(format!("지원하지 않는 op: {}", req.op));
@@ -123,7 +123,7 @@ pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, S
     }
     let repo = PathBuf::from(&session.integration_path);
 
-    // repository identity: 제출한 worktree가 세션과 같은 저장소인지.
+    // Repository identity: whether the submitted worktree belongs to the session's repository.
     let worktree = PathBuf::from(&req.worktree);
     if !worktree.is_dir() {
         return Err(format!("worktree 경로가 없다: {}", req.worktree));
@@ -134,14 +134,14 @@ pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, S
         return Err("제출 worktree가 세션의 Git 저장소와 다르다 (같은 common object database만 입력으로 받는다)".into());
     }
 
-    // 축약되지 않은 commit object + base가 source의 조상.
+    // Unabbreviated commit objects, plus base must be an ancestor of source.
     let base = git::resolve_commit(&repo, &req.base_sha)?;
     let source = git::resolve_commit(&repo, &req.source_sha)?;
     if !git::is_ancestor(&repo, &base, &source)? {
         return Err("baseSha가 sourceSha의 조상이 아니다".into());
     }
 
-    // base가 현재 integration HEAD의 조상인지(뒤처진 후보 표시).
+    // Whether base is an ancestor of the current integration HEAD (marks a stale candidate).
     let head = git::head_info(&repo)?;
     let base_is_current_ancestor = if head.head.is_empty() {
         false
@@ -149,18 +149,18 @@ pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, S
         git::is_ancestor(&repo, &base, &head.head)?
     };
 
-    // merge commit 포함 range는 기본 거부(설계 227줄).
+    // Ranges containing merge commits are rejected by default (design line 227).
     if git::contains_merge_commit(&repo, &base, &source)? {
         return Err("base..source에 merge commit이 포함되어 있다 — 기본 정책은 거부다".into());
     }
 
-    // exact manifest 재계산 — 에이전트가 보낸 경로·blob 정보는 무시한다(설계 219-220줄).
+    // Recompute the exact manifest — path and blob info sent by the agent is ignored (design lines 219-220).
     let (entries, manifest_json) = git::compute_manifest(&repo, &base, &source)?;
     if entries.is_empty() {
         return Err("변경이 비어 있다 (base == source)".into());
     }
 
-    // 위험 콘텐츠 사전검사(설계 229줄).
+    // Pre-check for risky content (design line 229).
     let risks = git::assess_manifest_risks(&repo, &entries)?;
     let blob_risks = git::assess_blob_risks(&repo, &entries)?;
     let mut blocked = Vec::new();
@@ -194,10 +194,10 @@ pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, S
         return Err(format!("untracked 파일과 충돌: {}", collisions.join(", ")));
     }
 
-    // 의존성 검증: 단순 ID가 아니라 승인된 candidate digest 또는 verified merge SHA(설계 229-230줄).
+    // Dependency validation: not bare IDs but an approved candidate digest or verified merge SHA (design lines 229-230).
     validate_dependencies(store, &req.depends_on)?;
 
-    // 보호 ref를 먼저 붙잡아 검토 중에 Git 객체가 사라지지 않게 한다(설계 194-198줄).
+    // Grab the protected ref first so Git objects cannot vanish during review (design lines 194-198).
     let candidate_id = new_id("c");
     git::create_protected_ref(&repo, &candidate_id, &source)?;
 
@@ -205,15 +205,27 @@ pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, S
     let source_tree = tree_of(&repo, &source)?;
     let dependency_json = serde_json::to_string(&req.depends_on).unwrap_or_else(|_| "[]".into());
     let verification_plan_hash = verification_plan_hash(&session);
-    let digest = digest_payload(
-        &base,
-        &source,
-        &base_tree,
-        &source_tree,
-        &manifest_json,
-        &dependency_json,
-        &verification_plan_hash,
-    );
+    // note 인텐트도 승인 digest에 묶는다 — 인텐트 내용이 다르면 digest가 달라져 재승인이 필요하다.
+    let note_intents_json = serde_json::to_string(&req.note_intents).unwrap_or_else(|_| "[]".into());
+    let digest = {
+        let base_digest = digest_payload(
+            &base,
+            &source,
+            &base_tree,
+            &source_tree,
+            &manifest_json,
+            &dependency_json,
+            &verification_plan_hash,
+        );
+        // digest_payload과 같은 규칙(길이 접두사)으로 base digest 뒤에 인텐트를 이어 붙인다.
+        use sha2::{Digest, Sha256};
+        let mut h = Sha256::new();
+        h.update((base_digest.len() as u64).to_le_bytes());
+        h.update(base_digest.as_bytes());
+        h.update((note_intents_json.len() as u64).to_le_bytes());
+        h.update(note_intents_json.as_bytes());
+        hex::encode(h.finalize())
+    };
 
     let change_set = ChangeSet {
         id: candidate_id.clone(),
@@ -228,7 +240,7 @@ pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, S
         dependency_json,
         verification_plan_hash,
         digest,
-        // 뒤처진 후보도 검토는 필요하므로 review_pending으로 두고 뷰에서 stale을 표시한다.
+        // Stale candidates still need review, so keep them review_pending and flag stale in the view.
         status: ChangeSetStatus::ReviewPending,
         summary: req.summary.clone(),
         superseded_by: String::new(),
@@ -238,12 +250,12 @@ pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, S
     };
     store.insert_change_set(&change_set, &req.depends_on)?;
 
-    // 이슈 노트 변경 intent는 승인 뒤 코어가 file WAL로 한 번만 적용한다(설계 76-78줄).
+    // Issue note change intents are applied exactly once by the core via the file WAL after approval (design lines 76-78).
     for intent in &req.note_intents {
         store_note_intent(store, &change_set.id, intent)?;
     }
 
-    // 제출 검사 결과는 요약으로만 남긴다 — 수용 판정에는 쓰지 않는다.
+    // Submitted check results are stored only as a summary — never used for the acceptance decision.
     let checks_note = note_checks(&req.checks);
     if !checks_note.is_empty() {
         store.insert_audit_event(&AuditEvent {
@@ -264,7 +276,7 @@ pub fn validate_request(store: &Store, req: &ProposeRequest) -> Result<String, S
     Ok(candidate_id)
 }
 
-/// 의존 후보 digest 또는 verified merge SHA인지 확인한다.
+/// Verify each dependency is a candidate digest or a verified merge SHA.
 pub fn validate_dependencies(store: &Store, depends_on: &[String]) -> Result<(), String> {
     for dep in depends_on {
         let as_digest = store
@@ -282,14 +294,14 @@ pub fn validate_dependencies(store: &Store, depends_on: &[String]) -> Result<(),
 }
 
 fn store_unverified_ok(_store: &Store, _dep: &str) -> Result<bool, String> {
-    // merge SHA 형태의 의존은 integration_attempt에서 verified/reverted 시도의 merge_sha로 확인한다.
-    // pending_change_sets의 digest 매칭이 1차 필터고, 여기서는 merge SHA 존재를 장부에서 찾는다.
-    Ok(false) // store API에서 list_attempts 전역 조회가 없어 1단계는 digest 매칭만 지원
+    // A dependency in merge SHA form is verified against the merge_sha of verified/reverted attempts in integration_attempt.
+    // digest matching in pending_change_sets is the first filter; here the merge SHA's existence is looked up in the ledger.
+    Ok(false) // phase 1 supports digest matching only: the store API has no global list_attempts query
 }
 
 fn store_note_intent(store: &Store, candidate_id: &str, intent: &NoteIntent) -> Result<(), String> {
-    // intent는 staged inbound_change로 남긴다. 후보가 verified되면 apply_note_intents가
-    // file WAL 절차로 한 번만 적용한다(설계 76-78·566-571줄).
+    // The intent is stored as a staged inbound_change. Once the candidate is verified, apply_note_intents
+    // applies it exactly once via the file WAL procedure (design lines 76-78 and 566-571).
     store.insert_audit_event(&AuditEvent {
         id: new_id("e"),
         kind: "changeset.note_intent".into(),
@@ -319,9 +331,11 @@ fn store_note_intent(store: &Store, candidate_id: &str, intent: &NoteIntent) -> 
     Ok(())
 }
 
-/// 후보가 verified된 뒤 노트 intent를 적용한다. expected hash가 다르면 거절한다 —
-/// optimistic hash + file WAL(설계 566-571줄). 적용 성공 수를 반환한다.
+/// Apply note intents after the candidate is verified. Rejects when the expected hash differs —
+/// optimistic hash + file WAL (design lines 566-571). Returns the number of successful applications.
 pub fn apply_note_intents(store: &Store, candidate_id: &str) -> Result<usize, String> {
+    // 에이전트가 넣은 경로는 반드시 볼트 루트 안이어야 한다 — 임의 파일 읽기/rename 차단.
+    let root = crate::sdlc::vault_root()?;
     let staged = store.list_inbound_changes("staged", 500)?;
     let mut applied = 0usize;
     for item in &staged {
@@ -342,6 +356,7 @@ pub fn apply_note_intents(store: &Store, candidate_id: &str) -> Result<usize, St
             .unwrap_or("")
             .to_string();
         let target = std::path::PathBuf::from(&note_path);
+        crate::workspace_io::check_path(&root, &target)?;
         let current = std::fs::read_to_string(&target).unwrap_or_default();
         let current_hash = {
             use sha2::{Digest, Sha256};
@@ -355,8 +370,8 @@ pub fn apply_note_intents(store: &Store, candidate_id: &str) -> Result<usize, St
         }
         let updated =
             crate::extensions::github::update_frontmatter_field(&current, &field, &value)?;
-        // file WAL 절차는 extensions::github의 내부 함수를 재사용할 수 없으므로
-        // 여기서 같은 절차를 수행한다: prepared → 쓰기 → applied.
+        // The file WAL procedure cannot reuse extensions::github's internal function,
+        // so perform the same procedure here: prepared -> write -> applied.
         let wal_id = store.file_wal_prepare(&note_path, &current_hash, "")?;
         let tmp = target.with_extension(format!("intent-{}", &wal_id[..8.min(wal_id.len())]));
         std::fs::write(&tmp, &updated).map_err(|e| format!("임시 파일 쓰기 실패: {e}"))?;
@@ -368,7 +383,7 @@ pub fn apply_note_intents(store: &Store, candidate_id: &str) -> Result<usize, St
     Ok(applied)
 }
 
-/// 세션의 검증 프로필 내용 해시. 프로필이 바뀌면 기존 승인은 무효가 된다.
+/// Content hash of the session's verification profile. Changing the profile invalidates existing approvals.
 pub fn verification_plan_hash(session: &Session) -> String {
     use sha2::{Digest, Sha256};
     let mut h = Sha256::new();
@@ -421,7 +436,7 @@ mod tests {
         }
     }
 
-    /// 대표 체크아웃 + 같은 저장소의 agent worktree + 세션과 유효한 propose 요청.
+    /// Main checkout + an agent worktree in the same repository + a propose request valid for the session.
     fn setup(tag: &str) -> (TempRepo, std::sync::Arc<Store>, ProposeRequest) {
         let main_dir =
             std::env::temp_dir().join(format!("sawhorse-inbox-{}-{tag}", uuid::Uuid::new_v4()));
@@ -589,5 +604,61 @@ mod tests {
             inbox_rejected_dir().join("bad.json.reason.txt").exists(),
             "거부 사유 사이드카"
         );
+    }
+
+    #[test]
+    fn note_intents_are_bound_into_the_approval_digest() {
+        let (_t, store, mut req) = setup("digest-intent");
+        let d1 = store
+            .get_change_set(&validate_request(&store, &req).unwrap())
+            .unwrap()
+            .unwrap()
+            .digest;
+        req.note_intents = vec![NoteIntent {
+            note_path: "프로젝트/x/이슈.md".into(),
+            field: "status".into(),
+            value: "done".into(),
+            ..Default::default()
+        }];
+        let d2 = store
+            .get_change_set(&validate_request(&store, &req).unwrap())
+            .unwrap()
+            .unwrap()
+            .digest;
+        assert_ne!(d1, d2, "인텐트가 있으면 digest가 달라야 한다");
+        req.note_intents[0].value = "review".into();
+        let d3 = store
+            .get_change_set(&validate_request(&store, &req).unwrap())
+            .unwrap()
+            .unwrap()
+            .digest;
+        assert_ne!(d2, d3, "인텐트 내용이 다르면 digest가 달라야 한다");
+    }
+
+    #[test]
+    fn note_intent_outside_vault_is_rejected() {
+        let (_t, store, _req) = setup("intent-escape");
+        let payload = serde_json::json!({
+            "value": "x",
+            "expectedLocalHash": "",
+        })
+        .to_string();
+        let escape = std::env::temp_dir().join("sawhorse-escape-note.md");
+        let _ = std::fs::remove_file(&escape);
+        store
+            .insert_inbound_change(
+                &new_id("ni"),
+                "c-escape",
+                "note_intent",
+                "status",
+                &payload,
+                &escape.to_string_lossy(),
+            )
+            .unwrap();
+        assert!(
+            apply_note_intents(&store, "c-escape").is_err(),
+            "볼트 밖 경로 인텐트는 거부되어야 한다"
+        );
+        assert!(!escape.exists(), "볼트 밖 파일이 만들어지면 안 된다");
     }
 }

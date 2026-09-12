@@ -37,7 +37,7 @@ await page.addInitScript((fx) => {
 await page.goto("http://localhost:5199/", { waitUntil: "domcontentloaded" });
 await page.waitForSelector('[role="alert"] > div', { timeout: 20000 });
 
-// 1) 스키마 충돌 CTA → 스키마 스튜디오 화면으로 바뀌는지
+// 1) Schema conflict CTA → verify the view switches to the schema studio screen
 await page.locator('[role="alert"] > div').first().getByRole("button").first().click();
 await page.waitForTimeout(1500);
 const body1 = await page.evaluate(() => document.body.innerText);
@@ -46,7 +46,7 @@ console.log("SCHEMA_PAGE_MARKERS:", JSON.stringify({
   stripStillVisible: await page.locator('[role="alert"]').count(),
 }, null, 2));
 
-// 2) 레거시 이슈 CTA → 작업대 이슈 화면으로 바뀌는지
+// 2) Legacy issue CTA → verify the view switches to the workbench issue screen
 const legacyCta = page.locator('[role="alert"] > div').last().getByRole("button").first();
 await legacyCta.click();
 await page.waitForTimeout(1500);
