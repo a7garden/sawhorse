@@ -179,7 +179,7 @@ pub struct DiscoveredBundle {
     pub dir: String,
 }
 
-/// Built-in extensions are discovered from app resources, user extensions from ~/.claude/sawhorse/extensions/ (design 608-610).
+/// Built-in extensions are discovered from app resources, user extensions from ~/.sawhorse/extensions/ (design 608-610).
 pub fn discover(builtin_root: Option<&Path>) -> Result<Vec<DiscoveredBundle>, String> {
     let mut out = Vec::new();
     let mut push_dir = |dir: &Path, source: &str| {

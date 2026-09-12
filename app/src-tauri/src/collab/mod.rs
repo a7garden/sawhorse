@@ -19,7 +19,7 @@ pub mod store;
 
 use chrono::Utc;
 
-/// Working directory (`~/.claude/sawhorse`). Same parent as config.json.
+/// Working directory (`~/.sawhorse`). Same parent as config.json.
 #[cfg(test)]
 thread_local! {
     static TEST_ROOT: std::path::PathBuf = {

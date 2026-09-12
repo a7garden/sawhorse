@@ -86,7 +86,7 @@
   "home": {
     "title": "홈",
     "problems": {
-      "configMissing": "설정 파일(~/.claude/sawhorse/config.json)이 없습니다. 작업공간 경로만 지정해도 시작할 수 있습니다.",
+      "configMissing": "설정 파일(~/.sawhorse/config.json)이 없습니다. 작업공간 경로만 지정해도 시작할 수 있습니다.",
       "vaultPath": "볼트 경로가 유효하지 않습니다. 설정에서 경로를 확인하세요.",
       "claudeCli": "claude CLI를 실행할 수 없습니다. 설정에서 실행 파일 위치를 확인하세요.",
       "projectPaths": "프로젝트 경로 확인 실패: {{names}}",

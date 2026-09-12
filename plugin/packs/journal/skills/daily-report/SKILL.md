@@ -15,7 +15,7 @@ description: Use when the user asks for a daily work report to send — "업무 
 
 ## 분석 절차 (daily-log와 공통)
 
-1. **저널 로드** — `%USERPROFILE%\.claude\sawhorse\journal\<오늘>.jsonl`을 읽는다. `<오늘>`은 로컬 날짜 `YYYY-MM-DD`. 라인 스키마: `{"ts","session_id","cwd","transcript_path","reason"}`.
+1. **저널 로드** — `%USERPROFILE%\.sawhorse\journal\<오늘>.jsonl`을 읽는다. `<오늘>`은 로컬 날짜 `YYYY-MM-DD`. 라인 스키마: `{"ts","session_id","cwd","transcript_path","reason"}`.
 2. **session_id dedup** — 같은 session_id가 여러 줄이면 마지막 것만 유효로 삼는다.
 3. **transcript 샘플링** — 유효 라인의 `transcript_path`마다 다음 규칙을 그대로 적용한다:
 

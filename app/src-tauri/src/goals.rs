@@ -27,12 +27,9 @@ pub fn adopt_locked(root: &Path, id: &str) -> Result<GoalState, String> {
     }
     let project = project_by_id(root, &work.project_id)?;
     if !Path::new(&project.repo_path).is_dir()
-        || !matches!(
-            crate::agents::normalize_id(&project.default_agent),
-            "codex" | "claude"
-        )
+        || !crate::agents::supports_run_contract(&project.default_agent)
     {
-        return Err("프로젝트 저장소와 Codex 또는 Claude 기본 에이전트가 필요합니다".into());
+        return Err("프로젝트 저장소와 하네스 실행을 지원하는 기본 에이전트가 필요합니다".into());
     }
     let source_definition = workflow_definition_for_work(root, &work)?;
     let sources = source_definition
@@ -189,11 +186,8 @@ pub fn create_at(root: &Path, input: CreateGoal) -> Result<WorkItem, String> {
         return Err("병렬 작업 수는 1~16이어야 합니다".into());
     }
     let project = project_by_id(root, &input.project_id)?;
-    if !matches!(
-        crate::agents::normalize_id(&project.default_agent),
-        "codex" | "claude"
-    ) {
-        return Err("골 모드는 프로젝트 기본 에이전트로 Codex 또는 Claude가 필요합니다".into());
+    if !crate::agents::supports_run_contract(&project.default_agent) {
+        return Err("골 모드는 하네스 실행을 지원하는 프로젝트 기본 에이전트가 필요합니다".into());
     }
     if !Path::new(&project.repo_path).is_dir() {
         return Err("목표를 실행할 프로젝트 저장소가 필요합니다".into());

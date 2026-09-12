@@ -15,7 +15,7 @@ description: Use when the user wants to jot something into today's daily note �
 
 ## 설정 읽기
 
-`~/.claude/sawhorse/config.json` (Windows: `%USERPROFILE%\.claude\sawhorse\config.json`)
+`~/.sawhorse/config.json` (Windows: `%USERPROFILE%\.sawhorse\config.json`)
 
 - `vaultPath` — 작업공간 루트. 비어 있으면 **아무것도 쓰지 않고** 대시보드에서 작업공간을
   먼저 지정하라고 안내하고 멈춘다.

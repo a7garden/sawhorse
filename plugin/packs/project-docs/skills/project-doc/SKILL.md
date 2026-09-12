@@ -15,7 +15,7 @@ description: Use when the user wants to create project knowledge documents in th
 - 원격 변경 주의: `git push`, `svn commit/ci`, `git svn dcommit`, `hg push`는 불필요하면 실행하지 않는다. 훅이 실행 전 사용자 확인을 요구하며, 스킬 자체도 승인받은 목적 없이는 시도하지 않는다.
 - 코드베이스 경로가 주어지면 읽기 전용으로만 다룬다. 어떤 파일도 수정/삭제하지 않는다.
 - 쓰기 대상은 vault(`${user_config.vault_path}`)뿐이다.
-- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
+- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
 - `concepts` 확장이 활성화된 경우에만 sawhorse:wiki 규범을 적용한다: 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 `템플릿/개념.md`로 먼저 생성한다(죽은 링크 금지). 꺼져 있으면 개념 폴더·문서·링크를 만들지 않는다.
 - frontmatter는 볼트의 해당 문서 템플릿을 기준으로 사용한다. 임의 필드 생성 금지. 키는 영어, 값은 한국어.
 - vault 밖 원문 문서를 통째로 복사하지 않는다. 요약 + 출처 표기만 남긴다.

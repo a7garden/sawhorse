@@ -1564,7 +1564,7 @@ async fn start_record(root: PathBuf, id: String) {
     // Herdr owns the common lifecycle; CLI-specific flags remain opt-in. Passing
     // Claude/Codex flags to every kind makes otherwise supported agents fail at
     // startup. OMP intentionally implements the same --add-dir/--model contract.
-    if matches!(record.agent.as_str(), "claude" | "codex" | "omp") {
+    if crate::agents::supports_run_contract(&record.agent) {
         let vault_dir = match root.canonicalize() {
             Ok(path) => path,
             Err(error) => {
@@ -4011,7 +4011,7 @@ pub async fn workflow_generate(
     if request.trim().is_empty() || request.len() > 32_000 {
         return Err("워크플로 요청은 1~32000 바이트로 작성해 주세요".into());
     }
-    if !matches!(agent.as_str(), "claude" | "codex" | "omp") {
+    if !crate::agents::supports_run_contract(&agent) {
         return Err("지원하지 않는 에이전트입니다".into());
     }
     let scratch = std::env::temp_dir().join(format!("sawhorse-workflow-{}", Uuid::new_v4()));
@@ -4151,7 +4151,7 @@ pub async fn sdd_generate_resource(
     if !matches!(kind.as_str(), "template" | "design")
         || source.trim().is_empty()
         || source.len() > 256_000
-        || !matches!(agent.as_str(), "claude" | "codex" | "omp")
+        || !crate::agents::supports_run_contract(&agent)
     {
         return Err("종류·참조 문서·에이전트를 확인하세요 (최대 256KB)".into());
     }

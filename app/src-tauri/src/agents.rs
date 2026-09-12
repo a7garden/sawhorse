@@ -989,6 +989,14 @@ pub fn can_run_jobs(id: &str) -> bool {
     spec(id).is_some_and(|agent| agent.runs_jobs)
 }
 
+/// Agents whose CLI implements the harness run contract — cwd-scoped launch with
+/// `--add-dir`/`--model` flags (OMP intentionally matches Claude's contract).
+/// Launch and goal gates consult this shared capability instead of hard-coding
+/// agent ids at each call site.
+pub fn supports_run_contract(id: &str) -> bool {
+    matches!(normalize_id(id), CLAUDE | CODEX | "omp")
+}
+
 #[derive(Serialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentPresence {
@@ -1527,7 +1535,11 @@ mod tests {
         );
         assert_eq!(effective_default(&dash("", vec![]), &installed), "omp");
         assert_eq!(effective_default(&dash("nope", vec![]), &[]), CLAUDE);
-        assert_eq!(normalize_id("cursor-agent"), "cursor");
+        assert!(supports_run_contract("claude"));
+        assert!(supports_run_contract("codex"));
+        assert!(supports_run_contract("omp"));
+        assert!(!supports_run_contract("gemini"));
+        assert!(!supports_run_contract(""));
     }
 
     #[tokio::test]

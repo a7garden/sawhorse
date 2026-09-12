@@ -7,7 +7,7 @@ description: Work on a Sawhorse SDD task using its intent, spec, plan, verificat
 
 Sawhorse owns the workspace schema and task transitions. The harness prompt supplies the task ID, repository, artifact paths, stage, role, and verification commands. Read those concrete files first; do not reconstruct requirements from a terminal title or assume another agent's context.
 
-When invoked outside the harness, read `~/.claude/sawhorse/config.json` for `vaultPath`, then `.sawhorse/schema.json` in that vault. Version 1 uses:
+When invoked outside the harness, read `~/.sawhorse/config.json` for `vaultPath`, then `.sawhorse/schema.json` in that vault. Version 1 uses:
 
 - `projects/<id>/project.md`: repository, project dependencies, verification commands, default agent/model.
 - `work/<id>/work.md`: task metadata, dependency IDs, dates, stage, status, decision history, and the issue axis — `issueType`, `executionType`, `labels`, `assignees`, `milestone`, `state`, `closed`, `github*`.

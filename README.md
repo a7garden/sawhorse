@@ -202,12 +202,12 @@ conventions of the selected workflow.
 - `concepts`: creating, classifying, and linking concept notes.
 - `todos`: a todo screen that surfaces journal checklists.
 - `project-docs`: project documentation of proposals and the codebase.
-- User packs: add them at `~/.claude/sawhorse/packs/<id>/pack.json`.
+- User packs: add them at `~/.sawhorse/packs/<id>/pack.json`.
 
 A pack's unit is an independent feature, not an industry or a way of working. A pack declares
 folders, templates, settings, actions, and extra screens; turning it off leaves the original notes
 in place. The vault health check is an always-needed app-native feature, so it is provided
-regardless of pack installation. The app and plugins share `~/.claude/sawhorse/config.json`.
+regardless of pack installation. The app and plugins share `~/.sawhorse/config.json`.
 
 Unified extension package v2 installs from local folders/files, exact Git commits, or HTTPS. After
 verifying the full payload SHA-256 and engine/semver dependencies, it records the requested

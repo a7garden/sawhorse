@@ -16,7 +16,7 @@ description: Use when the user wants to look back on a week of daily notes — "
 
 ## 설정 읽기
 
-`~/.claude/sawhorse/config.json`
+`~/.sawhorse/config.json`
 
 - `vaultPath` — 작업공간 루트. 비어 있으면 아무것도 쓰지 않고 안내 후 멈춘다.
 - `packs.settings.journal.reviewDay` — 한 주의 끝으로 볼 요일(기본 `금`). 주의 시작은

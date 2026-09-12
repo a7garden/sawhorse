@@ -7,7 +7,7 @@ description: Organize Sawhorse work requests and milestones, or prepare their de
 
 업무 요청을 Sawhorse의 공통 작업으로 연결한다. 코드·문서·조사·협의·결정 모두 `work/<id>/`의 같은 모델을 사용한다. 이 스킬은 별도의 상태나 승인 흐름을 만들지 않는다.
 
-먼저 [작업 계약](references/issues-milestones-design.md)을 읽는다. 하네스가 제공한 작업 ID, 프로젝트, 고정 workflow, 현재 노드, 산출물 경로와 허용 범위가 실행 기준이다. 하네스 밖에서는 `~/.claude/sawhorse/config.json`의 `vaultPath`를 읽고 해당 작업과 프로젝트를 확인한다. Windows에서는 사용자 홈의 `.claude/sawhorse/`를 사용한다.
+먼저 [작업 계약](references/issues-milestones-design.md)을 읽는다. 하네스가 제공한 작업 ID, 프로젝트, 고정 workflow, 현재 노드, 산출물 경로와 허용 범위가 실행 기준이다. 하네스 밖에서는 `~/.sawhorse/config.json`의 `vaultPath`를 읽고 해당 작업과 프로젝트를 확인한다. Windows에서는 사용자 홈의 `.sawhorse/`를 사용한다.
 
 ## 요청별 처리
 

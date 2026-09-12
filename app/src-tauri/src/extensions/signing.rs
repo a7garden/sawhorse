@@ -2,7 +2,7 @@
 //
 // - An ed25519 signature is attached to the bundle's extension.json bytes
 //   (`<bundle>/extension.json.sig`, 64 hex bytes). Trusted public keys used for signature
-//   verification are managed in `~/.claude/sawhorse/extensions/trusted-keys.json`
+//   verification are managed in `~/.sawhorse/extensions/trusted-keys.json`
 //   (array of hex public keys).
 // - User bundles failing verification are refused for install/update. Built-in bundles are
 //   treated as covered by the app signature.

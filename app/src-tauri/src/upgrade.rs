@@ -507,7 +507,7 @@ fn install_agents(
     let mut skills = bundle_skills(bundle)?;
     for (source, manifest, _) in shipped_packages(bundle)? {
         let adapter = home
-            .join(".claude/sawhorse/packs")
+            .join(".sawhorse/packs")
             .join(format!("x-{}", manifest.id));
         if !adapter.is_dir()
             || read_json(&adapter.join("pack.json"))?["version"] != manifest.version
@@ -543,7 +543,7 @@ fn install_agents(
                 let adapter_root = dir
                     .parent()
                     .and_then(Path::parent)
-                    .filter(|root| root.starts_with(home.join(".claude/sawhorse/packs")));
+                    .filter(|root| root.starts_with(home.join(".sawhorse/packs")));
                 let namespace = adapter_root
                     .and_then(Path::file_name)
                     .map(|name| format!("sawhorse-{}", name.to_string_lossy()));
@@ -595,7 +595,7 @@ fn install_agents(
     // The 1.0 workflow bundles were decomposed into per-feature packs. Rewrite the old override as a
     // backup-safe retired marker so it cannot reappear as a user pack and undo that boundary.
     for id in ["si", "starter"] {
-        let target = home.join(".claude/sawhorse/packs").join(id);
+        let target = home.join(".sawhorse/packs").join(id);
         if target.exists() {
             replace_tree(report, journal, &target, |stage| {
                 fs::create_dir_all(stage).map_err(err)?;
@@ -612,7 +612,7 @@ fn install_agents(
             })?;
         }
     }
-    let tasks = home.join(".claude/sawhorse/tasks");
+    let tasks = home.join(".sawhorse/tasks");
     if tasks.is_dir() {
         let mut notices = Vec::new();
         replace_tree(report, journal, &tasks, |stage| {
@@ -705,7 +705,7 @@ fn install_extension_packages(
     report: &mut UpgradeReport,
     journal: &Path,
 ) -> Result<(), String> {
-    let target = home.join(".claude/sawhorse/extension-packages");
+    let target = home.join(".sawhorse/extension-packages");
     let locked = vault
         .filter(|root| root.join(".sawhorse/extensions.lock.json").is_file())
         .map(crate::extensions::package::read_lock)
@@ -757,7 +757,7 @@ fn install_extension_packages(
             continue;
         }
         let adapter = home
-            .join(".claude/sawhorse/packs")
+            .join(".sawhorse/packs")
             .join(format!("x-{}", manifest.id));
         if locked
             .projects
@@ -943,7 +943,7 @@ pub fn run_at(home: &Path, bundle: &Path, vault: Option<&Path>) -> Result<Upgrad
     );
     let id = hash(identity.as_bytes());
     let journal = home
-        .join(".claude/sawhorse/upgrades")
+        .join(".sawhorse/upgrades")
         .join(&id)
         .join("report.json");
     validate_path(&journal)?;
@@ -1090,7 +1090,7 @@ pub fn run_at(home: &Path, bundle: &Path, vault: Option<&Path>) -> Result<Upgrad
     Ok(report)
 }
 fn read_config(home: &Path) -> Result<Value, String> {
-    let path = home.join(".claude/sawhorse/config.json");
+    let path = home.join(".sawhorse/config.json");
     if path.exists() {
         read_json(&path)
     } else {
@@ -1129,6 +1129,8 @@ pub fn startup() {
     READY.store(false, Ordering::Release);
     let result = (|| {
         let home = dirs::home_dir().ok_or("사용자 홈을 찾을 수 없습니다")?;
+        // Relocate the data home out of ~/.claude/sawhorse before anything reads it.
+        crate::config::ensure_home_migrated();
         let bundle = crate::plugin::resolve_root()?;
         let config = read_config(&home)?;
         let vault = config["vaultPath"]
@@ -1223,7 +1225,7 @@ mod tests {
             let config = PathBuf::from(config).canonicalize().unwrap();
             assert!(config.starts_with(std::env::temp_dir().canonicalize().unwrap()));
             let config: Value = read_json(&config).unwrap();
-            write_json(&f.home.join(".claude/sawhorse/config.json"), &config).unwrap();
+            write_json(&f.home.join(".sawhorse/config.json"), &config).unwrap();
         }
         let report = f.run();
         assert_eq!(tree_hash(&source).unwrap(), before);
@@ -1446,7 +1448,7 @@ mod tests {
             );
         }
         f.write(
-            "home/.claude/sawhorse/config.json",
+            "home/.sawhorse/config.json",
             "{\"improve\":{\"projects\":{\"A\":{\"path\":\"/repo/a\",\"verify\":\"npm test\"}}}}",
         );
         let report = f.run();
@@ -1487,15 +1489,15 @@ mod tests {
         )
         .unwrap();
         f.write(
-            "home/.claude/sawhorse/tasks/improve.json",
+            "home/.sawhorse/tasks/improve.json",
             r#"{"prompt":"/sawhorse:improve all","enabled":true}"#,
         );
         f.write(
-            "home/.claude/sawhorse/tasks/export.json",
+            "home/.sawhorse/tasks/export.json",
             r#"{"title":"Old export","prompt":"/sawhorse:improve-excel A","enabled":true}"#,
         );
         f.write(
-            "home/.claude/sawhorse/tasks/archive/history.json",
+            "home/.sawhorse/tasks/archive/history.json",
             r#"{"prompt":"/sawhorse:improve","enabled":false}"#,
         );
         let report = f.run();
@@ -1505,16 +1507,15 @@ mod tests {
         assert_eq!(registry["plugins"]["other@market"], other);
         assert_eq!(registry["custom"], "preserved");
         assert_eq!(
-            read_json(&f.home.join(".claude/sawhorse/tasks/improve.json")).unwrap()["prompt"],
+            read_json(&f.home.join(".sawhorse/tasks/improve.json")).unwrap()["prompt"],
             "/sawhorse:issues all"
         );
         assert_eq!(
-            read_json(&f.home.join(".claude/sawhorse/tasks/export.json")).unwrap()["enabled"],
+            read_json(&f.home.join(".sawhorse/tasks/export.json")).unwrap()["enabled"],
             false
         );
         assert_eq!(
-            read_json(&f.home.join(".claude/sawhorse/tasks/archive/history.json")).unwrap()
-                ["prompt"],
+            read_json(&f.home.join(".sawhorse/tasks/archive/history.json")).unwrap()["prompt"],
             "/sawhorse:improve"
         );
         assert_eq!(report.notices.len(), 1);
@@ -1546,7 +1547,7 @@ mod tests {
         assert_eq!(lock["projects"]["demo"][1]["extra"], 42);
         assert!(f
             .home
-            .join(".claude/sawhorse/extension-packages/xlsx-export/1.1.0")
+            .join(".sawhorse/extension-packages/xlsx-export/1.1.0")
             .join(entry["digest"].as_str().unwrap())
             .join("extension.json")
             .is_file());

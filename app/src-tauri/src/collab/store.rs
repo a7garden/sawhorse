@@ -1,7 +1,7 @@
 // Ledger (SQLite) layer. Design lines 500-556: not a shared DB written directly by many agents,
 // but a single writer inside the Tauri core that guarantees transaction and outbox semantics.
 //
-// - Path: `~/.claude/sawhorse/workbench.sqlite` (one global DB; project-scoped rows carry a project_id)
+// - Path: `~/.sawhorse/workbench.sqlite` (one global DB; project-scoped rows carry a project_id)
 // - WAL + synchronous=FULL: after an app crash the ledger must not lag behind Git state (ledger written first).
 // - All access is serialized through `parking_lot::Mutex<Connection>`. Background workers and
 //   tauri commands share the same instance.

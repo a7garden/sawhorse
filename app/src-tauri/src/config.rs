@@ -12,9 +12,66 @@ use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-pub fn config_path() -> PathBuf {
+/// App-owned data home (`~/.sawhorse`). Holds config.json, user packs, collab
+/// ledger, extensions, and upgrade journals. Earlier releases stored this tree
+/// inside the Claude Code config dir; `ensure_home_migrated` moves it once.
+pub fn app_home() -> PathBuf {
     let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.join(".claude").join("sawhorse").join("config.json")
+    home.join(".sawhorse")
+}
+
+/// Pre-migration data home under the Claude Code config dir. Only the
+/// migration reads it; nothing writes there anymore.
+pub fn legacy_app_home() -> PathBuf {
+    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
+    home.join(".claude").join("sawhorse")
+}
+
+pub fn config_path() -> PathBuf {
+    app_home().join("config.json")
+}
+
+/// One-time relocation of the data home out of `~/.claude/sawhorse`
+/// (app-owned storage — the app must not nest its data inside a vendor's
+/// config directory). Idempotent per process; an existing target stays the
+/// owner and the legacy tree is never merged or deleted on copy fallback.
+pub fn ensure_home_migrated() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        let _ = ensure_home_migrated_at(&legacy_app_home(), &app_home());
+    });
+}
+
+/// Migration core with injectable paths for tests. Returns whether it moved
+/// anything. Rename is atomic within the home volume; when it fails (locked
+/// file, exotic mount) the tree is copied and the original left as a backup.
+pub fn ensure_home_migrated_at(legacy: &Path, target: &Path) -> std::io::Result<bool> {
+    if !legacy.is_dir() || target.exists() {
+        return Ok(false);
+    }
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if std::fs::rename(legacy, target).is_ok() {
+        return Ok(true);
+    }
+    copy_dir_recursive(legacy, target)?;
+    Ok(true)
+}
+
+fn copy_dir_recursive(source: &Path, target: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(target)?;
+    for entry in std::fs::read_dir(source)? {
+        let entry = entry?;
+        let destination = target.join(entry.file_name());
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &destination)?;
+        } else if file_type.is_file() {
+            std::fs::copy(entry.path(), &destination)?;
+        }
+    }
+    Ok(())
 }
 
 fn load_raw_at(path: &Path) -> Value {
@@ -827,6 +884,36 @@ mod tests {
 
     fn temp_path(tag: &str) -> PathBuf {
         std::env::temp_dir().join(format!("swdash-test-{}-{}.json", tag, uuid::Uuid::new_v4()))
+    }
+
+    #[test]
+    fn home_migration_moves_legacy_tree_once_and_keeps_target_owner() {
+        let base =
+            std::env::temp_dir().join(format!("swdash-home-migration-{}", uuid::Uuid::new_v4()));
+        let legacy = base.join(".claude").join("sawhorse");
+        std::fs::create_dir_all(legacy.join("packs/demo")).unwrap();
+        std::fs::write(legacy.join("config.json"), r#"{"vaultPath":"/v"}"#).unwrap();
+        let target = base.join(".sawhorse");
+
+        assert!(ensure_home_migrated_at(&legacy, &target).unwrap());
+        assert!(!legacy.exists(), "rename moves the whole tree");
+        assert_eq!(
+            std::fs::read_to_string(target.join("config.json")).unwrap(),
+            r#"{"vaultPath":"/v"}"#
+        );
+        assert!(target.join("packs/demo").is_dir());
+
+        // Idempotent: nothing left to move.
+        assert!(!ensure_home_migrated_at(&legacy, &target).unwrap());
+
+        // An existing target is the owner — a reappearing legacy tree is left alone.
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join("config.json"), r#"{"vaultPath":"/old"}"#).unwrap();
+        assert!(!ensure_home_migrated_at(&legacy, &target).unwrap());
+        assert_eq!(
+            std::fs::read_to_string(target.join("config.json")).unwrap(),
+            r#"{"vaultPath":"/v"}"#
+        );
     }
 
     #[test]

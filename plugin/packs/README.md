@@ -10,7 +10,7 @@ workflow. New features that carry install permissions or dependencies use
 ## Build one in five minutes
 
 ```bash
-cp -R packs/journal ~/.claude/sawhorse/packs/my-feature
+cp -R packs/journal ~/.sawhorse/packs/my-feature
 # change the "id" in pack.json to "my-pack" (lowercase, digits, hyphens)
 ```
 
@@ -18,7 +18,7 @@ Refresh in the app's **확장 관리** (extension manager) and the pack appears 
 with `views` add work screens.
 
 A user pack with the same `id` **overrides** the built-in pack. To reshape a built-in feature pack
-your way, copy that feature folder to `~/.claude/sawhorse/packs/<feature-id>/` and edit the copy.
+your way, copy that feature folder to `~/.sawhorse/packs/<feature-id>/` and edit the copy.
 
 ## Folder layout
 
@@ -104,7 +104,7 @@ your way, copy that feature folder to `~/.claude/sawhorse/packs/<feature-id>/` a
 Types: `text`, `path`, `number`, `bool`, `select` (`options[{value,label}]`),
 `table` (`columns[{key,label}]`).
 
-Values are stored in `~/.claude/sawhorse/config.json` under `packs.settings.<packId>`.
+Values are stored in `~/.sawhorse/config.json` under `packs.settings.<packId>`.
 **Skills read those values** — writing in SKILL.md which keys to read is the contract.
 
 ## Three rules

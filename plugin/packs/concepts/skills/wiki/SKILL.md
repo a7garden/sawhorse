@@ -13,7 +13,7 @@ vault에 노트를 쓸 때 이 규범을 준수함을 각자 본문에 명시한
 
 - 코드베이스는 읽기 전용으로만 다룬다. 어떤 파일도 수정/삭제하지 않는다.
 - 원격 변경 금지: `git push`, `svn commit/ci`, `git svn dcommit`, `hg push`는 실행하지 않는다. 로컬 작업만 한다.
-- vault 루트 경로 결정 순서: 1) `${user_config.vault_path}` (비어있지 않으면 최우선) 2) `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` 3) 둘 다 없으면 `/sawhorse:setup` 실행을 안내하거나 사용자에게 절대경로를 묻는다. 개념 노트 위치: `<vault>/개념/<개념명>.md`.
+- vault 루트 경로 결정 순서: 1) `${user_config.vault_path}` (비어있지 않으면 최우선) 2) `%USERPROFILE%\.sawhorse\config.json`의 `vaultPath` 3) 둘 다 없으면 `/sawhorse:setup` 실행을 안내하거나 사용자에게 절대경로를 묻는다. 개념 노트 위치: `<vault>/개념/<개념명>.md`.
 
 ## 규범 7조
 

@@ -63,7 +63,7 @@ CLI에 내장된 `sawhorse-workflow-author/SKILL.md`를 설치한다. Codex는 `
 ## 작업공간 선택
 
 선택 순서는 `--vault PATH` → `SAWHORSE_VAULT` → 현재 폴더부터 부모 방향으로 찾은
-`.sawhorse/schema.json` 또는 `workspace.json` → 앱의 `~/.claude/sawhorse/config.json`의
+`.sawhorse/schema.json` 또는 `workspace.json` → 앱의 `~/.sawhorse/config.json`의
 `vaultPath`이다. 상대경로는 명령을 실행한 폴더 기준이다. 공백·한글 경로는 따옴표로 감싼다.
 
 ```sh

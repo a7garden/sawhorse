@@ -14,7 +14,7 @@ description: Use when the user wants to analyze a codebase and document it featu
 - 빌드·테스트·포맷터·코드 생성 등 파일 쓰기를 유발하는 명령도 코드베이스에서 실행하지 않는다.
 - 원격 변경 금지: `git push`, `svn commit/ci`, `git svn dcommit`, `hg push`를 절대 실행하지 않는다.
 - 쓰기 대상은 vault(`${user_config.vault_path}`)뿐이다.
-- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
+- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.sawhorse\config.json`의 `vaultPath` → 사용자에게 절대경로 문의. 순서대로 시도한다.
 - `concepts` 확장이 활성화된 경우에만 sawhorse:wiki 규범을 적용한다: 개념 첫 등장 시 `[[개념명]]` 위키링크. 노트가 없으면 `템플릿/개념.md`로 먼저 생성한다(죽은 링크 금지). 꺼져 있으면 개념 문서나 링크를 만들지 않는다.
 - 시각화 우선: 텍스트 나열보다 다이어그램이 명확한 곳은 반드시 다이어그램으로 쓴다. 기능분석 문서에서 실제 파일 경로는 frontmatter `sources`에만 적는다(경로 변경에 본문이 썩지 않는 구조).
 - frontmatter는 볼트의 해당 문서 템플릿을 기준으로. 임의 필드 생성 금지. 키는 영어, 값은 한국어.

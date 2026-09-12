@@ -19,7 +19,7 @@ description: Inspect and tidy journal and knowledge documents, root attachments,
 node ${CLAUDE_PLUGIN_ROOT}/scripts/vault-hygiene.mjs --vault "<vaultPath>" --mode scan
 ```
 
-경로는 실행 문맥 또는 사용자 홈의 `.claude/sawhorse/config.json`의 `vaultPath`에서 읽는다.
+경로는 실행 문맥 또는 사용자 홈의 `.sawhorse/config.json`의 `vaultPath`에서 읽는다.
 
 | 모드 | 처리 |
 |---|---|

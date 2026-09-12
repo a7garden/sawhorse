@@ -1,6 +1,6 @@
 // Candidate file inbox. Design lines 200-232 and 819-820.
 //
-// An agent writes exactly one JSON file into `~/.claude/sawhorse/collab/inbox/changesets/`
+// An agent writes exactly one JSON file into `~/.sawhorse/collab/inbox/changesets/`
 // (single-writer rule, same as the file inbox pattern in tasks.rs). This module validates the file,
 // re-verifies the Git objects, normalizes the candidate into the ledger (SQLite), and moves the file to processed/rejected.
 // Only the ledger holds the canonical candidate record — the inbox file is just a request.

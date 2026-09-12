@@ -86,7 +86,7 @@
   "home": {
     "title": "Home",
     "problems": {
-      "configMissing": "The config file (~/.claude/sawhorse/config.json) is missing. Setting just the workspace path is enough to start.",
+      "configMissing": "The config file (~/.sawhorse/config.json) is missing. Setting just the workspace path is enough to start.",
       "vaultPath": "The vault path is invalid. Check the path in settings.",
       "claudeCli": "The claude CLI can't be run. Check the executable location in settings.",
       "projectPaths": "Project path check failed: {{names}}",

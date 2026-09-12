@@ -17,13 +17,13 @@ description: Use when the user starts the workday — "출근", "아침", "morni
 - 원격 저장소 변경 금지: `git push`, `svn commit`/`svn ci`, `git svn dcommit`, `hg push`는 실행하지 않는다.
 - `concepts` 확장이 활성화된 경우에만 sawhorse:wiki 규범을 적용한다. 꺼져 있으면 개념 문서를 만들거나 링크하지 않는다.
 - 프로퍼티 키는 영어, 값은 한국어. 스킬이 임의 필드를 만들지 않는다.
-- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.claude\sawhorse\config.json`의 `vaultPath` → 사용자 문의. 무인 실행이므로 어디서도 경로를 못 찾으면 질문하지 말고 실패 사유를 보고하고 종료한다.
+- vault 경로 결정: `${user_config.vault_path}` → `%USERPROFILE%\.sawhorse\config.json`의 `vaultPath` → 사용자 문의. 무인 실행이므로 어디서도 경로를 못 찾으면 질문하지 말고 실패 사유를 보고하고 종료한다.
 
 ## 절차
 
 1. **오늘 일지 노트 확보** — `${vault}/일지/YYYY-MM-DD.md`(로컬 날짜). 노트가 없으면 템플릿(`템플릿/일지.md`) 내용으로 생성한다. `{{date}}`는 오늘 날짜로 치환한다.
 2. **어제 노트 찾기** — `일지/` 폴더에서 파일명이 `YYYY-MM-DD.md` 패턴이면서 날짜가 오늘 이전인 것 중 가장 최신 파일. 패턴이 아닌 파일명은 대상에서 제외한다. 없으면 3-4단계를 건너뛰고 보고에 "이전 일지 없음"을 적는다.
-3. **어제 요약** — 어제 노트의 `## 업무기록`을 3줄 이내로 요약한다. 업무기록이 비어 있으면 어제 날짜 저널(`%USERPROFILE%\.claude\sawhorse\journal\<어제>.jsonl`)로 대체한다: session_id dedup(같은 id는 마지막 라인만 유효) 후 각 transcript에 [SAMPLING] 규칙을 적용해 요약한다. 둘 다 없으면 "어제 기록 없음".
+3. **어제 요약** — 어제 노트의 `## 업무기록`을 3줄 이내로 요약한다. 업무기록이 비어 있으면 어제 날짜 저널(`%USERPROFILE%\.sawhorse\journal\<어제>.jsonl`)로 대체한다: session_id dedup(같은 id는 마지막 라인만 유효) 후 각 transcript에 [SAMPLING] 규칙을 적용해 요약한다. 둘 다 없으면 "어제 기록 없음".
 
 [SAMPLING] transcript JSONL 샘플링 규칙: (1) 전체 통독 금지. (2) 먼저 라인 수 파악. (3) `"type":"summary"` 라인과 user 발화(`message.role == "user"`이고 content가 문자열이거나 content[].type=="text")를 추출. (4) 마지막 assistant 텍스트 1-2개만 추가. (5) tool_result 본문은 읽지 않는다. 파일이 크면 앞부분 user 발화와 뒷부분 마무리를 우선.
 

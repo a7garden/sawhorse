@@ -244,6 +244,7 @@ impl Output {
 }
 
 pub fn run() -> ExitCode {
+    crate::config::ensure_home_migrated();
     let args: Vec<OsString> = std::env::args_os().collect();
     let wants_json = args.iter().any(|arg| arg == "--json");
     let result = match Cli::try_parse_from(args) {

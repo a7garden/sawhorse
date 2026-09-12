@@ -93,7 +93,7 @@ describe("journal-append.mjs", () => {
       );
       assert.equal(r.status, 0, `exit ${r.status}: ${r.stderr}`);
     }
-    const jdir = join(home, ".claude", "sawhorse", "journal");
+    const jdir = join(home, ".sawhorse", "journal");
     assert.ok(existsAt(jdir), "journal dir created");
     const files = readdirSync(jdir).filter((f) => f.endsWith(".jsonl"));
     assert.equal(files.length, 1, "exactly one journal file");

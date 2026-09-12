@@ -46,8 +46,8 @@ For the English demo used for README screenshots, run `bun run dev --port 1430` 
 
 The source of truth for core schemas is the vault's `.sawhorse/schema.json` plus the published
 schema/workflow JSON and Markdown. Run and import state lives in `.sawhorse/runtime.sqlite`, and
-package selection in `.sawhorse/extensions.lock.json`. User preferences use the existing
-`~/.claude/sawhorse/config.json`. Tests use temporary folders and an explicit browser preview and
+package selection in `.sawhorse/extensions.lock.json`. User preferences live in the app-owned
+`~/.sawhorse/config.json` (relocated once from the older `~/.claude/sawhorse` location). Tests use temporary folders and an explicit browser preview and
 never modify a real user vault.
 
 ## GitHub OAuth setup

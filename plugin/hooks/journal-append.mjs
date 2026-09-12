@@ -22,7 +22,7 @@ try {
   if (!raw) process.exit(0);
   const e = JSON.parse(raw);
   if (!e.session_id) process.exit(0);
-  const dir = join(homedir(), ".claude", "sawhorse", "journal");
+  const dir = join(homedir(), ".sawhorse", "journal");
   mkdirSync(dir, { recursive: true });
   const rec = {
     ts: new Date().toISOString(),

@@ -4,7 +4,7 @@
 // screens (views) + agent skills. A pack only declares; it carries no code — rendering, validation, and
 // execution are all done by the host. The cap on expressiveness is intentional; skills fill the gaps.
 //
-// Discovery order: user packs (~/.claude/sawhorse/packs/<id>) > builtin packs (<plugin root>/packs/<id>).
+// Discovery order: user packs (~/.sawhorse/packs/<id>) > builtin packs (<plugin root>/packs/<id>).
 // Every pack owns its own `skills/` — there is no fallback (no plugin-root skills/ lookup). A builtin pack's
 // skills are declared by the `skills` array in `plugin/.claude-plugin/plugin.json`.
 
@@ -339,7 +339,7 @@ impl PackManifest {
 pub enum PackSource {
     /// Pack shipped with the app/repository
     Builtin,
-    /// Pack placed by the user under ~/.claude/sawhorse/packs
+    /// Pack placed by the user under ~/.sawhorse/packs
     User,
 }
 
@@ -362,8 +362,7 @@ pub struct BrokenPack {
 }
 
 pub fn user_packs_dir() -> PathBuf {
-    let home = dirs::home_dir().unwrap_or_else(|| PathBuf::from("."));
-    home.join(".claude").join("sawhorse").join("packs")
+    crate::config::app_home().join("packs")
 }
 
 fn read_manifest(path: &Path) -> Result<PackManifest, String> {
