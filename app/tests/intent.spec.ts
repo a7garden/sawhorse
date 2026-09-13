@@ -125,7 +125,10 @@ test("images are embedded at the caret, with undo/redo and portable saved order"
   await expect(page.locator(".wb-atomic-editor .cm-atomic-image")).toHaveCount(0);
   await expect(editor).toContainText("before");
   await expect(editor).toContainText("after");
-  await editor.press("ControlOrMeta+Shift+z");
+  // CM6's historyKeymap scopes redo per platform (mac: Mod-Shift-z, linux: Mod-y);
+  // headless Linux chromium drops the Shift modifier on Shift-letter chords, which
+  // makes ControlOrMeta+Shift+z resolve to plain Ctrl-z (undo) there.
+  await editor.press(process.platform === "darwin" ? "Meta+Shift+z" : "Control+y");
   await expect(page.locator(".wb-atomic-editor .cm-atomic-image img")).toHaveJSProperty("naturalWidth",1);
   await page.getByRole("button",{name:"미리보기",exact:true}).click();
   await expect(page.locator(".wb-intent-preview img")).toHaveJSProperty("naturalWidth",1);
