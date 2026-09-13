@@ -1,7 +1,7 @@
 {
   "name": "sawhorse",
   "description": "Sawhorse's bundled catalog of workflow skills, packs, and scripts. A resource directory the app reads at runtime; nothing here is installed into agents.",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "skills": [
     "./skills",
     "./packs/concepts/skills",
