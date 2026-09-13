@@ -17,6 +17,7 @@ mod mockups;
 mod model_policy;
 mod notes;
 mod packs;
+mod pdc;
 mod plugin;
 mod scheduler;
 mod schemas;
