@@ -105,9 +105,23 @@ pub enum XValue {
 /// [`XSawhorse::set_legacy_id`]·[`XSawhorse::set_json_field`]로 동결한다.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct XSawhorse {
-    /// 확장 스칼라 필드. 키는 맵 안에서 유일하다.
+    /// 확장 스칼라 필드. 비공개 — 쓰기는 검증된 헬퍼로만 허용해 동결된
+    /// 쓰기 어휘가 타입 수준에서 강제된다. serde `flatten`은 비공개여도
+    /// 채워 준다.
     #[serde(flatten)]
-    pub fields: BTreeMap<String, XValue>,
+    fields: BTreeMap<String, XValue>,
+}
+
+impl XSawhorse {
+    /// 보존된 스칼라를 읽는다.
+    pub fn get(&self, key: &str) -> Option<&XValue> {
+        self.fields.get(key)
+    }
+
+    /// 보존된 모든 스칼라를 관찰 순서 없이(사전순 맵) 순회한다.
+    pub fn iter(&self) -> impl Iterator<Item = (&String, &XValue)> {
+        self.fields.iter()
+    }
 }
 
 impl XSawhorse {
@@ -264,9 +278,9 @@ mod tests {
         let json = r#"{"legacy_id":"old","flag":true,"labels":["a","b"],"other_json":"{}"}"#;
         let extension: XSawhorse = serde_json::from_str(json).unwrap();
         assert_eq!(extension.legacy_id(), Some("old"));
-        assert_eq!(extension.fields.get("flag"), Some(&XValue::Flag(true)));
+        assert_eq!(extension.get("flag"), Some(&XValue::Flag(true)));
         assert_eq!(
-            extension.fields.get("labels"),
+            extension.get("labels"),
             Some(&XValue::TextList(vec!["a".into(), "b".into()]))
         );
         // 보존된 값은 재직렬화 때 그대로 남는다.

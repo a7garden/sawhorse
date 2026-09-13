@@ -83,6 +83,7 @@ Implemented in `app/src-tauri/src/pdc/`: contract pins (`contract.rs`, including
 - Keep existing Markdown and `shdoc/1` readers unchanged.
 
 Exit: shared fixtures are visible and byte-identical after read-only access.
+Implemented in `app/src-tauri/src/pdc/`: transport extraction (`transport.rs` — exact envelope line markers, CRLF tolerance for envelope parsing only, BOM rejection, 4 MiB ceiling, premature comment-close rejection, visible legacy HTML), the frozen constrained-envelope grammar hand-written to reject every forbidden feature (`envelope.rs` — including §5.3 opaque literal-block strings inside extension namespaces), and recursive discovery with corpus-vocabulary diagnostics plus unsafe-content and duplicate-target scans (`reader.rs`). The authoritative conformance corpus (revision 3, commit 6481ef0e) is vendored at `app/src-tauri/fixtures/pdc/conformance/` and native tests drive every file, reader-operation and set case, asserting byte-identical source preservation. Existing Markdown and `shdoc/1` readers are untouched. Exit: met.
 
 ### Stage 2 — canonical writers
 

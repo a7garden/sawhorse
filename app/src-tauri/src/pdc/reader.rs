@@ -303,6 +303,24 @@ fn scan_djot_unsafe(body: &[u8]) -> Option<Vec<String>> {
     (!constructs.is_empty()).then_some(constructs)
 }
 
+/// Djot 블록 표적 `{#b-<uuid>}`의 중복 검사(§7.2). 표적 뒤에 클래스 등
+/// 속성이 붙는 경우(`{#b-<uuid> .pdc-task}`, §9.1)에도 같은 ID로 비교해야
+/// 하므로 토큰을 `}` 앞의 공백에서 끊는다.
+fn duplicate_block_id_djot(body: &[u8]) -> bool {
+    let text = String::from_utf8_lossy(body);
+    let mut seen = std::collections::HashSet::new();
+    let mut rest = &*text;
+    while let Some(start) = rest.find("{#b-") {
+        let after = &rest[start + 4..];
+        let end = after.find(['}', ' ']).unwrap_or(after.len());
+        if !seen.insert(after[..end].to_string()) {
+            return true;
+        }
+        rest = &after[end..];
+    }
+    false
+}
+
 /// 블록 표적 ID의 중복 검사 — 같은 표적이 두 번 나오면 참이다(§7.2).
 fn duplicate_block_ids_in(text: &str, open: &str, close: &str) -> bool {
     let mut seen = std::collections::HashSet::new();
@@ -318,11 +336,6 @@ fn duplicate_block_ids_in(text: &str, open: &str, close: &str) -> bool {
         rest = &after[end + close.len()..];
     }
     false
-}
-
-/// Djot 블록 표적 `{#b-<uuid>}`의 중복 검사(§7.2).
-fn duplicate_block_id_djot(body: &[u8]) -> bool {
-    duplicate_block_ids_in(&String::from_utf8_lossy(body), "{#b-", "}")
 }
 
 /// HTML 블록 표적 `id="b-<uuid>"`의 중복 검사.
@@ -349,10 +362,8 @@ mod tests {
     }
 
     fn corpus() -> serde_json::Value {
-        serde_json::from_str(
-            &std::fs::read_to_string(corpus_dir().join("corpus.json")).unwrap(),
-        )
-        .unwrap()
+        serde_json::from_str(&std::fs::read_to_string(corpus_dir().join("corpus.json")).unwrap())
+            .unwrap()
     }
 
     fn read_case(relative: &str) -> ReadDocument {
@@ -568,5 +579,15 @@ mod tests {
         let scan = scan_registered(&root, None).unwrap();
         assert!(scan.documents.is_empty());
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn djot_duplicate_block_id_is_caught_even_with_trailing_attributes() {
+        // §9.1 작업 구문처럼 표적 뒤에 클래스가 붙어도 같은 ID로 비교한다.
+        let envelope = "---\nformat: pdc-document/1\nbody: pdc-djot/1\nid: 018f47c6-4a77-7c52-9db8-0e5f9bcb17db\ncreated: 2026-09-13T12:34:56.789Z\nupdated: 2026-09-13T12:34:56.789Z\ntitle: t\n---\n";
+        let body = "- [ ] [Open]{#b-018f47c6-c718-728c-9d91-b2bc700814bb .pdc-task}\n- [x] [Done]{#b-018f47c6-c718-728c-9d91-b2bc700814bb .pdc-task}\n";
+        let mut source = envelope.as_bytes().to_vec();
+        source.extend_from_slice(body.as_bytes());
+        assert_eq!(read_document("djot", source).outcome.code(), "duplicate_block_id");
     }
 }

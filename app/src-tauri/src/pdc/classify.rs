@@ -49,7 +49,17 @@ fn seg(segments: &[&str], index: usize, expected: &str) -> bool {
 }
 
 fn last<'a>(segments: &[&'a str]) -> &'a str {
-    segments[segments.len() - 1]
+    segments.last().copied().unwrap_or("")
+}
+
+/// 파일명 접미·정확명 비교는 대소문자를 무시한다 — 대소문자 보존 파일系에서
+/// `SPEC.MD`가 catch-all 운영 기록으로 가라앉아 이관 누락되는 일을 막는다.
+fn has_suffix_ignore_case(name: &str, suffix: &str) -> bool {
+    name.to_ascii_lowercase().ends_with(suffix)
+}
+
+fn equals_ignore_case(name: &str, expected: &str) -> bool {
+    name.eq_ignore_ascii_case(expected)
 }
 
 fn is_id_map_store(segments: &[&str]) -> bool {
@@ -69,7 +79,9 @@ fn is_work_assets(segments: &[&str]) -> bool {
 }
 
 fn is_mockup_manifest(segments: &[&str]) -> bool {
-    segments.len() >= 3 && seg(segments, 0, "work") && last(segments) == "mockup-manifest.json"
+    segments.len() >= 2
+        && seg(segments, 0, "work")
+        && equals_ignore_case(last(segments), "mockup-manifest.json")
 }
 
 fn in_work(segments: &[&str]) -> bool {
@@ -77,35 +89,35 @@ fn in_work(segments: &[&str]) -> bool {
 }
 
 fn is_work_html(segments: &[&str]) -> bool {
-    segments.len() >= 3 && in_work(segments) && last(segments).ends_with(".html")
+    segments.len() >= 2 && in_work(segments) && has_suffix_ignore_case(last(segments), ".html")
 }
 
 fn is_work_md(segments: &[&str]) -> bool {
-    segments.len() >= 3 && in_work(segments) && last(segments).ends_with(".md")
+    segments.len() >= 2 && in_work(segments) && has_suffix_ignore_case(last(segments), ".md")
 }
 
 fn is_project_note(segments: &[&str]) -> bool {
-    segments.len() == 3 && seg(segments, 0, "projects") && segments[2] == "project.md"
+    segments.len() == 3 && seg(segments, 0, "projects") && equals_ignore_case(segments[2], "project.md")
 }
 
 fn is_project_design(segments: &[&str]) -> bool {
-    segments.len() == 3 && seg(segments, 0, "projects") && segments[2] == "DESIGN.md"
+    segments.len() == 3 && seg(segments, 0, "projects") && equals_ignore_case(segments[2], "DESIGN.md")
 }
 
 fn is_project_resources(segments: &[&str]) -> bool {
-    segments.len() == 3 && seg(segments, 0, "projects") && segments[2] == "resources.json"
+    segments.len() == 3 && seg(segments, 0, "projects") && equals_ignore_case(segments[2], "resources.json")
 }
 
 fn is_calendar_md(segments: &[&str]) -> bool {
-    segments.len() == 2 && seg(segments, 0, "calendar") && last(segments).ends_with(".md")
+    segments.len() == 2 && seg(segments, 0, "calendar") && has_suffix_ignore_case(last(segments), ".md")
 }
 
 fn is_djot_suffix(segments: &[&str]) -> bool {
-    last(segments).ends_with(".djot")
+    has_suffix_ignore_case(last(segments), ".djot")
 }
 
 fn is_html_suffix(segments: &[&str]) -> bool {
-    last(segments).ends_with(".html")
+    has_suffix_ignore_case(last(segments), ".html")
 }
 
 fn is_pdc_vault_manifest(segments: &[&str]) -> bool {

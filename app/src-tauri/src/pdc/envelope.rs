@@ -73,7 +73,6 @@ fn invalid(reason: impl Into<String>) -> Outcome {
     Outcome::InvalidEnvelope(reason.into())
 }
 
-/// 탭은 어디에도 허용되지 않는다(§5).
 fn reject_tabs(line: &[u8]) -> Result<(), Outcome> {
     if line.contains(&b'\t') {
         Err(invalid("봉투에 탭이 있다"))
@@ -117,6 +116,9 @@ fn parse_flow_seq(raw: &str) -> Result<EnvValue, Outcome> {
     if inner.trim().is_empty() {
         return Err(invalid("빈 시퀀스는 빈 값과 같다"));
     }
+    if inner.contains('[') || inner.contains(']') {
+        return Err(invalid("시퀀스는 평평해야 한다 — 중첩 괄호는 금지다"));
+    }
     let mut items = Vec::new();
     for part in inner.split(',') {
         let item = part.trim();
@@ -139,7 +141,10 @@ fn parse_flow_seq(raw: &str) -> Result<EnvValue, Outcome> {
 /// 벗겨지지 않은 스칼라의 금지 문법 표지(주석·앵커·별칭·태그·복합 키).
 fn reject_forbidden_scalar_markers(raw: &str) -> Result<(), Outcome> {
     let first = raw.chars().next();
-    if matches!(first, Some('&') | Some('*') | Some('!') | Some('?') | Some('>') | Some('|')) {
+    if matches!(
+        first,
+        Some('&') | Some('*') | Some('!') | Some('?') | Some('>') | Some('|') | Some('#')
+    ) {
         return Err(invalid(format!(
             "봉투 값이 금지된 문법 표지 `{}`로 시작한다",
             first.unwrap()
@@ -212,8 +217,11 @@ pub fn parse(envelope: &[u8]) -> Result<Envelope, Outcome> {
         }
         let raw_value = line[colon + 1..].trim();
         if raw_value.is_empty() {
-            // 들여쓴 자식(중첩 맵 또는 블록 시퀀스)을 모은다.
-            let mut children: Vec<(usize, &str)> = Vec::new();
+            // 들여쓴 자식(중첩 맵 또는 블록 시퀀스)을 한 패스로 모은다.
+            // 리터럴 블록 값(`key: |`)의 내용 줄은 네 칸 들여쓰기라서
+            // 수집을 끊지 않도록 여기서 함께 소비한다(§5.3).
+            let mut children: Vec<(String, EnvValue)> = Vec::new();
+            let mut seq_items: Option<Vec<String>> = None;
             let mut cursor = index + 1;
             while cursor < lines.len() && !lines[cursor].is_empty() {
                 let child = lines[cursor];
@@ -221,42 +229,76 @@ pub fn parse(envelope: &[u8]) -> Result<Envelope, Outcome> {
                 if !two_space_indent(child.as_bytes()) {
                     break;
                 }
-                children.push((cursor, child));
+                let is_seq_item = child.trim_start().starts_with("- ");
+                match &mut seq_items {
+                    Some(items) => {
+                        let Some(item) = child.trim_start().strip_prefix("- ") else {
+                            return Err(invalid(format!("{key}의 시퀀스가 어긋난다")));
+                        };
+                        reject_forbidden_scalar_markers(item)?;
+                        items.push(item.to_string());
+                    }
+                    None if is_seq_item => {
+                        let item = child.trim_start().strip_prefix("- ").unwrap_or("");
+                        reject_forbidden_scalar_markers(item)?;
+                        seq_items = Some(vec![item.to_string()]);
+                    }
+                    None => {
+                        let Some(colon) = child.find(':') else {
+                            return Err(invalid("중첩 맵 항목에 `:`이 없다"));
+                        };
+                        let child_key = child[..colon].trim_start().trim_end();
+                        if !valid_key(child_key) {
+                            return Err(invalid(format!(
+                                "중첩 맵 키가 부적절하다: {child_key}"
+                            )));
+                        }
+                        if children.iter().any(|(existing, _)| existing == child_key) {
+                            return Err(invalid(format!("중복 봉투 키: {child_key}")));
+                        }
+                        let raw = child[colon + 1..].trim();
+                        if raw == "|" || raw == "|-" || raw == "|+" {
+                            // §5.3: 복잡한 확장 데이터는 소유 네임스페이스의
+                            // 불투명 리터럴 블록 문자열로 운반된다.
+                            cursor += 1;
+                            let mut content_lines: Vec<&str> = Vec::new();
+                            while cursor < lines.len() {
+                                let content = lines[cursor];
+                                if content.is_empty() {
+                                    content_lines.push("");
+                                    cursor += 1;
+                                    continue;
+                                }
+                                let Some(rest) = content.strip_prefix("    ") else {
+                                    break;
+                                };
+                                content_lines.push(rest);
+                                cursor += 1;
+                            }
+                            while content_lines.last().is_some_and(|line| line.is_empty()) {
+                                content_lines.pop();
+                            }
+                            let mut content = content_lines.join("\n");
+                            if !content.is_empty() {
+                                content.push('\n');
+                            }
+                            children.push((child_key.to_string(), EnvValue::Text(content)));
+                            continue;
+                        }
+                        children.push((child_key.to_string(), parse_scalar(raw)?));
+                    }
+                }
                 cursor += 1;
             }
-            if children.is_empty() {
+            if children.is_empty() && seq_items.is_none() {
                 return Err(invalid(format!("빈 값은 금지다: {key}")));
             }
-            let value = if children[0].1.trim_start().starts_with("- ") {
-                let mut items = Vec::new();
-                for (_, child) in &children {
-                    let trimmed = child.trim_start();
-                    let Some(item) = trimmed.strip_prefix("- ") else {
-                        return Err(invalid(format!("{key}의 시퀀스가 어긋난다")));
-                    };
-                    reject_forbidden_scalar_markers(item)?;
-                    items.push(item.to_string());
-                }
-                EnvValue::Seq(items)
-            } else {
-                let mut map: Vec<(String, EnvValue)> = Vec::new();
-                for (_, child) in &children {
-                    let Some(colon) = child.find(':') else {
-                        return Err(invalid("중첩 맵 항목에 `:`이 없다"));
-                    };
-                    let child_key = child[..colon].trim_start().trim_end();
-                    if !valid_key(child_key) {
-                        return Err(invalid(format!("중첩 맵 키가 부적절하다: {child_key}")));
-                    }
-                    if map.iter().any(|(existing, _)| existing == child_key) {
-                        return Err(invalid(format!("중복 봉투 키: {child_key}")));
-                    }
-                    map.push((child_key.to_string(), parse_scalar(&child[colon + 1..])?));
-                }
-                EnvValue::Map(map)
+            let value = match seq_items {
+                Some(items) => EnvValue::Seq(items),
+                None => EnvValue::Map(children),
             };
             entries.push((key.to_string(), value));
-            index = children.last().map(|(position, _)| position + 1).unwrap_or(index + 1);
+            index = cursor;
         } else if raw_value == "|" || raw_value == "|-" || raw_value == "|+" {
             // 리터럴 블록 문자열 — 두 칸 들여쓰기 줄을 내용으로 모은다.
             let mut content_lines: Vec<&str> = Vec::new();
@@ -611,5 +653,34 @@ mod tests {
         assert!(!canonical_timestamp_shape("2026-09-13T12:34:56.789+09:00"));
         assert!(!canonical_timestamp_shape("2026-00-13T12:34:56.789Z"));
         // 실제 달력(예: 2026-02-30)은 validate의 chrono 검사가 잡는다.
+    }
+    #[test]
+    fn literal_blocks_work_inside_nested_extension_maps() {
+        // §5.3: 복잡한 확장 데이터는 소유 네임스페이스의 불투명 리터럴
+        // 블록 문자열로 운반된다 — 블록 뒤의 항목도 살아 있어야 한다.
+        let envelope = parse_str(
+            "x_sawhorse:\n  legacy_id: FDR-001\n  big_json: |\n    {\"a\":1}\n  after: 1\n",
+        )
+        .unwrap();
+        let Some(EnvValue::Map(map)) = envelope.get("x_sawhorse") else {
+            panic!("확장 맵이어야 한다");
+        };
+        assert_eq!(map.len(), 3, "블록 뒤 항목이 유실되지 않는다: {map:?}");
+        assert_eq!(map[1].0, "big_json");
+        assert_eq!(map[1].1, EnvValue::Text("{\"a\":1}\n".into()));
+        assert_eq!(map[2], ("after".to_string(), EnvValue::Text("1".into())));
+    }
+
+    #[test]
+    fn comment_hash_at_value_start_is_forbidden() {
+        // `key: #comment`는 일반 YAML에서 빈 값+주석이다 — 봉투에서는 금지.
+        let outcome = parse_str("title: #not a title\n").unwrap_err();
+        assert_eq!(outcome.code(), "invalid_envelope");
+    }
+
+    #[test]
+    fn nested_brackets_in_flow_sequences_are_rejected() {
+        let outcome = parse_str("tags: [[a], b]\n").unwrap_err();
+        assert_eq!(outcome.code(), "invalid_envelope");
     }
 }

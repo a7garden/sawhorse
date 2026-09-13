@@ -1,7 +1,8 @@
 //! 레거시 ID → UUIDv7 매핑 저장소 — Stage 0 동결.
 //!
-//! 매핑 규칙: UUID형이 아닌 work/project/artifact ID는 UUIDv7을 **한 번만**
-//! 할당하고 참조 재기록 전에 이 저장소에 영속화한다. 저장소는 볼트당 하나,
+//! 매핑 규칙: UUID형이 아닌 work/project/artifact ID만 UUIDv7을 **한 번만**
+//! 할당하고 참조 재기록 전에 이 저장소에 영속화한다. UUID형 ID는 원장 대상이
+//! 아니다 — 문서 `id`가 그 값을 그대로 가진다. 저장소는 볼트당 하나,
 //! `<root>/.sawhorse/pdc/id-map.json`뿐이다. 손상되면 조용히 새로 시작하지
 //! 않고 오류를 낸다 — 매핑 유실은 곧 참조 유실이다.
 
@@ -69,16 +70,27 @@ fn load(root: &Path) -> Result<StoreFile, String> {
 }
 
 /// 임시 파일 기록 후 rename — `document_spaces::write_atomic`과 같은 패턴.
+/// 원장은 내구성이 계약이므로 rename 전에 파일을 fsync하고, 쓰기 실패 시
+/// 임시 파일을 치운다.
 fn write_atomic(path: &Path, contents: &str) -> Result<(), String> {
     let parent = path
         .parent()
         .ok_or_else(|| "파일의 상위 폴더가 없습니다".to_string())?;
     std::fs::create_dir_all(parent).map_err(|e| format!("폴더 생성 실패: {e}"))?;
     let temporary = parent.join(format!(".pdc-{}.tmp", Uuid::new_v4()));
-    std::fs::write(&temporary, contents).map_err(|e| format!("파일 쓰기 실패: {e}"))?;
-    std::fs::rename(&temporary, path).map_err(|e| {
+    let write = || -> std::io::Result<()> {
+        use std::io::Write;
+        let mut file = std::fs::File::create(&temporary)?;
+        file.write_all(contents.as_bytes())?;
+        file.sync_all()
+    };
+    if let Err(error) = write() {
         let _ = std::fs::remove_file(&temporary);
-        format!("파일 교체 실패: {e}")
+        return Err(format!("파일 쓰기 실패: {error}"));
+    }
+    std::fs::rename(&temporary, path).map_err(|error| {
+        let _ = std::fs::remove_file(&temporary);
+        format!("파일 교체 실패: {error}")
     })
 }
 
@@ -91,9 +103,14 @@ fn now_ms() -> u64 {
 
 /// 저장 키로 쓸 수 있는 레거시 ID인지 — 세그먼트 하나짜리 비어 있지 않은
 /// 식별자면 충분하다(알파벳 제한은 두지 않는다: 한글 ID가 실존한다).
+/// UUID형 ID는 원장 대상에서 **제외**다: 그런 ID는 문서 `id`가 그 값을 그대로
+/// 가지므로 새 UUIDv7을 붙이면 정체가 갈라진다.
 fn validate_legacy_id(legacy_id: &str) -> Result<(), String> {
     if legacy_id.is_empty() || legacy_id.len() > 128 {
-        return Err(format!("레거시 ID 길이가 부적절합니다: {}자", legacy_id.len()));
+        return Err(format!(
+            "레거시 ID 길이가 부적절합니다: {}자",
+            legacy_id.len()
+        ));
     }
     if legacy_id == "." || legacy_id == ".." {
         return Err(format!("안전하지 않은 레거시 ID: {legacy_id}"));
@@ -103,6 +120,11 @@ fn validate_legacy_id(legacy_id: &str) -> Result<(), String> {
     }
     if legacy_id.bytes().any(|byte| byte < 0x20 || byte == 0x7f) {
         return Err("레거시 ID에 제어 문자가 있습니다".into());
+    }
+    if Uuid::parse_str(legacy_id).is_ok() {
+        return Err(format!(
+            "UUID 형태 ID `{legacy_id}`는 원장 대상이 아니다 — 문서 id를 그대로 사용한다"
+        ));
     }
     Ok(())
 }
@@ -121,6 +143,11 @@ pub fn lookup(root: &Path, legacy_id: &str) -> Result<Option<String>, String> {
         .and_then(|entry| canonical(&entry.uuid)))
 }
 
+/// 같은 프로세스 안의 동시 allocate를 직렬화한다 — 읽기-검사-쓰기 사이에
+/// 다른 판독기가 비어 보이는 원장을 관찰해 이중 할당하는 일을 막는다.
+/// 볼트를 여는 프로세스 간 경합은 ChangeSet 적용 잠금(Stage 4)이 직렬화한다.
+static ALLOCATION_LOCK: parking_lot::Mutex<()> = parking_lot::Mutex::new(());
+
 /// 매핑을 조회해 없으면 UUIDv7을 새로 할당한다.
 ///
 /// 반환값은 `(정규 표기 uuid, 이번에 새로 할당했는가)`다. 기존 매핑은
@@ -128,6 +155,7 @@ pub fn lookup(root: &Path, legacy_id: &str) -> Result<Option<String>, String> {
 /// "Allocate once and persist the mapping before rewriting references").
 pub fn allocate(root: &Path, legacy_id: &str) -> Result<(String, bool), String> {
     validate_legacy_id(legacy_id)?;
+    let _allocation = ALLOCATION_LOCK.lock();
     let mut store = load(root)?;
     if let Some(entry) = store.mappings.get(legacy_id) {
         let uuid = canonical(&entry.uuid).ok_or_else(|| {
@@ -145,8 +173,8 @@ pub fn allocate(root: &Path, legacy_id: &str) -> Result<(String, bool), String> 
     };
     let uuid = entry.uuid.clone();
     store.mappings.insert(legacy_id.to_string(), entry);
-    let text = serde_json::to_string_pretty(&store)
-        .map_err(|e| format!("매핑 저장소 직렬화 실패: {e}"))?;
+    let text =
+        serde_json::to_string_pretty(&store).map_err(|e| format!("매핑 저장소 직렬화 실패: {e}"))?;
     write_atomic(&store_path(root), &text)?;
     Ok((uuid, true))
 }
@@ -158,10 +186,7 @@ mod tests {
     use std::path::PathBuf;
 
     fn tempdir(tag: &str) -> PathBuf {
-        let path = std::env::temp_dir().join(format!(
-            "sawhorse-pdc-idmap-{tag}-{}",
-            Uuid::new_v4()
-        ));
+        let path = std::env::temp_dir().join(format!("sawhorse-pdc-idmap-{tag}-{}", Uuid::new_v4()));
         fs::create_dir_all(&path).unwrap();
         path
     }
@@ -181,7 +206,25 @@ mod tests {
         // 서로 다른 레거시 ID는 서로 다른 UUID를 받는다.
         let (other, _) = allocate(&root, "proj-b").unwrap();
         assert_ne!(first, other);
-        assert_eq!(lookup(&root, "proj-a").unwrap().as_deref(), Some(first.as_str()));
+        assert_eq!(
+            lookup(&root, "proj-a").unwrap().as_deref(),
+            Some(first.as_str())
+        );
+    }
+
+    #[test]
+    fn concurrent_allocate_still_allocates_once() {
+        let root = tempdir("concurrent");
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let root = root.clone();
+                std::thread::spawn(move || allocate(&root, "shared").unwrap())
+            })
+            .collect();
+        let results: Vec<(String, bool)> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        let uuids: std::collections::HashSet<&String> = results.iter().map(|(uuid, _)| uuid).collect();
+        assert_eq!(uuids.len(), 1, "경쟁 상황에서도 할당은 한 번이다");
+        assert_eq!(results.iter().filter(|(_, allocated)| *allocated).count(), 1);
     }
 
     #[test]
@@ -259,7 +302,8 @@ mod tests {
         .unwrap();
         // 기존 항목은 건드리지 않는다.
         allocate(&root, "newcomer").unwrap();
-        let store: serde_json::Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        let store: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
         assert_eq!(store["futureSection"]["a"], 1);
         assert_eq!(store["mappings"]["kept"]["futureNote"], "keep me");
         assert!(store["mappings"]["newcomer"]["uuid"].is_string());
@@ -271,6 +315,16 @@ mod tests {
         for bad in ["", ".", "..", "a/b", "a\\b", "x\x01y"] {
             assert!(allocate(&root, bad).is_err(), "{bad:?}는 거부되어야 한다");
         }
+        // UUID형 ID는 원장 대상이 아니다 — 정체 갈라짐을 막는다.
+        for uuid_shaped in [
+            "018f47c6-4a77-7c52-9db8-0e5f9bcb17db",
+            "018F47C6-4A77-7C52-9DB8-0E5F9BCB17DB",
+            "018f47c64a777c529db80e5f9bcb17db",
+        ] {
+            let error = allocate(&root, uuid_shaped).unwrap_err();
+            assert!(error.contains("원장 대상이 아니다"), "{uuid_shaped}: {error}");
+        }
+        assert!(lookup(&root, "018f47c6-4a77-7c52-9db8-0e5f9bcb17db").is_err());
         // 한글 ID는 실존하는 레거시 ID다 — 받아야 한다.
         assert!(allocate(&root, "골든-프로젝트").is_ok());
     }
