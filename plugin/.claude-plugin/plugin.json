@@ -1,7 +1,7 @@
 {
   "name": "sawhorse",
-  "description": "Agent skills and hooks for Sawhorse's workflow artifacts, automation, and journal/knowledge documents.",
-  "version": "1.0.0",
+  "description": "Sawhorse's bundled catalog of workflow skills, packs, and scripts. A resource directory the app reads at runtime; nothing here is installed into agents.",
+  "version": "1.1.0",
   "skills": [
     "./skills",
     "./packs/concepts/skills",
@@ -21,12 +21,5 @@
     "sdd",
     "tdd",
     "knowledge"
-  ],
-  "userConfig": {
-    "vault_path": {
-      "type": "string",
-      "title": "Absolute workspace path",
-      "description": "Local Markdown workspace path where Sawhorse stores records"
-    }
-  }
+  ]
 }
