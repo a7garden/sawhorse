@@ -3790,7 +3790,7 @@ dependencies = [
 
 [[package]]
 name = "sawhorse-dashboard"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "arc-swap",
  "base64 0.22.1",

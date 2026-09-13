@@ -1,6 +1,6 @@
 [package]
 name = "sawhorse-dashboard"
-version = "1.0.0"
+version = "1.1.0"
 description = "sawhorse operations dashboard"
 edition = "2021"
 default-run = "sawhorse-dashboard"
