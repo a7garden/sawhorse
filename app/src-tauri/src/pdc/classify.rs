@@ -63,7 +63,10 @@ fn equals_ignore_case(name: &str, expected: &str) -> bool {
 }
 
 fn is_id_map_store(segments: &[&str]) -> bool {
-    segments.len() == 3 && seg(segments, 0, ".sawhorse") && seg(segments, 1, "pdc") && segments[2] == "id-map.json"
+    segments.len() == 3
+        && seg(segments, 0, ".sawhorse")
+        && seg(segments, 1, "pdc")
+        && segments[2] == "id-map.json"
 }
 
 fn in_dot_sawhorse(segments: &[&str]) -> bool {
@@ -97,19 +100,27 @@ fn is_work_md(segments: &[&str]) -> bool {
 }
 
 fn is_project_note(segments: &[&str]) -> bool {
-    segments.len() == 3 && seg(segments, 0, "projects") && equals_ignore_case(segments[2], "project.md")
+    segments.len() == 3
+        && seg(segments, 0, "projects")
+        && equals_ignore_case(segments[2], "project.md")
 }
 
 fn is_project_design(segments: &[&str]) -> bool {
-    segments.len() == 3 && seg(segments, 0, "projects") && equals_ignore_case(segments[2], "DESIGN.md")
+    segments.len() == 3
+        && seg(segments, 0, "projects")
+        && equals_ignore_case(segments[2], "DESIGN.md")
 }
 
 fn is_project_resources(segments: &[&str]) -> bool {
-    segments.len() == 3 && seg(segments, 0, "projects") && equals_ignore_case(segments[2], "resources.json")
+    segments.len() == 3
+        && seg(segments, 0, "projects")
+        && equals_ignore_case(segments[2], "resources.json")
 }
 
 fn is_calendar_md(segments: &[&str]) -> bool {
-    segments.len() == 2 && seg(segments, 0, "calendar") && has_suffix_ignore_case(last(segments), ".md")
+    segments.len() == 2
+        && seg(segments, 0, "calendar")
+        && has_suffix_ignore_case(last(segments), ".md")
 }
 
 fn is_djot_suffix(segments: &[&str]) -> bool {
@@ -213,7 +224,7 @@ static TABLE: &[PathClass] = &[
         pattern: "work/**/*.md",
         owner: "sdlc",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "work.md와 stage 산출 문서(intent·spec·plan·verification·release·learning 등).",
         matches: is_work_md,
     },
@@ -229,7 +240,7 @@ static TABLE: &[PathClass] = &[
         pattern: "projects/*/project.md",
         owner: "sdlc",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "프로젝트 정문서. frontmatter의 워크플로 선택 같은 운영 바인딩은 소속 운영 레코드에 남는다.",
         matches: is_project_note,
     },
@@ -237,7 +248,7 @@ static TABLE: &[PathClass] = &[
         pattern: "projects/*/DESIGN.md",
         owner: "project_resources",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "프로젝트 시각 지침 정문서(표현 계층 바인딩의 원본).",
         matches: is_project_design,
     },
@@ -261,7 +272,7 @@ static TABLE: &[PathClass] = &[
         pattern: "calendar/*.md",
         owner: "sdlc calendar",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "일정 문서(마일스톤·리뷰·배포·회의). 일정 자체는 운영 판단에 쓰이더라도 문서 본문은 저술물이다.",
         matches: is_calendar_md,
     },
@@ -277,7 +288,7 @@ static TABLE: &[PathClass] = &[
         pattern: "프로젝트/**",
         owner: "vault 이슈 노트",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "이슈 노트. 승인·상태 키는 장부 사실이며 문서 필드가 승인을 부여하지 않는다.",
         matches: |segments: &[&str]| seg(segments, 0, "프로젝트"),
     },
@@ -285,7 +296,7 @@ static TABLE: &[PathClass] = &[
         pattern: "사업/**",
         owner: "vault 이슈 노트(레거시)",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "SI 전용 시대 루트 — 호환 읽기 전용, 새로 만들지 않는다.",
         matches: |segments: &[&str]| seg(segments, 0, "사업"),
     },
@@ -293,7 +304,7 @@ static TABLE: &[PathClass] = &[
         pattern: "이슈/**",
         owner: "vault 수함",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "이슈 수함 목록.",
         matches: |segments: &[&str]| seg(segments, 0, "이슈"),
     },
@@ -301,7 +312,7 @@ static TABLE: &[PathClass] = &[
         pattern: "개선/**",
         owner: "vault 수함(레거시)",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "레거시 문제 수함 목록.",
         matches: |segments: &[&str]| seg(segments, 0, "개선"),
     },
@@ -309,7 +320,7 @@ static TABLE: &[PathClass] = &[
         pattern: "일지/**",
         owner: "journal pack",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "일지·할 일 — 체크박스 [PRESERVE] 계약이 유지된다.",
         matches: |segments: &[&str]| seg(segments, 0, "일지"),
     },
@@ -317,7 +328,7 @@ static TABLE: &[PathClass] = &[
         pattern: "개념/**",
         owner: "concepts pack",
         scope: Scope::AuthoredDocument,
-        transport: Some(contract::TRANSPORT_DJOT),
+        transport: Some(contract::TRANSPORT_MARKDOWN),
         note: "개념 노트.",
         matches: |segments: &[&str]| seg(segments, 0, "개념"),
     },
@@ -331,7 +342,7 @@ static TABLE: &[PathClass] = &[
     },
     PathClass {
         pattern: "**/*.djot",
-        owner: "문서 공간(Stage 1)",
+        owner: "문서 공간(레거시 v1)",
         scope: Scope::AuthoredDocument,
         transport: Some(contract::TRANSPORT_DJOT),
         note: "등록된 문서 공간의 PDC Djot 정문서 — Stage 1 판독기가 발견한다.",
@@ -376,9 +387,11 @@ pub fn classify(vault_relative: &str) -> Option<&'static PathClass> {
 /// 인벤토리의 기계 판독 형태. 계약 고정값을 머리에 붙여 단일 문서로 동결한다.
 pub fn inventory_manifest_json() -> String {
     let manifest = serde_json::json!({
-        "documentFormat": contract::DOCUMENT_FORMAT,
+        "documentFormat": contract::DOCUMENT_FORMAT_V2,
+        "corpusFormat": contract::CORPUS_FORMAT,
         "corpusRevision": contract::CORPUS_REVISION,
-        "transports": [contract::TRANSPORT_DJOT, contract::TRANSPORT_HTML],
+        "transports": [contract::TRANSPORT_MARKDOWN, contract::TRANSPORT_HTML],
+        "legacyTransports": [contract::TRANSPORT_DJOT],
         "classes": TABLE,
     });
     serde_json::to_string_pretty(&manifest).expect("인벤토리 직렬화는 실패하지 않는다")
@@ -444,15 +457,18 @@ mod tests {
     #[test]
     fn authored_documents_target_the_documented_transports() {
         let cases = [
-            ("work/w-1/spec.md", contract::TRANSPORT_DJOT),
+            ("work/w-1/spec.md", contract::TRANSPORT_MARKDOWN),
             ("work/w-1/intent.html", contract::TRANSPORT_HTML),
-            ("projects/p/project.md", contract::TRANSPORT_DJOT),
-            ("projects/p/DESIGN.md", contract::TRANSPORT_DJOT),
-            ("calendar/c-1.md", contract::TRANSPORT_DJOT),
-            ("프로젝트/FDR/이슈/12 이슈목록.md", contract::TRANSPORT_DJOT),
-            ("사업/FDR/개선/3 문제목록.md", contract::TRANSPORT_DJOT),
-            ("일지/2026-09-13.md", contract::TRANSPORT_DJOT),
-            ("개념/pdc.md", contract::TRANSPORT_DJOT),
+            ("projects/p/project.md", contract::TRANSPORT_MARKDOWN),
+            ("projects/p/DESIGN.md", contract::TRANSPORT_MARKDOWN),
+            ("calendar/c-1.md", contract::TRANSPORT_MARKDOWN),
+            (
+                "프로젝트/FDR/이슈/12 이슈목록.md",
+                contract::TRANSPORT_MARKDOWN,
+            ),
+            ("사업/FDR/개선/3 문제목록.md", contract::TRANSPORT_MARKDOWN),
+            ("일지/2026-09-13.md", contract::TRANSPORT_MARKDOWN),
+            ("개념/pdc.md", contract::TRANSPORT_MARKDOWN),
             ("notes/board.djot", contract::TRANSPORT_DJOT),
             ("pages/board.html", contract::TRANSPORT_HTML),
         ];
@@ -506,17 +522,21 @@ mod tests {
             classify("a/b/../c").map(|class| class.pattern),
             classify("a/b/../c").map(|class| class.pattern)
         );
-        assert_eq!(classify("work/w-1/spec.md").map(|c| c.pattern), Some("work/**/*.md"));
+        assert_eq!(
+            classify("work/w-1/spec.md").map(|c| c.pattern),
+            Some("work/**/*.md")
+        );
     }
 
     #[test]
     fn manifest_embeds_the_pinned_contract() {
-        let manifest: serde_json::Value =
-            serde_json::from_str(&inventory_manifest_json()).unwrap();
-        assert_eq!(manifest["corpusRevision"], 3);
-        assert_eq!(manifest["documentFormat"], "pdc-document/1");
-        assert_eq!(manifest["transports"][0], "pdc-djot/1");
+        let manifest: serde_json::Value = serde_json::from_str(&inventory_manifest_json()).unwrap();
+        assert_eq!(manifest["documentFormat"], "pdc-document/2");
+        assert_eq!(manifest["corpusFormat"], "pdc-document-conformance/2");
+        assert_eq!(manifest["corpusRevision"], 2);
+        assert_eq!(manifest["transports"][0], "pdc-markdown/1");
         assert_eq!(manifest["transports"][1], "pdc-html/1");
+        assert_eq!(manifest["legacyTransports"][0], "pdc-djot/1");
         let classes = manifest["classes"].as_array().unwrap();
         assert_eq!(classes.len(), inventory().len());
         assert!(classes[0]["matches"].is_null(), "판정기는 직렬화에서 뺀다");

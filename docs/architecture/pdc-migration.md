@@ -1,9 +1,9 @@
 # Portable Document Contract Migration
 
-Status: priority 1 document-plane migration — Stage 0 (boundary and fixtures) implemented; Stages 1–4 pending  
-Contract: `pdc-document/1`, authoritative repository `github.com/a7garden/portable-document-contract` (public draft 4, 2026-09-13, conformance corpus revision 3, pinned at commit 6481ef0e2fb44cae969ecbf5e3d57fd253c77e4b)
-Target capabilities: Full Reader; Djot and HTML Writer/Mutator for the authored document plane
-
+Status: priority 1 document-plane migration — adapted to Markdown-first PDC 2: Stages 0–2 (boundary, Full Reader, canonical Writer + in-app editor) implemented for `pdc-document/2`; Stages 3–4 (importer plans, authorized conversion) pending
+Contract: `pdc-document/2`, authoritative repository `github.com/a7garden/portable-document-contract` (`references/PDC-2.0.md`, public draft 2, 2026-09-14, tag `v2.0.0-draft.2`, commit `0ee51ea`, corpus `pdc-document-conformance/2` revision 2, vendored at `app/src-tauri/fixtures/pdc/conformance/`)
+Target capabilities: Full Reader; Markdown (`pdc-markdown/1`) and HTML (`pdc-html/1`) Writer/Mutator for the authored document plane; `pdc-query/1` classification/preservation only (no query execution)
+Legacy promise: every `pdc-document/1` document (Djot or HTML body) stays visible, byte-preserved, and read-only — `legacy_document_version`; plain Markdown and unmarked HTML stay visible as `legacy_markdown` / `legacy_html`; conversion is explicit, user-authorized, new-target-first (§14)
 This plan governs Sawhorse documents that users understand as portable authored artifacts. It does not convert operational records into documents. The external `portable-document-contract` repository is authoritative; contract changes land there before Sawhorse behavior defines them implicitly.
 
 ## Plane boundary
@@ -33,11 +33,11 @@ Approval and workflow status remain ledger facts. A checkbox or document field n
 
 ## Target representation
 
-- Ordinary portable artifacts use `.djot` plus `pdc-djot/1`.
-- Authored rich documents use `.html` plus the PDC comment-wrapped envelope and `pdc-html/1`.
-- `shdoc/1` migrates preferentially to PDC HTML, retaining its body and readable semantics instead of converting to Djot.
-- Operational metadata stays in its owning record. Portable documents refer to operational objects through `x_sawhorse` only when the reference is useful outside Sawhorse.
-- Complex extension data uses an opaque `x_sawhorse.*_json` literal string; other apps preserve it without interpreting it.
+- Ordinary portable artifacts use lowercase `.md` plus `pdc-markdown/1` (Obsidian-compatible Markdown: CommonMark 0.31.2 + GFM tables/strikethrough/task lists/autolinks, wiki links and embeds, caret block IDs `^[A-Za-z0-9-]+` — writers needing stable targets emit `^b-<uuid>`, GFM tasks, callouts, highlights, `base` query blocks).
+- Authored rich documents use `.html` plus `pdc-html/1` under the same `pdc-document/2` envelope and the PDC comment-wrapped transport.
+- The v2 envelope is safe general YAML 1.2 Core: required `format`/`body`/`id`/`created`/`updated`/`title`; comments, nested JSON-compatible mappings and sequences preserved; duplicate/non-string keys, anchors/aliases/tags, multi-document streams, non-finite numbers, tabs in indentation rejected; depth cap 32, node cap 10,000 (`document_too_complex`). User properties are owned by the user and preserved losslessly; there is no reserved `x_` mechanism in PDC 2.
+- Operational metadata stays in its owning record. Relative links/assets resolve vault-confined (`..`-escapes and unsafe schemes are `unsafe_content`); `pdc://document/<uuid>` and managed `pdc://asset/sha256/<digest>` continue unchanged.
+- Rendering: `pdc-markdown/1` previews render through pulldown-cmark (GFM) and the shared `pdc-document-render-policy/3` sanitizer; raw HTML stays in source and is inert in preview.
 
 ## Mapping rules
 
@@ -93,6 +93,8 @@ Implemented in `app/src-tauri/src/pdc/`: transport extraction (`transport.rs` �
 
 Exit: new documents pass profile-specific create, edit, move, rename, link, asset, and revision-conflict tests.
 
+Implemented in `app/src-tauri/src/pdc/`: canonical envelope serialization with §5.4 key order, flow/block sequence selection, and quote-safe scalar round-trips (`writer.rs` — UUIDv7 creation, `.pdc/vault.json` creation before the first canonical write, expected-digest conflict detection, byte-level no-op that leaves `updated` untouched, metadata-only patches that preserve body bytes exactly, body patches that preserve envelope spelling line-by-line, atomic replacement through the workspace lock path, move/rename that refuses profile conversion), managed SHA-256 assets (`assets.rs` — create-if-absent with integrity verification and media sniffing, served to previews through the verified `pdc-asset://` protocol in `lib.rs`), policy-gated Djot preview (`preview.rs` — jotdown rendering sanitized to the shared render-policy allowlists with `☐/☑` readable task fallbacks), and the editor surface (`commands.rs` + `app/src/features/documents/` — document list with diagnostics, source editing for both profiles, metadata form, sandboxed preview, external-change conflict flow, trash, rename, asset insertion). Corpus operation fixtures (metadata-patch, no-op, external-change, both transports) run as native tests. Exit: met — writer-level create, edit, move, rename, link, asset, and revision-conflict fixtures pass; Markdown and `shdoc/1` stores remain untouched.
+
 ### Stage 3 — importer plans
 
 - Markdown importer: map body syntax, links, IDs, assets, and authored metadata explicitly.
@@ -126,4 +128,4 @@ bun run test:e2e
 cd src-tauri && cargo test --lib
 ```
 
-Migration verification additionally runs corpus revision 3, ChangeSet preview/apply/rollback tests, legacy-reader compatibility tests, and cross-app vault fixtures.
+Migration verification additionally runs corpus revision 2 (`pdc-document-conformance/2`, including the legacy v1 readability and writer-operation cases), ChangeSet preview/apply/rollback tests, legacy-reader compatibility tests, and cross-app vault fixtures.

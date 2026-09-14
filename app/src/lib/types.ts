@@ -1228,3 +1228,99 @@ export interface ManagedTodo {
   source: string;
 }
 export type ManagedTodoInput = Pick<ManagedTodo, "text" | "checked" | "dueDate" | "priority"> & { id?: string; deleted?: boolean };
+
+// ---------- PDC 정문서 평면 (portable-document-contract) ----------
+
+/** 문서 하나의 목록 행. `code`는 계약 §13 진단 어휘다. */
+export interface PdcDocumentSummary {
+  path: string;
+  id: string | null;
+  title: string | null;
+  /** 폴백 적용 표시 제목(첫 H1 → 파일 이름 줄기). */
+  displayTitle: string;
+  created: string | null;
+  updated: string | null;
+  tags: string[];
+  aliases: string[];
+  favorite: boolean;
+  deleted: boolean;
+  bodyProfile: string | null;
+  code: string;
+  message: string | null;
+  /** Valid 정문서만 편집할 수 있다 — 진단 문서는 표시 전용이다. */
+  editable: boolean;
+}
+
+export interface PdcScan {
+  documents: PdcDocumentSummary[];
+  duplicateIds: { id: string; paths: string[] }[];
+}
+
+export interface PdcEnvelopeView {
+  id: string;
+  title: string;
+  created: string;
+  updated: string;
+  profile: string | null;
+  lang: string | null;
+  tags: string[];
+  aliases: string[];
+  favorite: boolean;
+  deleted: boolean;
+  deletedAt: string | null;
+  bodyProfile: string;
+}
+
+export interface PdcDocumentView {
+  path: string;
+  /** 원문 전체 — 표시 전용 소스 뷰의 내용이자 보존의 증거다. */
+  source: string;
+  digest: string;
+  /** 본문(이송 추출 성공 시). 레거시 HTML은 원문 전체다. */
+  body: string;
+  envelope: PdcEnvelopeView | null;
+  code: string;
+  message: string | null;
+  editable: boolean;
+}
+
+export interface PdcCreateInput {
+  spaceId?: string;
+  dir: string;
+  stem: string;
+  /** 새 문서는 v2 전용이다 — Markdown(소문자 .md)이 기본이고 HTML이 1급이다. */
+  transport: "markdown" | "html";
+  title: string;
+  body: string;
+  tags?: string[];
+  aliases?: string[];
+}
+
+export interface PdcCreated {
+  path: string;
+  id: string;
+  digest: string;
+  updated: string;
+}
+
+/** `undefined` 필드는 손대지 않는다(백엔드 SavePatch와 1:1). */
+export interface PdcSavePatch {
+  title?: string;
+  tags?: string[];
+  aliases?: string[];
+  favorite?: boolean;
+  deleted?: boolean;
+  body?: string;
+}
+
+export type PdcSaveOutcome =
+  | { status: "saved"; digest: string; updated: string; size: number }
+  | { status: "unchanged"; digest: string }
+  | { status: "conflict"; currentDigest: string; currentUpdated: string | null };
+
+export interface PdcAssetStored {
+  uri: string;
+  digest: string;
+  filename: string | null;
+  mediaType: string | null;
+}

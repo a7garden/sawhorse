@@ -1,6 +1,6 @@
 [package]
 name = "sawhorse-dashboard"
-version = "1.2.0"
+version = "1.3.0"
 description = "sawhorse operations dashboard"
 edition = "2021"
 default-run = "sawhorse-dashboard"
@@ -52,6 +52,8 @@ keyring = { version = "3", features = ["apple-native", "windows-native", "sync-s
 html5ever = "0.40.0"
 jotdown = "0.10"
 ammonia = "4.1"
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
+yaml-rust2 = "0.13"
 
 [dev-dependencies]
 filetime = "0.2"

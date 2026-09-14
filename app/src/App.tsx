@@ -21,12 +21,14 @@ import {
   Workflow,
   FlaskConical,
   FolderSearch,
+  FileStack,
   Library,
 } from "lucide-react";
 import { useApp, parseViewPage, viewPageId, type PageId } from "@/lib/store";
 import { icon as packIcon, type IconComponent } from "@/lib/icons";
 import { useTheme, type Theme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
+import type { Language } from "@/i18n";
 import WorkbenchPage from "@/features/workbench/WorkbenchPage";
 import { useProjectScope } from "@/features/workbench/project-scope";
 import { ensureWorkspaceSnapshot, useWorkspaceSnapshot } from "@/features/workbench/snapshot-store";
@@ -51,6 +53,7 @@ import TerminalPage from "@/pages/TerminalPage";
 import SchemaStudioPage from "@/features/schema-studio/SchemaStudioPage";
 import WorkflowStudioPage from "@/features/workflow-studio/WorkflowStudioPage";
 import OnboardingPage from "@/pages/OnboardingPage";
+import PdcDocumentsPage from "@/features/documents/PdcDocumentsPage";
 
 import GitHubExtensionPage from "@/pages/GitHubExtensionPage";
 import { DetailNavigation } from "@/components/DetailNavigation";
@@ -87,6 +90,7 @@ const TOP_NAV: {
   // six of them would share the same word.
   { id: "terminal", labelKey: "nav.terminal", icon: Terminal, group: "work" },
   { id: "docs", labelKey: "nav.docs", icon: FileText, group: "vault" },
+  { id: "documents", labelKey: "nav.documents", icon: FileStack, group: "vault" },
   { id: "vault", labelKey: "nav.vault", icon: FolderSearch, group: "vault" },
   { id: "reading", labelKey: "nav.reading", icon: Newspaper, group: "reading" },
   { id: "github", labelKey: "nav.github", icon: Github, group: "reading" },
@@ -126,6 +130,15 @@ const THEME_KEY: Record<Theme, string> = {
   light: "theme.light",
   dark: "theme.dark",
   system: "theme.system",
+};
+
+/**
+ * `nav.documents` keeps the common nav key path but is owned by the documents lane;
+ * common.json is shared with concurrent lanes, so the label ships as a defaultValue
+ * fallback here instead of an edit to that file.
+ */
+const NAV_LABEL_FALLBACKS: Record<string, Record<Language, string>> = {
+  "nav.documents": { ko: "정문서", en: "Documents" },
 };
 
 /**
@@ -185,7 +198,14 @@ export default function App() {
   const setPage = useApp((s) => s.setPage);
   const init = useApp((s) => s.init);
   const nav = useApp((s) => s.nav);
-  const { t } = useTranslation("common");
+  const { t, i18n } = useTranslation("common");
+  /** Nav keys owned by feature lanes resolve their label through defaultValue (see NAV_LABEL_FALLBACKS). */
+  const navLabel = (key: string) => {
+    const fallback = NAV_LABEL_FALLBACKS[key];
+    return fallback
+      ? t(key, { defaultValue: fallback[i18n.language as Language] ?? fallback.ko })
+      : t(key);
+  };
   const snapshot = useWorkspaceSnapshot((state) => state.snapshot);
   const selectedProjectId = useProjectScope((state) => state.projectId);
   const selectProject = useProjectScope((state) => state.selectProject);
@@ -210,7 +230,7 @@ export default function App() {
   const pageLabelKey = group?.tabs.find((tab) => tab.id === page)?.labelKey
     ?? TOP_NAV.find((item) => item.id === navPage)?.labelKey
     ?? BOTTOM_NAV.find((item) => item.id === page)?.labelKey;
-  const pageLabel = navPage === "work" && !selectedProject ? t("nav.projectsOverview") : pageLabelKey ? t(pageLabelKey) : nav.find((item) => viewPageId(item.packId, item.viewId) === page)?.label;
+  const pageLabel = navPage === "work" && !selectedProject ? t("nav.projectsOverview") : pageLabelKey ? navLabel(pageLabelKey) : nav.find((item) => viewPageId(item.packId, item.viewId) === page)?.label;
   const projectScoped = TOP_NAV.some((item) => item.id === (group?.root ?? navPage) && item.group === "project-scope");
   const changeProject = (id: string) => {
     if (!window.dispatchEvent(new Event("sawhorse:navigate", { cancelable: true }))) return;
@@ -249,6 +269,8 @@ export default function App() {
         return <GitHubExtensionPage />;
       case "docs":
         return <DocsPage />;
+      case "documents":
+        return <PdcDocumentsPage />;
       case "todos":
         return <TodosPage />;
       case "vault":
@@ -346,7 +368,7 @@ export default function App() {
                   <NavButton
                     key={n.id}
                     id={n.id}
-                    label={n.id === "work" && !selectedProject ? t("nav.projectsOverview") : t(n.labelKey)}
+                    label={n.id === "work" && !selectedProject ? t("nav.projectsOverview") : navLabel(n.labelKey)}
                     Icon={n.icon}
                     active={navPage === n.id || group?.root === n.id}
                   />

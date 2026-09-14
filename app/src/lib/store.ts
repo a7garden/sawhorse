@@ -37,6 +37,7 @@ export const CORE_PAGES = [
   "github",
   "issues",
   "docs",
+  "documents",
   "todos",
   "vault",
   "task-library",

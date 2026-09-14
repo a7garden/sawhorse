@@ -15,10 +15,20 @@ use super::contract;
 /// 판독 결과의 기계 판독 코드. 적합성 말뭉치 `expect` 어휘와 1:1이다.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
-    /// 적합한 정문서.
+    /// 적합한 v2 정문서 또는 실행 가능 질의.
     Valid,
+    /// 가시·읽기 전용 v1 정문서(pdc-document/1) — 자동 변환 대상이 아니다.
+    LegacyValid,
     /// 봉투 없는 표시 가능 레거시 HTML(§4.3) — 잘못됨이 아니라 레거시다.
     LegacyHtml,
+    /// PDC 봉투 없는 평범 Markdown(§4.2) — 가시 레거시 입력이다.
+    LegacyMarkdown,
+    /// 봉투는 있지만 미지 주요 버전(pdc-document/3+) — 가시 읽기 전용.
+    UnsupportedDocumentVersion(String),
+    /// 질의 계층 판정: 구조는 안전하지만 이식 하위집합 밖 — 실행하지 않는다.
+    ValidUnexecuted,
+    /// 질의 계층 오류(안전 YAML 위반·루트 비맵·폐기 구문 등).
+    InvalidQuery(String),
     /// 이송 위반(봉투 없음·프로필 불일치·BOM·조기 주석 닫기 등).
     InvalidTransport(String),
     /// 미지 주요 버전의 바디 프로필(§2) — malformed가 아니라 미지원.
@@ -29,11 +39,11 @@ pub enum Outcome {
     InvalidEnvelope(String),
     /// 실행 가능·안전하지 않은 구조(§6) — 원본 보존, 안전한 표시만 허용.
     UnsafeContent(Vec<String>),
-    /// 한 문서 안의 중복 `b-<uuid>` 표적(§7.2).
+    /// 한 문서 안의 중복 `b-<uuid>`·caret 표적(§7.2).
     DuplicateBlockId,
     /// 4 MiB 초과(§4.1).
     DocumentTooLarge,
-    /// 중첩 깊이 256 초과(§4.2/§4.3).
+    /// 중첩 깊이 256(§4.2/§4.3)·봉투 YAML 상한(§5) 초과.
     DocumentTooComplex,
 }
 
@@ -42,7 +52,12 @@ impl Outcome {
     pub fn code(&self) -> &'static str {
         match self {
             Outcome::Valid => "valid",
+            Outcome::LegacyValid => "legacy_valid",
             Outcome::LegacyHtml => "legacy_html",
+            Outcome::LegacyMarkdown => "legacy_markdown",
+            Outcome::UnsupportedDocumentVersion(_) => "unsupported_document_version",
+            Outcome::ValidUnexecuted => "valid_unexecuted",
+            Outcome::InvalidQuery(_) => "invalid_query",
             Outcome::InvalidTransport(_) => "invalid_transport",
             Outcome::UnsupportedBodyVersion(_) => "unsupported_body_version",
             Outcome::InvalidDocumentId => "invalid_document_id",
@@ -154,7 +169,9 @@ fn extract_html(bytes: &[u8]) -> Extracted {
         }
     }
     let Some(close_index) = close_index else {
-        return Err(Outcome::InvalidTransport("HTML 봉투가 닫히지 않았다".into()));
+        return Err(Outcome::InvalidTransport(
+            "HTML 봉투가 닫히지 않았다".into(),
+        ));
     };
     // 닫는 `---` 바로 다음 줄이 정확히 `-->`여야 한다.
     match lines.get(close_index + 1) {
@@ -204,23 +221,74 @@ fn find_subslice(haystack: &[u8], needle: &[u8]) -> Option<usize> {
         .find(|&index| &haystack[index..index + needle.len()] == needle)
 }
 
-
 /// 확장자로 이송을 골라 봉투를 추출한다. HTML은 봉투 문양이 없으면
-/// [`Outcome::LegacyHtml`]로 돌아간다(§4.3 — 레거시는 표시 가능 항목이다).
+/// [`Outcome::LegacyHtml`]로, Markdown은 정확한 `---` 프런트매터가 없으면
+/// [`Outcome::LegacyMarkdown`]로 돌아간다(§4.2·§4.3 — 레거시는 표시 가능
+/// 항목이다).
 pub fn extract(extension: &str, bytes: &[u8]) -> Extracted {
-    if has_bom(bytes) {
-        return Err(Outcome::InvalidTransport("UTF-8 BOM이 있다".into()));
+    match extension {
+        "md" => extract_markdown(bytes),
+        _ => {
+            if has_bom(bytes) {
+                return Err(Outcome::InvalidTransport("UTF-8 BOM이 있다".into()));
+            }
+            if !size_ok(bytes.len()) {
+                return Err(Outcome::DocumentTooLarge);
+            }
+            match extension {
+                "djot" => extract_djot(bytes),
+                "html" => extract_html_or_legacy(bytes),
+                other => Err(Outcome::InvalidTransport(format!(
+                    "알 수 없는 이송 확장자: {other}"
+                ))),
+            }
+        }
     }
+}
+
+/// Markdown 이송(§4.2): 바이트 0의 정확한 `---` 열림, 다음 정확한 `---` 닫힘.
+/// 들여쓰기·여백 뒤섞인 구분선은 문양이 아니므로 열림으로 인정하지 않는다.
+fn extract_markdown(bytes: &[u8]) -> Extracted {
     if !size_ok(bytes.len()) {
         return Err(Outcome::DocumentTooLarge);
     }
-    match extension {
-        "djot" => extract_djot(bytes),
-        "html" => extract_html_or_legacy(bytes),
-        other => Err(Outcome::InvalidTransport(format!(
-            "알 수 없는 이송 확장자: {other}"
-        ))),
+    if has_bom(bytes) {
+        // BOM은 이송 위반이지만 평범 Markdown 뒤에 붙은 BOM은 그냥 레거시다.
+        // BOM 뒤가 정확한 `---` 문양이면 PDC 문서를 해치는 BOM이므로 위반.
+        let rest = &bytes[3..];
+        let fenced = line_ranges(rest)
+            .first()
+            .is_some_and(|first| is_line(rest, *first, b"---"));
+        return Err(if fenced {
+            Outcome::InvalidTransport("UTF-8 BOM이 있다".into())
+        } else {
+            Outcome::LegacyMarkdown
+        });
     }
+    let lines = line_ranges(bytes);
+    let Some(first) = lines.first() else {
+        return Err(Outcome::LegacyMarkdown);
+    };
+    if !is_line(bytes, *first, b"---") {
+        return Err(Outcome::LegacyMarkdown);
+    }
+    let mut close = None;
+    for range in lines.iter().skip(1) {
+        if is_line(bytes, *range, b"---") {
+            close = Some(*range);
+            break;
+        }
+    }
+    let Some(close) = close else {
+        return Err(Outcome::InvalidTransport(
+            "프런트매터가 닫히지 않았다".into(),
+        ));
+    };
+    Ok(Transport {
+        body_profile: String::new(), // envelope 문법이 채워 검증한다.
+        envelope_range: (first.1, close.0),
+        body_range: (close.1, bytes.len()),
+    })
 }
 
 #[cfg(test)]
@@ -233,7 +301,8 @@ mod tests {
     #[test]
     fn djot_envelope_and_body_ranges_split_cleanly() {
         let transport = extract("djot", MINIMAL_DJOT.as_bytes()).unwrap();
-        let envelope = &MINIMAL_DJOT.as_bytes()[transport.envelope_range.0..transport.envelope_range.1];
+        let envelope =
+            &MINIMAL_DJOT.as_bytes()[transport.envelope_range.0..transport.envelope_range.1];
         let body = &MINIMAL_DJOT.as_bytes()[transport.body_range.0..transport.body_range.1];
         assert_eq!(envelope, b"format: pdc-document/1\nbody: pdc-djot/1\n");
         assert_eq!(body, b"# Body\n");
@@ -242,7 +311,8 @@ mod tests {
     #[test]
     fn html_envelope_excludes_comment_wrapper() {
         let transport = extract("html", MINIMAL_HTML.as_bytes()).unwrap();
-        let envelope = &MINIMAL_HTML.as_bytes()[transport.envelope_range.0..transport.envelope_range.1];
+        let envelope =
+            &MINIMAL_HTML.as_bytes()[transport.envelope_range.0..transport.envelope_range.1];
         let body = &MINIMAL_HTML.as_bytes()[transport.body_range.0..transport.body_range.1];
         assert_eq!(envelope, b"format: pdc-document/1\n");
         assert_eq!(body, b"<h1>Body</h1>\n");
@@ -293,17 +363,58 @@ mod tests {
     fn bom_is_invalid_transport() {
         let mut bytes = vec![0xEF, 0xBB, 0xBF];
         bytes.extend_from_slice(MINIMAL_DJOT.as_bytes());
-        assert_eq!(extract("djot", &bytes).unwrap_err().code(), "invalid_transport");
+        assert_eq!(
+            extract("djot", &bytes).unwrap_err().code(),
+            "invalid_transport"
+        );
     }
 
     #[test]
     fn oversized_document_is_too_large() {
         let big = vec![b'x'; contract::DOCUMENT_MAX_BYTES as usize + 1];
-        assert_eq!(extract("djot", &big).unwrap_err().code(), "document_too_large");
+        assert_eq!(
+            extract("djot", &big).unwrap_err().code(),
+            "document_too_large"
+        );
     }
 
     #[test]
-    fn unknown_extension_is_invalid_transport() {
-        assert_eq!(extract("md", b"---\n---\n").unwrap_err().code(), "invalid_transport");
+    fn markdown_transport_splits_frontmatter_from_body() {
+        let source = "---\nformat: pdc-document/2\nbody: pdc-markdown/1\n---\n# Body\n";
+        let transport = extract("md", source.as_bytes()).unwrap();
+        let envelope = &source.as_bytes()[transport.envelope_range.0..transport.envelope_range.1];
+        let body = &source.as_bytes()[transport.body_range.0..transport.body_range.1];
+        assert_eq!(body, b"# Body\n");
+        assert!(envelope.starts_with(b"format:"));
+    }
+
+    #[test]
+    fn plain_markdown_is_legacy_not_invalid() {
+        assert_eq!(
+            extract("md", b"# Plain Markdown\n\ntext\n")
+                .unwrap_err()
+                .code(),
+            "legacy_markdown"
+        );
+        assert_eq!(extract("md", b"").unwrap_err().code(), "legacy_markdown");
+    }
+
+    #[test]
+    fn unclosed_frontmatter_is_invalid_transport() {
+        let bytes = b"---\nformat: pdc-document/2\n# never closes\n";
+        assert_eq!(
+            extract("md", bytes).unwrap_err().code(),
+            "invalid_transport"
+        );
+    }
+
+    #[test]
+    fn bom_on_markdown_document_is_invalid_but_bom_on_plain_md_is_legacy() {
+        let mut doc = vec![0xEF, 0xBB, 0xBF];
+        doc.extend_from_slice(b"---\nformat: x\n---\nbody\n");
+        assert_eq!(extract("md", &doc).unwrap_err().code(), "invalid_transport");
+        let mut plain = vec![0xEF, 0xBB, 0xBF];
+        plain.extend_from_slice(b"# just text\n");
+        assert_eq!(extract("md", &plain).unwrap_err().code(), "legacy_markdown");
     }
 }

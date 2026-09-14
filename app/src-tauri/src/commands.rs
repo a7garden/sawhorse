@@ -32,6 +32,13 @@ pub struct VaultNoteView {
     pub markdown: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VaultNoteSource {
+    pub source: String,
+    pub digest: String,
+}
+
 fn empty_todos(date: String) -> vault::TodoSections {
     vault::TodoSections {
         date,
@@ -143,6 +150,33 @@ pub fn read_note(path: String) -> Result<NoteView, String> {
         frontmatter,
         markdown,
     })
+}
+
+/// Raw full-text source of a vault note plus its digest, for in-app editing.
+#[tauri::command]
+pub fn read_vault_note_source(path: String) -> Result<VaultNoteSource, String> {
+    let confined = vault_confined(&path)?;
+    let root = crate::sdlc::vault_root()?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let (source, digest) = vault::read_note_source(&root, &confined)?;
+    Ok(VaultNoteSource { source, digest })
+}
+
+/// Atomic raw-text save for in-app note editing; returns the new digest.
+/// `external-change-conflict` means the note changed on disk since
+/// `expectedDigest` was read.
+#[tauri::command]
+pub fn save_vault_note_source(
+    path: String,
+    expected_digest: String,
+    content: String,
+) -> Result<String, String> {
+    let confined = vault_confined(&path)?;
+    let root = crate::sdlc::vault_root()?
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    vault::save_note_source(&root, &confined, &expected_digest, &content)
 }
 
 #[tauri::command]

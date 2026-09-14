@@ -20,9 +20,13 @@ pub enum EnvValue {
     Text(String),
     /// 불리언 — `true`/`false`만 해당한다.
     Flag(bool),
-    /// 평평한 문자열 시퀀스(플로우 `[a, b]` 또는 블록 `- a`).
-    Seq(Vec<String>),
-    /// 두 칸 들여쓰기의 중첩 맵.
+    /// 수 — v2 안전 YAML의 유한 수. 철자 보존을 위해 원문 스펠링을 담는다.
+    Number(String),
+    /// null — v2 안전 YAML에서 값 생략과 같다.
+    Null,
+    /// 시퀀스. v1은 평평한 문자열 시퀀스, v2는 중첩 가능한 일반 시퀀스다.
+    Seq(Vec<EnvValue>),
+    /// 맵. 키는 언제나 문자열이다.
     Map(Vec<(String, EnvValue)>),
 }
 
@@ -42,11 +46,21 @@ impl EnvValue {
             _ => None,
         }
     }
-
     /// 시퀀스 뷰.
-    pub fn as_seq(&self) -> Option<&[String]> {
+    pub fn as_seq(&self) -> Option<&[EnvValue]> {
         match self {
             EnvValue::Seq(items) => Some(items),
+            _ => None,
+        }
+    }
+
+    /// 평평한 문자열 시퀀스 뷰 — 시퀀스의 모든 항목이 문자열일 때만 `Some`.
+    pub fn as_text_seq(&self) -> Option<Vec<&str>> {
+        match self {
+            EnvValue::Seq(items) => items
+                .iter()
+                .map(|item| item.as_text())
+                .collect::<Option<Vec<_>>>(),
             _ => None,
         }
     }
@@ -85,8 +99,12 @@ fn reject_tabs(line: &[u8]) -> Result<(), Outcome> {
 /// deleted_at)와 미래 키를 모두 담는 최소 제약이다.
 fn valid_key(key: &str) -> bool {
     let bytes = key.as_bytes();
-    let head = bytes.first().is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
-    head && bytes.iter().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+    let head = bytes
+        .first()
+        .is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_');
+    head && bytes
+        .iter()
+        .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
 }
 
 /// 인용 스칼라를 벗긴다. 여는 문자와 같은 문자로 한 줄에서 닫혀야 한다.
@@ -133,7 +151,7 @@ fn parse_flow_seq(raw: &str) -> Result<EnvValue, Outcome> {
             reject_forbidden_scalar_markers(item)?;
             item.to_string()
         };
-        items.push(value);
+        items.push(EnvValue::Text(value));
     }
     Ok(EnvValue::Seq(items))
 }
@@ -184,8 +202,8 @@ fn two_space_indent(line: &[u8]) -> bool {
 
 /// 봉투 바이트(경계선 `---` 제외)를 문법에 따라 해석한다.
 pub fn parse(envelope: &[u8]) -> Result<Envelope, Outcome> {
-    let text = String::from_utf8(envelope.to_vec())
-        .map_err(|_| invalid("봉투는 UTF-8이어야 한다"))?;
+    let text =
+        String::from_utf8(envelope.to_vec()).map_err(|_| invalid("봉투는 UTF-8이어야 한다"))?;
     let lines: Vec<&str> = text
         .split('\n')
         .map(|line| line.strip_suffix('\r').unwrap_or(line))
@@ -221,7 +239,7 @@ pub fn parse(envelope: &[u8]) -> Result<Envelope, Outcome> {
             // 리터럴 블록 값(`key: |`)의 내용 줄은 네 칸 들여쓰기라서
             // 수집을 끊지 않도록 여기서 함께 소비한다(§5.3).
             let mut children: Vec<(String, EnvValue)> = Vec::new();
-            let mut seq_items: Option<Vec<String>> = None;
+            let mut seq_items: Option<Vec<EnvValue>> = None;
             let mut cursor = index + 1;
             while cursor < lines.len() && !lines[cursor].is_empty() {
                 let child = lines[cursor];
@@ -236,12 +254,12 @@ pub fn parse(envelope: &[u8]) -> Result<Envelope, Outcome> {
                             return Err(invalid(format!("{key}의 시퀀스가 어긋난다")));
                         };
                         reject_forbidden_scalar_markers(item)?;
-                        items.push(item.to_string());
+                        items.push(EnvValue::Text(item.to_string()));
                     }
                     None if is_seq_item => {
                         let item = child.trim_start().strip_prefix("- ").unwrap_or("");
                         reject_forbidden_scalar_markers(item)?;
-                        seq_items = Some(vec![item.to_string()]);
+                        seq_items = Some(vec![EnvValue::Text(item.to_string())]);
                     }
                     None => {
                         let Some(colon) = child.find(':') else {
@@ -249,9 +267,7 @@ pub fn parse(envelope: &[u8]) -> Result<Envelope, Outcome> {
                         };
                         let child_key = child[..colon].trim_start().trim_end();
                         if !valid_key(child_key) {
-                            return Err(invalid(format!(
-                                "중첩 맵 키가 부적절하다: {child_key}"
-                            )));
+                            return Err(invalid(format!("중첩 맵 키가 부적절하다: {child_key}")));
                         }
                         if children.iter().any(|(existing, _)| existing == child_key) {
                             return Err(invalid(format!("중복 봉투 키: {child_key}")));
@@ -395,22 +411,48 @@ pub fn canonical_timestamp_shape(value: &str) -> bool {
         && bytes[8..10] != *b"00"
 }
 
-/// 문법만 통과한 봉투에 §5.1·§5.2 의미 규칙을 적용한다.
+/// 문법만 통과한 봉투에 §5.1·§5.2 의미 규칙을 적용한다(v1 동결 문법).
 pub fn validate(envelope: &Envelope) -> Result<(), Outcome> {
+    validate_semantics(
+        envelope,
+        contract::DOCUMENT_FORMAT,
+        &[contract::TRANSPORT_DJOT, contract::TRANSPORT_HTML],
+    )
+}
+
+/// v2 봉투 의미 검사 — Markdown/HTML 바디 프로필만 허용된다. `pdc-djot/1`은
+/// v2 아래에서 이송 위반이다(§2: Markdown 프로필은 PDC 1에 존재하지 않았고
+/// Djot은 v1 전용이다).
+pub fn validate_v2(envelope: &Envelope) -> Result<(), Outcome> {
+    validate_semantics(
+        envelope,
+        contract::DOCUMENT_FORMAT_V2,
+        &[contract::TRANSPORT_MARKDOWN, contract::TRANSPORT_HTML],
+    )
+}
+
+fn validate_semantics(envelope: &Envelope, format: &str, bodies: &[&str]) -> Result<(), Outcome> {
     for required in ["format", "body", "id", "created", "updated", "title"] {
         if envelope.get(required).is_none() {
             return Err(invalid(format!("필수 필드가 없다: {required}")));
         }
     }
-    if envelope.text("format") != Some(contract::DOCUMENT_FORMAT) {
-        return Err(invalid(format!(
-            "형식 식별자는 {}이어야 한다",
-            contract::DOCUMENT_FORMAT
-        )));
+    if envelope.text("format") != Some(format) {
+        return Err(invalid(format!("형식 식별자는 {format}이어야 한다")));
     }
     match envelope.text("body") {
-        Some(contract::TRANSPORT_DJOT) | Some(contract::TRANSPORT_HTML) => {}
-        Some(other) if other.starts_with("pdc-djot/") || other.starts_with("pdc-html/") => {
+        Some(body) if bodies.contains(&body) => {}
+        // §2: `pdc-djot/1`은 v2 봉투 아래에서 미지원이 아니라 이송 위반이다.
+        Some(other) if format == contract::DOCUMENT_FORMAT_V2 && other.starts_with("pdc-djot/") => {
+            return Err(Outcome::InvalidTransport(
+                "pdc-djot/1은 v1 전용이다 — v2 봉투는 pdc-markdown/1·pdc-html/1만 담는다".into(),
+            ));
+        }
+        Some(other)
+            if other.starts_with("pdc-djot/")
+                || other.starts_with("pdc-html/")
+                || other.starts_with("pdc-markdown/") =>
+        {
             return Err(Outcome::UnsupportedBodyVersion(other.to_string()));
         }
         _ => {
@@ -444,14 +486,14 @@ pub fn validate(envelope: &Envelope) -> Result<(), Outcome> {
     if envelope.text("title").is_none() {
         return Err(invalid("title은 빈 문자열이라도 문자열이어야 한다"));
     }
-    for list_key in ["tags", "aliases"] {
+    for list_key in ["tags", "aliases", "cssclasses"] {
         if let Some(items) = envelope.get(list_key) {
             let items = items
-                .as_seq()
+                .as_text_seq()
                 .ok_or_else(|| invalid(format!("{list_key}는 문자열 시퀀스여야 한다")))?;
             let mut seen = std::collections::HashSet::new();
             for item in items {
-                if !seen.insert(item.clone()) {
+                if !seen.insert(item.to_string()) {
                     return Err(invalid(format!("{list_key}에 중복 항목이 있다: {item}")));
                 }
             }
@@ -464,7 +506,10 @@ pub fn validate(envelope: &Envelope) -> Result<(), Outcome> {
             }
         }
     }
-    let deleted = envelope.get("deleted").and_then(EnvValue::as_flag).unwrap_or(false);
+    let deleted = envelope
+        .get("deleted")
+        .and_then(EnvValue::as_flag)
+        .unwrap_or(false);
     let deleted_at = envelope.get("deleted_at");
     if deleted != deleted_at.is_some() {
         return Err(invalid("deleted가 참일 때만 deleted_at이 있어야 한다"));
@@ -506,10 +551,13 @@ mod tests {
     fn parses_scalars_flags_and_flow_sequences() {
         let envelope = parse_str("format: pdc-document/1\nfavorite: true\ntags: [a, b]\n").unwrap();
         assert_eq!(envelope.text("format"), Some("pdc-document/1"));
-        assert_eq!(envelope.get("favorite").and_then(EnvValue::as_flag), Some(true));
         assert_eq!(
-            envelope.get("tags").and_then(EnvValue::as_seq),
-            Some(&["a".to_string(), "b".to_string()][..])
+            envelope.get("favorite").and_then(EnvValue::as_flag),
+            Some(true)
+        );
+        assert_eq!(
+            envelope.get("tags").and_then(EnvValue::as_text_seq),
+            Some(vec!["a", "b"])
         );
     }
 
@@ -527,8 +575,8 @@ mod tests {
             ("legacy_id".to_string(), EnvValue::Text("FDR-001".into()))
         );
         assert_eq!(
-            envelope.get("tags").and_then(EnvValue::as_seq),
-            Some(&["alpha".to_string(), "beta".to_string()][..])
+            envelope.get("tags").and_then(EnvValue::as_text_seq),
+            Some(vec!["alpha", "beta"])
         );
     }
 
@@ -574,9 +622,7 @@ mod tests {
 
         let no_title = base.replace("title: t\n", "");
         assert_eq!(
-            validate(&parse_str(&no_title).unwrap())
-                .unwrap_err()
-                .code(),
+            validate(&parse_str(&no_title).unwrap()).unwrap_err().code(),
             "invalid_envelope"
         );
     }
@@ -585,10 +631,7 @@ mod tests {
     fn rejects_noncanonical_uuid_and_timestamps() {
         let base = "format: pdc-document/1\nbody: pdc-djot/1\ncreated: 2026-09-13T12:34:56.789Z\nupdated: 2026-09-13T12:34:56.789Z\ntitle: t\n";
         let outcome = validate(
-            &parse_str(&format!(
-                "{base}id: 018F47C6-8AEA-7F30-A70F-1ED00DF4CC25\n"
-            ))
-            .unwrap(),
+            &parse_str(&format!("{base}id: 018F47C6-8AEA-7F30-A70F-1ED00DF4CC25\n")).unwrap(),
         )
         .unwrap_err();
         assert_eq!(outcome.code(), "invalid_document_id");
@@ -603,9 +646,7 @@ mod tests {
 
         let ordering = "format: pdc-document/1\nbody: pdc-djot/1\nid: 018f47c6-4a77-7c52-9db8-0e5f9bcb17db\ntitle: t\ncreated: 2026-09-13T13:00:00.000Z\nupdated: 2026-09-13T12:00:00.000Z\n";
         assert_eq!(
-            validate(&parse_str(ordering).unwrap())
-                .unwrap_err()
-                .code(),
+            validate(&parse_str(ordering).unwrap()).unwrap_err().code(),
             "invalid_envelope"
         );
     }
@@ -614,9 +655,7 @@ mod tests {
     fn future_body_profile_is_unsupported_not_malformed() {
         let base = "format: pdc-document/1\nid: 018f47c6-4a77-7c52-9db8-0e5f9bcb17db\ncreated: 2026-09-13T12:34:56.789Z\nupdated: 2026-09-13T12:34:56.789Z\ntitle: t\nbody: pdc-djot/2\n";
         assert_eq!(
-            validate(&parse_str(base).unwrap())
-                .unwrap_err()
-                .code(),
+            validate(&parse_str(base).unwrap()).unwrap_err().code(),
             "unsupported_body_version"
         );
     }
@@ -625,9 +664,7 @@ mod tests {
     fn deleted_requires_deleted_at() {
         let base = "format: pdc-document/1\nbody: pdc-djot/1\nid: 018f47c6-4a77-7c52-9db8-0e5f9bcb17db\ncreated: 2026-09-13T12:34:56.789Z\nupdated: 2026-09-13T12:34:56.789Z\ntitle: t\ndeleted: true\n";
         assert_eq!(
-            validate(&parse_str(base).unwrap())
-                .unwrap_err()
-                .code(),
+            validate(&parse_str(base).unwrap()).unwrap_err().code(),
             "invalid_envelope"
         );
         let tombstone = base.replace(
@@ -642,14 +679,23 @@ mod tests {
         assert!(canonical_uuid("018f47c6-4a77-7c52-9db8-0e5f9bcb17db"));
         assert!(canonical_uuid("018f47c6-4a77-8c52-9db8-0e5f9bcb17db"));
         assert!(!canonical_uuid("018F47C6-8AEA-7F30-A70F-1ED00DF4CC25"));
-        assert!(!canonical_uuid("018f47c6-4a77-0c52-9db8-0e5f9bcb17db"), "버전 0은 없다");
-        assert!(!canonical_uuid("018f47c6-4a77-7c52-cdb8-0e5f9bcb17db"), "variant 비트");
+        assert!(
+            !canonical_uuid("018f47c6-4a77-0c52-9db8-0e5f9bcb17db"),
+            "버전 0은 없다"
+        );
+        assert!(
+            !canonical_uuid("018f47c6-4a77-7c52-cdb8-0e5f9bcb17db"),
+            "variant 비트"
+        );
     }
 
     #[test]
     fn timestamp_shape_requires_canonical_millis_utc() {
         assert!(canonical_timestamp_shape("2026-09-13T12:34:56.789Z"));
-        assert!(!canonical_timestamp_shape("2026-09-13T12:34:56Z"), "밀리초 필요");
+        assert!(
+            !canonical_timestamp_shape("2026-09-13T12:34:56Z"),
+            "밀리초 필요"
+        );
         assert!(!canonical_timestamp_shape("2026-09-13T12:34:56.789+09:00"));
         assert!(!canonical_timestamp_shape("2026-00-13T12:34:56.789Z"));
         // 실제 달력(예: 2026-02-30)은 validate의 chrono 검사가 잡는다.

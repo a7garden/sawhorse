@@ -69,6 +69,13 @@ import type {
   PackageWorkflowSummary,
   ExtensionLock,
   IngestionJob,
+  PdcAssetStored,
+  PdcCreated,
+  PdcCreateInput,
+  PdcDocumentView,
+  PdcSaveOutcome,
+  PdcSavePatch,
+  PdcScan,
 } from "./types";
 
 export const api = {
@@ -92,6 +99,10 @@ export const api = {
     invoke("approve_note", { path }),
   approveIssue: (path: string): Promise<void> =>
     invoke("approve_issue", { path }),
+  readVaultNoteSource: (path: string): Promise<{ source: string; digest: string }> =>
+    invoke("read_vault_note_source", { path }),
+  saveVaultNoteSource: (path: string, expectedDigest: string, content: string): Promise<string> =>
+    invoke("save_vault_note_source", { path, expectedDigest, content }),
   inboxCount: (project?: string): Promise<number> =>
     invoke("list_inbox_count", { project: project ?? null }),
   auditVault: (): Promise<VaultAudit> => invoke("audit_vault"),
@@ -439,6 +450,70 @@ export const api = {
       operationId,
       remoteCreated,
       result,
+    }),
+};
+
+/**
+ * PDC(portable-document-contract) 정문서 평면 — Stage 2 에디터 창구.
+ * 원본 보존·예상 다이제스트 충돌·no-op 규칙은 백엔드(src-tauri pdc::writer)가
+ * 단일 출처로 책진다. `spaceId`는 등록된 문서 공간(없으면 기본 공간)이다.
+ */
+export const pdcApi = {
+  scan: (spaceId?: string): Promise<PdcScan> =>
+    invoke("pdc_scan_documents", { spaceId: spaceId ?? null }),
+  read: (path: string, spaceId?: string): Promise<PdcDocumentView> =>
+    invoke("pdc_read_document", { path, spaceId: spaceId ?? null }),
+  create: (input: PdcCreateInput): Promise<PdcCreated> =>
+    invoke("pdc_create_document", {
+      spaceId: input.spaceId ?? null,
+      dir: input.dir,
+      stem: input.stem,
+      transport: input.transport,
+      title: input.title,
+      body: input.body,
+      tags: input.tags ?? null,
+      aliases: input.aliases ?? null,
+    }),
+  save: (
+    path: string,
+    expectedDigest: string,
+    patch: PdcSavePatch,
+    spaceId?: string,
+  ): Promise<PdcSaveOutcome> =>
+    invoke("pdc_save_document", {
+      path,
+      expectedDigest,
+      patch,
+      spaceId: spaceId ?? null,
+    }),
+  move: (
+    from: string,
+    to: string,
+    expectedDigest: string,
+    spaceId?: string,
+  ): Promise<void> =>
+    invoke("pdc_move_document", {
+      from,
+      to,
+      expectedDigest,
+      spaceId: spaceId ?? null,
+    }),
+  previewMarkdown: (body: string): Promise<string> =>
+    invoke("pdc_preview_markdown", { body }),
+  /** v1 레거시 Djot 본문의 읽기 전용 미리보기. */
+  previewDjot: (body: string): Promise<string> =>
+    invoke("pdc_preview_djot", { body }),
+  addAsset: (
+    bytes: Uint8Array,
+    filename?: string,
+    mediaType?: string,
+    spaceId?: string,
+  ): Promise<PdcAssetStored> =>
+    invoke("pdc_add_asset", {
+      bytes: Array.from(bytes),
+      filename: filename ?? null,
+      mediaType: mediaType ?? null,
+      spaceId: spaceId ?? null,
     }),
 };
 

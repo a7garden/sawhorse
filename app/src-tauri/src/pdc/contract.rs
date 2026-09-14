@@ -2,11 +2,11 @@
 //!
 //! 권위는 외부 portable-document-contract 저장소다:
 //! `github.com/a7garden/portable-document-contract`, 규범 문서
-//! `references/PDC-1.0.md` (public draft 4, 2026-09-13), 동작 개정
-//! `conformance/corpus.json` (`pdc-document-conformance/1`, revision 3).
-//! 이 모듈은 그 계약이 명시한 식별자·상한·규칙만 Sawhorse에 고정하고 새 계약
-//! 의미를 정의하지 않는다. 계약 변경은 외부 저장소에 먼저 반영되고 이 고정물은
-//! 그 결과를 따라간다.
+//! `references/PDC-2.0.md` (public draft 2, 2026-09-14, 태그
+//! `v2.0.0-draft.2`, 커밋 0ee51ea에 고정), 동작 개정 `conformance/corpus.json`
+//! (`pdc-document-conformance/2`, revision 2). 이 모듈은 그 계약이 명시한
+//! 식별자·상한·규칙만 Sawhorse에 고정하고 새 계약 의미를 정의하지 않는다.
+//! 계약 변경은 외부 저장소에 먼저 반영되고 이 고정물은 그 결과를 따라간다.
 
 #![allow(dead_code)] // Stage 0 동결물 — Stage 1~4가 소비한다.
 use std::collections::BTreeMap;
@@ -16,21 +16,73 @@ use serde::{Deserialize, Serialize};
 /// PDC 문서 계약 형식 식별자(§2). 정확히 대소문자를 구비해 비교한다.
 pub const DOCUMENT_FORMAT: &str = "pdc-document/1";
 
+/// v2 문서 계약 형식 식별자 — Markdown 우선 정본. v1 문서는 가시 읽기 전용
+/// 레거시로 남고 절대 자동 변환되지 않는다(§1·§14).
+pub const DOCUMENT_FORMAT_V2: &str = "pdc-document/2";
+
+/// 적합성 말뭉치 형식 식별자(v2). v1 개정(revision 3)은 더 이상 핀 대상이
+/// 아니며, v1 판독기는 v2 말뭉치의 legacy 사례로 시험한다.
+pub const CORPUS_FORMAT: &str = "pdc-document-conformance/2";
+
 /// 고정된 적합성 말뭉치 개정(§2: "구현은 명명된 corpus revision으로 시험해야
 /// 한다"). 정본 `conformance/corpus.json`의 revision과 일치한다.
-pub const CORPUS_REVISION: u32 = 3;
+pub const CORPUS_REVISION: u32 = 2;
+
+/// 규범 문서가 고정된 업스트림 커밋(태그 `v2.0.0-draft.2`).
+pub const SPEC_COMMIT: &str = "0ee51ea";
+
+/// 규범 문서 태그.
+pub const SPEC_TAG: &str = "v2.0.0-draft.2";
 
 /// 일반 정문서 바디 프로필 — 동결된 Djot 방언(§6.1).
 pub const TRANSPORT_DJOT: &str = "pdc-djot/1";
 
+/// v2 일반 정문서 바디 프로필 — Obsidian 호환 Markdown(소문자 `.md`).
+pub const TRANSPORT_MARKDOWN: &str = "pdc-markdown/1";
+
+/// HTML 이송 미디어 타입(§4.3) — v2 봉투. v1 봉투는 [`MEDIA_TYPE_HTML_V1`]이다.
+pub const MEDIA_TYPE_HTML: &str = "application/vnd.pdc.document+html;version=2";
+
+/// HTML 이송 미디어 타입(§4.3) — v1 레거시 봉투.
+pub const MEDIA_TYPE_HTML_V1: &str = "application/vnd.pdc.document+html;version=1";
+
+/// Djot 이송 미디어 타입(§4.2) — v1 레거시 전용.
+pub const MEDIA_TYPE_DJOT: &str = "application/vnd.pdc.document+djot;version=1";
+
 /// 서식 있는 정문서 바디 프로필 — 원본 보존 HTML(§6.2).
 pub const TRANSPORT_HTML: &str = "pdc-html/1";
 
-/// Djot 이송 미디어 타입(§4.2).
-pub const MEDIA_TYPE_DJOT: &str = "application/vnd.pdc.document+djot;version=1";
+/// Markdown 본문의 안정 블록 표적 문자 집합(§7.2): `[A-Za-z0-9-]+` — 밑줄은
+/// 포함되지 않는다.
+pub fn is_caret_target_id(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
 
-/// HTML 이송 미디어 타입(§4.3).
-pub const MEDIA_TYPE_HTML: &str = "application/vnd.pdc.document+html;version=1";
+pub const MEDIA_TYPE_MARKDOWN: &str = "application/vnd.pdc.document+markdown;version=2";
+
+/// Markdown 정문서 확장자 — 소문자 `.md`만 정칙이다.
+pub const MARKDOWN_EXTENSION: &str = "md";
+
+/// Markdown 본문의 안정 블록 표적 문양 — caret 표기 `^b-<uuid>`(v2 §7.2).
+pub const MARKDOWN_BLOCK_TARGET_PREFIX: &str = "^b-";
+
+/// v2 봉투 안전 YAML 상한: 중첩 깊이(§5-v2).
+pub const YAML_MAX_DEPTH: usize = 32;
+
+/// v2 봉투 안전 YAML 상한: 노드 수(§5-v2).
+pub const YAML_MAX_NODES: usize = 10_000;
+
+/// 별도 질의 계층 식별자 — Obsidian Bases 호환 `.base`/```base 블록.
+/// 읽기 전용이며 승인 근거가 되지 않는다. Sawhorse는 질의를 실행하지 않는다.
+pub const QUERY_FORMAT: &str = "pdc-query/1";
+
+/// 질의 이송 상한(PDC-QUERY-1.0 §3.1) — 1 MiB.
+pub const QUERY_MAX_BYTES: u64 = 1024 * 1024;
+/// 질의 파일 확장자 — 소문자 `.base`(PDC-QUERY-1.0 §3.1).
+pub const QUERY_BASE_EXTENSION: &str = "base";
 
 /// 볼트 정검 표시(vault manifest) 파일 경로(§3.1).
 pub const VAULT_MANIFEST_RELATIVE: &str = ".pdc/vault.json";
@@ -223,21 +275,41 @@ mod tests {
     use super::*;
 
     #[test]
-    fn contract_pins_match_the_authoritative_draft4() {
+    fn contract_pins_match_the_authoritative_v2_draft() {
         assert_eq!(DOCUMENT_FORMAT, "pdc-document/1");
+        assert_eq!(DOCUMENT_FORMAT_V2, "pdc-document/2");
         assert_eq!(TRANSPORT_DJOT, "pdc-djot/1");
+        assert_eq!(TRANSPORT_MARKDOWN, "pdc-markdown/1");
         assert_eq!(TRANSPORT_HTML, "pdc-html/1");
         assert_eq!(VAULT_MANIFEST_FORMAT, "pdc-vault/1");
         assert_eq!(VAULT_MANIFEST_RELATIVE, ".pdc/vault.json");
+        assert_eq!(CORPUS_FORMAT, "pdc-document-conformance/2");
+        assert_eq!(CORPUS_REVISION, 2);
+        assert_eq!(SPEC_TAG, "v2.0.0-draft.2");
+        assert!(SPEC_COMMIT.starts_with("0ee51ea"));
+        assert_eq!(QUERY_FORMAT, "pdc-query/1");
         assert_eq!(
             MEDIA_TYPE_DJOT,
             "application/vnd.pdc.document+djot;version=1"
         );
         assert_eq!(
-            MEDIA_TYPE_HTML,
+            MEDIA_TYPE_HTML_V1,
             "application/vnd.pdc.document+html;version=1"
         );
+        assert_eq!(
+            MEDIA_TYPE_HTML,
+            "application/vnd.pdc.document+html;version=2"
+        );
+        assert_eq!(
+            MEDIA_TYPE_MARKDOWN,
+            "application/vnd.pdc.document+markdown;version=2"
+        );
         assert_eq!(BLOCK_TARGET_PREFIX, "b-");
+        assert_eq!(MARKDOWN_BLOCK_TARGET_PREFIX, "^b-");
+        assert!(is_caret_target_id("dup-block-id"));
+        assert!(is_caret_target_id("018f47c6-c718-728c-9d91-b2bc700814bb"));
+        assert!(!is_caret_target_id("under_score"));
+        assert!(!is_caret_target_id(""));
         assert_eq!(
             DJOT_DIALECT_BASELINE,
             "d77f8a0cbea6785c42b3e2b03463195b5ca6f7c7"
@@ -324,7 +396,10 @@ mod tests {
             format!(".pdc/assets/sha256/01/{digest}")
         );
         assert!(asset_uri("ABC").is_err());
-        assert!(asset_uri(&digest.to_uppercase()).is_err(), "다이제스트는 소문자다");
+        assert!(
+            asset_uri(&digest.to_uppercase()).is_err(),
+            "다이제스트는 소문자다"
+        );
         assert!(!is_sha256_digest("0123"));
     }
 }

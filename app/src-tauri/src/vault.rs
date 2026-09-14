@@ -1071,6 +1071,44 @@ pub fn read_vault_note(vault: &Path, rel: &str) -> Result<(String, String), Stri
     Ok((title, text))
 }
 
+// ---------- raw note source (in-app editing) ----------
+
+/// Full raw text of a note plus its sha256 hex digest, for editing the note
+/// exactly as it is on disk. `note` must stay inside `root`; the command layer
+/// pairs a canonical root with a canonical note (`vault_confined` guard).
+pub fn read_note_source(root: &Path, note: &Path) -> Result<(String, String), String> {
+    crate::workspace_io::check_path(root, note)?;
+    let text = std::fs::read_to_string(note).map_err(|e| format!("파일 읽기 실패: {e}"))?;
+    let digest = sha256_hex(text.as_bytes());
+    Ok((text, digest))
+}
+
+/// Atomically replace a note's full raw text and return the new digest. Order:
+/// confine → advisory lock → verify the caller saw the current bytes. A digest
+/// mismatch means an external editor changed the file after it was read;
+/// rewriting the exact current text is a no-op that leaves the file untouched.
+pub fn save_note_source(
+    root: &Path,
+    note: &Path,
+    expected_digest: &str,
+    content: &str,
+) -> Result<String, String> {
+    crate::workspace_io::check_path(root, note)?;
+    let _lock = crate::workspace_io::lock(root, "notes")?;
+    let current = std::fs::read_to_string(note).map_err(|e| format!("파일 읽기 실패: {e}"))?;
+    let current_digest = sha256_hex(current.as_bytes());
+    if current_digest != expected_digest {
+        return Err(
+            "external-change-conflict: 노트가 외부에서 변경됐다. 다시 읽은 뒤 시도하라".into(),
+        );
+    }
+    if content == current {
+        return Ok(current_digest);
+    }
+    crate::workspace_io::write_atomic(note, content.as_bytes(), true)?;
+    Ok(sha256_hex(content.as_bytes()))
+}
+
 // ---------- embedded note assets (images) ----------
 
 /// Notes embed screenshots; the webview cannot read the filesystem, so images
@@ -1231,6 +1269,11 @@ pub fn read_note_asset(vault: &Path, note: &Path, src: &str) -> Result<String, S
     }
     let bytes = std::fs::read(&canonical).map_err(|e| format!("이미지 읽기 실패: {e}"))?;
     Ok(format!("data:{mime};base64,{}", BASE64.encode(bytes)))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    hex::encode(Sha256::digest(bytes))
 }
 
 #[cfg(test)]

@@ -90,6 +90,43 @@ pub fn run() {
         .plugin(tauri_plugin_autostart::init(MacosLauncher::LaunchAgent, None))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .register_uri_scheme_protocol("pdc-asset", |_ctx, request| {
+            // macOS·Linux: pdc-asset://localhost/<digest>?space=<id>
+            // Windows: http://pdc-asset.localhost/<digest>?space=<id>
+            // 바이트는 공간의 .pdc/assets에서 다이제스트로 검증된 뒤에야 흘러간다(§8.2).
+            let uri = request.uri();
+            let digest = uri.path().trim_start_matches('/').to_string();
+            let space = uri.query().and_then(|query| {
+                query.split('&').find_map(|pair| pair.strip_prefix("space="))
+            });
+            let response = (|| -> Result<tauri::http::Response<Vec<u8>>, String> {
+                let vault = crate::sdlc::vault_root()?;
+                let root = crate::document_spaces::resolve_root(&vault, space)?;
+                let (bytes, media) = pdc::assets::load_asset(&root, &digest)?;
+                tauri::http::Response::builder()
+                    .header("Content-Type", media)
+                    .header("Cache-Control", "max-age=31536000, immutable")
+                    .body(bytes)
+                    .map_err(|e| e.to_string())
+            })();
+            match response {
+                Ok(response) => response,
+                Err(message) => {
+                    let status = if message.contains("missing_asset") {
+                        404
+                    } else if message.contains("asset_digest_mismatch") {
+                        409
+                    } else {
+                        400
+                    };
+                    tauri::http::Response::builder()
+                        .status(status)
+                        .header("Content-Type", "text/plain; charset=utf-8")
+                        .body(message.into_bytes())
+                        .unwrap_or_else(|_| tauri::http::Response::new(Vec::new()))
+                }
+            }
+        })
         .setup(|app| {
             apply_dock_icon();
             // Bundles ship the whole plugin/ — the plugin dir in the resource directory is the plugin root.
@@ -492,6 +529,16 @@ pub fn run() {
             commands::herdr_close_tab,
             commands::herdr_read_pane,
             commands::herdr_open_tab,
+            pdc::commands::pdc_scan_documents,
+            pdc::commands::pdc_read_document,
+            pdc::commands::pdc_create_document,
+            pdc::commands::pdc_save_document,
+            pdc::commands::pdc_move_document,
+            pdc::commands::pdc_preview_markdown,
+            pdc::commands::pdc_preview_djot,
+            pdc::commands::pdc_add_asset,
+            commands::read_vault_note_source,
+            commands::save_vault_note_source,
         ])
         .run(tauri::generate_context!())
         .expect("sawhorse 대시보드 실행 실패");
